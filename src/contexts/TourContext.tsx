@@ -118,20 +118,31 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
         zIndex: 10000,
       },
       tooltip: {
-        borderRadius: 8,
+        borderRadius: 10,
         fontSize: 14,
-        padding: 20,
+        // Extra right/top padding so body text never sits under the absolute ×
+        padding: '18px 16px 14px',
+        maxWidth: 380,
+        lineHeight: 1.5,
       },
       tooltipContainer: {
         textAlign: 'left' as const,
+        lineHeight: 1.5,
       },
       tooltipTitle: {
         fontSize: 16,
         fontWeight: 600,
         marginBottom: 8,
+        paddingRight: 28,
       },
       tooltipContent: {
-        padding: 0,
+        // Joyride’s × is position:absolute; keep clear space on the right + top
+        padding: '4px 32px 4px 2px',
+        lineHeight: 1.55,
+      },
+      tooltipFooter: {
+        marginTop: 14,
+        alignItems: 'center',
       },
       buttonNext: {
         backgroundColor: '#3b82f6',
@@ -152,10 +163,19 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
       },
       buttonClose: {
         color: isDark ? '#9ca3af' : '#6b7280',
+        height: 16,
+        width: 16,
+        padding: 8,
+        top: 8,
+        right: 8,
       },
       beacon: {
         inner: '#3b82f6',
         outer: '#3b82f6',
+      },
+      // Keep the cutout close to the control so dense header buttons don't bleed together
+      spotlight: {
+        borderRadius: 6,
       },
     };
   }, [theme]);
@@ -237,6 +257,17 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
     }, 200);
   }, [onViewModeChange, onPageChange, beginTourRun]);
 
+  const returnToKanbanAfterTour = useCallback(() => {
+    // When admin/system-monitor steps are skipped or the tour ends on Admin, land on Kanban.
+    const hash = window.location.hash.toLowerCase();
+    if (onPageChange && (hash.includes('admin') || hash.includes('reports'))) {
+      onPageChange('kanban');
+    }
+    if (onViewModeChange) {
+      onViewModeChange('kanban');
+    }
+  }, [onPageChange, onViewModeChange]);
+
   const stopTour = useCallback(() => {
     setIsRunning(false);
     setStepIndex(0);
@@ -244,7 +275,8 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
     advancingRef.current = false;
     // Restore system metrics panel to whatever visibility it had before the tour opened it
     window.dispatchEvent(new Event('tour:restore-system-panel'));
-  }, []);
+    returnToKanbanAfterTour();
+  }, [returnToKanbanAfterTour]);
 
   const setHelpModalOpen = useCallback((open: boolean) => {
     setIsHelpModalOpen(open);
@@ -417,6 +449,7 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
         disableScrollParentFix={true}
         disableOverlay={false}
         spotlightClicks={true}
+        spotlightPadding={4}
         styles={joyrideStyles}
         locale={{
           back: t('tour.back'),
