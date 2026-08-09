@@ -21,6 +21,8 @@ import {
 } from '../utils/settingsSecrets.js';
 import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
 import { getRequestStoragePaths } from '../services/storage/index.js';
+import { getObject, filenameFromPublicUrl } from '../services/storage/objectStorage.js';
+import path from 'path';
 
 const router = express.Router();
 
@@ -325,31 +327,30 @@ router.put('/settings', authenticateAdminPortal, async (req, res) => {
 router.get('/users', authenticateAdminPortal, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    // MIGRATED: Get all users with roles using sqlManager
     const usersRaw = await userQueries.getAllUsersWithRolesAndMembers(db);
-    
-    // Transform to match expected format (without member info for admin portal)
-    const users = usersRaw.map(user => ({
-      id: user.id,
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      is_active: user.is_active,
-      created_at: user.created_at,
-      roles: user.roles || ''
-    }));
-    
-    // Format users data
-    const formattedUsers = users.map(user => ({
-      id: user.id,
-      email: user.email,
-      firstName: user.first_name,
-      lastName: user.last_name,
-      isActive: Boolean(user.is_active),
-      roles: user.roles ? user.roles.split(',') : [],
-      createdAt: user.created_at
-    }));
-    
+
+    const formattedUsers = usersRaw.map((user) => {
+      const firstName = user.first_name || '';
+      const lastName = user.last_name || '';
+      const displayName =
+        (user.member_name && String(user.member_name).trim()) ||
+        `${firstName} ${lastName}`.trim() ||
+        user.email;
+      return {
+        id: user.id,
+        email: user.email,
+        firstName,
+        lastName,
+        displayName,
+        isActive: Boolean(user.is_active),
+        roles: user.roles ? String(user.roles).split(',').filter(Boolean) : [],
+        createdAt: user.created_at,
+        authProvider: user.auth_provider || 'local',
+        googleAvatarUrl: user.google_avatar_url || null,
+        hasLocalAvatar: Boolean(user.avatar_path)
+      };
+    });
+
     res.json({
       success: true,
       data: formattedUsers
@@ -358,10 +359,45 @@ router.get('/users', authenticateAdminPortal, async (req, res) => {
     console.error('Error fetching users:', error);
     const db = getRequestDatabase(req);
     const t = await getTranslator(db);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: t('errors.failedToFetchUsers') 
+      error: t('errors.failedToFetchUsers')
     });
+  }
+});
+
+// Stream user avatar (INSTANCE_TOKEN auth — for admin portal cross-origin <img>)
+router.get('/users/:userId/avatar', authenticateAdminPortal, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const { userId } = req.params;
+    const user = await userQueries.getUserByIdForAdmin(db, userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (user.google_avatar_url) {
+      return res.redirect(302, user.google_avatar_url);
+    }
+
+    const avatarPath = user.avatar_path || user.avatarPath;
+    if (!avatarPath) {
+      return res.status(404).json({ success: false, error: 'No avatar' });
+    }
+
+    const filename = filenameFromPublicUrl(avatarPath, 'avatars') || path.basename(String(avatarPath));
+    const storagePaths = getRequestStoragePaths(req);
+    const obj = await getObject(db, storagePaths, 'avatars', filename);
+    if (!obj) {
+      return res.status(404).json({ success: false, error: 'Avatar file not found' });
+    }
+
+    res.setHeader('Content-Type', obj.contentType || 'image/png');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.send(obj.buffer);
+  } catch (error) {
+    console.error('Error serving admin-portal user avatar:', error);
+    res.status(500).json({ success: false, error: 'Failed to load avatar' });
   }
 });
 
@@ -496,7 +532,7 @@ router.put('/users/:userId', authenticateAdminPortal, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const { userId } = req.params;
-    const { email, firstName, lastName, role, isActive } = req.body;
+    const { email, firstName, lastName, role, isActive, displayName: displayNameBody } = req.body;
     const t = await getTranslator(db);
 
     const existingUser = await userQueries.getUserByIdForAdmin(db, userId);
@@ -559,7 +595,13 @@ router.put('/users/:userId', authenticateAdminPortal, async (req, res) => {
     }
 
     const memberRow = await userQueries.getMemberByUserIdWithColor(db, userId);
-    const displayName = `${effectiveFirst} ${effectiveLast}`.trim();
+    let displayName =
+      displayNameBody !== undefined && String(displayNameBody).trim()
+        ? String(displayNameBody).trim()
+        : `${effectiveFirst} ${effectiveLast}`.trim();
+    if (displayName.length > 30) {
+      displayName = displayName.substring(0, 30);
+    }
     if (memberRow) {
       await userQueries.updateMemberName(db, userId, displayName);
     }
@@ -621,8 +663,12 @@ router.put('/users/:userId', authenticateAdminPortal, async (req, res) => {
         email: updatedUser.email || effectiveEmail,
         firstName: updatedUser.first_name || effectiveFirst,
         lastName: updatedUser.last_name || effectiveLast,
+        displayName,
         roles: rolesArray,
         isActive: Boolean(updatedUser.is_active),
+        authProvider: updatedUser.auth_provider || 'local',
+        googleAvatarUrl: updatedUser.google_avatar_url || null,
+        hasLocalAvatar: Boolean(updatedUser.avatar_path || updatedUser.avatarPath),
         createdAt: updatedUser.created_at
       }
     });
