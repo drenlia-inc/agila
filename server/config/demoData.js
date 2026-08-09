@@ -298,210 +298,12 @@ export async function initializeDemoData(db, boardId, columns) {
   // Calculate sprint start date for task timing (14 days ago)
   const sprintStartForTasks = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   
-  // Demo tasks data - each assigned to a specific member
-  // All tasks start at or before sprint start, so they appear in initial burndown
-  const demoTasks = [
-    // To Do Column (3 tasks) - not yet started or just started
-    {
-      title: 'Set up project documentation',
-      description: 'Create comprehensive project documentation including README, API docs, and user guides.',
-      priority: 'high',
-      effort: 3,
-      startDate: sprintStartForTasks, // Sprint start
-      duedate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days from now
-      assignedTo: 3 // Alex Morgan (admin)
-    },
-    {
-      title: 'Design user interface mockups',
-      description: 'Create wireframes and mockups for the new dashboard interface.',
-      priority: 'medium',
-      effort: 2,
-      startDate: sprintStartForTasks, // Sprint start
-      duedate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 5 days from now
-      assignedTo: 1 // Sarah Johnson
-    },
-    {
-      title: 'Research third-party integrations',
-      description: 'Investigate available APIs and services for payment processing and analytics.',
-      priority: 'low',
-      effort: 1,
-      startDate: sprintStartForTasks, // Sprint start
-      dueDate: null,
-      assignedTo: 2 // Mike Davis
-    },
-    // In Progress Column (3 tasks) - actively being worked on
-    {
-      title: 'Implement user authentication',
-      description: 'Build secure login system with JWT tokens and password hashing.',
-      priority: 'urgent',
-      effort: 5,
-      startDate: sprintStartForTasks, // Sprint start
-      duedate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 3 days from now
-      assignedTo: 2 // Mike Davis
-    },
-    {
-      title: 'Create database schema',
-      description: 'Design and implement the database structure with proper relationships and indexes.',
-      priority: 'high',
-      effort: 4,
-      startDate: sprintStartForTasks, // Sprint start
-      duedate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 2 days from now
-      assignedTo: 3 // Alex Morgan (admin)
-    },
-    {
-      title: 'Set up CI/CD pipeline',
-      description: 'Configure automated testing and deployment workflows using GitHub Actions.',
-      priority: 'medium',
-      effort: 3,
-      startDate: sprintStartForTasks, // Sprint start
-      duedate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 4 days from now
-      assignedTo: 1 // Sarah Johnson
-    },
-    // Testing Column (3 tasks) - in testing phase
-    {
-      title: 'Write unit tests for API endpoints',
-      description: 'Create comprehensive test coverage for all REST API endpoints.',
-      priority: 'high',
-      effort: 2,
-      startDate: sprintStartForTasks, // Sprint start
-      duedate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 day from now
-      assignedTo: 1 // Sarah Johnson
-    },
-    {
-      title: 'Perform security audit',
-      description: 'Review code for security vulnerabilities and implement necessary fixes.',
-      priority: 'urgent',
-      effort: 3,
-      startDate: sprintStartForTasks, // Sprint start
-      duedate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 2 days from now
-      assignedTo: 3 // Alex Morgan (admin)
-    },
-    {
-      title: 'Test cross-browser compatibility',
-      description: 'Ensure the application works correctly across different browsers and devices.',
-      priority: 'medium',
-      effort: 2,
-      startDate: sprintStartForTasks, // Sprint start
-      duedate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 3 days from now
-      assignedTo: 0 // John Smith
-    },
-    // Completed Column (3 tasks)
-    {
-      title: 'Project planning and requirements gathering',
-      description: 'Conducted stakeholder interviews and documented all project requirements.',
-      priority: 'medium',
-      effort: 2,
-      startDate: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Started 12 days ago
-      dueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Due 5 days ago
-      completedDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Completed 6 days ago
-      assignedTo: 0 // John Smith
-    },
-    {
-      title: 'Set up development environment',
-      description: 'Configured local development setup with all necessary tools and dependencies.',
-      priority: 'low',
-      effort: 1,
-      startDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Started 10 days ago
-      dueDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Due 3 days ago
-      completedDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Completed 4 days ago
-      assignedTo: 1 // Sarah Johnson
-    },
-    {
-      title: 'Create initial project structure',
-      description: 'Set up the basic project architecture and folder structure.',
-      priority: 'medium',
-      effort: 1,
-      startDate: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Started 9 days ago
-      dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Due 2 days ago
-      completedDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Completed 3 days ago
-      assignedTo: 2 // Mike Davis
-    },
-    // Archive Column (3 tasks)
-    {
-      title: 'Legacy feature removal',
-      description: 'Removed deprecated features that are no longer needed in the current version.',
-      priority: 'low',
-      effort: 1,
-      startDate: new Date(Date.now() - 17 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Started 17 days ago
-      dueDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Due 10 days ago
-      completedDate: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Completed 11 days ago
-      assignedTo: 2 // Mike Davis
-    },
-    {
-      title: 'Old documentation cleanup',
-      description: 'Archived outdated documentation and updated references to current versions.',
-      priority: 'low',
-      effort: 1,
-      startDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Started 14 days ago
-      dueDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Due 7 days ago
-      completedDate: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Completed 8 days ago
-      assignedTo: 0 // John Smith
-    },
-    {
-      title: 'Deprecated API endpoint removal',
-      description: 'Removed old API endpoints that have been replaced by newer versions.',
-      priority: 'medium',
-      effort: 2,
-      startDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Started 20 days ago
-      dueDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Due 14 days ago
-      completedDate: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Completed 13 days ago
-      assignedTo: 1 // Sarah Johnson
-    }
-  ];
-
-  // Insert demo tasks
-  const taskStmt = db.prepare(`
-    INSERT INTO tasks (id, title, description, ticket, memberid, requesterid, startdate, duedate, effort, priority, columnid, boardid, position, created_at, updated_at) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-  `);
-
-  const createdTasks = []; // Store task info for later use (relationships, leaderboard, etc.)
-  
-  for (let index = 0; index < demoTasks.length; index++) {
-    const task = demoTasks[index];
-    const taskId = crypto.randomUUID();
-    const ticketNumber = String(index + 1).padStart(5, '0'); // TASK-00001, TASK-00002, etc.
-    const columnIndex = Math.floor(index / 3); // 0-4 for each column
-    const positionInColumn = index % 3; // 0-2 within each column
-    
-    const assignedMember = members[task.assignedTo % members.length];
-    
-    await wrapQuery(taskStmt, 'INSERT').run(
-      taskId,
-      task.title,
-      task.description,
-      `TASK-${ticketNumber}`, // Fixed format: TASK-00001, TASK-00002, etc.
-      assignedMember.id,
-      assignedMember.id, // Requester is same as assignee for demo
-      task.startDate || today, // Use task's startDate if provided
-      task.dueDate,
-      task.effort,
-      task.priority,
-      columns[columnIndex].id,
-      boardId,
-      positionInColumn,
-      now,
-      now
-    );
-    
-    // Store task info for later use
-    createdTasks.push({
-      id: taskId,
-      ticket: `TASK-${ticketNumber}`,
-      columnIndex: columnIndex,
-      memberId: assignedMember.id,
-      completedDate: task.completedDate || null,
-      effort: task.effort
-    });
-  }
-
-  console.log(`✅ Created ${demoTasks.length} demo tasks assigned to team members`);
-
-  // Create a sprint with realistic dates (started 2 weeks ago, ends in 1 week)
+  // Create sprint first so tasks can be inserted with sprint_id (or null = backlog).
+  // Realistic rule: backlog = not committed → To Do only; active sprint work flows across columns.
   const sprintStartDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const sprintEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const sprintId = crypto.randomUUID();
-  
+
   await wrapQuery(db.prepare(`
     INSERT INTO planning_periods (id, name, start_date, end_date, description, is_active, board_id, created_at, updated_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -511,49 +313,144 @@ export async function initializeDemoData(db, boardId, columns) {
     sprintStartDate,
     sprintEndDate,
     'Complete initial project setup and core features',
-    1, // is_active
-    boardId, // board_id
+    1,
+    boardId,
     now,
     now
   );
-
   console.log(`✅ Created demo sprint: Sprint 1 (${sprintStartDate} to ${sprintEndDate})`);
 
-  // Link only a subset of the original tasks to the sprint (rest stay backlog).
-  // Target: 12 sprint tasks total = 4 originals + 8 extras below.
-  const originalSprintTaskIndices = [0, 1, 3, 4]; // docs, mockups, auth, schema
-  const linkSprintStmt = db.prepare(
-    'UPDATE tasks SET sprint_id = $1, updated_at = $2 WHERE id = $3'
-  );
-  for (const idx of originalSprintTaskIndices) {
-    const task = createdTasks[idx];
-    if (task) {
-      await wrapQuery(linkSprintStmt, 'UPDATE').run(sprintId, now, task.id);
-    }
-  }
-  console.log(`✅ Linked ${originalSprintTaskIndices.length} original demo tasks to Sprint 1`);
+  const daysFromNow = (d) => new Date(Date.now() + d * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const daysAgoDate = (d) => new Date(Date.now() - d * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  // Extra sprint tasks — varied columns/assignees so Sprint 1 has a fuller board
-  const extraSprintTasks = [
+  // columnIndex: 0 To Do, 1 In Progress, 2 Testing, 3 Completed, 4 Archive
+  // inSprint: false → backlog (To Do only); true → Sprint 1
+  const demoTasks = [
+    // —— Backlog (To Do only) ——
     {
-      title: 'Polish onboarding checklist',
-      description: 'Add empty-state tips and a short checklist for first-time board setup.',
+      title: 'Research third-party integrations',
+      description: 'Investigate available APIs and services for payment processing and analytics.',
+      priority: 'low',
+      effort: 1,
+      startDate: today,
+      dueDate: null,
+      columnIndex: 0,
+      inSprint: false,
+      assignedTo: 2
+    },
+    {
+      title: 'Explore dark-mode polish',
+      description: 'Audit contrast and charts in dark theme; list follow-ups for a future sprint.',
+      priority: 'low',
+      effort: 2,
+      startDate: today,
+      dueDate: null,
+      columnIndex: 0,
+      inSprint: false,
+      assignedTo: 0
+    },
+    {
+      title: 'Document API versioning policy',
+      description: 'Draft how we version public REST endpoints and communicate breaking changes.',
       priority: 'medium',
       effort: 2,
-      startDate: sprintStartForTasks,
-      dueDate: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      startDate: today,
+      dueDate: daysFromNow(14),
       columnIndex: 0,
+      inSprint: false,
       assignedTo: 3
+    },
+    {
+      title: 'Evaluate analytics vendors',
+      description: 'Compare product analytics options (privacy, cost, SDK size) before committing.',
+      priority: 'low',
+      effort: 1,
+      startDate: today,
+      dueDate: null,
+      columnIndex: 0,
+      inSprint: false,
+      assignedTo: 1
     },
     {
       title: 'Add keyboard shortcuts help',
       description: 'Document and surface common board shortcuts for power users.',
       priority: 'low',
       effort: 1,
-      startDate: sprintStartForTasks,
-      dueDate: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      startDate: today,
+      dueDate: daysFromNow(21),
       columnIndex: 0,
+      inSprint: false,
       assignedTo: 0
+    },
+
+    // —— Sprint 1 · To Do ——
+    {
+      title: 'Set up project documentation',
+      description: 'Create comprehensive project documentation including README, API docs, and user guides.',
+      priority: 'high',
+      effort: 3,
+      startDate: sprintStartForTasks,
+      dueDate: daysFromNow(7),
+      columnIndex: 0,
+      inSprint: true,
+      assignedTo: 3
+    },
+    {
+      title: 'Design user interface mockups',
+      description: 'Create wireframes and mockups for the new dashboard interface.',
+      priority: 'medium',
+      effort: 2,
+      startDate: sprintStartForTasks,
+      dueDate: daysFromNow(5),
+      columnIndex: 0,
+      inSprint: true,
+      assignedTo: 1
+    },
+    {
+      title: 'Polish onboarding checklist',
+      description: 'Add empty-state tips and a short checklist for first-time board setup.',
+      priority: 'medium',
+      effort: 2,
+      startDate: sprintStartForTasks,
+      dueDate: daysFromNow(6),
+      columnIndex: 0,
+      inSprint: true,
+      assignedTo: 3
+    },
+
+    // —— Sprint 1 · In Progress ——
+    {
+      title: 'Implement user authentication',
+      description: 'Build secure login system with JWT tokens and password hashing.',
+      priority: 'urgent',
+      effort: 5,
+      startDate: sprintStartForTasks,
+      dueDate: daysFromNow(3),
+      columnIndex: 1,
+      inSprint: true,
+      assignedTo: 2
+    },
+    {
+      title: 'Create database schema',
+      description: 'Design and implement the database structure with proper relationships and indexes.',
+      priority: 'high',
+      effort: 4,
+      startDate: sprintStartForTasks,
+      dueDate: daysFromNow(2),
+      columnIndex: 1,
+      inSprint: true,
+      assignedTo: 3
+    },
+    {
+      title: 'Set up CI/CD pipeline',
+      description: 'Configure automated testing and deployment workflows using GitHub Actions.',
+      priority: 'medium',
+      effort: 3,
+      startDate: sprintStartForTasks,
+      dueDate: daysFromNow(4),
+      columnIndex: 1,
+      inSprint: true,
+      assignedTo: 1
     },
     {
       title: 'Improve task search relevance',
@@ -561,8 +458,9 @@ export async function initializeDemoData(db, boardId, columns) {
       priority: 'high',
       effort: 3,
       startDate: sprintStartForTasks,
-      dueDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      dueDate: daysFromNow(4),
       columnIndex: 1,
+      inSprint: true,
       assignedTo: 2
     },
     {
@@ -571,19 +469,45 @@ export async function initializeDemoData(db, boardId, columns) {
       priority: 'medium',
       effort: 2,
       startDate: sprintStartForTasks,
-      dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      dueDate: daysFromNow(5),
       columnIndex: 1,
+      inSprint: true,
+      assignedTo: 3
+    },
+
+    // —— Sprint 1 · Testing ——
+    {
+      title: 'Write unit tests for API endpoints',
+      description: 'Create comprehensive test coverage for all REST API endpoints.',
+      priority: 'high',
+      effort: 2,
+      startDate: sprintStartForTasks,
+      dueDate: daysFromNow(1),
+      columnIndex: 2,
+      inSprint: true,
+      assignedTo: 1
+    },
+    {
+      title: 'Perform security audit',
+      description: 'Review code for security vulnerabilities and implement necessary fixes.',
+      priority: 'urgent',
+      effort: 3,
+      startDate: sprintStartForTasks,
+      dueDate: daysFromNow(2),
+      columnIndex: 2,
+      inSprint: true,
       assignedTo: 3
     },
     {
-      title: 'Column WIP limit warnings',
-      description: 'Warn when moving a card into a column that already exceeds its WIP limit.',
+      title: 'Test cross-browser compatibility',
+      description: 'Ensure the application works correctly across different browsers and devices.',
       priority: 'medium',
       effort: 2,
       startDate: sprintStartForTasks,
-      dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      columnIndex: 1,
-      assignedTo: 1
+      dueDate: daysFromNow(3),
+      columnIndex: 2,
+      inSprint: true,
+      assignedTo: 0
     },
     {
       title: 'Verify sprint filter edge cases',
@@ -591,57 +515,120 @@ export async function initializeDemoData(db, boardId, columns) {
       priority: 'high',
       effort: 2,
       startDate: sprintStartForTasks,
-      dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      dueDate: daysFromNow(2),
       columnIndex: 2,
+      inSprint: true,
       assignedTo: 2
     },
+
+    // —— Sprint 1 · Completed ——
     {
-      title: 'Regression: drag across boards',
-      description: 'Confirm multi-select drag still works when moving cards to another board.',
-      priority: 'urgent',
-      effort: 3,
-      startDate: sprintStartForTasks,
-      dueDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      columnIndex: 2,
+      title: 'Project planning and requirements gathering',
+      description: 'Conducted stakeholder interviews and documented all project requirements.',
+      priority: 'medium',
+      effort: 2,
+      startDate: daysAgoDate(12),
+      dueDate: daysAgoDate(5),
+      completedDate: daysAgoDate(6),
+      columnIndex: 3,
+      inSprint: true,
       assignedTo: 0
     },
     {
-      title: 'Ship demo seed sprint data',
-      description: 'Ensure sample tasks are assigned to members and linked to the active sprint.',
+      title: 'Set up development environment',
+      description: 'Configured local development setup with all necessary tools and dependencies.',
       priority: 'low',
       effort: 1,
-      startDate: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      dueDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      completedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      startDate: daysAgoDate(10),
+      dueDate: daysAgoDate(3),
+      completedDate: daysAgoDate(4),
       columnIndex: 3,
+      inSprint: true,
+      assignedTo: 1
+    },
+    {
+      title: 'Create initial project structure',
+      description: 'Set up the basic project architecture and folder structure.',
+      priority: 'medium',
+      effort: 1,
+      startDate: daysAgoDate(9),
+      dueDate: daysAgoDate(2),
+      completedDate: daysAgoDate(3),
+      columnIndex: 3,
+      inSprint: true,
+      assignedTo: 2
+    },
+    {
+      title: 'Wire sprint filter on board view',
+      description: 'Let the board show backlog vs an active sprint without losing column layout.',
+      priority: 'low',
+      effort: 1,
+      startDate: daysAgoDate(11),
+      dueDate: daysAgoDate(4),
+      completedDate: daysAgoDate(5),
+      columnIndex: 3,
+      inSprint: true,
       assignedTo: 3
+    },
+
+    // —— Sprint 1 · Archive (finished earlier this sprint, then archived) ——
+    {
+      title: 'Legacy feature removal',
+      description: 'Removed deprecated features that are no longer needed in the current version.',
+      priority: 'low',
+      effort: 1,
+      startDate: daysAgoDate(13),
+      dueDate: daysAgoDate(10),
+      completedDate: daysAgoDate(11),
+      columnIndex: 4,
+      inSprint: true,
+      assignedTo: 2
+    },
+    {
+      title: 'Old documentation cleanup',
+      description: 'Archived outdated documentation and updated references to current versions.',
+      priority: 'low',
+      effort: 1,
+      startDate: daysAgoDate(12),
+      dueDate: daysAgoDate(8),
+      completedDate: daysAgoDate(9),
+      columnIndex: 4,
+      inSprint: true,
+      assignedTo: 0
     }
   ];
 
-  const sprintTaskStmt = db.prepare(`
+  const taskStmt = db.prepare(`
     INSERT INTO tasks (id, title, description, ticket, memberid, requesterid, startdate, duedate, effort, priority, columnid, boardid, position, sprint_id, created_at, updated_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
   `);
 
+  const createdTasks = [];
   const positionsByColumn = {};
-  for (const task of extraSprintTasks) {
-    const colIdx = task.columnIndex;
-    if (positionsByColumn[colIdx] === undefined) {
-      // Original seed places 3 tasks at positions 0–2 in each column
-      positionsByColumn[colIdx] = 3;
-    }
-    const taskId = crypto.randomUUID();
-    const ticketNumber = String(createdTasks.length + 1).padStart(5, '0');
-    const assignedMember = members[task.assignedTo % members.length];
-    const position = positionsByColumn[colIdx]++;
+  let sprintTaskCount = 0;
+  let backlogTaskCount = 0;
 
-    await wrapQuery(sprintTaskStmt, 'INSERT').run(
+  for (let index = 0; index < demoTasks.length; index++) {
+    const task = demoTasks[index];
+    const colIdx = task.columnIndex;
+    if (positionsByColumn[colIdx] === undefined) positionsByColumn[colIdx] = 0;
+    const position = positionsByColumn[colIdx]++;
+    const taskId = crypto.randomUUID();
+    const ticketNumber = String(index + 1).padStart(5, '0');
+    const assignedMember = members[task.assignedTo % members.length];
+    // Slight realism: requester is often a teammate, not always the assignee
+    const requester = members[(task.assignedTo + 1) % members.length];
+    const taskSprintId = task.inSprint ? sprintId : null;
+    if (task.inSprint) sprintTaskCount += 1;
+    else backlogTaskCount += 1;
+
+    await wrapQuery(taskStmt, 'INSERT').run(
       taskId,
       task.title,
       task.description,
       `TASK-${ticketNumber}`,
       assignedMember.id,
-      assignedMember.id,
+      requester.id,
       task.startDate || today,
       task.dueDate || null,
       task.effort,
@@ -649,65 +636,30 @@ export async function initializeDemoData(db, boardId, columns) {
       columns[colIdx].id,
       boardId,
       position,
-      sprintId,
+      taskSprintId,
       now,
       now
     );
 
     createdTasks.push({
       id: taskId,
+      title: task.title,
       ticket: `TASK-${ticketNumber}`,
       columnIndex: colIdx,
       memberId: assignedMember.id,
       completedDate: task.completedDate || null,
-      effort: task.effort
+      effort: task.effort,
+      startDate: task.startDate || today,
+      inSprint: !!task.inSprint,
+      priority: task.priority
     });
   }
 
   console.log(
-    `✅ Created ${extraSprintTasks.length} additional sprint-linked demo tasks ` +
-      `(${originalSprintTaskIndices.length + extraSprintTasks.length} on Sprint 1 total)`
+    `✅ Created ${demoTasks.length} demo tasks (${backlogTaskCount} backlog in To Do, ${sprintTaskCount} on Sprint 1)`
   );
 
-  // TODO: Update completed tasks with realistic completion dates
-  // Disabled because completed_at column doesn't exist in tasks table yet
-  /*
-  const completedColumnId = columns.find(c => c.title === 'Completed')?.id;
-  const completedTasks = await wrapQuery(db.prepare('SELECT id FROM tasks WHERE columnid = $1 AND boardid = $2'), 'SELECT').all(completedColumnId, boardId);
-  
-  for (const [index, task] of completedTasks.entries()) {
-    // Spread completions: 10 days ago, 8 days ago, 5 days ago
-    const daysAgo = [10, 8, 5][index] || 3;
-    const completedDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
-    
-    await wrapQuery(db.prepare('UPDATE tasks SET completed_at = $1, updated_at = $2 WHERE id = $3'), 'UPDATE').run(
-      completedDate,
-      completedDate,
-      task.id
-    );
-  }
-  */
-
-  // TODO: Update archived tasks with older completion dates
-  // Disabled because completed_at column doesn't exist in tasks table yet
-  /*
-  const archiveColumnId = columns.find(c => c.title === 'Archive')?.id;
-  const archivedTasks = await wrapQuery(db.prepare('SELECT id FROM tasks WHERE columnid = $1 AND boardid = $2'), 'SELECT').all(archiveColumnId, boardId);
-  
-  for (const [index, task] of archivedTasks.entries()) {
-    // Archived tasks completed 14, 12, 11 days ago
-    const daysAgo = [14, 12, 11][index] || 10;
-    const completedDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
-    
-    await wrapQuery(db.prepare('UPDATE tasks SET completed_at = $1, updated_at = $2 WHERE id = $3'), 'UPDATE').run(
-      completedDate,
-      completedDate,
-      task.id
-    );
-  }
-  */
-
-  // console.log(`✅ Updated ${completedTasks.length + archivedTasks.length} tasks with completion dates`);
+  const taskByTitle = (title) => createdTasks.find((t) => t.title === title);
 
   // Create tags
   const tags = [
@@ -727,50 +679,38 @@ export async function initializeDemoData(db, boardId, columns) {
 
   console.log(`✅ Created ${tags.length} tags`);
 
-  // Assign tags to tasks (get fresh task list with IDs)
-  const allTasks = await wrapQuery(db.prepare(`
-    SELECT t.id, t.title 
-    FROM tasks t 
-    WHERE t.boardid = $1 
-    ORDER BY t.position
-  `), 'SELECT').all(boardId);
-
-  // Tag assignments (based on task titles/descriptions)
-  const tagAssignments = [
-    { taskIndex: 0, tags: ['documentation'] }, // Set up project documentation
-    { taskIndex: 1, tags: ['frontend'] }, // Design user interface mockups
-    { taskIndex: 2, tags: ['backend'] }, // Research third-party integrations
-    { taskIndex: 3, tags: ['backend', 'security'] }, // Implement user authentication
-    { taskIndex: 4, tags: ['database', 'backend'] }, // Create database schema
-    { taskIndex: 5, tags: ['backend'] }, // Set up CI/CD pipeline
-    { taskIndex: 6, tags: ['backend', 'testing'] }, // Write unit tests for API endpoints
-    { taskIndex: 7, tags: ['security', 'backend'] }, // Perform security audit
-    { taskIndex: 8, tags: ['frontend', 'testing'] }, // Test cross-browser compatibility
-    { taskIndex: 9, tags: ['documentation'] }, // Project planning and requirements gathering
-    { taskIndex: 12, tags: ['backend'] }, // Deprecated API endpoint removal
-  ];
+  // Tag / comment / relationship helpers keyed by title (stable across reordering)
+  const tagsByTitle = {
+    'Set up project documentation': ['documentation'],
+    'Design user interface mockups': ['frontend'],
+    'Research third-party integrations': ['backend'],
+    'Implement user authentication': ['backend', 'security'],
+    'Create database schema': ['database', 'backend'],
+    'Set up CI/CD pipeline': ['backend'],
+    'Write unit tests for API endpoints': ['backend', 'testing'],
+    'Perform security audit': ['security', 'backend'],
+    'Test cross-browser compatibility': ['frontend', 'testing'],
+    'Project planning and requirements gathering': ['documentation'],
+    'Document API versioning policy': ['documentation'],
+    'Legacy feature removal': ['backend']
+  };
 
   const taskTagStmt = db.prepare('INSERT INTO task_tags (taskid, tagid) VALUES ($1, $2)');
-  for (const assignment of tagAssignments) {
-    if (allTasks[assignment.taskIndex]) {
-      for (const tagName of assignment.tags) {
-        await wrapQuery(taskTagStmt, 'INSERT').run(allTasks[assignment.taskIndex].id, tagIds[tagName]);
-      }
+  for (const task of createdTasks) {
+    const names = tagsByTitle[task.title];
+    if (!names) continue;
+    for (const tagName of names) {
+      await wrapQuery(taskTagStmt, 'INSERT').run(task.id, tagIds[tagName]);
     }
   }
 
   console.log(`✅ Assigned tags to tasks`);
 
-  // Create task relationships (parent/child dependencies)
   const relationships = [
-    // "Create database schema" is parent of "Implement user authentication" 
-    { parentIndex: 4, childIndex: 3, type: 'parent' },
-    // "Implement user authentication" is parent of "Write unit tests"
-    { parentIndex: 3, childIndex: 6, type: 'parent' },
-    // "Project planning" is parent of "Set up project documentation"
-    { parentIndex: 9, childIndex: 0, type: 'parent' },
-    // "Design user interface mockups" related to "Test cross-browser compatibility"
-    { task1Index: 1, task2Index: 8, type: 'related' },
+    { parentTitle: 'Create database schema', childTitle: 'Implement user authentication', type: 'parent' },
+    { parentTitle: 'Implement user authentication', childTitle: 'Write unit tests for API endpoints', type: 'parent' },
+    { parentTitle: 'Project planning and requirements gathering', childTitle: 'Set up project documentation', type: 'parent' },
+    { task1Title: 'Design user interface mockups', task2Title: 'Test cross-browser compatibility', type: 'related' },
   ];
 
   const relationshipStmt = db.prepare(`
@@ -780,88 +720,65 @@ export async function initializeDemoData(db, boardId, columns) {
 
   let relationshipCount = 0;
   for (const rel of relationships) {
-    if (rel.type === 'parent' && allTasks[rel.parentIndex] && allTasks[rel.childIndex]) {
-      // Create parent relationship
-      await wrapQuery(relationshipStmt, 'INSERT').run(
-        allTasks[rel.parentIndex].id,
-        'parent',
-        allTasks[rel.childIndex].id,
-        now,
-        now
-      );
-      // Create inverse child relationship
-      await wrapQuery(relationshipStmt, 'INSERT').run(
-        allTasks[rel.childIndex].id,
-        'child',
-        allTasks[rel.parentIndex].id,
-        now,
-        now
-      );
+    if (rel.type === 'parent') {
+      const parent = taskByTitle(rel.parentTitle);
+      const child = taskByTitle(rel.childTitle);
+      if (!parent || !child) continue;
+      await wrapQuery(relationshipStmt, 'INSERT').run(parent.id, 'parent', child.id, now, now);
+      await wrapQuery(relationshipStmt, 'INSERT').run(child.id, 'child', parent.id, now, now);
       relationshipCount += 2;
-    } else if (rel.type === 'related' && allTasks[rel.task1Index] && allTasks[rel.task2Index]) {
-      // Create related relationship (bidirectional)
-      await wrapQuery(relationshipStmt, 'INSERT').run(
-        allTasks[rel.task1Index].id,
-        'related',
-        allTasks[rel.task2Index].id,
-        now,
-        now
-      );
-      await wrapQuery(relationshipStmt, 'INSERT').run(
-        allTasks[rel.task2Index].id,
-        'related',
-        allTasks[rel.task1Index].id,
-        now,
-        now
-      );
+    } else if (rel.type === 'related') {
+      const a = taskByTitle(rel.task1Title);
+      const b = taskByTitle(rel.task2Title);
+      if (!a || !b) continue;
+      await wrapQuery(relationshipStmt, 'INSERT').run(a.id, 'related', b.id, now, now);
+      await wrapQuery(relationshipStmt, 'INSERT').run(b.id, 'related', a.id, now, now);
       relationshipCount += 2;
     }
   }
 
   console.log(`✅ Created ${relationshipCount} task relationships (${relationships.length} logical relationships)`);
 
-
-  // Create comments on tasks
   const comments = [
     {
-      taskIndex: 3,
-      memberId: members[1].id, // Sarah
+      title: 'Implement user authentication',
+      memberId: members[1].id,
       text: 'Started implementing JWT token authentication. Should be ready by EOD tomorrow.',
       createdDaysAgo: 2
     },
     {
-      taskIndex: 3,
-      memberId: members[0].id, // John
+      title: 'Implement user authentication',
+      memberId: members[0].id,
       text: 'Great! Make sure to add refresh token functionality as well.',
       createdDaysAgo: 2
     },
     {
-      taskIndex: 4,
-      memberId: members[0].id, // John
+      title: 'Create database schema',
+      memberId: members[0].id,
       text: 'Database schema design is complete. Moving to implementation phase.',
       createdDaysAgo: 5
     },
     {
-      taskIndex: 6,
-      memberId: members[1].id, // Sarah
+      title: 'Write unit tests for API endpoints',
+      memberId: members[1].id,
       text: 'Added test coverage for all authentication endpoints. Coverage is now at 85%.',
       createdDaysAgo: 1
     },
     {
-      taskIndex: 7,
-      memberId: members[2].id, // Mike
+      title: 'Perform security audit',
+      memberId: members[2].id,
       text: 'Found a few SQL injection vulnerabilities. Creating tasks to fix them.',
       createdDaysAgo: 3
     },
     {
-      taskIndex: 7,
-      memberId: members[0].id, // John
+      title: 'Perform security audit',
+      memberId: members[0].id,
       text: 'Thanks for catching those! Let\'s prioritize the fixes.',
       createdDaysAgo: 3
     },
     {
-      taskIndex: 0,
-      memberId: members[0].id, // John
+      title: 'Set up project documentation',
+      memberId: members[0].id,
       text: 'Working on API documentation. Will use OpenAPI/Swagger format.',
       createdDaysAgo: 1
     },
@@ -872,50 +789,40 @@ export async function initializeDemoData(db, boardId, columns) {
     VALUES ($1, $2, $3, $4, $5, $6)
   `);
 
+  let commentCount = 0;
   for (const comment of comments) {
-    if (allTasks[comment.taskIndex]) {
-      const commentDate = new Date(Date.now() - comment.createdDaysAgo * 24 * 60 * 60 * 1000).toISOString();
-      
-      await wrapQuery(commentStmt, 'INSERT').run(
-        crypto.randomUUID(),
-        allTasks[comment.taskIndex].id,
-        comment.memberId, // authorId references members(id)
-        comment.text,
-        commentDate,
-        commentDate
-      );
-    }
+    const task = taskByTitle(comment.title);
+    if (!task) continue;
+    const commentDate = new Date(Date.now() - comment.createdDaysAgo * 24 * 60 * 60 * 1000).toISOString();
+    await wrapQuery(commentStmt, 'INSERT').run(
+      crypto.randomUUID(),
+      task.id,
+      comment.memberId,
+      comment.text,
+      commentDate,
+      commentDate
+    );
+    commentCount += 1;
   }
 
-  console.log(`✅ Created ${comments.length} comments on tasks`);
+  console.log(`✅ Created ${commentCount} comments on tasks`);
 
-  // Create activity events for leaderboard data
-  // These events track user actions and provide data for the leaderboard
   const activityEvents = [
-    // Completed tasks (column 3 - indexes 9, 10, 11)
-    { taskIndex: 9, memberId: members[0].id, action: 'completed', daysAgo: 6 }, // John completed Project planning
-    { taskIndex: 10, memberid: members[1].id, action: 'completed', daysAgo: 4 }, // Sarah completed Set up dev environment
-    { taskIndex: 11, memberId: members[2].id, action: 'completed', daysAgo: 3 }, // Mike completed Create initial structure
-    
-    // Archived tasks (column 4 - indexes 12, 13, 14)
-    { taskIndex: 12, memberId: members[2].id, action: 'completed', daysAgo: 11 }, // Mike completed Legacy feature removal
-    { taskIndex: 13, memberId: members[0].id, action: 'completed', daysAgo: 8 }, // John completed Old docs cleanup
-    { taskIndex: 14, memberId: members[1].id, action: 'completed', daysAgo: 13 }, // Sarah completed Deprecated API removal
-    
-    // Task creations (distributed over last 2 weeks)
-    { taskIndex: 0, memberId: members[0].id, action: 'created', daysAgo: 12 },
-    { taskIndex: 1, memberId: members[1].id, action: 'created', daysAgo: 11 },
-    { taskIndex: 2, memberId: members[2].id, action: 'created', daysAgo: 10 },
-    { taskIndex: 3, memberId: members[2].id, action: 'created', daysAgo: 9 },
-    { taskIndex: 4, memberId: members[0].id, action: 'created', daysAgo: 8 },
-    { taskIndex: 5, memberId: members[1].id, action: 'created', daysAgo: 7 },
-    
-    // Comments (add some activity points for engagement)
-    { taskIndex: 1, memberId: members[0].id, action: 'commented', daysAgo: 5 },
-    { taskIndex: 3, memberId: members[1].id, action: 'commented', daysAgo: 4 },
-    { taskIndex: 7, memberId: members[2].id, action: 'commented', daysAgo: 3 },
-    { taskIndex: 7, memberId: members[0].id, action: 'commented', daysAgo: 3 },
-    { taskIndex: 0, memberId: members[0].id, action: 'commented', daysAgo: 1 },
+    { title: 'Project planning and requirements gathering', memberId: members[0].id, action: 'completed', daysAgo: 6 },
+    { title: 'Set up development environment', memberId: members[1].id, action: 'completed', daysAgo: 4 },
+    { title: 'Create initial project structure', memberId: members[2].id, action: 'completed', daysAgo: 3 },
+    { title: 'Legacy feature removal', memberId: members[2].id, action: 'completed', daysAgo: 11 },
+    { title: 'Old documentation cleanup', memberId: members[0].id, action: 'completed', daysAgo: 8 },
+    { title: 'Wire sprint filter on board view', memberId: members[3]?.id || members[0].id, action: 'completed', daysAgo: 5 },
+    { title: 'Set up project documentation', memberId: members[3]?.id || members[0].id, action: 'created', daysAgo: 12 },
+    { title: 'Design user interface mockups', memberId: members[1].id, action: 'created', daysAgo: 11 },
+    { title: 'Implement user authentication', memberId: members[2].id, action: 'created', daysAgo: 9 },
+    { title: 'Create database schema', memberId: members[3]?.id || members[0].id, action: 'created', daysAgo: 8 },
+    { title: 'Set up CI/CD pipeline', memberId: members[1].id, action: 'created', daysAgo: 7 },
+    { title: 'Design user interface mockups', memberId: members[0].id, action: 'commented', daysAgo: 5 },
+    { title: 'Implement user authentication', memberId: members[1].id, action: 'commented', daysAgo: 4 },
+    { title: 'Perform security audit', memberId: members[2].id, action: 'commented', daysAgo: 3 },
+    { title: 'Set up project documentation', memberId: members[0].id, action: 'commented', daysAgo: 1 },
   ];
 
   const activityStmt = db.prepare(`
@@ -930,54 +837,48 @@ export async function initializeDemoData(db, boardId, columns) {
 
   let activityCount = 0;
   for (const event of activityEvents) {
-    if (createdTasks[event.taskIndex]) {
-      const task = createdTasks[event.taskIndex];
-      const member = members.find(m => m.id === event.memberId);
-      if (!member) continue;
-      
-      const user = await wrapQuery(db.prepare('SELECT id, email FROM users WHERE id = $1'), 'SELECT').get(member.userid);
-      if (!user) continue;
-      
-      const eventTimestamp = new Date(Date.now() - event.daysAgo * 24 * 60 * 60 * 1000);
-      const eventDate = eventTimestamp.toISOString();
-      
-      // Calculate period info
-      const periodYear = eventTimestamp.getFullYear();
-      const periodMonth = eventTimestamp.getMonth() + 1;
-      const periodWeek = Math.ceil((eventTimestamp.getDate() + new Date(eventTimestamp.getFullYear(), eventTimestamp.getMonth(), 1).getDay()) / 7);
-      
-      let eventType = event.action;
-      
-      // Map actions to match activity_events event types
-      if (event.action === 'completed') {
-        eventType = 'task_completed';
-      } else if (event.action === 'created') {
-        eventType = 'task_created';
-      } else if (event.action === 'commented') {
-        eventType = 'comment_added';
-      }
-      
-      await wrapQuery(activityStmt, 'INSERT').run(
-        crypto.randomUUID(),
-        eventType,
-        user.id,
-        member.name,
-        user.email,
-        task.id,
-        demoTasks[event.taskIndex].title,
-        task.ticket,
-        boardId,
-        board?.name || 'Main Board',
-        event.action === 'completed' ? task.effort : null,
-        demoTasks[event.taskIndex].priority,
-        eventDate,
-        periodYear,
-        periodMonth,
-        periodWeek
-      );
-      
-      activityCount++;
-    }
+    const task = taskByTitle(event.title);
+    if (!task) continue;
+    const member = members.find((m) => m.id === event.memberId);
+    if (!member) continue;
+
+    const user = await wrapQuery(db.prepare('SELECT id, email FROM users WHERE id = $1'), 'SELECT').get(member.userId);
+    if (!user) continue;
+
+    const eventTimestamp = new Date(Date.now() - event.daysAgo * 24 * 60 * 60 * 1000);
+    const eventDate = eventTimestamp.toISOString();
+
+    const periodYear = eventTimestamp.getFullYear();
+    const periodMonth = eventTimestamp.getMonth() + 1;
+    const periodWeek = Math.ceil(
+      (eventTimestamp.getDate() + new Date(eventTimestamp.getFullYear(), eventTimestamp.getMonth(), 1).getDay()) / 7
+    );
+
+    let eventType = event.action;
+    if (event.action === 'completed') eventType = 'task_completed';
+    else if (event.action === 'created') eventType = 'task_created';
+    else if (event.action === 'commented') eventType = 'comment_added';
+
+    await wrapQuery(activityStmt, 'INSERT').run(
+      crypto.randomUUID(),
+      eventType,
+      user.id,
+      member.name,
+      user.email,
+      task.id,
+      task.title,
+      task.ticket,
+      boardId,
+      board?.name || 'Main Board',
+      event.action === 'completed' ? task.effort : null,
+      task.priority,
+      eventDate,
+      periodYear,
+      periodMonth,
+      periodWeek
+    );
+
+    activityCount++;
   }
 
   console.log(`✅ Created ${activityCount} activity events for leaderboard`);
@@ -1000,22 +901,21 @@ export async function initializeDemoData(db, boardId, columns) {
   const userPointsData = [];
   
   for (const member of members) {
-    const user = await wrapQuery(db.prepare('SELECT id FROM users WHERE id = $1'), 'SELECT').get(member.userid);
+    const user = await wrapQuery(db.prepare('SELECT id FROM users WHERE id = $1'), 'SELECT').get(member.userId);
     if (!user) continue;
-    
-    // Count activities for this user
-    const userEvents = activityEvents.filter(e => e.memberId === member.id);
-    
+
+    const userEvents = activityEvents.filter((e) => e.memberId === member.id);
+
     let totalPoints = 0;
     let tasksCreated = 0;
     let tasksCompleted = 0;
     let totalEffortCompleted = 0;
     let commentsAdded = 0;
-    
-    userEvents.forEach(event => {
-      const task = createdTasks[event.taskIndex];
+
+    userEvents.forEach((event) => {
+      const task = taskByTitle(event.title);
       if (!task) return;
-      
+
       if (event.action === 'created') {
         tasksCreated++;
         totalPoints += POINTS.TASK_CREATED;
@@ -1089,71 +989,64 @@ export async function initializeDemoData(db, boardId, columns) {
   while (currentDate <= snapshotEndDate) {
     const snapshotDateStr = currentDate.toISOString().split('T')[0];
     
-    // For each task, create a snapshot showing its state on that date
-    for (let index = 0; index < createdTasks.length; index++) {
-      const task = createdTasks[index];
-      const taskData = demoTasks[index];
-      const taskStartDate = new Date(taskData.startDate || sprintStartDate);
-      
-      // Only create snapshot if task was created by this date
-      if (taskStartDate <= currentDate) {
-        // Determine if task is completed by this date
-        const taskCompletedDate = task.completedDate ? new Date(task.completedDate) : null;
-        const isCompleted = taskCompletedDate && taskCompletedDate <= currentDate ? 1 : 0;
-        
-        // Get column based on completion status
-        const column = columns[task.columnIndex];
-        
-        // Get tags for this task
-        const taskTagsResult = await wrapQuery(db.prepare('SELECT tagid FROM task_tags WHERE taskid = $1'), 'SELECT').all(task.id);
-        const taskTagsList = [];
-        for (const tt of taskTagsResult) {
-          const tag = await wrapQuery(db.prepare('SELECT tag, color FROM tags WHERE id = $1'), 'SELECT').get(tt.tagid);
-          if (tag) {
-            taskTagsList.push(tag.tag);
-          }
-        }
-        
-        // Find the assignee member
-        const assigneeMember = members.find(m => m.id === task.memberId);
-        const assigneeName = assigneeMember ? assigneeMember.name : 'Unknown';
-        
-        await wrapQuery(db.prepare(`
-          INSERT INTO task_snapshots (
-            id, snapshot_date, task_id, task_title, task_ticket, task_description,
-            board_id, board_name, column_id, column_name,
-            assignee_id, assignee_name, requester_id, requester_name,
-            effort_points, priority_name, tags, status, is_completed, is_deleted, created_at, completed_at
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-          ON CONFLICT DO NOTHING
-        `), 'INSERT').run(
-          crypto.randomUUID(),
-          snapshotDateStr,
-          task.id,
-          taskData.title,
-          task.ticket,
-          taskData.description,
-          boardId,
-          board?.name || 'Main Board',
-          column.id,
-          column.title,
-          task.memberId,
-          assigneeName,
-          task.memberId, // requester same as assignee for demo
-          assigneeName,
-          task.effort || 0,
-          taskData.priority,
-          taskTagsList.length > 0 ? JSON.stringify(taskTagsList) : null,
-          isCompleted ? 'completed' : 'in_progress',
-          isCompleted, // is_completed flag for burndown chart
-          0, // is_deleted
-          taskStartDate.toISOString(),
-          taskCompletedDate ? taskCompletedDate.toISOString() : null
-        );
-        
-        snapshotCount++;
+    // Burndown should reflect committed sprint scope only (not backlog)
+    for (const task of createdTasks) {
+      if (!task.inSprint) continue;
+
+      const taskStartDate = new Date(task.startDate || sprintStartDate);
+      if (taskStartDate > currentDate) continue;
+
+      const taskCompletedDate = task.completedDate ? new Date(task.completedDate) : null;
+      const isCompleted = taskCompletedDate && taskCompletedDate <= currentDate ? 1 : 0;
+      const column = columns[task.columnIndex];
+
+      const taskTagsResult = await wrapQuery(db.prepare('SELECT tagid FROM task_tags WHERE taskid = $1'), 'SELECT').all(task.id);
+      const taskTagsList = [];
+      for (const tt of taskTagsResult) {
+        const tag = await wrapQuery(db.prepare('SELECT tag, color FROM tags WHERE id = $1'), 'SELECT').get(tt.tagid);
+        if (tag) taskTagsList.push(tag.tag);
       }
+
+      const assigneeMember = members.find((m) => m.id === task.memberId);
+      const assigneeName = assigneeMember ? assigneeMember.name : 'Unknown';
+      const seedTask = demoTasks.find((t) => t.title === task.title);
+      const description = seedTask?.description || '';
+
+      await wrapQuery(db.prepare(`
+        INSERT INTO task_snapshots (
+          id, snapshot_date, task_id, task_title, task_ticket, task_description,
+          board_id, board_name, column_id, column_name,
+          assignee_id, assignee_name, requester_id, requester_name,
+          effort_points, priority_name, tags, status, is_completed, is_deleted, created_at, completed_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+        ON CONFLICT DO NOTHING
+      `), 'INSERT').run(
+        crypto.randomUUID(),
+        snapshotDateStr,
+        task.id,
+        task.title,
+        task.ticket,
+        description,
+        boardId,
+        board?.name || 'Main Board',
+        column.id,
+        column.title,
+        task.memberId,
+        assigneeName,
+        task.memberId,
+        assigneeName,
+        task.effort || 0,
+        task.priority,
+        taskTagsList.length > 0 ? JSON.stringify(taskTagsList) : null,
+        isCompleted ? 'completed' : 'in_progress',
+        isCompleted,
+        0,
+        taskStartDate.toISOString(),
+        taskCompletedDate ? taskCompletedDate.toISOString() : null
+      );
+
+      snapshotCount++;
     }
     
     // Move to next day

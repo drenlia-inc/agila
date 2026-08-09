@@ -817,20 +817,33 @@ const initializeDefaultData = async (db, tenantId = null) => {
     console.log('✅ Initialized UPLOAD_FILETYPES with default file types (including GIF)');
   }
   
-  // Initialize authentication data if no roles exist
-  const rolesCountResult = await wrapQuery(db.prepare('SELECT COUNT(*) as count FROM roles'), 'SELECT').get();
-  const rolesCount = asCount(rolesCountResult.count);
-  if (rolesCount === 0) {
+  // Initialize authentication data if the default admin is missing.
+  // Do NOT gate on roles COUNT alone — migrations (e.g. add_viewer_role) may insert
+  // a role before this runs, which previously skipped admin seeding on fresh DBs.
+  const defaultAdminExisting = await wrapQuery(
+    db.prepare('SELECT id FROM users WHERE email = ?'),
+    'SELECT'
+  ).get('admin@kanban.local');
+  if (!defaultAdminExisting) {
     // Generate random password for admin user (only when creating users)
     const adminPassword = generateRandomPassword(12);
     
     // Store password in settings
     await wrapQuery(db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value'), 'INSERT').run('ADMIN_PASSWORD', adminPassword);
     
-    // Insert default roles
-    await wrapQuery(db.prepare('INSERT INTO roles (name, description) VALUES (?, ?)'), 'INSERT').run('admin', 'Administrator role');
-    await wrapQuery(db.prepare('INSERT INTO roles (name, description) VALUES (?, ?)'), 'INSERT').run('user', 'Regular user role');
-    await wrapQuery(db.prepare('INSERT INTO roles (name, description) VALUES (?, ?)'), 'INSERT').run('viewer', 'Read-only role');
+    // Ensure default roles (viewer may already exist from migration 34)
+    await wrapQuery(
+      db.prepare('INSERT INTO roles (name, description) VALUES (?, ?) ON CONFLICT (name) DO NOTHING'),
+      'INSERT'
+    ).run('admin', 'Administrator role');
+    await wrapQuery(
+      db.prepare('INSERT INTO roles (name, description) VALUES (?, ?) ON CONFLICT (name) DO NOTHING'),
+      'INSERT'
+    ).run('user', 'Regular user role');
+    await wrapQuery(
+      db.prepare('INSERT INTO roles (name, description) VALUES (?, ?) ON CONFLICT (name) DO NOTHING'),
+      'INSERT'
+    ).run('viewer', 'Read-only role');
 
     // Create default admin user with random password
     const adminId = crypto.randomUUID();
