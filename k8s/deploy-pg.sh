@@ -89,19 +89,21 @@ if [[ "$PLAN" != "basic" && "$PLAN" != "pro" ]]; then
     exit 1
 fi
 
-# Set license configuration based on plan
+# Set license configuration based on plan (must match admin plan_features catalog)
 if [[ "$PLAN" == "basic" ]]; then
     USER_LIMIT="5"
-    TASK_LIMIT="100"
+    TASK_LIMIT="-1"  # unlimited
     BOARD_LIMIT="10"
-    STORAGE_LIMIT="1Gi"
-    SUPPORT_TYPE="basic"
+    STORAGE_LIMIT="107374182400"  # 100 GiB in bytes
+    SUPPORT_LEVEL="basic"
+    AI_TIER="off"
 else
     USER_LIMIT="50"
     TASK_LIMIT="-1"  # unlimited
     BOARD_LIMIT="-1" # unlimited
-    STORAGE_LIMIT="10Gi"
-    SUPPORT_TYPE="pro"
+    STORAGE_LIMIT="-1"  # unlimited* (soft fair-use enforced in app)
+    SUPPORT_LEVEL="pro"
+    AI_TIER="full"
 fi
 
 # Generate random JWT secret (overwritten from local configmap-pg.yaml when present)
@@ -116,7 +118,7 @@ RECOVERED_TOKEN=""
 
 echo "🚀 Deploying Easy Kanban PostgreSQL instance: ${INSTANCE_NAME}"
 echo "📍 Namespace: ${NAMESPACE}"
-echo "📋 Plan: ${PLAN} (${SUPPORT_TYPE})"
+echo "📋 Plan: ${PLAN} (${SUPPORT_LEVEL})"
 echo "👥 User Limit: ${USER_LIMIT}"
 echo "📝 Task Limit: ${TASK_LIMIT}"
 echo "📊 Board Limit: ${BOARD_LIMIT}"

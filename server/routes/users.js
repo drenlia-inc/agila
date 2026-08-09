@@ -13,6 +13,7 @@ import { commitUploadedFile, getRequestStoragePaths } from '../services/storage/
 import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
 import { validateUploadedFileMagic } from '../utils/fileMagicBytes.js';
 import { getAdminFileSettings } from '../utils/fileValidation.js';
+import { getLicenseManager } from '../config/license.js';
 import {
   parseBody,
   updateProfileBodySchema,
@@ -60,6 +61,19 @@ router.post('/upload', authenticateToken, createUploadMiddleware, async (req, re
     }
 
     const db = getRequestDatabase(req);
+    const licenseManager = getLicenseManager(db);
+    if (licenseManager.isEnabled()) {
+      try {
+        await licenseManager.checkStorageLimit(req.file.size || 0);
+      } catch (limitErr) {
+        return res.status(403).json({
+          error: 'License limit exceeded',
+          details: limitErr.message,
+          limit: 'STORAGE_LIMIT'
+        });
+      }
+    }
+
     const settings = await getAdminFileSettings(db);
     const magic = await validateUploadedFileMagic(req.file, {
       mode: 'attachment',

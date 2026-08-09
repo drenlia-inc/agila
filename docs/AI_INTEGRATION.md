@@ -103,7 +103,7 @@ Used when tenant settings are empty, or for Docker networking:
 | `AI_CALLBACK_BASE_URL` | Absolute base for runner→app callbacks (compose: `http://agila-app:3222`) |
 | Runner `PORT`, `MAX_CONCURRENT` | Runner listen port and local job pool size |
 
-See `docker-compose-pro.yml`, `docker-compose-free.yml`, `docker-compose-example.yml`, or `docker-compose-dev.yml` (`kanban-app` + `kanban-runner`). Basic and demo compose files omit the runner by default.
+See `docker-compose-example.yml` or `docker-compose-dev.yml` (`kanban-app` + `kanban-runner`). Demo compose omits the runner by default.
 
 ### Admin API helpers
 
@@ -271,7 +271,7 @@ Automation jobs run `runner/src/automationLoop.js` (discover → `submit_dry_run
 
 ## Local development (Docker Compose Pro)
 
-1. Use compose that includes `kanban-runner` (e.g. `docker-compose-pro.yml`, `docker-compose-free.yml`, `docker-compose-example.yml`, or `docker-compose-dev.yml`).
+1. Use compose that includes `kanban-runner` (e.g. `docker-compose-example.yml` or `docker-compose-dev.yml`).
 2. Align `RUNNER_TOKEN` on app and runner; set `AI_RUNNER_URL` and `AI_CALLBACK_BASE_URL` for in-network callbacks.
 3. In Admin → AI Settings: enable AI, configure provider/key/model, set runner URL/token (or rely on env defaults), **Validate** LLM and **Probe** runner.
 4. In Profile → Dev: add GitHub PAT (and/or SSH) for private repos / PRs.

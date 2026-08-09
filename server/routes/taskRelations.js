@@ -10,6 +10,7 @@ import { TAG_ACTIONS } from '../constants/activityActions.js';
 import * as reportingLogger from '../services/reportingLogger.js';
 import notificationService from '../services/notificationService.js';
 import { updateStorageUsage } from '../utils/storageUtils.js';
+import { getLicenseManager } from '../config/license.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 import { helpers, tasks as taskQueries, files as fileQueries, activity as activityQueries } from '../utils/sqlManager/index.js';
 import { getBilingualTranslation, getTranslatorForLanguage } from '../utils/i18n.js';
@@ -671,7 +672,20 @@ router.post('/:taskId/attachments', authenticateToken, async (req, res) => {
     const insertedAttachments = [];
     
     if (attachments?.length > 0) {
-      
+      const addBytes = attachments.reduce((sum, a) => sum + (Number(a.size) || 0), 0);
+      const licenseManager = getLicenseManager(db);
+      if (licenseManager.isEnabled()) {
+        try {
+          await licenseManager.checkStorageLimit(addBytes);
+        } catch (limitErr) {
+          return res.status(403).json({
+            error: 'License limit exceeded',
+            details: limitErr.message,
+            limit: 'STORAGE_LIMIT'
+          });
+        }
+      }
+
       // Collect queries and send as a batched transaction
       const batchQueries = [];
       const insertQuery = `

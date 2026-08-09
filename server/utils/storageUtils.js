@@ -47,21 +47,36 @@ export const updateStorageUsage = async (db, usage = null) => {
 };
 
 /**
- * Get current storage limit from settings
+ * Get current storage limit from license (when enabled) or settings.
+ * Unlimited (-1) uses the same soft fair-use cap as LicenseManager (1 TiB).
  * @param {Database} db - Database instance
  * @returns {number} Storage limit in bytes
  */
 export const getStorageLimit = async (db) => {
+  const SOFT_CAP = 1024 * 1024 * 1024 * 1024; // 1 TiB
+  const FALLBACK = 107374182400; // 100 GiB
   try {
+    const { getLicenseManager } = await import('../config/license.js');
+    const licenseManager = getLicenseManager(db);
+    if (licenseManager.isEnabled()) {
+      const limits = await licenseManager.getLimits();
+      const effective = licenseManager.getEffectiveStorageLimitBytes(limits);
+      if (effective !== null) return effective;
+    }
+
     const result = await wrapQuery(
       db.prepare('SELECT value FROM settings WHERE key = $1'),
       'SELECT'
     ).get('STORAGE_LIMIT');
-    
-    return result ? parseInt(result.value) : 5368709120; // Default 5GB
+
+    if (!result) return FALLBACK;
+    const n = parseInt(result.value, 10);
+    if (Number.isNaN(n)) return FALLBACK;
+    if (n === -1) return SOFT_CAP;
+    return n;
   } catch (error) {
     console.error('Error getting storage limit:', error);
-    return 5368709120; // Default 5GB
+    return FALLBACK;
   }
 };
 

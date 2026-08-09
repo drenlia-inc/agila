@@ -75,7 +75,12 @@ export const checkStorageLimit = (req, res, next) => {
     return next(); // Skip license checks when disabled
   }
 
-  licenseManager.checkStorageLimit()
+  const additionalBytes =
+    (req.file && req.file.size) ||
+    parseInt(req.headers['content-length'], 10) ||
+    0;
+
+  licenseManager.checkStorageLimit(additionalBytes)
     .then(() => next())
     .catch(error => {
       res.status(403).json({

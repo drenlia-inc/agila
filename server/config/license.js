@@ -2,6 +2,14 @@
 import { wrapQuery } from '../utils/queryLogger.js';
 import { getStorageUsage as getStorageUsageFromUtils } from '../utils/storageUtils.js';
 
+/** Soft fair-use cap when STORAGE_LIMIT is unlimited (-1). Not shown on pricing cards. */
+const PRO_STORAGE_SOFT_CAP_BYTES = 1024 * 1024 * 1024 * 1024; // 1 TiB
+
+function isUnlimitedNumeric(value) {
+  const n = typeof value === 'number' ? value : parseInt(value, 10);
+  return n === -1;
+}
+
 class LicenseManager {
   constructor(db) {
     this.db = db;
@@ -10,11 +18,30 @@ class LicenseManager {
     // Default limits from environment variables
     this.defaultLimits = {
       USER_LIMIT: parseInt(process.env.USER_LIMIT) || 5,
-      TASK_LIMIT: parseInt(process.env.TASK_LIMIT) || 100,
+      TASK_LIMIT: parseInt(process.env.TASK_LIMIT) || -1,
       BOARD_LIMIT: parseInt(process.env.BOARD_LIMIT) || 10,
-      STORAGE_LIMIT: parseInt(process.env.STORAGE_LIMIT) || 1073741824, // 1GB default
-      SUPPORT_TYPE: process.env.SUPPORT_TYPE || 'basic'
+      STORAGE_LIMIT: parseInt(process.env.STORAGE_LIMIT) || 107374182400, // 100 GiB
+      SUPPORT_LEVEL: process.env.SUPPORT_LEVEL || 'basic',
+      AI_TIER: process.env.AI_TIER || 'off'
     };
+  }
+
+  /**
+   * Effective bytes for enforcement. Unlimited (-1) → internal soft cap.
+   * @param {object|null} limits
+   * @returns {number|null} null = no enforcement
+   */
+  getEffectiveStorageLimitBytes(limits) {
+    if (!limits || limits.STORAGE_LIMIT === undefined || limits.STORAGE_LIMIT === null) {
+      return null;
+    }
+    if (isUnlimitedNumeric(limits.STORAGE_LIMIT)) {
+      return PRO_STORAGE_SOFT_CAP_BYTES;
+    }
+    const n = typeof limits.STORAGE_LIMIT === 'number'
+      ? limits.STORAGE_LIMIT
+      : parseInt(limits.STORAGE_LIMIT, 10);
+    return Number.isNaN(n) ? null : n;
   }
 
   // Get current license limits (from database if available, otherwise from environment)
@@ -38,15 +65,23 @@ class LicenseManager {
         const limits = isMultiTenant ? {} : { ...this.defaultLimits };
         
         licenseSettings.forEach(setting => {
-          const key = setting.setting_key;
+          let key = setting.setting_key;
           const value = setting.setting_value;
-          
-          if (key === 'SUPPORT_TYPE') {
+          // Legacy alias from older deploys
+          if (key === 'SUPPORT_TYPE') key = 'SUPPORT_LEVEL';
+
+          if (key === 'SUPPORT_LEVEL' || key === 'AI_TIER') {
             limits[key] = value;
           } else {
-            limits[key] = parseInt(value);
+            const n = parseInt(value, 10);
+            limits[key] = Number.isNaN(n) ? value : n;
           }
         });
+
+        // Ensure SUPPORT_LEVEL is always present for Admin UI consumers
+        if (!limits.SUPPORT_LEVEL) {
+          limits.SUPPORT_LEVEL = this.defaultLimits.SUPPORT_LEVEL || 'basic';
+        }
         
         return limits;
       }
@@ -209,16 +244,22 @@ class LicenseManager {
     return true;
   }
 
-  // Check storage limit
-  async checkStorageLimit() {
+  // Check storage limit (optional additionalBytes for pending upload)
+  async checkStorageLimit(additionalBytes = 0) {
     if (!this.enabled) return true;
 
     const limits = await this.getLimits();
     if (!limits) return true;
 
+    const maxBytes = this.getEffectiveStorageLimitBytes(limits);
+    if (maxBytes === null) return true;
+
     const storageUsage = await this.getStorageUsage();
-    if (storageUsage >= limits.STORAGE_LIMIT) {
-      throw new Error(`Storage limit exceeded. Current: ${storageUsage} bytes, Maximum: ${limits.STORAGE_LIMIT} bytes`);
+    const projected = storageUsage + (Number(additionalBytes) || 0);
+    if (projected > maxBytes) {
+      throw new Error(
+        `Storage limit exceeded. Current: ${storageUsage} bytes, Maximum: ${maxBytes} bytes`
+      );
     }
     return true;
   }
@@ -287,19 +328,25 @@ class LicenseManager {
         };
       }
 
+      const users = await this.getUserCount();
+      const boards = await this.getBoardCount();
+      const totalTasks = await this.getTotalTaskCount();
+      const storage = await this.getStorageUsage();
+      const effectiveStorage = this.getEffectiveStorageLimitBytes(limits);
+
       return {
         enabled: true,
         limits: limits,
         usage: {
-          users: await this.getUserCount(),
-          boards: await this.getBoardCount(),
-          totalTasks: await this.getTotalTaskCount(),
-          storage: await this.getStorageUsage()
+          users,
+          boards,
+          totalTasks,
+          storage
         },
         limitsReached: {
-          users: (await this.getUserCount()) >= limits.USER_LIMIT,
-          boards: (await this.getBoardCount()) >= limits.BOARD_LIMIT,
-          storage: (await this.getStorageUsage()) >= limits.STORAGE_LIMIT
+          users: !isUnlimitedNumeric(limits.USER_LIMIT) && users >= limits.USER_LIMIT,
+          boards: !isUnlimitedNumeric(limits.BOARD_LIMIT) && boards >= limits.BOARD_LIMIT,
+          storage: effectiveStorage !== null && storage >= effectiveStorage
         },
         boardTaskCounts: await this.getBoardTaskCounts()
       };

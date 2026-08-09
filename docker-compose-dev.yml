@@ -21,11 +21,24 @@ services:
       # JWT / settings encryption (from project-root .env — Compose substitutes ${VAR})
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-}
-      # Allowed origins for CORS
-      - ALLOWED_ORIGINS=
+      # Vite allowedHosts + CORS. Override via project-root .env (ALLOWED_ORIGINS=...)
+      # or copy this file to gitignored docker-compose.yml for local hostnames.
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-localhost,127.0.0.1}
       # Enable demo mode to show countdown timer for hourly resets (demo environments only)
       - DEMO_ENABLED=false
-      - LICENSE_ENABLED=false
+      # Licensed local playground (edit limits in Admin → Licensing / admin-portal, or here for fresh DBs).
+      # For true self-host (no limits), use docker-compose-example.yml with LICENSE_ENABLED=false.
+      - LICENSE_ENABLED=true
+      - USER_LIMIT=50
+      - TASK_LIMIT=-1
+      - BOARD_LIMIT=-1
+      - STORAGE_LIMIT=107374182400
+      - SUPPORT_LEVEL=pro
+      - AI_TIER=full
+      # Instance token for admin portal Inspect / plan pushes (from project-root .env)
+      - INSTANCE_NAME=dev-instance
+      - INSTANCE_TOKEN=${INSTANCE_TOKEN:-kanban-dev-token-change-me}
+      - ADMIN_SERVICE_URL=${ADMIN_SERVICE_URL:-https://admin.agila.dev}
       # Multi-tenant configuration (set to false for single-tenant Docker deployments)
       - MULTI_TENANT=false
       # Tenant domain (only used in multi-tenant mode, for extracting tenant ID from hostname)

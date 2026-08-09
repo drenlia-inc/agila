@@ -166,7 +166,7 @@ cp docker-compose-example.yml docker-compose.yml
    - `JWT_SECRET`: Set a strong secret key for authentication
    - `ALLOWED_ORIGINS`: Set your domain(s), e.g., `yourdomain.com`
    - `DEMO_ENABLED`: Set to `true` to try the demo with generated data, `false` for production
-   - Optional AI runner (for Agent **Code** jobs): `AI_RUNNER_URL`, `AI_CALLBACK_BASE_URL`, `RUNNER_TOKEN` (see compose example / `docker-compose-pro.yml`)
+   - Optional AI runner (for Agent **Code** jobs): `AI_RUNNER_URL`, `AI_CALLBACK_BASE_URL`, `RUNNER_TOKEN` (see `docker-compose-example.yml` / `docker-compose-dev.yml`)
 
 2. Start the application:
 ```bash

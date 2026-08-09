@@ -13,6 +13,7 @@ import {
   getDirtySystemSettingsSubTabs,
   type SystemSettingsSubTabId,
 } from '../../utils/adminSettingsDirty';
+import api from '../../api';
 
 export type SystemSettingsSubTab = SystemSettingsSubTabId;
 
@@ -106,6 +107,8 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
       ])
   );
   const [aiLocalDirty, setAiLocalDirty] = useState(false);
+  /** false when licensed Basic (AI_TIER=off); true when self-host or Pro */
+  const [aiAllowedByPlan, setAiAllowedByPlan] = useState(true);
   const [queueRetentionLocalDirty, setQueueRetentionLocalDirty] = useState(false);
   const aiSaveRef = useRef<(() => Promise<void>) | null>(null);
   const queueSaveRef = useRef<(() => Promise<void>) | null>(null);
@@ -120,6 +123,42 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
   const registerQueueSave = useCallback((save: (() => Promise<void>) | null) => {
     queueSaveRef.current = save;
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get('/auth/license-info');
+        if (cancelled) return;
+        // Licensing disabled (self-host) → AI allowed
+        if (!data?.enabled) {
+          setAiAllowedByPlan(true);
+          return;
+        }
+        const tier = String(data?.limits?.AI_TIER || '').toLowerCase();
+        const support = String(data?.limits?.SUPPORT_LEVEL || data?.limits?.SUPPORT_TYPE || '').toLowerCase();
+        if (tier === 'off' || tier === 'none' || tier === 'false') {
+          setAiAllowedByPlan(false);
+        } else if (tier === 'full' || tier === 'limited') {
+          setAiAllowedByPlan(true);
+        } else {
+          // Legacy: no AI_TIER — Basic plan has no AI
+          setAiAllowedByPlan(support === 'pro' || support === 'community' || support === '');
+        }
+      } catch {
+        if (!cancelled) setAiAllowedByPlan(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!aiAllowedByPlan && activeSubTab === 'ai') {
+      setActiveSubTab('sso');
+    }
+  }, [aiAllowedByPlan, activeSubTab]);
 
   useEffect(() => {
     if (!onRegisterLocalSave) return;
@@ -204,19 +243,20 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
           {subNavBtn('mail-server', t('tabs.mailServer'))}
           {subNavBtn('storage', t('tabs.storage'))}
           {subNavBtn('file-uploads', t('appSettings.fileUploads'))}
-          {subNavBtn(
-            'ai',
-            t('appSettings.ai'),
-            <Sparkles
-              size={14}
-              className={
-                activeSubTab === 'ai'
-                  ? 'text-teal-600 dark:text-teal-400'
-                  : 'text-teal-500/80 dark:text-teal-400/80'
-              }
-              aria-hidden
-            />
-          )}
+          {aiAllowedByPlan &&
+            subNavBtn(
+              'ai',
+              t('appSettings.ai'),
+              <Sparkles
+                size={14}
+                className={
+                  activeSubTab === 'ai'
+                    ? 'text-teal-600 dark:text-teal-400'
+                    : 'text-teal-500/80 dark:text-teal-400/80'
+                }
+                aria-hidden
+              />
+            )}
           {subNavBtn('notifications', t('appSettings.notifications'))}
           {subNavBtn('notification-queue', t('appSettings.notificationQueue'))}
         </nav>
@@ -294,7 +334,7 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
         </div>
       )}
 
-      {visitedSubTabs.has('ai') && onAutoSave && (
+      {aiAllowedByPlan && visitedSubTabs.has('ai') && onAutoSave && (
         <div className={activeSubTab === 'ai' ? undefined : 'hidden'} aria-hidden={activeSubTab !== 'ai'}>
           <AdminAISettingsTab
             editingSettings={editingSettings}

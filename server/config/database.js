@@ -1029,7 +1029,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
 
     // Set MAIL_MANAGED=true for licensed instances (basic/pro plans)
     if (process.env.LICENSE_ENABLED === 'true') {
-      const supportType = process.env.SUPPORT_TYPE || 'basic';
+      const supportType = process.env.SUPPORT_LEVEL || 'basic';
       if (supportType === 'basic' || supportType === 'pro') {
         await wrapQuery(db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP'), 'INSERT')
           .run('MAIL_MANAGED', 'true');

@@ -841,12 +841,14 @@ router.get('/plan', authenticateAdminPortal, async (req, res) => {
       // MIGRATED: Get all license settings using sqlManager
       const licenseSettings = await licenseSettingsQueries.getAllLicenseSettings(db);
       licenseSettings.forEach(setting => {
-        if (['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'SUPPORT_TYPE'].includes(setting.settingKey)) {
+        let key = setting.settingKey;
+        if (key === 'SUPPORT_TYPE') key = 'SUPPORT_LEVEL';
+        if (['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'].includes(key)) {
           // Parse numeric values, keep string values as-is
-          if (setting.settingKey === 'SUPPORT_TYPE') {
-            dbSettings[setting.settingKey] = setting.settingValue;
+          if (key === 'SUPPORT_LEVEL' || key === 'AI_TIER') {
+            dbSettings[key] = setting.settingValue;
           } else {
-            dbSettings[setting.settingKey] = parseInt(setting.settingValue);
+            dbSettings[key] = parseInt(setting.settingValue, 10);
           }
         }
       });
@@ -877,7 +879,7 @@ router.get('/plan', authenticateAdminPortal, async (req, res) => {
     };
 
     const planInfo = {
-      plan: getDisplayValue('SUPPORT_TYPE') || 'basic',
+      plan: getDisplayValue('SUPPORT_LEVEL') || 'basic',
       usage: licenseInfo.usage,
       limitsReached: licenseInfo.limitsReached,
       // For backward compatibility, also include the limits object with display values
@@ -886,7 +888,8 @@ router.get('/plan', authenticateAdminPortal, async (req, res) => {
         TASK_LIMIT: getDisplayValue('TASK_LIMIT'),
         BOARD_LIMIT: getDisplayValue('BOARD_LIMIT'),
         STORAGE_LIMIT: getDisplayValue('STORAGE_LIMIT'),
-        SUPPORT_TYPE: getDisplayValue('SUPPORT_TYPE')
+        SUPPORT_LEVEL: getDisplayValue('SUPPORT_LEVEL'),
+        AI_TIER: getDisplayValue('AI_TIER')
       },
       features: [
         {
@@ -923,10 +926,16 @@ router.get('/plan', authenticateAdminPortal, async (req, res) => {
           limitReached: licenseInfo.limitsReached.storage
         },
         {
-          key: 'SUPPORT_TYPE',
-          value: getDisplayValue('SUPPORT_TYPE'),
-          inMemory: isMultiTenant ? null : licenseInfo.limits.SUPPORT_TYPE,
-          database: dbSettings.SUPPORT_TYPE !== undefined ? dbSettings.SUPPORT_TYPE : null
+          key: 'SUPPORT_LEVEL',
+          value: getDisplayValue('SUPPORT_LEVEL'),
+          inMemory: isMultiTenant ? null : licenseInfo.limits.SUPPORT_LEVEL,
+          database: dbSettings.SUPPORT_LEVEL !== undefined ? dbSettings.SUPPORT_LEVEL : null
+        },
+        {
+          key: 'AI_TIER',
+          value: getDisplayValue('AI_TIER'),
+          inMemory: isMultiTenant ? null : licenseInfo.limits?.AI_TIER,
+          database: dbSettings.AI_TIER !== undefined ? dbSettings.AI_TIER : null
         }
       ],
       boardTaskCounts: licenseInfo.boardTaskCounts
@@ -958,11 +967,11 @@ router.get('/plan', authenticateAdminPortal, async (req, res) => {
       TASK_LIMIT: parseInt(process.env.TASK_LIMIT) || 100,
       BOARD_LIMIT: parseInt(process.env.BOARD_LIMIT) || 10,
       STORAGE_LIMIT: parseInt(process.env.STORAGE_LIMIT) || 1073741824,
-      SUPPORT_TYPE: process.env.SUPPORT_TYPE || 'basic'
+      SUPPORT_LEVEL: process.env.SUPPORT_LEVEL || 'basic'
     };
 
     const fallbackInfo = {
-      plan: fallbackLimits.SUPPORT_TYPE,
+      plan: fallbackLimits.SUPPORT_LEVEL,
       features: [
         {
           key: 'USER_LIMIT',
@@ -994,8 +1003,8 @@ router.get('/plan', authenticateAdminPortal, async (req, res) => {
           limitReached: false
         },
         {
-          key: 'SUPPORT_TYPE',
-          inMemory: fallbackLimits.SUPPORT_TYPE,
+          key: 'SUPPORT_LEVEL',
+          inMemory: fallbackLimits.SUPPORT_LEVEL,
           database: null
         }
       ]
@@ -1019,7 +1028,7 @@ router.put('/plan/:key', authenticateAdminPortal, async (req, res) => {
     const t = await getTranslator(db);
     
     // Validate key
-    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'SUPPORT_TYPE'];
+    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'];
     if (!allowedKeys.includes(key)) {
       return res.status(400).json({ 
         success: false,
@@ -1028,7 +1037,7 @@ router.put('/plan/:key', authenticateAdminPortal, async (req, res) => {
     }
 
     // Validate value based on key type
-    if (key !== 'SUPPORT_TYPE' && value !== null) {
+    if (key !== 'SUPPORT_LEVEL' && key !== 'AI_TIER' && value !== null) {
       const numValue = parseInt(value);
       if (isNaN(numValue) || numValue < -1) {
         return res.status(400).json({ 
@@ -1075,7 +1084,7 @@ router.delete('/plan/:key', authenticateAdminPortal, async (req, res) => {
     const t = await getTranslator(db);
     
     // Validate key
-    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'SUPPORT_TYPE'];
+    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'];
     if (!allowedKeys.includes(key)) {
       return res.status(400).json({ 
         success: false,

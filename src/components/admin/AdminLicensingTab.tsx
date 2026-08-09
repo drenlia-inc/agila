@@ -16,7 +16,10 @@ interface LicenseInfo {
     TASK_LIMIT: number;
     BOARD_LIMIT: number;
     STORAGE_LIMIT: number;
-    SUPPORT_TYPE: string;
+    SUPPORT_LEVEL?: string;
+    /** @deprecated legacy alias — prefer SUPPORT_LEVEL */
+    SUPPORT_TYPE?: string;
+    AI_TIER?: string;
   };
   usage: {
     users: number;
@@ -32,6 +35,10 @@ interface LicenseInfo {
   boardTaskCounts?: BoardTaskCount[];
   message?: string;
   error?: string;
+}
+
+function resolveSupportLevel(limits: LicenseInfo['limits'] | undefined): string {
+  return String(limits?.SUPPORT_LEVEL || limits?.SUPPORT_TYPE || 'basic');
 }
 
 interface AdminLicensingTabProps {
@@ -160,6 +167,7 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   };
 
   const formatBytes = (bytes: number): string => {
+    if (bytes === -1) return t('licensing.unlimited');
     if (bytes === 0) return `0 ${t('licensing.bytes')}`;
     const k = 1024;
     const sizes = [
@@ -174,12 +182,13 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   };
 
   const getSupportTypeColor = (supportType: string): string => {
-    switch (supportType.toLowerCase()) {
+    switch (String(supportType || '').toLowerCase()) {
       case 'pro':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
       case 'basic':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'free':
+      case 'community':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
@@ -187,12 +196,13 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   };
 
   const getSupportTypeIcon = (supportType: string) => {
-    switch (supportType.toLowerCase()) {
+    switch (String(supportType || '').toLowerCase()) {
       case 'pro':
         return <Shield className="h-4 w-4" />;
       case 'basic':
         return <CheckCircle className="h-4 w-4" />;
       case 'free':
+      case 'community':
         return <AlertCircle className="h-4 w-4" />;
       default:
         return <AlertCircle className="h-4 w-4" />;
@@ -280,6 +290,8 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
       );
     }
 
+    const supportLevel = resolveSupportLevel(licenseInfo.limits);
+
     return (
       <div className="space-y-6">
         {/* Plan Information */}
@@ -291,18 +303,19 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
             </h3>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                {getSupportTypeIcon(licenseInfo.limits.SUPPORT_TYPE)}
+                {getSupportTypeIcon(supportLevel)}
                 <div>
-                  <h3 className="text-xl font-semibold capitalize text-gray-900 dark:text-white">{licenseInfo.limits.SUPPORT_TYPE} {t('licensing.plan')}</h3>
+                  <h3 className="text-xl font-semibold capitalize text-gray-900 dark:text-white">{supportLevel} {t('licensing.plan')}</h3>
                   <p className="text-gray-600 dark:text-gray-400">
-                    {licenseInfo.limits.SUPPORT_TYPE.toLowerCase() === 'pro' && t('licensing.proPlanDescription')}
-                    {licenseInfo.limits.SUPPORT_TYPE.toLowerCase() === 'basic' && t('licensing.basicPlanDescription')}
-                    {licenseInfo.limits.SUPPORT_TYPE.toLowerCase() === 'free' && t('licensing.freePlanDescription')}
+                    {supportLevel.toLowerCase() === 'pro' && t('licensing.proPlanDescription')}
+                    {supportLevel.toLowerCase() === 'basic' && t('licensing.basicPlanDescription')}
+                    {(supportLevel.toLowerCase() === 'free' || supportLevel.toLowerCase() === 'community') &&
+                      t('licensing.freePlanDescription')}
                   </p>
                 </div>
               </div>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getSupportTypeColor(licenseInfo.limits.SUPPORT_TYPE)}`}>
-                {licenseInfo.limits.SUPPORT_TYPE.toUpperCase()}
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getSupportTypeColor(supportLevel)}`}>
+                {supportLevel.toUpperCase()}
               </span>
             </div>
           </div>
@@ -524,7 +537,7 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('licensing.planType')}</span>
-                <span className="text-sm capitalize text-gray-900 dark:text-white">{licenseInfo.limits.SUPPORT_TYPE}</span>
+                <span className="text-sm capitalize text-gray-900 dark:text-white">{supportLevel}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('licensing.appVersion')}</span>
