@@ -46,6 +46,7 @@ import {
   BOARD_TRASH_CHANGED_EVENT,
   type BoardTrashChangedDetail,
 } from '../../utils/boardTrashEvents';
+import { getTaskSprintId, taskMatchesSelectedSprint } from '../../utils/columnFilters';
 
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
@@ -439,6 +440,19 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
 
   const trashCountRequestRef = useRef(0);
 
+  const normalizeTrashTasks = useCallback((tasks: Task[]): Task[] => {
+    return tasks.map((task) => ({
+      ...task,
+      sprintId: getTaskSprintId(task),
+    }));
+  }, []);
+
+  const countTrashForSprint = useCallback(
+    (tasks: Task[]) =>
+      tasks.filter((task) => taskMatchesSelectedSprint(task, selectedSprintId)).length,
+    [selectedSprintId]
+  );
+
   const refreshTrashCount = useCallback(async (boardId: string | null) => {
     if (!boardId) {
       setTrashCount(0);
@@ -446,6 +460,20 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     }
     const requestId = ++trashCountRequestRef.current;
     try {
+      // When a sprint is selected, badge must match sprint-filtered trash (needs task list).
+      if (selectedSprintId !== null) {
+        const tasks = normalizeTrashTasks(await getBoardTrash(boardId));
+        if (requestId !== trashCountRequestRef.current) return;
+        setTrashTasks(tasks);
+        setTrashCount(countTrashForSprint(tasks));
+        // Close only when the board has no trash at all (not merely none for this sprint).
+        if (tasks.length === 0) {
+          setTrashOpen(false);
+          writeTrashOpenPreference(boardId, false);
+        }
+        return;
+      }
+
       const count = await getBoardTrashCount(boardId);
       if (requestId !== trashCountRequestRef.current) return;
       setTrashCount(count);
@@ -457,7 +485,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     } catch {
       // ignore — trash badge is best-effort
     }
-  }, []);
+  }, [selectedSprintId, normalizeTrashTasks, countTrashForSprint]);
 
   /**
    * `silent` keeps the panel mounted while refetching — the loading placeholder
@@ -471,9 +499,9 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
       }
       if (!options?.silent) setTrashLoading(true);
       try {
-        const tasks = await getBoardTrash(boardId);
+        const tasks = normalizeTrashTasks(await getBoardTrash(boardId));
         setTrashTasks(tasks);
-        setTrashCount(tasks.length);
+        setTrashCount(countTrashForSprint(tasks));
         if (tasks.length === 0) {
           setTrashOpen(false);
           writeTrashOpenPreference(boardId, false);
@@ -485,7 +513,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         if (!options?.silent) setTrashLoading(false);
       }
     },
-    [t]
+    [t, normalizeTrashTasks, countTrashForSprint]
   );
 
   useEffect(() => {
@@ -496,6 +524,16 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     setTrashOpen(shouldOpen);
     void refreshTrashCount(selectedBoard);
   }, [selectedBoard, refreshTrashCount]);
+
+  // Recompute badge when sprint filter changes (trash list may already be loaded).
+  useEffect(() => {
+    if (!selectedBoard) return;
+    if (trashTasks.length > 0) {
+      setTrashCount(countTrashForSprint(trashTasks));
+      return;
+    }
+    void refreshTrashCount(selectedBoard);
+  }, [selectedSprintId]); // eslint-disable-line react-hooks/exhaustive-deps -- only react to sprint changes
 
   useEffect(() => {
     if (trashOpen && selectedBoard) {
@@ -576,7 +614,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
             writeTrashOpenPreference(selectedBoard, false);
             setTrashCount(0);
           } else {
-            setTrashCount(next.length);
+            setTrashCount(countTrashForSprint(next));
           }
           return next;
         });
@@ -590,7 +628,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         throw error;
       }
     },
-    [onTaskRestoredLocally, onSelectTask, selectedTask?.id, t, selectedBoard]
+    [onTaskRestoredLocally, onSelectTask, selectedTask?.id, t, selectedBoard, countTrashForSprint]
   );
 
   const handlePurgeTrashTask = useCallback(
@@ -605,7 +643,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
             writeTrashOpenPreference(selectedBoard, false);
             setTrashCount(0);
           } else {
-            setTrashCount(next.length);
+            setTrashCount(countTrashForSprint(next));
           }
           return next;
         });
@@ -617,7 +655,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         throw error;
       }
     },
-    [selectedTask?.id, onSelectTask, t, selectedBoard]
+    [selectedTask?.id, onSelectTask, t, selectedBoard, countTrashForSprint]
   );
 
   const removeTasksFromTrashList = useCallback(
@@ -632,7 +670,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           writeTrashOpenPreference(selectedBoard, false);
           setTrashCount(0);
         } else {
-          setTrashCount(next.length);
+          setTrashCount(countTrashForSprint(next));
         }
         return next;
       });
@@ -644,7 +682,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         onSelectTask(null);
       }
     },
-    [selectedBoard, selectedTask?.id, onSelectTask]
+    [selectedBoard, selectedTask?.id, onSelectTask, countTrashForSprint]
   );
 
   const handleRestoreTrashSelected = useCallback(
@@ -1301,7 +1339,9 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
 
       {selectedBoard && trashOpen && (
         <BoardTrashView
-          tasks={trashTasks}
+          tasks={trashTasks.filter((task) =>
+            taskMatchesSelectedSprint(task, selectedSprintId)
+          )}
           displayColumns={Object.values(getFilteredColumnsForDisplay)
             .filter((column) => column && column.id)
             .sort((a, b) => (a.position || 0) - (b.position || 0))}

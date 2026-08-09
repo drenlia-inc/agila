@@ -2112,7 +2112,7 @@ export default function ListView({
                             ) : (
                               <div 
                                 className={`text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/60 rounded px-1 py-0.5 prose prose-sm dark:prose-invert max-w-none ${
-                                  taskViewMode === 'shrink' ? 'line-clamp-2 overflow-hidden' : 'break-words'
+                                  taskViewMode === 'shrink' ? 'task-description-shrink line-clamp-2 overflow-hidden' : 'break-words'
                                 }`} 
                                 title={task.description ? task.description.replace(/<[^>]*>/g, '') : ''}
                                 onClick={(e) => {

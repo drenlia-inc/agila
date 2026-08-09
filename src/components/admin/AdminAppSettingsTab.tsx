@@ -31,6 +31,7 @@ import {
   AdminSection,
   adminInputClass,
 } from './AdminSection';
+import { AdminToggle, adminSettingIsEnabled } from './AdminToggle';
 
 interface AdminAppSettingsTabProps {
   settings: { [key: string]: string | undefined };
@@ -544,14 +545,17 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
                       {t('appSettings.taskDeleteConfirmationDescription')}
                     </p>
                   </div>
-                  <select
-                    value={editingSettings.TASK_DELETE_CONFIRM || 'true'}
-                    onChange={(e) => handleTaskDeleteConfirmChange(e.target.value)}
-                    className={`w-36 ${adminInputClass}`}
-                  >
-                    <option value="true">{t('appSettings.enabled')}</option>
-                    <option value="false">{t('appSettings.disabled')}</option>
-                  </select>
+                  <AdminToggle
+                    checked={adminSettingIsEnabled(editingSettings.TASK_DELETE_CONFIRM)}
+                    label={
+                      adminSettingIsEnabled(editingSettings.TASK_DELETE_CONFIRM)
+                        ? t('appSettings.enabled')
+                        : t('appSettings.disabled')
+                    }
+                    onChange={(next) =>
+                      handleTaskDeleteConfirmChange(next ? 'true' : 'false')
+                    }
+                  />
                 </div>
 
                 <div
@@ -566,14 +570,17 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
                       {t('appSettings.allowUserSelfDeleteDescription')}
                     </p>
                   </div>
-                  <select
-                    value={editingSettings.ALLOW_USER_SELF_DELETE || 'true'}
-                    onChange={(e) => handleAllowUserSelfDeleteChange(e.target.value)}
-                    className={`w-36 ${adminInputClass}`}
-                  >
-                    <option value="true">{t('appSettings.enabled')}</option>
-                    <option value="false">{t('appSettings.disabled')}</option>
-                  </select>
+                  <AdminToggle
+                    checked={adminSettingIsEnabled(editingSettings.ALLOW_USER_SELF_DELETE)}
+                    label={
+                      adminSettingIsEnabled(editingSettings.ALLOW_USER_SELF_DELETE)
+                        ? t('appSettings.enabled')
+                        : t('appSettings.disabled')
+                    }
+                    onChange={(next) =>
+                      handleAllowUserSelfDeleteChange(next ? 'true' : 'false')
+                    }
+                  />
                 </div>
               </div>
             </AdminSection>
@@ -642,14 +649,17 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
                         {t('appSettings.defaultVisibilityDescription')}
                       </p>
                     </div>
-                    <select
-                      value={editingSettings.SHOW_ACTIVITY_FEED || 'true'}
-                      onChange={(e) => handleShowActivityFeedChange(e.target.value)}
-                      className={`w-36 ${adminInputClass}`}
-                    >
-                      <option value="true">{t('appSettings.enabled')}</option>
-                      <option value="false">{t('appSettings.disabled')}</option>
-                    </select>
+                    <AdminToggle
+                      checked={adminSettingIsEnabled(editingSettings.SHOW_ACTIVITY_FEED)}
+                      label={
+                        adminSettingIsEnabled(editingSettings.SHOW_ACTIVITY_FEED)
+                          ? t('appSettings.enabled')
+                          : t('appSettings.disabled')
+                      }
+                      onChange={(next) =>
+                        handleShowActivityFeedChange(next ? 'true' : 'false')
+                      }
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start">

@@ -1449,7 +1449,7 @@ export async function getTrashTasksForBoard(db, boardId) {
            t.startdate as "startDate", t.duedate as "dueDate",
            t.effort, t.priority, t.priority_id as "priority_id",
            t.columnid as "columnId", t.boardid as "boardId",
-           t.sprint_id as "sprint_id",
+           t.sprint_id as "sprintId",
            t.created_at, t.updated_at,
            t.deleted_at as "deletedAt",
            t.deleted_by as "deletedBy",

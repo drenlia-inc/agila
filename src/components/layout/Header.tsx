@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Github, HelpCircle, LogOut, User, RefreshCw, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check } from 'lucide-react';
+import { Github, HelpCircle, LogOut, User, RefreshCw, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check, Eye, Shield } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CurrentUser, SiteSettings, TeamMember } from '../../types';
 import ThemeToggle from '../ThemeToggle';
@@ -20,6 +20,7 @@ import {
   DEFAULT_SITE_LOGO_DARK,
   isPublicBrandAssetPath,
 } from '../../constants';
+import { userIsAdmin, userIsViewer } from '../../utils/permissions';
 
 interface SystemInfo {
   memory: {
@@ -138,6 +139,9 @@ const Header: React.FC<HeaderProps> = ({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const { i18n, t } = useTranslation('common');
+
+  const isViewOnlyAccount = userIsViewer(currentUser);
+  const isAdminAccount = userIsAdmin(currentUser);
   
   // Get current language - use i18n.language for immediate updates, fallback to user preferences
   const currentLanguage = useMemo(() => {
@@ -534,16 +538,6 @@ const Header: React.FC<HeaderProps> = ({
               );
             })()}
           </a>
-          {currentUser?.roles?.includes('viewer') &&
-            !currentUser.roles.includes('admin') &&
-            !currentUser.roles.includes('user') && (
-            <span
-              className="hidden sm:inline-flex items-center rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
-              title={t('messages.readOnlyMode')}
-            >
-              {t('messages.readOnlyBadge')}
-            </span>
-          )}
           {/* Sprint Selector - only show in Kanban view, hide on TaskPage / very narrow */}
           {currentUser && currentPage === 'kanban' && !hideSprintSelector && (
             <div className="hidden sm:block min-w-0 shrink">
@@ -954,55 +948,97 @@ const Header: React.FC<HeaderProps> = ({
           {/* 6. Account — click to open (iPad / keyboard friendly) */}
           {currentUser && (
             <div className="relative ml-1" ref={profileMenuRef}>
-              <button
-                type="button"
-                className="flex items-center gap-2 p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-                onClick={() => setShowProfileMenu((open) => !open)}
-                aria-label={t('navigation.profileMenu')}
-                aria-expanded={showProfileMenu}
-                aria-haspopup="menu"
-                data-tour-id="profile-menu"
+              <KanbanChromeTooltip
+                label={isViewOnlyAccount ? t('messages.readOnlyBadge') : ''}
+                delayMs={0}
               >
-                {currentUser?.googleAvatarUrl || currentUser?.avatarUrl ? (
-                  <img
-                    src={getAuthenticatedAvatarUrl(currentUser.googleAvatarUrl || currentUser.avatarUrl)}
-                    alt=""
-                    className="h-8 w-8 rounded-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent) {
-                        const fallback = document.createElement('div');
-                        fallback.className = 'h-8 w-8 rounded-full flex items-center justify-center';
-                        fallback.style.backgroundColor = members.find(m => m.user_id === currentUser?.id)?.color || '#4ECDC4';
-                        const initials = document.createElement('span');
-                        initials.className = 'text-sm font-medium text-white';
-                        initials.textContent = `${currentUser.firstName?.[0] || ''}${currentUser.lastName?.[0] || ''}`;
-                        fallback.appendChild(initials);
-                        parent.appendChild(fallback);
-                      }
-                    }}
-                  />
-                ) : (
-                  <div
-                    className="h-8 w-8 rounded-full flex items-center justify-center"
-                    style={{
-                      backgroundColor: members.find(m => m.user_id === currentUser?.id)?.color || '#4ECDC4'
-                    }}
-                  >
-                    <span className="text-sm font-medium text-white">
-                      {currentUser.firstName?.[0]}{currentUser.lastName?.[0]}
-                    </span>
-                  </div>
-                )}
-              </button>
+                <button
+                  type="button"
+                  className="relative flex items-center gap-2 p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                  onClick={() => setShowProfileMenu((open) => !open)}
+                  aria-label={
+                    isViewOnlyAccount
+                      ? `${t('navigation.profileMenu')} — ${t('messages.readOnlyBadge')}`
+                      : t('navigation.profileMenu')
+                  }
+                  aria-expanded={showProfileMenu}
+                  aria-haspopup="menu"
+                  data-tour-id="profile-menu"
+                >
+                  <span className="relative inline-flex h-8 w-8 shrink-0">
+                    {currentUser?.googleAvatarUrl || currentUser?.avatarUrl ? (
+                      <img
+                        src={getAuthenticatedAvatarUrl(currentUser.googleAvatarUrl || currentUser.avatarUrl)}
+                        alt=""
+                        className="h-8 w-8 rounded-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent && !parent.querySelector('[data-avatar-fallback]')) {
+                            const fallback = document.createElement('div');
+                            fallback.setAttribute('data-avatar-fallback', 'true');
+                            fallback.className = 'h-8 w-8 rounded-full flex items-center justify-center';
+                            fallback.style.backgroundColor = members.find(m => m.user_id === currentUser?.id)?.color || '#4ECDC4';
+                            const initials = document.createElement('span');
+                            initials.className = 'text-sm font-medium text-white';
+                            initials.textContent = `${currentUser.firstName?.[0] || ''}${currentUser.lastName?.[0] || ''}`;
+                            fallback.appendChild(initials);
+                            parent.appendChild(fallback);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className="h-8 w-8 rounded-full flex items-center justify-center"
+                        style={{
+                          backgroundColor: members.find(m => m.user_id === currentUser?.id)?.color || '#4ECDC4'
+                        }}
+                      >
+                        <span className="text-sm font-medium text-white">
+                          {currentUser.firstName?.[0]}{currentUser.lastName?.[0]}
+                        </span>
+                      </div>
+                    )}
+                    {isViewOnlyAccount && (
+                      <span
+                        className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sky-100 text-sky-700 ring-2 ring-white dark:bg-sky-950 dark:text-sky-300 dark:ring-gray-800"
+                        aria-hidden
+                      >
+                        <Eye size={10} strokeWidth={2.5} />
+                      </span>
+                    )}
+                  </span>
+                </button>
+              </KanbanChromeTooltip>
 
               {showProfileMenu && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full mt-2 min-w-max bg-white dark:bg-gray-800 rounded-lg shadow-lg z-[70] border border-gray-200 dark:border-gray-700"
+                  className="absolute right-0 top-full mt-2 min-w-[12rem] bg-white dark:bg-gray-800 rounded-lg shadow-lg z-[70] border border-gray-200 dark:border-gray-700"
                 >
+                  <div className="border-b border-gray-100 px-4 py-2.5 dark:border-gray-700">
+                    <div className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {[currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.email}
+                    </div>
+                    {(currentUser.firstName || currentUser.lastName) && currentUser.email && (
+                      <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+                        {currentUser.email}
+                      </div>
+                    )}
+                    {isViewOnlyAccount && (
+                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+                        <Eye size={12} aria-hidden />
+                        {t('messages.readOnlyBadge')}
+                      </span>
+                    )}
+                    {isAdminAccount && !isViewOnlyAccount && (
+                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+                        <Shield size={12} aria-hidden />
+                        {t('messages.adminBadge')}
+                      </span>
+                    )}
+                  </div>
                   <div className="py-1">
                     <button
                       type="button"

@@ -77,7 +77,18 @@ type KanbanChromeTooltipProps = {
   placement?: 'bottom' | 'top';
   /** Override portaled bubble z-index (e.g. above a high z-index modal). */
   portalZIndex?: number;
+  /**
+   * Force wrapped text and constrain bubble width (px).
+   * Prefer {@link widthAnchorRef} when the tip should match a column/card width.
+   */
+  maxWidth?: number;
+  /** Measure this element’s width and use it as the tip max-width (e.g. column root). */
+  widthAnchorRef?: React.RefObject<HTMLElement | null>;
 };
+
+/** Wrapped label surface without a fixed rem max-width (width comes from style). */
+const CHROME_TOOLTIP_WRAPPED_SURFACE_CLASS =
+  `px-2 py-1.5 text-xs font-normal normal-case tracking-normal whitespace-pre-line text-left break-words leading-snug rounded shadow-lg ${CHROME_TOOLTIP_COLORS} ${CHROME_TOOLTIP_RING} pointer-events-none`;
 
 /**
  * App-wide chrome tooltips: inverted light/dark surface; optional delay (default ~native title).
@@ -92,6 +103,8 @@ export function KanbanChromeTooltip({
   wrapperClassName = 'relative inline-flex',
   placement = 'bottom',
   portalZIndex = CHROME_TOOLTIP_PORTAL_Z,
+  maxWidth,
+  widthAnchorRef,
 }: KanbanChromeTooltipProps) {
   const [visible, setVisible] = useState(false);
   /** Positioned + ready to show (avoids off-screen → clamp jump). */
@@ -166,6 +179,17 @@ export function KanbanChromeTooltip({
       const tip = tooltipRef.current;
       if (!el || !tip) return;
 
+      // Apply width constraint before measuring so wrap height is correct.
+      const anchorWidth = widthAnchorRef?.current?.getBoundingClientRect().width;
+      const resolvedMaxWidth =
+        maxWidth ??
+        (anchorWidth != null && anchorWidth > 0 ? Math.round(anchorWidth) : undefined);
+      if (resolvedMaxWidth != null) {
+        tip.style.maxWidth = `${resolvedMaxWidth}px`;
+      } else {
+        tip.style.maxWidth = '';
+      }
+
       const rect = el.getBoundingClientRect();
       // Tip is mounted (possibly opacity 0) so measurements are real — no estimate → clamp jump
       const tipW = Math.max(1, tip.offsetWidth);
@@ -200,7 +224,7 @@ export function KanbanChromeTooltip({
       window.removeEventListener('scroll', update, true);
       window.removeEventListener('resize', update);
     };
-  }, [visible, placement, portalZIndex, label, content]);
+  }, [visible, placement, portalZIndex, label, content, maxWidth, widthAnchorRef]);
 
   useEffect(
     () => () => {
@@ -215,13 +239,16 @@ export function KanbanChromeTooltip({
     return <>{children}</>;
   }
 
+  const wrapToWidth = maxWidth != null || widthAnchorRef != null;
   const tooltipClassName = content
     ? interactive
       ? CHROME_TOOLTIP_SELECTABLE_SURFACE_CLASS
       : CHROME_TOOLTIP_RICH_SURFACE_CLASS
-    : label.includes('\n')
-      ? CHROME_TOOLTIP_MULTILINE_SURFACE_CLASS
-      : CHROME_TOOLTIP_SURFACE_CLASS;
+    : wrapToWidth
+      ? CHROME_TOOLTIP_WRAPPED_SURFACE_CLASS
+      : label.includes('\n')
+        ? CHROME_TOOLTIP_MULTILINE_SURFACE_CLASS
+        : CHROME_TOOLTIP_SURFACE_CLASS;
 
   // Mount while visible so we can measure before revealing (opacity 0 until positioned)
   const portal =

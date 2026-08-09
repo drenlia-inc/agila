@@ -829,7 +829,10 @@ export default function KanbanColumn({
     }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, column.title, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, highlightLinksMode, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds]);
 
   // Combine sortable and column droppable refs for the column container
+  const columnElRef = useRef<HTMLElement | null>(null);
+
   const setColumnRef = (node: HTMLElement | null) => {
+    columnElRef.current = node;
     setNodeRef(node);
     setColumnDroppableRef(node);
   };
@@ -1317,7 +1320,10 @@ export default function KanbanColumn({
           )}
 
           {!isEditing && !!column.policy_text?.trim() && (
-            <KanbanChromeTooltip label={column.policy_text.trim()}>
+            <KanbanChromeTooltip
+              label={column.policy_text.trim()}
+              widthAnchorRef={columnElRef}
+            >
               <span
                 className="inline-flex p-1 text-gray-500 dark:text-gray-400"
                 aria-label={t('column.policyText')}

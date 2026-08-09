@@ -2,10 +2,13 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Columns, Task, TeamMember, Board, Priority } from '../types';
 import { SavedFilterView, getSavedFilterView } from '../api';
 import { TaskViewMode, ViewMode, loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
-import { filterTasks, hasConfiguredSearchFilters } from '../utils/taskUtils';
+import { hasConfiguredSearchFilters, filterTasks } from '../utils/taskUtils';
 import { SYSTEM_MEMBER_ID } from '../constants/appConstants';
-import { dedupeTasksInColumns } from '../utils/taskReorderingUtils';
 import { isAgentMemberId } from '../utils/agentMemberUi';
+import {
+  applyActiveColumnFilters,
+  taskMatchesSelectedSprint,
+} from '../utils/columnFilters';
 
 // Extend Window interface for justUpdatedFromWebSocket flag
 declare global {
@@ -18,6 +21,8 @@ interface UseTaskFiltersProps {
   columns: Columns;
   members: TeamMember[];
   boards: Board[];
+  /** Used so header/text search can match sprint names. */
+  sprints?: Array<{ id: string; name: string }>;
   updateCurrentUserPreference: <K extends keyof import('../utils/userPreferences').UserPreferences>(
     key: K,
     value: import('../utils/userPreferences').UserPreferences[K]
@@ -28,6 +33,7 @@ export const useTaskFilters = ({
   columns,
   members,
   boards,
+  sprints = [],
   updateCurrentUserPreference,
 }: UseTaskFiltersProps) => {
   // Load user preferences from cookies
@@ -74,252 +80,93 @@ export const useTaskFilters = ({
     viewModeRef.current = viewMode;
   }, [viewMode]);
 
+  const getFilterState = useCallback(
+    () => ({
+      selectedSprintId,
+      searchFilters,
+      selectedMembers,
+      includeAssignees,
+      includeWatchers,
+      includeCollaborators,
+      includeRequesters,
+      showAgentTasks,
+    }),
+    [
+      selectedSprintId,
+      searchFilters,
+      selectedMembers,
+      includeAssignees,
+      includeWatchers,
+      includeCollaborators,
+      includeRequesters,
+      showAgentTasks,
+    ]
+  );
+
+  /** Synchronous filter apply — used when seeding columns on board switch to avoid unfiltered flash. */
+  const applyFiltersToColumns = useCallback(
+    (columnsToFilter: Columns): Columns =>
+      applyActiveColumnFilters(columnsToFilter, getFilterState(), members, boards, sprints),
+    [getFilterState, members, boards, sprints]
+  );
+
   // Enhanced filtering effect with watchers/collaborators/requesters support
   useEffect(() => {
     // Delay filtering only when WebSocket/optimistic batch paths set justUpdatedFromWebSocket.
     // Do NOT infer batches from task-count deltas — board switches (e.g. 73→3 tasks) look the
     // same and wrongly blanked the board for ~400ms.
     let timeoutId: NodeJS.Timeout | null = null;
-    
-    // CRITICAL: Refactor performFiltering to accept columns as parameter to avoid stale closure
+
     const performFiltering = (columnsToFilter: Columns = columns) => {
-      // CRITICAL: Don't filter if columns is empty - might be during batch update
       if (!columnsToFilter || Object.keys(columnsToFilter).length === 0) {
         return;
       }
-
-      // Safety net: one task id must not appear in multiple columns
-      const uniqueColumns = dedupeTasksInColumns(columnsToFilter);
-      
-      // Do not bail when all columns have zero tasks — that is valid (e.g. newly created board).
-      // Previously we returned here, which left filteredColumns stuck on the previous board until
-      // another event forced a refresh.
-      
-      // Filter when search criteria are set, members selected, or role chips affect results.
-      // Search panel visibility (isSearchActive) does not gate search criteria.
-      const searchConfigured = hasConfiguredSearchFilters(searchFilters);
-      const isFiltering = searchConfigured || selectedMembers.length > 0 || includeAssignees || includeWatchers || includeCollaborators || includeRequesters;
-      
-      const stripAgentIfNeeded = (tasks: Task[]) =>
-        showAgentTasks ? tasks : tasks.filter((task) => !isAgentMemberId(task.memberId));
-
-      if (!isFiltering) {
-        if (!showAgentTasks) {
-          const withoutAgent: Columns = {};
-          for (const [columnId, column] of Object.entries(uniqueColumns)) {
-            withoutAgent[columnId] = {
-              ...column,
-              tasks: stripAgentIfNeeded(column.tasks || []),
-            };
-          }
-          setFilteredColumns(withoutAgent);
-        } else {
-          setFilteredColumns(uniqueColumns);
-        }
-        return;
-      }
-
-      // Create custom filtering function that includes watchers/collaborators/requesters (synchronous)
-      const customFilterTasks = (tasks: any[]) => {
-        // If no checkboxes enabled, return all tasks (no filtering)
-        if (!includeAssignees && !includeWatchers && !includeCollaborators && !includeRequesters) {
-          return tasks;
-        }
-        
-        // If no members selected, treat as "all members" (empty array = show all)
-        const showAllMembers = selectedMembers.length === 0;
-        
-        const filteredTasks = [];
-        
-        for (const task of tasks) {
-          let includeTask = false;
-          
-          // Check if task is assigned to selected members (or any member if showAllMembers)
-          if (includeAssignees) {
-            if (showAllMembers) {
-              // Show all tasks with assignees (any member)
-              if (task.memberId) {
-                includeTask = true;
-              }
-            } else {
-              // Show only tasks assigned to selected members
-              if (task.memberId && selectedMembers.includes(task.memberId)) {
-                includeTask = true;
-              }
-            }
-          }
-          
-          // Check watchers if checkbox is enabled (use cached data)
-          if (!includeTask && includeWatchers) {
-            const watchers = task.watchers || [];
-            if (watchers.length > 0) {
-              if (showAllMembers) {
-                // Show all tasks with watchers
-                includeTask = true;
-              } else {
-                // Show only tasks watched by selected members
-                if (watchers.some((watcher: any) => selectedMembers.includes(watcher.id))) {
-                  includeTask = true;
-                }
-              }
-            }
-          }
-          
-          // Check collaborators if checkbox is enabled (use cached data)
-          if (!includeTask && includeCollaborators) {
-            const collaborators = task.collaborators || [];
-            if (collaborators.length > 0) {
-              if (showAllMembers) {
-                // Show all tasks with collaborators
-                includeTask = true;
-              } else {
-                // Show only tasks with selected members as collaborators
-                if (collaborators.some((collaborator: any) => selectedMembers.includes(collaborator.id))) {
-                  includeTask = true;
-                }
-              }
-            }
-          }
-          
-          // Check requesters if checkbox is enabled
-          if (!includeTask && includeRequesters) {
-            if (showAllMembers) {
-              // Show all tasks with requesters
-              if (task.requesterId) {
-                includeTask = true;
-              }
-            } else {
-              // Show only tasks requested by selected members
-              if (task.requesterId && selectedMembers.includes(task.requesterId)) {
-                includeTask = true;
-              }
-            }
-          }
-          
-          if (includeTask) {
-            filteredTasks.push(task);
-          }
-        }
-        
-        return filteredTasks;
-      };
-
-      // Create effective filters with member filtering 
-      const effectiveFilters = {
-        ...searchFilters,
-        selectedMembers: selectedMembers.length > 0 ? selectedMembers : searchFilters.selectedMembers
-      };
-
-      const filteredColumns: any = {};
-      
-      for (const [columnId, column] of Object.entries(uniqueColumns)) {
-        let columnTasks = column.tasks;
-
-        // FIRST: Apply sprint filtering (if a sprint is selected)
-        // Pure sprint_id matching - no date-based fallback
-        if (selectedSprintId !== null) {
-          if (selectedSprintId === 'backlog') {
-            // Show only tasks NOT assigned to any sprint (backlog)
-            columnTasks = columnTasks.filter(task => !task.sprintId);
-          } else {
-            // Show only tasks with matching sprint_id (explicit assignment)
-            columnTasks = columnTasks.filter(task => task.sprintId === selectedSprintId);
-          }
-        }
-        
-        // SECOND: Apply search filters, but skip member filtering if we have checkboxes enabled
-        if (searchConfigured) {
-          // Create filters without member filtering if we have checkboxes enabled
-          const searchOnlyFilters = (includeAssignees || includeWatchers || includeCollaborators || includeRequesters) ? {
-            ...effectiveFilters,
-            selectedMembers: [] // Skip member filtering in search, we'll handle it in custom filter
-          } : effectiveFilters;
-          
-          columnTasks = filterTasks(columnTasks, searchOnlyFilters, true, members, boards);
-        }
-        
-        // THIRD: Apply our custom member filtering with assignees/watchers/collaborators/requesters
-        // Run member filtering if at least one filter type is enabled (works with 0 or more members selected)
-        if (includeAssignees || includeWatchers || includeCollaborators || includeRequesters) {
-          columnTasks = customFilterTasks(columnTasks);
-        }
-
-        // FOURTH: Optionally hide AI Agent–assigned tasks (independent of member chip selection)
-        columnTasks = stripAgentIfNeeded(columnTasks);
-        
-        // IMPORTANT: Create new column object and ensure task objects are preserved
-        // When filtering, we create a new array but the task objects inside are references
-        // to the original tasks from columns. This is correct - we want to preserve the
-        // task object references so that when we update a task in columns, filteredColumns
-        // picks up the new reference on the next computation.
-        filteredColumns[columnId] = {
-          ...column,
-          tasks: columnTasks // New array, but task objects are references to original tasks
-        };
-      }
-      
-      // Always commit filteredColumns (including all-empty boards). Skipping when both counts
-      // were 0 left filteredColumns showing the previous board's tasks after create-board / switch.
-      setFilteredColumns(filteredColumns);
+      setFilteredColumns(applyFiltersToColumns(columnsToFilter));
     };
 
     if (window.justUpdatedFromWebSocket) {
       // Delay filtering to let batch update complete
-      // The batch update processes all updates in a single setColumns call, but React state updates
-      // are asynchronous, so we need to wait longer to ensure the state has fully settled
-      // We use a longer delay to ensure the batch update's setColumns has been applied
       timeoutId = setTimeout(() => {
-        // CRITICAL: The effect will re-run when columns changes, so we don't need to manually
-        // read from the ref here. Instead, we should just let the effect run again naturally.
-        // But to ensure we have the latest data, we'll use a callback pattern to force
-        // the effect to re-evaluate with the latest columns value.
-        // 
-        // Actually, the best approach is to just let the effect run again when columns changes.
-        // The delay is just to prevent it from running too early. But we need to ensure
-        // we're using the latest columns value.
-        //
-        // Since the effect depends on `columns`, when columns changes (from batch update),
-        // the effect will run again. But we're delaying it, so we need to ensure we read
-        // the latest value. The ref should be updated by now, but let's also check the
-        // current columns value from the closure to be safe.
-        //
-        // Always use the latest columns from the ref (updated every render). Never prefer an
-        // older snapshot just because it had more tasks — that resurrected the previous board's
-        // tasks on a new empty board after switching.
         const columnsToUse = columnsRef.current;
-        
         if (!columnsToUse || Object.keys(columnsToUse).length === 0) {
           return;
         }
-        
         performFiltering(columnsToUse);
       }, 400); // 400ms delay - enough for batch update to complete and React state to settle
-      
+
       return () => {
         if (timeoutId) clearTimeout(timeoutId);
       };
     } else {
-      // Run filtering immediately
       performFiltering();
     }
-  }, [columns, searchFilters.text, searchFilters.dateFrom, searchFilters.dateTo, searchFilters.dueDateFrom, searchFilters.dueDateTo, searchFilters.selectedPriorities, searchFilters.selectedTags, searchFilters.projectId, searchFilters.taskId, selectedMembers, includeAssignees, includeWatchers, includeCollaborators, includeRequesters, selectedSprintId, members, boards, showAgentTasks]);
+  }, [
+    columns,
+    searchFilters.text,
+    searchFilters.dateFrom,
+    searchFilters.dateTo,
+    searchFilters.dueDateFrom,
+    searchFilters.dueDateTo,
+    searchFilters.selectedPriorities,
+    searchFilters.selectedTags,
+    searchFilters.projectId,
+    searchFilters.taskId,
+    selectedMembers,
+    includeAssignees,
+    includeWatchers,
+    includeCollaborators,
+    includeRequesters,
+    selectedSprintId,
+    members,
+    boards,
+    showAgentTasks,
+    applyFiltersToColumns,
+  ]);
 
   // Helper function to quickly check if a task should be included (synchronous checks only for WebSocket updates)
   const shouldIncludeTask = useCallback((task: Task): boolean => {
-    // Sprint filtering (applied first, before other filters)
-    // Pure sprint_id matching - no date-based fallback
-    if (selectedSprintId !== null) {
-      if (selectedSprintId === 'backlog') {
-        // Show only tasks NOT assigned to any sprint (backlog)
-        if (task.sprintId !== null && task.sprintId !== undefined) {
-          return false;
-        }
-      } else {
-        // Show only tasks with matching sprint_id (explicit assignment)
-        if (task.sprintId !== selectedSprintId) {
-          return false;
-        }
-      }
+    if (!taskMatchesSelectedSprint(task, selectedSprintId)) {
+      return false;
     }
     // If selectedSprintId is null, show all tasks (no sprint filtering)
 
@@ -347,7 +194,7 @@ export const useTaskFilters = ({
       } : effectiveFilters;
       
       // Use the filterTasks utility with a single task
-      const filtered = filterTasks([task], searchOnlyFilters, true, members, boards);
+      const filtered = filterTasks([task], searchOnlyFilters, true, members, boards, sprints);
       if (filtered.length === 0) return false; // Task didn't pass search filters
     }
 
@@ -386,7 +233,7 @@ export const useTaskFilters = ({
     }
 
     return true;
-  }, [searchFilters, selectedMembers, includeAssignees, includeWatchers, includeCollaborators, includeRequesters, members, boards, selectedSprintId, showAgentTasks]);
+  }, [searchFilters, selectedMembers, includeAssignees, includeWatchers, includeCollaborators, includeRequesters, members, boards, sprints, selectedSprintId, showAgentTasks]);
 
   // Keep shouldIncludeTaskRef in sync for WebSocket handlers
 
@@ -633,6 +480,7 @@ export const useTaskFilters = ({
     setCurrentFilterView,
     setSharedFilterViews,
     setFilteredColumns,
+    applyFiltersToColumns,
     
     // Handlers
     handleToggleSearch,

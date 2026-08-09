@@ -116,7 +116,7 @@ The **Tools** card on the Kanban page controls board layout and card density.
 
 - **Board view** (dropdown): Kanban · List · Gantt — same icon size as the toolbar button; short labels in the menu, full description on hover
 - **Search**: Toggle advanced search/filters
-- **Card density** (dropdown): Expand · Shrink · Compact
+- **Card density** (dropdown): Full · Preview · Minimal
   - **Compact** (tickets only) hides descriptions on cards and shows a **red dot** on the density button as a reminder
   - Tooltips describe the current mode (including that compact hides descriptions)
 

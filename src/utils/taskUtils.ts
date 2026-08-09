@@ -64,16 +64,26 @@ export const hasConfiguredSearchFilters = (searchFilters: SearchFilters): boolea
   );
 };
 
+/** Minimal sprint shape for text search by sprint name. */
+export type SprintSearchInfo = { id: string; name: string };
+
 /**
  * Filter tasks based on search criteria.
  * Criteria always apply when set — Search panel visibility (`isSearchActive`) does not gate filtering.
  * The `isSearchActive` argument is kept for call-site compatibility and ignored.
  */
-export const filterTasks = (tasks: Task[], searchFilters: SearchFilters, _isSearchActive?: boolean, members?: TeamMember[], boards?: any[]): Task[] => {
+export const filterTasks = (
+  tasks: Task[],
+  searchFilters: SearchFilters,
+  _isSearchActive?: boolean,
+  members?: TeamMember[],
+  boards?: any[],
+  sprints?: SprintSearchInfo[]
+): Task[] => {
   if (!hasConfiguredSearchFilters(searchFilters)) return tasks;
 
   return tasks.filter(task => {
-    // Enhanced text search (title, description, comments, ticket, assignee, requester)
+    // Text search: title, description, comments, ticket, assignee, requester, sprint name
     if (searchFilters.text) {
       const searchText = searchFilters.text.toLowerCase();
       const titleMatch = task.title.toLowerCase().includes(searchText);
@@ -108,6 +118,17 @@ export const filterTasks = (tasks: Task[], searchFilters: SearchFilters, _isSear
           }
         }
       }
+
+      let sprintMatch = false;
+      if (sprints?.length) {
+        const sprintId = task.sprintId ?? (task as { sprint_id?: string | null }).sprint_id;
+        if (sprintId) {
+          const sprint = sprints.find((s) => s.id === sprintId);
+          if (sprint?.name?.toLowerCase().includes(searchText)) {
+            sprintMatch = true;
+          }
+        }
+      }
       
       if (
         !titleMatch &&
@@ -115,7 +136,8 @@ export const filterTasks = (tasks: Task[], searchFilters: SearchFilters, _isSear
         !commentsMatch &&
         !ticketMatch &&
         !requesterMatch &&
-        !assigneeMatch
+        !assigneeMatch &&
+        !sprintMatch
       ) {
         return false;
       }
@@ -202,14 +224,21 @@ export const filterTasks = (tasks: Task[], searchFilters: SearchFilters, _isSear
  * Get filtered columns for display.
  * Panel visibility does not gate filtering — only whether criteria are set.
  */
-export const getFilteredColumns = (columns: Columns, searchFilters: SearchFilters, _isSearchActive?: boolean, members?: TeamMember[], boards?: any[]): Columns => {
+export const getFilteredColumns = (
+  columns: Columns,
+  searchFilters: SearchFilters,
+  _isSearchActive?: boolean,
+  members?: TeamMember[],
+  boards?: any[],
+  sprints?: SprintSearchInfo[]
+): Columns => {
   if (!hasConfiguredSearchFilters(searchFilters)) return columns;
 
   const filteredColumns: Columns = {};
   Object.entries(columns).forEach(([columnId, column]) => {
     filteredColumns[columnId] = {
       ...column,
-      tasks: filterTasks(column.tasks, searchFilters, true, members, boards)
+      tasks: filterTasks(column.tasks, searchFilters, true, members, boards, sprints)
     };
   });
   return filteredColumns;
@@ -218,7 +247,14 @@ export const getFilteredColumns = (columns: Columns, searchFilters: SearchFilter
 /**
  * Get filtered task count for a board (for tab pills)
  */
-export const getFilteredTaskCountForBoard = (board: Board, searchFilters: SearchFilters, _isSearchActive?: boolean, members?: TeamMember[], boards?: any[]): number => {
+export const getFilteredTaskCountForBoard = (
+  board: Board,
+  searchFilters: SearchFilters,
+  _isSearchActive?: boolean,
+  members?: TeamMember[],
+  boards?: any[],
+  sprints?: SprintSearchInfo[]
+): number => {
   if (!hasConfiguredSearchFilters(searchFilters)) {
     // Return total task count when no filters are active (excluding archived columns)
     let totalCount = 0;
@@ -237,7 +273,7 @@ export const getFilteredTaskCountForBoard = (board: Board, searchFilters: Search
     // Convert to boolean to handle SQLite integer values (0/1)
     const isArchived = Boolean(column.is_archived);
     if (!isArchived) {
-      totalCount += filterTasks(column.tasks, searchFilters, true, members, boards).length;
+      totalCount += filterTasks(column.tasks, searchFilters, true, members, boards, sprints).length;
     }
   });
   return totalCount;
@@ -254,10 +290,17 @@ export const hasActiveFilters = (searchFilters: SearchFilters, _isSearchActive?:
 /**
  * Check if a single task would be filtered out by current filters
  */
-export const wouldTaskBeFilteredOut = (task: Task, searchFilters: SearchFilters, _isSearchActive?: boolean): boolean => {
+export const wouldTaskBeFilteredOut = (
+  task: Task,
+  searchFilters: SearchFilters,
+  _isSearchActive?: boolean,
+  members?: TeamMember[],
+  boards?: any[],
+  sprints?: SprintSearchInfo[]
+): boolean => {
   if (!hasConfiguredSearchFilters(searchFilters)) return false;
   
-  const filtered = filterTasks([task], searchFilters, true);
+  const filtered = filterTasks([task], searchFilters, true, members, boards, sprints);
   return filtered.length === 0;
 };
 

@@ -330,10 +330,29 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
 }
 
+/*
+ * Shrink / Preview mode: line-clamp alone does not clip HTML tables (table layout
+ * ignores -webkit-line-clamp). Hard max-height keeps cards consistent.
+ */
+.task-card-description.line-clamp-2,
+.task-description-shrink {
+  max-height: 2.75rem; /* ~2 lines of text-sm */
+  overflow: hidden !important;
+}
+
 /* Ensure images in shrunken task cards don't break layout */
-.task-card-description.line-clamp-2 img {
+.task-card-description.line-clamp-2 img,
+.task-description-shrink img {
   max-height: 60px !important;
   margin: 0.25rem 0 !important;
+}
+
+/* Tables: force clip inside shrink preview (display:table escapes line-clamp) */
+.task-card-description.line-clamp-2 table,
+.task-description-shrink table {
+  display: block;
+  max-height: 2.5rem;
+  overflow: hidden;
 }
 
 /* Compact image mode for inline editing in TaskCards */

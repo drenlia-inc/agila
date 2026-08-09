@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { TeamMember, Task, Column, Columns, Board, PriorityOption, Tag, QueryLog, DragPreview, ColumnVisibilityWarning } from './types';
@@ -64,6 +64,7 @@ import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reord
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit } from './utils/kanbanFlowUtils';
 import { isAgentMemberId } from './utils/agentMemberUi';
+import { taskMatchesSelectedSprint } from './utils/columnFilters';
 import { userCanMutate } from './utils/permissions';
 import { isDemoModeClient } from './utils/demoReset';
 import { useLoadingState } from './hooks/useLoadingState';
@@ -618,6 +619,7 @@ function AppContent() {
     columns,
     members,
     boards,
+    sprints: availableSprints,
     updateCurrentUserPreference,
   });
 
@@ -651,7 +653,10 @@ function AppContent() {
       const wouldBeFilteredBySearch = wouldTaskBeFilteredOut(
         task,
         taskFilters.searchFilters,
-        taskFilters.isSearchActive
+        taskFilters.isSearchActive,
+        members,
+        boards,
+        availableSprints
       );
       const wouldBeFilteredBySprint = (() => {
         if (taskFilters.selectedSprintId === null) return false;
@@ -1535,13 +1540,6 @@ function AppContent() {
       }
     }
   }, [columns]); // Remove selectedTask from deps to avoid infinite loops
-
-  // Clear filteredColumns when board changes to prevent stale data in pills
-  useEffect(() => {
-    if (selectedBoard) {
-      taskFilters.setFilteredColumns({}); // Clear immediately to prevent stale pill counts
-    }
-  }, [selectedBoard]);
 
   // Invite user handler
   const handleInviteUser = async (email: string) => {
@@ -2597,67 +2595,64 @@ function AppContent() {
   const [isSwitchingBoard, setIsSwitchingBoard] = useState(false);
   const lastTaskCountsRef = useRef<Record<string, number>>({});
 
-  // Update columns when selected board changes
-  // Load board data when selected board changes (essential for board switching)
-  useEffect(() => {
-    if (feDebug('FE_DEBUG_APP_CORE')) console.log('🔗 [App] useEffect triggered:', { selectedBoard, currentPage, hasBoards: boards.length > 0 });
+  // Hydrate columns before paint when the selected board changes.
+  // Previously a separate effect cleared filteredColumns to {} first, which painted an empty
+  // board for a frame; columns and filteredColumns must update together.
+  useLayoutEffect(() => {
+    if (feDebug('FE_DEBUG_APP_CORE')) {
+      console.log('🔗 [App] board layout effect:', {
+        selectedBoard,
+        currentPage,
+        hasBoards: boards.length > 0,
+      });
+    }
 
     if (selectedBoard) {
-      // Set switching state to prevent task count updates during board switch
       setIsSwitchingBoard(true);
       const boardIdBeingOpened = selectedBoard;
-      
-      // CRITICAL FIX: Check if board data is already loaded in boards array
-      const boardInState = boards.find(b => b.id === selectedBoard);
+      const boardInState = boards.find((b) => b.id === selectedBoard);
+
       if (boardInState && boardInState.columns && Object.keys(boardInState.columns).length > 0) {
-        // Board data already loaded — show cached columns immediately for snappy UX.
-        // Do NOT gate this on justUpdatedFromWebSocket: after a cross-board drop (or any
-        // WS batch), that flag can still be true while the user switches boards. Skipping
-        // setColumns leaves the *previous* board's column IDs in `columns`, while
-        // boardColumnVisibility[selectedBoard] lists the new board's IDs, so
-        // getFullyFilteredColumns matches nothing and the Kanban stays blank until another
-        // navigation forces a sync.
         const newColumns: Columns = {};
-        Object.keys(boardInState.columns || {}).forEach(columnId => {
+        Object.keys(boardInState.columns || {}).forEach((columnId) => {
           const column = boardInState.columns[columnId];
           if (column) {
             newColumns[columnId] = {
               ...column,
-              tasks: [...(column.tasks || [])]
+              tasks: [...(column.tasks || [])],
             };
           }
         });
         setColumns(newColumns);
+        // Seed with active filters applied (sprint/search/etc.) so board switch does not
+        // briefly paint every card before useTaskFilters re-runs.
+        taskFilters.setFilteredColumns(taskFilters.applyFiltersToColumns(newColumns));
         setIsSwitchingBoard(false);
 
-        // Revalidate from API in the background. Cached boards[] can miss comment/task
-        // updates that arrived while this client was not in that board's WS room.
-        // Race-guard: only apply if still on the same board when the fetch completes.
-        refreshBoardData({ force: true, forBoardId: boardIdBeingOpened }).then(() => {
-          if (selectedBoardRef.current !== boardIdBeingOpened) return;
-        }).catch(() => {
-          /* refreshBoardData already logs */
-        });
+        refreshBoardData({ force: true, forBoardId: boardIdBeingOpened })
+          .then(() => {
+            if (selectedBoardRef.current !== boardIdBeingOpened) return;
+          })
+          .catch(() => {
+            /* refreshBoardData already logs */
+          });
       } else {
-        // Board data not in state yet — clear columns immediately so the previous board's tasks
-        // are not shown while refresh runs (e.g. new board or slow network).
         setColumns({});
-        // Force refresh: otherwise justUpdatedFromWebSocket can skip and leave stale columns visible.
+        taskFilters.setFilteredColumns({});
         refreshBoardData({ force: true, forBoardId: boardIdBeingOpened }).finally(() => {
           if (selectedBoardRef.current === boardIdBeingOpened) {
             setIsSwitchingBoard(false);
           }
         });
       }
-      
-      // Load relationships once for the selected board (for kanban page, which includes gantt view)
+
       if (currentPage === 'kanban') {
         getBoardTaskRelationships(selectedBoard)
-          .then(relationships => {
+          .then((relationships) => {
             if (selectedBoardRef.current !== boardIdBeingOpened) return;
             taskLinking.setBoardRelationships(relationships);
           })
-          .catch(error => {
+          .catch((error) => {
             console.error('⚠️ [App] Failed to load relationships:', error);
             if (selectedBoardRef.current === boardIdBeingOpened) {
               taskLinking.setBoardRelationships([]);
@@ -2665,13 +2660,13 @@ function AppContent() {
           });
       }
     } else {
-      // Clear columns when no board is selected
       setColumns({});
+      taskFilters.setFilteredColumns({});
       taskLinking.setBoardRelationships([]);
       setIsSwitchingBoard(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBoard, currentPage]); // Depend on currentPage to reload relationships when switching to kanban
+  }, [selectedBoard, currentPage]);
 
   // Watch for copied task to trigger animation
   useEffect(() => {
@@ -4467,12 +4462,8 @@ function AppContent() {
           return false;
         }
 
-        if (taskFilters.selectedSprintId !== null) {
-          if (taskFilters.selectedSprintId === 'backlog') {
-            if (task.sprintId !== null && task.sprintId !== undefined) return false;
-          } else if (task.sprintId !== taskFilters.selectedSprintId) {
-            return false;
-          }
+        if (!taskMatchesSelectedSprint(task, taskFilters.selectedSprintId)) {
+          return false;
         }
 
         if (hasConfiguredSearchFilters(taskFilters.searchFilters)) {
@@ -4481,7 +4472,8 @@ function AppContent() {
             taskFilters.searchFilters,
             true,
             members,
-            boards
+            boards,
+            availableSprints
           );
           if (searchFiltered.length === 0) return false;
         }

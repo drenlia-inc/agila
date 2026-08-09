@@ -33,7 +33,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 - **Task management** with priorities, comments, and file attachments
 - **Rich text editing** for task descriptions and comments with formatting, links, and embedded content
 - **Task relationships** - Link tasks as parent-child or related relationships
-- **Task view modes** - Compact, shrink, and expand views for optimal screen space
+- **Task view modes** - Full, Preview, and Minimal card density for optimal screen space
 - **Task toolbar** - Quick actions on hover (assign members, change priority, add tags, copy tasks)
 - **Quick edit** - Inline editing without opening full task details
 - **Multi-select & bulk actions** - Select tasks (per card or Select all per column); bulk tag, copy, sprint, priority, archive, delete, and move to another board; drag multi-selected tasks between columns

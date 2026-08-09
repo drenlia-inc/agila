@@ -2,13 +2,20 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Upload, Trash2 } from 'lucide-react';
 import { uploadAvatar, deleteAccount, getUserSettings } from '../api';
-import { loadUserPreferences, loadUserPreferencesAsync, updateUserPreference, type UserPreferences } from '../utils/userPreferences';
+import {
+  loadUserPreferences,
+  loadUserPreferencesAsync,
+  updateUserPreference,
+  updateAppSettingsPreference,
+  type UserPreferences,
+} from '../utils/userPreferences';
 import api from '../api';
 import { getAuthenticatedAvatarUrl } from '../utils/authImageUrl';
 import { useSettings } from '../contexts/SettingsContext';
 import ProfileDevTab from './profile/ProfileDevTab';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { setExplicitGuestLanguage } from '../utils/guestLanguage';
+import { userIsViewer } from '../utils/permissions';
 
 type NotificationPreferenceKey = keyof UserPreferences['notifications'];
 
@@ -40,6 +47,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   const { t, i18n } = useTranslation('common');
   const { systemSettings: contextSystemSettings, siteSettings } = useSettings(); // Use SettingsContext instead of fetching
   const aiEnabled = siteSettings?.AI_ENABLED === 'true' || contextSystemSettings?.AI_ENABLED === 'true';
+  const isViewOnlyUser = userIsViewer(currentUser);
   const [activeTab, setActiveTab] = useState<'profile' | 'app-settings' | 'notifications' | 'dev'>('profile');
   const [displayName, setDisplayName] = useState(currentUser?.firstName + ' ' + currentUser?.lastName || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
@@ -128,12 +136,12 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
     }
   }, [isOpen, onProfileEditingChange]); // Removed currentUser dependency to prevent resets during editing
 
-  // Leave Dev tab if AI is turned off while modal is open
+  // Leave Dev tab if AI is off or user is view-only (no PATs / agent credentials)
   useEffect(() => {
-    if (!aiEnabled && activeTab === 'dev') {
+    if (activeTab === 'dev' && (!aiEnabled || isViewOnlyUser)) {
       setActiveTab('profile');
     }
-  }, [aiEnabled, activeTab]);
+  }, [aiEnabled, isViewOnlyUser, activeTab]);
 
   // Monitor for changes to display name, bio, or avatar to set editing state
   useEffect(() => {
@@ -317,40 +325,34 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
 
   // App Settings handlers
   const handleTaskDeleteConfirmChange = (value: boolean | 'system') => {
-    const currentPrefs = loadUserPreferences(currentUser?.id);
-    const newAppSettings = {
-      ...currentPrefs.appSettings,
-      taskDeleteConfirm: value === 'system' ? undefined : value
-    };
-    
-    updateUserPreference('appSettings', newAppSettings, currentUser?.id);
+    const nextValue = value === 'system' ? undefined : value;
+    void updateAppSettingsPreference('taskDeleteConfirm', nextValue, currentUser?.id);
+    setUserPrefs((prev) => ({
+      ...prev,
+      appSettings: { ...prev.appSettings, taskDeleteConfirm: nextValue },
+    }));
   };
 
-  const handleActivityFeedToggle = async (enabled: boolean) => {
-    try {
-      // Update the unified preferences
-      const updatedPrefs = {
-        ...userPrefs,
-        appSettings: { 
-          ...userPrefs.appSettings, 
-          showActivityFeed: enabled 
-        }
-      };
-      
-      await updateUserPreference('appSettings', updatedPrefs.appSettings, currentUser?.id);
-      
-      // Update local state
-      setUserPrefs(updatedPrefs);
-      setUserSettings(prev => ({ ...prev, showActivityFeed: enabled }));
-      
-      // Also update the parent state
-      if (onActivityFeedToggle) {
-        onActivityFeedToggle(enabled);
-      }
-    } catch (error) {
+  const handleActivityFeedToggle = (enabled: boolean) => {
+    // Optimistic UI: flip checkbox + hide/show feed immediately. Persisting via
+    // updateUserPreference('appSettings') awaited a full prefs save and felt broken.
+    setUserPrefs((prev) => ({
+      ...prev,
+      appSettings: { ...prev.appSettings, showActivityFeed: enabled },
+    }));
+    setUserSettings((prev) => ({ ...prev, showActivityFeed: enabled }));
+    onActivityFeedToggle?.(enabled);
+
+    void updateAppSettingsPreference('showActivityFeed', enabled, currentUser?.id).catch((error) => {
       console.error('Failed to update activity feed setting:', error);
       setError(t('profile.failedToUpdateActivityFeed'));
-    }
+      setUserPrefs((prev) => ({
+        ...prev,
+        appSettings: { ...prev.appSettings, showActivityFeed: !enabled },
+      }));
+      setUserSettings((prev) => ({ ...prev, showActivityFeed: !enabled }));
+      onActivityFeedToggle?.(!enabled);
+    });
   };
 
   const handleLanguageChange = async (lang: 'en' | 'fr') => {
@@ -520,7 +522,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
               >
                 {t('profile.notifications')}
               </button>
-              {aiEnabled && (
+              {aiEnabled && !isViewOnlyUser && (
                 <button
                   onClick={() => setActiveTab('dev')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm ${
@@ -763,7 +765,8 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                 </p>
               </div>
 
-              {/* Task Delete Confirmation Setting */}
+              {/* Task Delete Confirmation — hidden for view-only (cannot delete tasks) */}
+              {!isViewOnlyUser && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -798,6 +801,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Preferred Language */}
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -926,7 +930,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
             </div>
           )}
 
-          {activeTab === 'dev' && aiEnabled && (
+          {activeTab === 'dev' && aiEnabled && !isViewOnlyUser && (
             <div className="space-y-6">
               <ProfileDevTab />
             </div>

@@ -1479,7 +1479,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                             {displayName}
                           </div>
                           {isSystemAccount && (
-                            <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded border bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800">
+                            <span className="shrink-0 inline-flex items-center px-1 py-px text-[9px] font-semibold uppercase tracking-wide leading-none rounded border bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800">
                               {t('users.systemAccount')}
                             </span>
                           )}
@@ -1718,7 +1718,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   {t('users.editUser')}
                 </h3>
                 {isLocalPseudoAccount(editingUserData.email) && (
-                  <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded border bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800">
+                  <span className="shrink-0 inline-flex items-center px-1 py-px text-[9px] font-semibold uppercase tracking-wide leading-none rounded border bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800">
                     {t('users.systemAccount')}
                   </span>
                 )}
