@@ -681,6 +681,82 @@ const migrations = [
       );
       console.log('✅ Migration 34: viewer role ensured');
     }
+  },
+  {
+    version: 35,
+    name: 'remove_spurious_bootstrap_admin',
+    description:
+      'Remove stock Alex Morgan (admin@kanban.local) when another admin already exists (accidental seed on existing tenants)',
+    up: async (db) => {
+      // Only remove the stock bootstrap identity when it is clearly surplus:
+      // another human admin exists, stock display name, and no task ownership.
+      const bootstrap = await dbAll(
+        db.prepare(`
+          SELECT u.id
+          FROM users u
+          WHERE u.email = 'admin@kanban.local'
+            AND u.first_name = 'Alex'
+            AND u.last_name = 'Morgan'
+            AND EXISTS (
+              SELECT 1
+              FROM users ou
+              JOIN user_roles ur ON ur.user_id = ou.id
+              JOIN roles r ON r.id = ur.role_id
+              WHERE r.name = 'admin'
+                AND ou.id <> u.id
+                AND ou.email NOT IN ('system@local', 'agent@local')
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM members m
+              WHERE m.user_id = u.id
+                AND (
+                  EXISTS (SELECT 1 FROM tasks t WHERE t.memberid = m.id)
+                  OR EXISTS (SELECT 1 FROM tasks t WHERE t.requesterid = m.id)
+                )
+            )
+        `)
+      );
+
+      if (!bootstrap.length) {
+        console.log('✅ Migration 35: no spurious bootstrap admin to remove');
+        return;
+      }
+
+      for (const row of bootstrap) {
+        const userId = row.id;
+
+        await dbRun(
+          db.prepare(`
+            DELETE FROM comments
+            WHERE authorid IN (SELECT id FROM members WHERE user_id = ?)
+          `),
+          userId
+        );
+        await dbRun(
+          db.prepare(`
+            DELETE FROM watchers
+            WHERE memberid IN (SELECT id FROM members WHERE user_id = ?)
+          `),
+          userId
+        );
+        await dbRun(
+          db.prepare(`
+            DELETE FROM collaborators
+            WHERE memberid IN (SELECT id FROM members WHERE user_id = ?)
+          `),
+          userId
+        );
+        await dbRun(db.prepare('DELETE FROM activity WHERE userid = ?'), userId);
+        await dbRun(db.prepare('DELETE FROM user_settings WHERE userid = ?'), userId);
+        await dbRun(db.prepare('DELETE FROM user_roles WHERE user_id = ?'), userId);
+        await dbRun(db.prepare('DELETE FROM user_invitations WHERE user_id = ?'), userId);
+        await dbRun(db.prepare('DELETE FROM members WHERE user_id = ?'), userId);
+        await dbRun(db.prepare('DELETE FROM users WHERE id = ?'), userId);
+
+        console.log(`✅ Migration 35: removed spurious bootstrap admin ${userId}`);
+      }
+    }
   }
 ];
 

@@ -817,14 +817,20 @@ const initializeDefaultData = async (db, tenantId = null) => {
     console.log('✅ Initialized UPLOAD_FILETYPES with default file types (including GIF)');
   }
   
-  // Initialize authentication data if the default admin is missing.
+  // Bootstrap admin only on truly empty tenants (no human users yet).
   // Do NOT gate on roles COUNT alone — migrations (e.g. add_viewer_role) may insert
   // a role before this runs, which previously skipped admin seeding on fresh DBs.
-  const defaultAdminExisting = await wrapQuery(
-    db.prepare('SELECT id FROM users WHERE email = ?'),
+  // Do NOT seed merely because admin@kanban.local is absent — existing tenants already
+  // have their own admins under different emails (regression from that check).
+  const humanUsersCountResult = await wrapQuery(
+    db.prepare(`
+      SELECT COUNT(*) as count FROM users
+      WHERE email NOT IN ('system@local', 'agent@local')
+    `),
     'SELECT'
-  ).get('admin@kanban.local');
-  if (!defaultAdminExisting) {
+  ).get();
+  const humanUsersCount = asCount(humanUsersCountResult?.count);
+  if (humanUsersCount === 0) {
     // Generate random password for admin user (only when creating users)
     const adminPassword = generateRandomPassword(12);
     

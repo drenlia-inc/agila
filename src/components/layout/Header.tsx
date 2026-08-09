@@ -47,6 +47,22 @@ interface SystemInfo {
   timestamp: string;
 }
 
+/**
+ * True when SITE_URL means "this app" rather than an external site.
+ * Hash-router SPA: bare origin (https://host) and / are equivalent to #kanban
+ * (board restored via onPageChange) — must not full-reload and drop #kanban#boardId.
+ */
+function isInAppSiteHomeUrl(raw: string): boolean {
+  const trimmed = (raw || '').trim();
+  if (!trimmed || trimmed === '#' || trimmed === '/') return true;
+  try {
+    const target = new URL(trimmed, window.location.origin);
+    return target.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 interface HeaderProps {
   currentUser: CurrentUser | null;
   siteSettings: SiteSettings;
@@ -458,17 +474,22 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const siteUrlRaw = (siteSettings.SITE_URL || '').trim();
+  const siteHomeIsInApp = isInAppSiteHomeUrl(siteUrlRaw);
+  // Prefer hash href for in-app home so status bar / fallback nav matches Kanban (not bare origin).
+  const siteHomeHref = siteHomeIsInApp ? '#kanban' : (siteUrlRaw || '#');
+
   /** Site title always navigates in this tab (ignore browser “open links in new tab” and SITE_OPENS_NEW_TAB). */
   const handleSiteTitleNavigation = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    const raw = (siteSettings.SITE_URL || '').trim();
-    if (!raw || raw === '#') {
+    // Same-origin SITE_URL (incl. https://host with no hash) → SPA kanban; board restored by App
+    if (siteHomeIsInApp) {
       onPageChange('kanban');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    window.location.assign(raw);
+    window.location.assign(siteUrlRaw);
   };
 
   return (
@@ -478,7 +499,7 @@ const Header: React.FC<HeaderProps> = ({
       <div className="app-page-shell py-2.5 flex justify-between items-center gap-2 min-w-0 max-w-full">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
           <a
-            href={siteSettings.SITE_URL || '#'}
+            href={siteHomeHref}
             onClick={handleSiteTitleNavigation}
             onAuxClick={(e) => {
               if (e.button === 1) {
