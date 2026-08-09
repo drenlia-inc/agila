@@ -29,8 +29,9 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
     const notificationsWithActor = notifications.map(notif => {
       let actor = null;
       try {
-        if (notif.actor_data) {
-          actor = JSON.parse(notif.actor_data);
+        const rawActor = notif.actorData ?? notif.actor_data;
+        if (rawActor) {
+          actor = typeof rawActor === 'string' ? JSON.parse(rawActor) : rawActor;
         }
       } catch (e) {
         console.warn('Failed to parse actor_data for notification', notif.id);
@@ -84,6 +85,14 @@ router.post('/send', authenticateToken, requireRole(['admin']), async (req, res)
 
     const db = getRequestDatabase(req);
     const emailService = new EmailService(db);
+
+    const sendingSetting = await helpers.getSetting(db, 'TASK_EMAIL_NOTIFICATIONS_ENABLED');
+    if (sendingSetting === 'false') {
+      return res.status(400).json({
+        error: 'Task email notifications are paused. Enable them in Mail settings to send from the queue.',
+        code: 'TASK_EMAIL_NOTIFICATIONS_PAUSED',
+      });
+    }
     
     let sentCount = 0;
     let failedCount = 0;
@@ -91,11 +100,21 @@ router.post('/send', authenticateToken, requireRole(['admin']), async (req, res)
     
     for (const notificationId of notificationIds) {
       try {
-        // MIGRATED: Get notification from queue using sqlManager
-        const notification = await notificationQueueQueries.getNotificationQueueItemById(db, notificationId, 'pending');
+        // Allow retry of failed rows as well as pending (UI "Send Now" is a resend/retry).
+        const notification = await notificationQueueQueries.getNotificationQueueItemById(
+          db,
+          notificationId
+        );
 
         if (!notification) {
-          errors.push(`Notification ${notificationId} not found or already sent`);
+          errors.push(`Notification ${notificationId} not found`);
+          failedCount++;
+          continue;
+        }
+        if (notification.status !== 'pending' && notification.status !== 'failed') {
+          errors.push(
+            `Notification ${notificationId} cannot be sent (status: ${notification.status})`
+          );
           failedCount++;
           continue;
         }

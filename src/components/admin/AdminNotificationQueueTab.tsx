@@ -50,6 +50,19 @@ interface AdminNotificationQueueTabProps {
   discardNonce?: number;
 }
 
+/** Split `YYYY-MM-DD HH:MM:SS` into date / time for two-line table cells. */
+function splitDateTimeLocal(value: string | null | undefined): { date: string; time: string } | null {
+  if (!value) return null;
+  const formatted = formatDateTimeLocal(typeof value === 'string' ? value : String(value));
+  if (!formatted) return null;
+  const spaceIdx = formatted.indexOf(' ');
+  if (spaceIdx === -1) return { date: formatted, time: '' };
+  return {
+    date: formatted.slice(0, spaceIdx),
+    time: formatted.slice(spaceIdx + 1),
+  };
+}
+
 const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
   onLocalDirtyChange,
   onRegisterLocalSave,
@@ -67,9 +80,11 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [retentionDays, setRetentionDays] = useState('0');
   const [savingRetention, setSavingRetention] = useState(false);
+  const [savingSendingToggle, setSavingSendingToggle] = useState(false);
 
   const savedRetentionDays = systemSettings?.NOTIFICATION_QUEUE_RETENTION_DAYS || '0';
   const retentionDirty = retentionDays.trim() !== savedRetentionDays.trim();
+  const taskEmailSendingEnabled = systemSettings?.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false';
 
   useEffect(() => {
     setRetentionDays(systemSettings?.NOTIFICATION_QUEUE_RETENTION_DAYS || '0');
@@ -148,6 +163,26 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
     return () => onRegisterLocalSave(null);
   }, [onRegisterLocalSave]);
 
+  const toggleTaskEmailSending = async () => {
+    if (savingSendingToggle) return;
+    const next = taskEmailSendingEnabled ? 'false' : 'true';
+    setSavingSendingToggle(true);
+    try {
+      await updateSetting('TASK_EMAIL_NOTIFICATIONS_ENABLED', next);
+      await refreshSettings?.();
+      toast.success(
+        next === 'true'
+          ? t('mail.taskEmailNotificationsEnabledToast')
+          : t('mail.taskEmailNotificationsPausedToast')
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error(t('failedToSaveSettings'));
+    } finally {
+      setSavingSendingToggle(false);
+    }
+  };
+
   // Filter notifications based on search query
   const filteredNotifications = notifications.filter((notification: NotificationQueueItem) => {
     if (!searchQuery.trim()) return true;
@@ -201,7 +236,12 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
 
   const handleSendImmediately = async () => {
     if (selectedIds.size === 0) {
-      toast.error(t('notificationQueue.noSelection') || 'Please select at least one notification', '');
+      toast.error(t('notificationQueue.noSelection'));
+      return;
+    }
+
+    if (!taskEmailSendingEnabled) {
+      toast.error(t('notificationQueue.sendPaused'));
       return;
     }
 
@@ -210,7 +250,7 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
     const sendableNotifications = selectedNotifications.filter(n => n.status !== 'sent');
     
     if (sendableNotifications.length === 0) {
-      toast.error(t('notificationQueue.noUnsentNotifications') || 'No unsent notifications selected. Only pending or failed notifications can be sent.', '');
+      toast.error(t('notificationQueue.noUnsentNotifications'));
       return;
     }
     
@@ -228,22 +268,38 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
       setIsSending(true);
       const result = await sendNotificationsImmediately(sendableNotifications.map(n => n.id));
       
-      if (result.success) {
-        toast.success(
-          t('notificationQueue.sendSuccess', { count: result.sentCount }) || `Successfully sent ${result.sentCount} notification(s)`,
+      if (result.errors && result.errors.length > 0) {
+        console.warn('Some notifications failed to send:', result.errors);
+      }
+
+      if (result.sentCount > 0 && result.failedCount > 0) {
+        toast.warning(
+          t('notificationQueue.sendPartial', {
+            sent: result.sentCount,
+            failed: result.failedCount,
+          }),
           ''
         );
-        
-        if (result.errors && result.errors.length > 0) {
-          console.warn('Some notifications failed to send:', result.errors);
-        }
-        
-        setSelectedIds(new Set());
-        await fetchNotifications();
+      } else if (result.sentCount > 0) {
+        toast.success(
+          t('notificationQueue.sendSuccess', { count: result.sentCount }),
+          ''
+        );
+      } else {
+        toast.error(t('notificationQueue.sendNone'), '');
       }
+
+      setSelectedIds(new Set());
+      await fetchNotifications();
     } catch (error: any) {
       console.error('Failed to send notifications:', error);
-      toast.error(t('notificationQueue.sendError') || 'Failed to send notifications', '');
+      const code = error?.response?.data?.code;
+      const msg = error?.response?.data?.error;
+      if (code === 'TASK_EMAIL_NOTIFICATIONS_PAUSED') {
+        toast.error(t('notificationQueue.sendPaused'));
+      } else {
+        toast.error(msg || t('notificationQueue.sendError'));
+      }
     } finally {
       setIsSending(false);
     }
@@ -351,13 +407,43 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
   }
 
   return (
-    <div>
+    <div className="min-w-0 max-w-full">
       <div className="mb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('notificationQueue.description') || 'Manage pending email notifications'}
+              {t('notificationQueue.description')}
             </p>
+            <div
+              className="mt-2 inline-flex items-center gap-2"
+              data-setting-key="TASK_EMAIL_NOTIFICATIONS_ENABLED"
+              title={t('mail.taskEmailNotificationsHint')}
+            >
+              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                {taskEmailSendingEnabled
+                  ? t('mail.taskEmailNotificationsOn')
+                  : t('mail.taskEmailNotificationsOff')}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={taskEmailSendingEnabled}
+                aria-label={t('mail.taskEmailNotificationsLabel')}
+                disabled={savingSendingToggle}
+                onClick={() => void toggleTaskEmailSending()}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 ${
+                  taskEmailSendingEnabled
+                    ? 'bg-blue-600 dark:bg-blue-500'
+                    : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    taskEmailSendingEnabled ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
           <div
             className="flex-shrink-0 sm:text-right"
@@ -432,10 +518,18 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
               <Search className="h-5 w-5 text-gray-400" />
             </div>
             <input
-              type="text"
+              type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('notificationQueue.searchPlaceholder') || 'Search notifications...'}
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape') return;
+                e.preventDefault();
+                e.stopPropagation();
+                setSearchQuery('');
+                e.currentTarget.blur();
+              }}
+              placeholder={t('notificationQueue.searchPlaceholder')}
+              aria-label={t('notificationQueue.searchPlaceholder')}
               className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
@@ -480,16 +574,18 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
           <button
             onClick={handleSendImmediately}
             disabled={(() => {
+              if (!taskEmailSendingEnabled) return true;
               if (selectedIds.size === 0 || isSending || isDeleting) return true;
               // Disable if only sent notifications are selected
               const selectedNotifications = filteredNotifications.filter(n => selectedIds.has(n.id));
               const hasUnsentNotifications = selectedNotifications.some(n => n.status !== 'sent');
               return !hasUnsentNotifications;
             })()}
+            title={!taskEmailSendingEnabled ? t('notificationQueue.sendPaused') : undefined}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             <Send className="w-4 h-4 mr-2" />
-            {isSending ? (t('notificationQueue.sending') || 'Sending...') : (t('notificationQueue.sendNow') || 'Send Now')}
+            {isSending ? t('notificationQueue.sending') : t('notificationQueue.sendNow')}
           </button>
           <div className="relative">
             <button
@@ -559,11 +655,19 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
+          {/*
+            Auto layout + w-max: table grows to column needs → horizontal scroll.
+            TASK is the only capped/wrapping column (overflow-wrap) so unbroken titles
+            wrap instead of stretching the table forever.
+          */}
+          <table className="w-max border-collapse divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-12">
+                <th
+                  scope="col"
+                  className="w-12 px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                >
                   <ModernCheckbox
                     checked={(() => {
                       const visibleNotifications = filteredNotifications.slice(0, displayLimit);
@@ -580,97 +684,161 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
                     size="sm"
                   />
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  {t('notificationQueue.recipient', 'Recipient')}
+                <th
+                  scope="col"
+                  className="min-w-[13rem] max-w-[16rem] px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                >
+                  {t('notificationQueue.recipient')}
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  {t('notificationQueue.task', 'Task')}
+                <th
+                  scope="col"
+                  className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                  style={{ width: '26rem', minWidth: '22rem', maxWidth: '26rem' }}
+                >
+                  {t('notificationQueue.task')}
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Type
+                <th
+                  scope="col"
+                  className="min-w-[10rem] px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                >
+                  {t('notificationQueue.typeColumn')}
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  {t('notificationQueue.status', 'Status')}
+                <th
+                  scope="col"
+                  className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                  style={{ width: '15rem', minWidth: '15rem', maxWidth: '18rem' }}
+                >
+                  {t('notificationQueue.status')}
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  {t('notificationQueue.scheduled', 'Scheduled')}
+                <th
+                  scope="col"
+                  className="min-w-[7rem] px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                >
+                  {t('notificationQueue.scheduled')}
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  {t('notificationQueue.changes', 'Changes')}
+                <th
+                  scope="col"
+                  className="min-w-[7rem] px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                >
+                  {t('notificationQueue.sent')}
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  {t('notificationQueue.updated', 'Updated')}
+                <th
+                  scope="col"
+                  className="min-w-[10rem] px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                >
+                  {t('notificationQueue.changes')}
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredNotifications.slice(0, displayLimit).map((notification) => (
-                <tr
-                  key={notification.id}
-                  className={`${ADMIN_TABLE_ROW_CLASS} ${
-                    selectedIds.has(notification.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                  }`}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <ModernCheckbox
-                      checked={selectedIds.has(notification.id)}
-                      onChange={() => handleSelectOne(notification.id)}
-                      size="sm"
-                    />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {notification.recipientName || notification.recipientEmail}
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {notification.recipientEmail}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {notification.taskTicket ? `[${notification.taskTicket}]` : ''} {notification.taskTitle || t('notificationQueue.unknownTask', 'Unknown Task')}
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {notification.boardTitle && `${notification.boardTitle} → `}
-                      {notification.columnTitle || t('notificationQueue.unknownColumn', 'Unknown Column')}
-                    </div>
-                    {notification.actor && (
-                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        {t('notificationQueue.by', 'by')} {notification.actor.name}
+              {filteredNotifications.slice(0, displayLimit).map((notification) => {
+                const scheduledParts = splitDateTimeLocal(notification.scheduledSendTime);
+                const sentParts =
+                  notification.status === 'sent' && notification.sentAt
+                    ? splitDateTimeLocal(notification.sentAt)
+                    : null;
+                return (
+                  <tr
+                    key={notification.id}
+                    className={`${ADMIN_TABLE_ROW_CLASS} ${
+                      selectedIds.has(notification.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    }`}
+                  >
+                    <td className="w-12 px-3 py-4 align-top">
+                      <ModernCheckbox
+                        checked={selectedIds.has(notification.id)}
+                        onChange={() => handleSelectOne(notification.id)}
+                        size="sm"
+                      />
+                    </td>
+                    <td className="min-w-[13rem] max-w-[16rem] px-3 py-4 align-top">
+                      <div
+                        className="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                        title={notification.recipientName || notification.recipientEmail}
+                      >
+                        {notification.recipientName || notification.recipientEmail}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-gray-100">
-                      {getNotificationTypeLabel(notification.notificationType)}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {notification.action}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(notification.status)}
-                    {notification.errorMessage && (
-                      <div className="text-xs text-red-600 dark:text-red-400 mt-1 max-w-xs truncate" title={notification.errorMessage}>
-                        {notification.errorMessage}
+                      <div
+                        className="truncate text-sm text-gray-500 dark:text-gray-400"
+                        title={notification.recipientEmail}
+                      >
+                        {notification.recipientEmail}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {formatDateTimeLocal(notification.scheduledSendTime)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {notification.changeCount > 1 ? (
-                      <span className="font-medium">{notification.changeCount} {t('notificationQueue.changesPlural', 'changes')}</span>
-                    ) : (
-                      <span>1 {t('notificationQueue.change', 'change')}</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {formatDateTimeLocal(notification.updatedAt)}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td
+                      className="px-3 py-4 align-top"
+                      style={{ width: '26rem', minWidth: '22rem', maxWidth: '26rem' }}
+                    >
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 [overflow-wrap:anywhere] break-words">
+                        {notification.taskTicket ? `[${notification.taskTicket}]` : ''}{' '}
+                        {notification.taskTitle || t('notificationQueue.unknownTask')}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400 [overflow-wrap:anywhere] break-words">
+                        {notification.boardTitle && `${notification.boardTitle} → `}
+                        {notification.columnTitle || t('notificationQueue.unknownColumn')}
+                      </div>
+                      {notification.actor && (
+                        <div className="mt-1 text-xs text-gray-400 dark:text-gray-500 [overflow-wrap:anywhere] break-words">
+                          {t('notificationQueue.by')} {notification.actor.name}
+                        </div>
+                      )}
+                    </td>
+                    <td className="min-w-[10rem] whitespace-nowrap px-3 py-4 align-top">
+                      <div className="text-sm text-gray-900 dark:text-gray-100">
+                        {getNotificationTypeLabel(notification.notificationType)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {notification.action}
+                      </div>
+                    </td>
+                    <td
+                      className="px-3 py-4 align-top"
+                      style={{ width: '15rem', minWidth: '15rem', maxWidth: '18rem' }}
+                    >
+                      {getStatusBadge(notification.status)}
+                      {notification.errorMessage && (
+                        <div
+                          className="mt-1 truncate text-xs text-red-600 dark:text-red-400"
+                          title={notification.errorMessage}
+                        >
+                          {notification.errorMessage}
+                        </div>
+                      )}
+                    </td>
+                    <td className="min-w-[7rem] whitespace-nowrap px-3 py-4 align-top text-sm leading-tight text-gray-500 dark:text-gray-400">
+                      {scheduledParts ? (
+                        <>
+                          <div>{scheduledParts.date}</div>
+                          <div>{scheduledParts.time}</div>
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="min-w-[7rem] whitespace-nowrap px-3 py-4 align-top text-sm leading-tight text-gray-500 dark:text-gray-400">
+                      {sentParts ? (
+                        <>
+                          <div>{sentParts.date}</div>
+                          <div>{sentParts.time}</div>
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="min-w-[10rem] whitespace-nowrap px-3 py-4 align-top text-sm text-gray-500 dark:text-gray-400">
+                      {notification.changeCount > 1 ? (
+                        <span className="font-medium">
+                          {notification.changeCount} {t('notificationQueue.changesPlural')}
+                        </span>
+                      ) : (
+                        <span>
+                          1 {t('notificationQueue.change')}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

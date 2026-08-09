@@ -652,6 +652,20 @@ const migrations = [
       );
       console.log('✅ Migration 32: System member display SYSTEM → System (when still stock name)');
     }
+  },
+  {
+    version: 33,
+    name: 'add_task_email_notifications_enabled',
+    description:
+      'Add TASK_EMAIL_NOTIFICATIONS_ENABLED (pause task emails while keeping them queued)',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const existing = await settingsQueries.getSettingByKey(db, 'TASK_EMAIL_NOTIFICATIONS_ENABLED');
+      if (!existing) {
+        await settingsQueries.createSetting(db, 'TASK_EMAIL_NOTIFICATIONS_ENABLED', 'true');
+        console.log('✅ Migration 33: TASK_EMAIL_NOTIFICATIONS_ENABLED=true');
+      }
+    }
   }
 ];
 

@@ -94,7 +94,7 @@ const AdminTabPanel: React.FC<{ active: boolean; children: React.ReactNode }> = 
   active,
   children,
 }) => (
-  <div className={active ? undefined : 'hidden'} aria-hidden={!active}>
+  <div className={`min-w-0 ${active ? '' : 'hidden'}`} aria-hidden={!active}>
     {children}
   </div>
 );
@@ -1437,7 +1437,7 @@ const Admin: React.FC<AdminProps> = ({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
         {/* Security Warning - Default Admin Account */}
         {hasDefaultAdmin && (
           <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
@@ -1529,9 +1529,9 @@ const Admin: React.FC<AdminProps> = ({
         </div>
 
         {/* Tabs + content share a tall parent so sticky header works while scrolling content. */}
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           {/* Tab Content — visited panels stay mounted (hidden) to retain drafts */}
-          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-100 dark:border-gray-700 min-h-[calc(100vh-8.5rem)]">
+          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-100 dark:border-gray-700 min-h-[calc(100vh-8.5rem)] min-w-0">
           {visitedTabs.has('users') && (
             <AdminTabPanel active={activeTab === 'users'}>
               <AdminUsersTab

@@ -173,6 +173,15 @@ class NotificationThrottler {
         return;
       }
 
+      // Pause outbound task emails but keep rows pending in the queue
+      const sendingSetting = await wrapQuery(
+        this.db.prepare(`SELECT value FROM settings WHERE key = ?`),
+        'SELECT'
+      ).get('TASK_EMAIL_NOTIFICATIONS_ENABLED');
+      if (sendingSetting && sendingSetting.value === 'false') {
+        return;
+      }
+
       // Recover rows stuck in processing (pod crash mid-send)
       try {
         await wrapQuery(

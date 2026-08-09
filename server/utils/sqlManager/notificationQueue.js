@@ -100,7 +100,10 @@ export async function getNotificationQueueItemById(db, id, status = null) {
 export async function updateNotificationQueueStatus(db, id, status) {
   const query = `
     UPDATE notification_queue
-    SET status = $1, sent_at = CURRENT_TIMESTAMP
+    SET status = $1,
+        sent_at = CASE WHEN $1 = 'sent' THEN CURRENT_TIMESTAMP ELSE sent_at END,
+        error_message = CASE WHEN $1 = 'sent' THEN NULL ELSE error_message END,
+        updated_at = CURRENT_TIMESTAMP
     WHERE id = $2
   `;
   

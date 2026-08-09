@@ -923,6 +923,8 @@ const initializeDefaultData = async (db, tenantId = null) => {
       ['UPLOAD_LIMITS_ENFORCED', 'true'], // Enable/disable file upload restrictions (default true)
       ['NOTIFICATION_DELAY', '30'], // Email notification delay in minutes (default 30)
       ['NOTIFICATION_QUEUE_RETENTION_DAYS', '0'], // Sent/failed queue rows; 0 = keep forever
+      // When false, task emails stay pending in the queue (SMTP / invites still use MAIL_ENABLED)
+      ['TASK_EMAIL_NOTIFICATIONS_ENABLED', 'true'],
       ['NOTIFICATION_DEFAULTS', JSON.stringify({
         newTaskAssigned: true,
         myTaskUpdated: true,

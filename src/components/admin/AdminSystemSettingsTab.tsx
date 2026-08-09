@@ -191,7 +191,7 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
   );
 
   return (
-    <div className="p-6">
+    <div className="p-6 min-w-0 max-w-full">
       <div className="mb-3">
         <p className="text-gray-600 dark:text-gray-400 text-sm">
           {t('systemSettings.description')}
@@ -325,7 +325,7 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
 
       {visitedSubTabs.has('notification-queue') && (
         <div
-          className={activeSubTab === 'notification-queue' ? undefined : 'hidden'}
+          className={`min-w-0 max-w-full ${activeSubTab === 'notification-queue' ? undefined : 'hidden'}`}
           aria-hidden={activeSubTab !== 'notification-queue'}
         >
           <AdminNotificationQueueTab

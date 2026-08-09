@@ -269,6 +269,70 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
             </div>
           </div>
 
+          <div
+            className="flex items-center justify-between gap-3 py-2 border-b border-gray-100 dark:border-gray-800"
+            data-setting-key="TASK_EMAIL_NOTIFICATIONS_ENABLED"
+          >
+            <div className="min-w-0">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {t('mail.taskEmailNotificationsLabel')}
+              </h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
+                {t('mail.taskEmailNotificationsHint')}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                {editingSettings.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false'
+                  ? t('mail.taskEmailNotificationsOn')
+                  : t('mail.taskEmailNotificationsOff')}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={editingSettings.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false'}
+                aria-label={t('mail.taskEmailNotificationsLabel')}
+                onClick={async () => {
+                  const currentlyOn = editingSettings.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false';
+                  const newValue = currentlyOn ? 'false' : 'true';
+                  handleInputChange('TASK_EMAIL_NOTIFICATIONS_ENABLED', newValue);
+                  try {
+                    await api.put('/admin/settings', {
+                      key: 'TASK_EMAIL_NOTIFICATIONS_ENABLED',
+                      value: newValue,
+                    });
+                    toast.success(
+                      newValue === 'true'
+                        ? t('mail.taskEmailNotificationsEnabledToast')
+                        : t('mail.taskEmailNotificationsPausedToast'),
+                      ''
+                    );
+                  } catch (error) {
+                    console.error('Failed to save task email notifications toggle:', error);
+                    handleInputChange(
+                      'TASK_EMAIL_NOTIFICATIONS_ENABLED',
+                      currentlyOn ? 'true' : 'false'
+                    );
+                    toast.error(t('failedToSaveSettings'), '');
+                  }
+                }}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  editingSettings.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false'
+                    ? 'bg-blue-600 dark:bg-blue-500'
+                    : 'bg-gray-200 dark:bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white dark:bg-gray-300 shadow ring-0 transition duration-200 ease-in-out ${
+                    editingSettings.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false'
+                      ? 'translate-x-5'
+                      : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
               <div data-setting-key="SMTP_HOST">
                 {mailFieldLabel('SMTP_HOST', t('mail.smtpHost'))}
