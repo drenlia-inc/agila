@@ -28,6 +28,7 @@ interface SprintSelectorProps {
   mode?: 'filter' | 'assign';
   /** Extra classes on the root (e.g. w-full for Task Page) */
   className?: string;
+  disabled?: boolean;
 }
 
 const SprintSelector: React.FC<SprintSelectorProps> = ({
@@ -37,6 +38,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
   sprints: propSprints,
   mode = 'filter',
   className = '',
+  disabled = false,
 }) => {
   const { t } = useTranslation('tasks');
   const [sprints, setSprints] = useState<Sprint[]>(propSprints || []);
@@ -229,13 +231,22 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
       >
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center gap-2 px-3 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors border border-gray-300 dark:border-gray-600 relative ${
+          onClick={() => {
+            if (disabled) return;
+            setIsOpen(!isOpen);
+          }}
+          disabled={disabled}
+          className={`flex items-center gap-2 px-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-md transition-colors border border-gray-300 dark:border-gray-600 relative ${
+            disabled
+              ? 'cursor-default opacity-100'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+          } ${
             isAssign
               ? 'w-full py-2 bg-white dark:bg-gray-700 shadow-sm justify-between'
               : 'py-1.5'
           } ${isOpen ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}
           aria-label={t('sprintSelector.selectSprint')}
+          aria-readonly={disabled || undefined}
           data-tour-id="sprint-selector"
         >
           <span className="flex items-center gap-2 min-w-0">
@@ -251,7 +262,9 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
               aria-hidden
             />
           )}
-          <ChevronDown className={`h-4 w-4 shrink-0 ${isOpen ? 'rotate-180' : ''} transition-transform`} />
+          {!disabled && (
+            <ChevronDown className={`h-4 w-4 shrink-0 ${isOpen ? 'rotate-180' : ''} transition-transform`} />
+          )}
         </button>
       </KanbanChromeTooltip>
 

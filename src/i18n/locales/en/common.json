@@ -42,7 +42,9 @@
     "created": "Created",
     "noResults": "No results found",
     "somethingWentWrong": "Something went wrong",
-    "pleaseWait": "Please wait..."
+    "pleaseWait": "Please wait...",
+    "readOnlyMode": "Your account is view-only. You cannot modify data.",
+    "readOnlyBadge": "View only"
   },
   "navigation": {
     "kanban": "Kanban",

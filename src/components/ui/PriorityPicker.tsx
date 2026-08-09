@@ -11,6 +11,7 @@ export interface PriorityPickerProps {
   label?: string;
   className?: string;
   allowClear?: boolean;
+  disabled?: boolean;
 }
 
 /**
@@ -23,6 +24,7 @@ export default function PriorityPicker({
   label,
   className = '',
   allowClear = true,
+  disabled = false,
 }: PriorityPickerProps) {
   const { t } = useTranslation('tasks');
   const [open, setOpen] = useState(false);
@@ -40,7 +42,12 @@ export default function PriorityPicker({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
   const pick = (p: PriorityOption | null) => {
+    if (disabled) return;
     if (!p) {
       onChange(null, null);
     } else {
@@ -49,6 +56,26 @@ export default function PriorityPicker({
     setOpen(false);
   };
 
+  const valueContent = selected ? (
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold min-w-0"
+      style={getPriorityPillStyle(selected.color)}
+    >
+      <span
+        className="w-2 h-2 rounded-full shrink-0"
+        style={{ backgroundColor: selected.color || '#6B7280' }}
+      />
+      <span className="truncate">{selected.priority}</span>
+    </span>
+  ) : (
+    <span className="text-gray-500 dark:text-gray-400 truncate">
+      {t('taskPage.noPriority')}
+    </span>
+  );
+
+  const shellClass =
+    'w-full flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700';
+
   return (
     <div className={`relative ${className}`} ref={rootRef}>
       {label && (
@@ -56,37 +83,28 @@ export default function PriorityPicker({
           {label}
         </label>
       )}
+      {disabled ? (
+        <div className={`${shellClass} cursor-default`} aria-readonly="true">
+          {valueContent}
+        </div>
+      ) : (
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`w-full flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+        className={`${shellClass} focus:outline-none focus:ring-2 focus:ring-blue-500 ${
           open ? 'ring-2 ring-blue-500 border-blue-500' : ''
         }`}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        {selected ? (
-          <span
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold min-w-0"
-            style={getPriorityPillStyle(selected.color)}
-          >
-            <span
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: selected.color || '#6B7280' }}
-            />
-            <span className="truncate">{selected.priority}</span>
-          </span>
-        ) : (
-          <span className="text-gray-500 dark:text-gray-400 truncate">
-            {t('taskPage.noPriority')}
-          </span>
-        )}
+        {valueContent}
         <ChevronDown
           className={`h-4 w-4 text-gray-400 shrink-0 ml-auto transition-transform ${
             open ? 'rotate-180' : ''
           }`}
         />
       </button>
+      )}
 
       {open && (
         <div

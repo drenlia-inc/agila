@@ -42,7 +42,9 @@
     "created": "Créé",
     "noResults": "Aucun résultat trouvé",
     "somethingWentWrong": "Une erreur s'est produite",
-    "pleaseWait": "Veuillez patienter..."
+    "pleaseWait": "Veuillez patienter...",
+    "readOnlyMode": "Votre compte est en lecture seule. Vous ne pouvez pas modifier les données.",
+    "readOnlyBadge": "Lecture seule"
   },
   "navigation": {
     "kanban": "Kanban",

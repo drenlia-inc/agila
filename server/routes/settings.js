@@ -122,6 +122,12 @@ router.get('/', async (req, res, next) => {
       'HIGHLIGHT_OVERDUE_TASKS',
       'EFFORT_UNIT',
       'DEFAULT_FINISHED_COLUMN_NAMES',
+      // Preference defaults for all authenticated users (not admin-only secrets)
+      'DEFAULT_VIEW_MODE',
+      'DEFAULT_TASK_VIEW_MODE',
+      'DEFAULT_ACTIVITY_FEED_POSITION',
+      'DEFAULT_ACTIVITY_FEED_WIDTH',
+      'DEFAULT_ACTIVITY_FEED_HEIGHT',
       'DEMO_RESET_AT',
       'TASK_DELETE_CONFIRM',
       'ALLOW_USER_SELF_DELETE',

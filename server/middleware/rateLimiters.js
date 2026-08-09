@@ -156,7 +156,15 @@ export const registrationLimiter = createLimiter({
   prefix: 'register'
 });
 
-// Account activation rate limiter: 10 attempts per hour
+// Invitation token pre-check (read-only): higher budget — page loads / Strict Mode remounts hit this
+export const invitationVerifyLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  message: { error: 'Too many invitation checks, please try again in 1 hour' },
+  prefix: 'invite-verify'
+});
+
+// Account activation (password set): 10 attempts per hour — POST only
 export const activationLimiter = createLimiter({
   windowMs: 60 * 60 * 1000,
   max: 10,

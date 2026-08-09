@@ -68,6 +68,8 @@ interface TaskCardToolbarProps {
   isSelected?: boolean;
   /** Show Shift+click permanent-delete hint on trash tooltip. */
   isAdmin?: boolean;
+  /** When false, only show assignee avatar + watcher/collaborator counts (read-only). */
+  canMutate?: boolean;
 }
 
 export default function TaskCardToolbar({
@@ -111,7 +113,8 @@ export default function TaskCardToolbar({
   isEditingTitle = false,
   isEditingDescription = false,
   isSelected = false,
-  isAdmin = false
+  isAdmin = false,
+  canMutate = true,
 }: TaskCardToolbarProps) {
   const { t } = useTranslation('tasks');
   const _priorityButtonRef = useRef<HTMLButtonElement>(null);
@@ -519,6 +522,60 @@ export default function TaskCardToolbar({
       ? 'pointer-events-auto opacity-100'
       : toolbarHoverVisibility;
 
+  const assigneeAvatar = isAgentMemberId(member.id) ? (
+    <img
+      src={getAgentAvatarSrc(member)}
+      alt={member.name}
+      className="w-8 h-8 rounded-full object-cover"
+    />
+  ) : member.googleAvatarUrl || member.avatarUrl ? (
+    <img
+      src={getAuthenticatedAvatarUrl(member.googleAvatarUrl || member.avatarUrl)}
+      alt={member.name}
+      className="w-8 h-8 rounded-full object-cover"
+    />
+  ) : (
+    <div
+      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white"
+      style={{ backgroundColor: member.color }}
+    >
+      {member.id === SYSTEM_MEMBER_ID ? '🤖' : member.name.charAt(0).toUpperCase()}
+    </div>
+  );
+
+  // Viewers: assignee avatar + watcher/collaborator counts only (no mutation controls).
+  if (!canMutate) {
+    return (
+      <>
+        <div className="absolute top-[7px] right-12 w-[46px] z-30 flex items-center justify-start gap-1.5">
+          {task.watchers && task.watchers.length > 0 && (
+            <KanbanChromeTooltip label={formatMembersTooltip(task.watchers, 'watcher')} delayMs={0} wrapperClassName="flex items-center">
+              <span className="flex items-center">
+                <Eye size={12} className="text-blue-500" />
+                <span className="text-[10px] text-blue-600 ml-0.5 font-medium">{task.watchers.length}</span>
+              </span>
+            </KanbanChromeTooltip>
+          )}
+          {task.collaborators && task.collaborators.length > 0 && (
+            <KanbanChromeTooltip label={formatMembersTooltip(task.collaborators, 'collaborator')} delayMs={0} wrapperClassName="flex items-center">
+              <span className="flex items-center">
+                <UserPlus size={12} className="text-blue-500" />
+                <span className="text-[10px] text-blue-600 ml-0.5 font-medium">{task.collaborators.length}</span>
+              </span>
+            </KanbanChromeTooltip>
+          )}
+        </div>
+        <div className="absolute top-1 right-2 z-20">
+          <KanbanChromeTooltip label={member.name}>
+            <div className="rounded-full" aria-hidden>
+              {assigneeAvatar}
+            </div>
+          </KanbanChromeTooltip>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {/* Left cluster: AI (when assigned) + grip; grip takes AI slot when agent absent */}
@@ -698,26 +755,7 @@ export default function TaskCardToolbar({
               }`}
               data-member-button="true"
             >
-            {isAgentMemberId(member.id) ? (
-              <img
-                src={getAgentAvatarSrc(member)}
-                alt={member.name}
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            ) : member.googleAvatarUrl || member.avatarUrl ? (
-              <img
-                src={getAuthenticatedAvatarUrl(member.googleAvatarUrl || member.avatarUrl)}
-                alt={member.name}
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            ) : (
-              <div 
-                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white"
-                style={{ backgroundColor: member.color }}
-              >
-                {member.id === SYSTEM_MEMBER_ID ? '🤖' : member.name.charAt(0).toUpperCase()}
-              </div>
-            )}
+            {assigneeAvatar}
             </button>
           </KanbanChromeTooltip>
 

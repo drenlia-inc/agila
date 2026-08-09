@@ -1199,15 +1199,29 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Note: blockedReason is tracked for WebSocket below, but not activity-logged (too noisy while typing)
     const fieldsToTrack = ['title', 'description', 'memberId', 'requesterId', 'startDate', 'dueDate', 'effort', 'columnId', 'isBlocked'];
     
-    // Check if priority changed (by ID or name) - only if values are actually different
-    const priorityIdChanged = priorityId && currentPriorityId && priorityId !== currentPriorityId;
-    const priorityNameChanged = priorityName && currentPriorityName && priorityName !== currentPriorityName;
-    const priorityChanged = priorityIdChanged || priorityNameChanged;
+    // Check if priority changed. Coerce IDs to string — client often sends "5" while PG returns 5,
+    // which previously logged bogus "normal" → "normal" activities (e.g. on comment-triggered PUTs).
+    const normalizePriorityId = (value) => {
+      if (value === null || value === undefined || value === '') return null;
+      return String(value);
+    };
+    const normalizePriorityLabel = (value) =>
+      String(value ?? '')
+        .trim()
+        .toLowerCase();
+    const priorityIdChanged =
+      normalizePriorityId(priorityId) !== normalizePriorityId(currentPriorityId);
+    const oldPriorityLabel = currentPriorityName || 'Unknown';
+    const newPriorityLabel = priorityName || 'Unknown';
+    const priorityLabelChanged =
+      normalizePriorityLabel(oldPriorityLabel) !== normalizePriorityLabel(newPriorityLabel);
+    // ID coercion alone ("5" vs 5) must never create activity; require a real label change.
+    const priorityChanged = priorityIdChanged && priorityLabelChanged;
     
     if (priorityChanged) {
-      const oldPriority = currentPriorityName || 'Unknown';
-      const newPriority = priorityName || 'Unknown';
-      changes.push(await generateTaskUpdateDetails('priorityId', oldPriority, newPriority, '', db));
+      changes.push(
+        await generateTaskUpdateDetails('priorityId', oldPriorityLabel, newPriorityLabel, '', db)
+      );
     }
     
     // Check if sprint changed - handle separately like priority

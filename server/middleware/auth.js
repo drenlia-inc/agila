@@ -34,7 +34,55 @@ function userMayUseSession(userRow) {
 }
 
 function primaryRole(roleNames) {
-  return roleNames.includes('admin') ? 'admin' : (roleNames[0] || 'user');
+  const roles = Array.isArray(roleNames) ? roleNames : [];
+  if (roles.includes('admin')) return 'admin';
+  if (roles.includes('user')) return 'user';
+  if (roles.includes('viewer')) return 'viewer';
+  return roles[0] || 'user';
+}
+
+/** True when the user may create/update/delete domain data (not read-only viewer). */
+export function userCanMutate(user) {
+  if (!user) return false;
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  if (roles.includes('admin') || roles.includes('user')) return true;
+  if (user.role === 'admin' || user.role === 'user') return true;
+  return false;
+}
+
+/**
+ * Mutating routes viewers may still call.
+ * Board/task/column edits remain blocked. Uses originalUrl when available (mount-safe).
+ */
+function isAllowedViewerMutation(req) {
+  const raw = (req.originalUrl || `${req.baseUrl || ''}${req.path || ''}` || '').split('?')[0];
+  const method = req.method;
+
+  if (method === 'POST' && /\/api\/files\/media-session\/?$/.test(raw)) return true;
+  if (method === 'DELETE' && /\/api\/files\/media-session\/?$/.test(raw)) return true;
+  if (method === 'POST' && /\/api\/auth\/logout\/?$/.test(raw)) return true;
+  // Own profile / avatar / personal settings
+  if (method === 'PUT' && /\/api\/(users|user)\/profile\/?$/.test(raw)) return true;
+  if (method === 'POST' && /\/api\/(users|user)\/avatar\/?$/.test(raw)) return true;
+  if ((method === 'PUT' || method === 'POST') && /\/api\/(users|user)\/settings\/?$/.test(raw)) return true;
+  // Comments (own edit/delete enforced in comments router)
+  if (/\/api\/comments(\/|$)/.test(raw)) return true;
+  // Personal saved views (shared=true rejected in views router)
+  if (/\/api\/views(\/|$)/.test(raw)) return true;
+  // Comment attachments (upload only; attachment DELETE stays blocked)
+  if (method === 'POST' && /\/api\/upload\/?$/.test(raw)) return true;
+  if (method === 'POST' && /\/api\/(users|user)\/upload\/?$/.test(raw)) return true;
+  return false;
+}
+
+function enforceViewerWritePolicy(req, res) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return null;
+  if (!req.user || userCanMutate(req.user)) return null;
+  if (isAllowedViewerMutation(req)) return null;
+  return res.status(403).json({
+    error: 'Read-only role cannot modify data',
+    code: 'READ_ONLY'
+  });
 }
 
 /**
@@ -115,6 +163,8 @@ export const authenticateToken = async (req, res, next) => {
         return res.status(401).json({ error: 'Invalid or expired token' });
       }
       req.user = patUser;
+      const denied = enforceViewerWritePolicy(req, res);
+      if (denied) return denied;
       return next();
     }
 
@@ -175,6 +225,8 @@ export const authenticateToken = async (req, res, next) => {
           roles: roleNames,
           authType: 'jwt'
         };
+        const denied = enforceViewerWritePolicy(req, res);
+        if (denied) return denied;
         return next();
       } catch (dbError) {
         // Transient DB errors (pool exhaustion, lock timeouts during bulk admin
@@ -187,6 +239,8 @@ export const authenticateToken = async (req, res, next) => {
     
     // No DB available (should be rare) — fall back to JWT claims only
     req.user = { ...user, authType: 'jwt' };
+    const denied = enforceViewerWritePolicy(req, res);
+    if (denied) return denied;
     next();
   } catch (err) {
     // Return 401 for authentication errors (invalid/expired token)
@@ -225,4 +279,14 @@ export const verifyToken = (token) => {
   return jwt.verify(token, JWT_SECRET);
 };
 
-export { JWT_SECRET, JWT_EXPIRES_IN, isUserActive, isForceLogout, userMayUseSession };
+/**
+ * Middleware for routes that already ran authenticateToken (or set req.user).
+ * Prefer relying on authenticateToken's built-in check; export for explicit use.
+ */
+export const requireMutationAccess = (req, res, next) => {
+  const denied = enforceViewerWritePolicy(req, res);
+  if (denied) return denied;
+  next();
+};
+
+export { JWT_SECRET, JWT_EXPIRES_IN, isUserActive, isForceLogout, userMayUseSession, primaryRole };

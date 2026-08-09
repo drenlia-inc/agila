@@ -51,7 +51,7 @@ When designing or changing any screen, treat **density, alignment, and input aff
 ## API Routes & Endpoints
 - EVERY route must be authenticated by default using `authenticateToken` middleware.
 - Only make a route public if it is explicitly listed as public:
-  - **Authentication**: `/api/auth/login`, `/api/auth/activate-account`, `/api/auth/google/*`, `/api/auth/demo-credentials`, `/api/auth/check-*`
+  - **Authentication**: `/api/auth/login`, `/api/auth/activate-account`, `/api/auth/verify-invitation`, `/api/auth/google/*`, `/api/auth/demo-credentials`, `/api/auth/check-*`
   - **Password Reset**: `/api/password-reset/request`, `/api/password-reset/reset`, `/api/password-reset/verify/:token`
   - **Health Checks**: `/health`, `/ready`, `/api/ready`, `/api/version`
   - **Public Settings**: `/api/settings` (GET only, for site name, mail status, OAuth config)
@@ -63,7 +63,7 @@ When designing or changing any screen, treat **density, alignment, and input aff
 - Apply rate limiting for sensitive public endpoints (see `server/middleware/rateLimiters.js`):
  - `loginLimiter` for login attempts
  - `passwordResetRequestLimiter` (3/hour) and `passwordResetCompletionLimiter` (6/hour)
- - `registrationLimiter` and `activationLimiter` for account creation
+ - `registrationLimiter`, `invitationVerifyLimiter` (GET verify), and `activationLimiter` (POST activate) for account creation
 - **File media auth (I3):** same-origin `<img>` / attachment loads use HttpOnly cookie `ek_media` (`purpose: media` JWT) set by `POST /api/files/media-session` after login. Default lifetime `MEDIA_TOKEN_EXPIRES_IN` = **8h** (override via env); client refreshes hourly / on tab focus. Do **not** embed the session JWT in `?token=`. File GETs prefer cookie, then Bearer; query `?token=` is accepted only for `purpose: media` tokens (session JWTs in query are rejected). Media tokens must not authorize API routes (`authenticateToken` rejects `purpose: media`). Inactive / `force_logout` users are rejected on media and WebSocket paths (`userMayUseSession`); deactivate/delete kicks live sockets.
 - **CSP:** `Content-Security-Policy-Report-Only` with `report-uri` / `Report-To` → public `POST /api/csp-report` (rate-limited). Admins review/clear via `GET`/`DELETE /api/admin/csp-reports` and **Admin → Troubleshooting → CSP reports**. Stay Report-Only until that list is quiet, then enforce.
 - **Request validation:** Zod `parseBody` from `server/utils/requestValidation.js` on tenant + agent JSON write routes. Multipart uploads use multer + magic-byte checks instead.

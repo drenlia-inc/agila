@@ -12,6 +12,8 @@ interface BoardTrashViewProps {
   displayColumns: Column[];
   columns: Columns;
   isAdmin: boolean;
+  /** When false, hide select/restore/purge actions (viewers). */
+  canMutate?: boolean;
   /** Currently open in TaskDetails (amber ring). Distinct from bulk checkboxes. */
   detailsTaskId?: string | null;
   /** Same grid style as the live Kanban board for width/alignment. */
@@ -31,6 +33,7 @@ interface BoardTrashViewProps {
 function TrashedTaskCard({
   task,
   isAdmin,
+  canMutate,
   checked,
   isDetailsOpen,
   expanded,
@@ -45,6 +48,7 @@ function TrashedTaskCard({
 }: {
   task: Task;
   isAdmin: boolean;
+  canMutate: boolean;
   checked: boolean;
   isDetailsOpen: boolean;
   expanded: boolean;
@@ -81,6 +85,7 @@ function TrashedTaskCard({
     >
       <div className="flex items-start gap-2">
         {/* Invisible padding enlarges the hit target; checkbox visual size stays 14px. */}
+        {canMutate && (
         <label
           className="relative -m-2 flex shrink-0 cursor-pointer items-start p-2"
           onClick={(e) => e.stopPropagation()}
@@ -95,6 +100,7 @@ function TrashedTaskCard({
             data-tour-id={`trash-task-select-${task.id}`}
           />
         </label>
+        )}
         <div className="min-w-0 flex-1">
           {task.ticket && (
             <div className="mb-0.5 font-mono text-xs text-blue-600 dark:text-blue-400">
@@ -139,7 +145,7 @@ function TrashedTaskCard({
         </div>
       )}
 
-      {(!bulkBusy || restoring || purging) && (
+      {canMutate && (!bulkBusy || restoring || purging) && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           {!bulkBusy && !purging && (
             <button
@@ -176,6 +182,7 @@ export default function BoardTrashView({
   displayColumns,
   columns,
   isAdmin,
+  canMutate = true,
   detailsTaskId = null,
   gridStyle,
   scrollContainerRef,
@@ -463,6 +470,7 @@ export default function BoardTrashView({
           <TrashedTaskCard
             task={task}
             isAdmin={isAdmin}
+            canMutate={canMutate}
             checked={selectedIds.has(task.id)}
             isDetailsOpen={detailsTaskId === task.id}
             expanded={expandedIds.has(task.id)}
@@ -540,7 +548,7 @@ export default function BoardTrashView({
                   {allExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                 </button>
               </KanbanChromeTooltip>
-              {!bulkBusy && (
+              {canMutate && !bulkBusy && (
                 <KanbanChromeTooltip label={selectLabel} delayMs={0} placement="top">
                   <button
                     type="button"
@@ -572,7 +580,7 @@ export default function BoardTrashView({
           </span>
         </h3>
         <div className="flex shrink-0 items-center gap-1.5">
-          {!bulkBusy && (
+          {canMutate && !bulkBusy && (
             <button
               type="button"
               onClick={handleSelectAllToggle}
@@ -582,7 +590,7 @@ export default function BoardTrashView({
               {allSelected ? t('trash.unselectAll') : t('trash.selectAll')}
             </button>
           )}
-          {!bulkBusy && selectionCount > 0 && (
+          {canMutate && !bulkBusy && selectionCount > 0 && (
             <button
               type="button"
               onClick={() => void runRestoreSelected()}
@@ -592,7 +600,7 @@ export default function BoardTrashView({
               {t('trash.restoreSelected')}
             </button>
           )}
-          {isAdmin && !bulkBusy && selectionCount > 0 && (
+          {canMutate && isAdmin && !bulkBusy && selectionCount > 0 && (
             <button
               type="button"
               onClick={() => {
@@ -605,7 +613,7 @@ export default function BoardTrashView({
               {t('trash.deleteSelected')}
             </button>
           )}
-          {isAdmin && !bulkBusy && (
+          {canMutate && isAdmin && !bulkBusy && (
             <button
               type="button"
               onClick={() => {
@@ -618,7 +626,7 @@ export default function BoardTrashView({
               {t('trash.emptyTrash')}
             </button>
           )}
-          {selectionCount > 0 && (
+          {canMutate && selectionCount > 0 && (
             <span className="text-xs font-medium text-amber-900 dark:text-amber-100">
               {t('trash.selectedCount', { count: selectionCount })}
             </span>

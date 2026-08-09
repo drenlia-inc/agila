@@ -556,15 +556,17 @@ const Admin: React.FC<AdminProps> = ({
     }
   };
 
-  const handleRoleChange = async (userId: string, action: 'promote' | 'demote') => {
+  const handleRoleChange = async (userId: string, role: 'admin' | 'user' | 'viewer') => {
     try {
-      const role = action === 'promote' ? 'admin' : 'user';
       await api.put(`/admin/users/${userId}/role`, { role });
       await loadData(); // Reload users
-      toast.success(action === 'promote' ? t('userPromotedSuccessfully') : t('userDemotedSuccessfully'), '');
+      toast.success(t('userRoleUpdatedSuccessfully'), '');
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.response?.data?.message || err.message || 
-                          (action === 'promote' ? t('failedToPromoteUser') : t('failedToDemoteUser'));
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        t('failedToUpdateUserRole');
       toast.error(errorMessage, '');
       console.error(err);
     }

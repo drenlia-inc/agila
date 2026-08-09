@@ -2,10 +2,10 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { authenticateToken, requireRole, JWT_SECRET, JWT_EXPIRES_IN } from '../middleware/auth.js';
+import { authenticateToken, requireRole, JWT_SECRET, JWT_EXPIRES_IN, primaryRole } from '../middleware/auth.js';
 import { getLicenseManager } from '../config/license.js';
 import notificationService from '../services/notificationService.js';
-import { loginLimiter, activationLimiter, registrationLimiter, oauthUrlLimiter, oauthCallbackLimiter } from '../middleware/rateLimiters.js';
+import { loginLimiter, activationLimiter, invitationVerifyLimiter, registrationLimiter, oauthUrlLimiter, oauthCallbackLimiter } from '../middleware/rateLimiters.js';
 import { createDefaultAvatar, getRandomColor } from '../utils/avatarGenerator.js';
 import { getTranslator } from '../utils/i18n.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
@@ -57,7 +57,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       { 
         id: user.id, 
         email: user.email, 
-        role: userRoles.includes('admin') ? 'admin' : 'user',
+        role: primaryRole(userRoles),
         roles: userRoles
       }, 
       JWT_SECRET, 
@@ -94,6 +94,51 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 });
 
+/**
+ * Verify invitation token before showing the password form.
+ * GET /api/auth/verify-invitation?token=&email=
+ */
+router.get('/verify-invitation', invitationVerifyLimiter, async (req, res) => {
+  const token = String(req.query.token || '').trim();
+  const email = String(req.query.email || '').trim().toLowerCase();
+  const db = getRequestDatabase(req);
+
+  if (!token || !email || !email.includes('@')) {
+    return res.status(400).json({ valid: false, error: 'Token and email are required' });
+  }
+
+  try {
+    const invitation = await authQueries.getInvitationByToken(db, token, email);
+
+    if (!invitation) {
+      return res.status(400).json({ valid: false, error: 'Invalid or expired invitation token' });
+    }
+
+    const tokenExpiry = new Date(invitation.expires_at);
+    if (Number.isNaN(tokenExpiry.getTime()) || tokenExpiry < new Date()) {
+      return res.status(400).json({ valid: false, error: 'Invitation token has expired' });
+    }
+
+    const isActive = typeof invitation.is_active === 'boolean'
+      ? invitation.is_active
+      : (invitation.is_active === 1 || invitation.is_active === true);
+
+    if (isActive) {
+      return res.status(400).json({ valid: false, error: 'Account is already active' });
+    }
+
+    return res.json({
+      valid: true,
+      email: invitation.email,
+      firstName: invitation.first_name || null,
+      lastName: invitation.last_name || null
+    });
+  } catch (error) {
+    console.error('Invitation verify error:', error);
+    return res.status(500).json({ valid: false, error: 'Failed to verify invitation token' });
+  }
+});
+
 // Account activation endpoint
 router.post('/activate-account', activationLimiter, async (req, res) => {
   const parsed = parseBody(activateAccountBodySchema, req.body);
@@ -113,7 +158,7 @@ router.post('/activate-account', activationLimiter, async (req, res) => {
     
     // Check if token has expired
     const tokenExpiry = new Date(invitation.expires_at);
-    if (tokenExpiry < new Date()) {
+    if (Number.isNaN(tokenExpiry.getTime()) || tokenExpiry < new Date()) {
       return res.status(400).json({ error: 'Invitation token has expired' });
     }
     
@@ -283,7 +328,7 @@ router.get('/me', authenticateToken, async (req, res) => {
       { 
         id: user.id, 
         email: user.email,
-        role: userRoles.includes('admin') ? 'admin' : 'user',
+        role: primaryRole(userRoles),
         roles: userRoles
       }, 
       JWT_SECRET, 
@@ -738,7 +783,7 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
     const jwtPayload = { 
       id: user.id, 
       email: user.email,
-      role: userRoles.includes('admin') ? 'admin' : 'user',
+      role: primaryRole(userRoles),
       roles: userRoles
     };
     

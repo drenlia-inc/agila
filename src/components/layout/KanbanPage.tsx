@@ -127,6 +127,8 @@ interface KanbanPageProps {
   sensors: any;
   collisionDetection: any;
   siteSettings: { [key: string]: string };
+  /** false for viewer (read-only) role — hide create/edit/DnD affordances */
+  canMutate?: boolean;
   
   // Column filtering props
   boardColumnVisibility: {[boardId: string]: string[]};
@@ -288,6 +290,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   gridStyle,
   sensors,
   collisionDetection,
+  canMutate = true,
   onSelectMember,
   onClearMemberSelections,
   onSelectAllMembers,
@@ -487,6 +490,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
 
   useEffect(() => {
     setTrashTasks([]);
+    // Clear immediately so the previous board's badge does not flash on the new board.
+    setTrashCount(0);
     const shouldOpen = readTrashOpenPreference(selectedBoard);
     setTrashOpen(shouldOpen);
     void refreshTrashCount(selectedBoard);
@@ -1281,11 +1286,11 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           onEditBoard={onEditBoard}
           onRemoveBoard={onRemoveBoard}
           onReorderBoards={onReorderBoards}
-          isAdmin={isAdmin}
+          isAdmin={isAdmin && canMutate}
           getFilteredTaskCount={getTaskCountForBoard}
           getTotalTaskCount={getTotalTaskCountForBoard}
           hasActiveFilters={activeFilters}
-          draggedTask={draggedTask}
+          draggedTask={canMutate ? draggedTask : null}
           onTaskDropOnBoard={onTaskDropOnBoard}
           siteSettings={siteSettings}
           trashCount={trashCount}
@@ -1301,7 +1306,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
             .filter((column) => column && column.id)
             .sort((a, b) => (a.position || 0) - (b.position || 0))}
           columns={columns}
-          isAdmin={isAdmin}
+          isAdmin={isAdmin && canMutate}
+          canMutate={canMutate}
           detailsTaskId={selectedTask?.id ?? null}
           gridStyle={gridStyle}
           scrollContainerRef={trashScrollContainerRef}
@@ -1368,6 +1374,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 currentUser={currentUser}
                 boardRelationships={boardRelationships}
                 selectedSprintId={selectedSprintId}
+                canMutate={canMutate}
               />
             </div>
           ) : viewMode === 'gantt' ? (
@@ -1390,6 +1397,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 onCopyTask={onCopyTask}
                 onRemoveTask={onRemoveTask}
                 siteSettings={siteSettings}
+                canMutate={canMutate}
               />
             </Suspense>
           ) : (
@@ -1446,6 +1454,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
             >
               {/* Board-level selection controls align to the same grid as the columns.
                   They intentionally live outside each column header/count slot. */}
+              {canMutate && (
               <div
                 style={gridStyle}
                 className="h-5 items-center"
@@ -1468,6 +1477,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                     </div>
                   ))}
               </div>
+              )}
                              {/* DndContext handled at App level for global cross-board functionality */}
             {/* Admin view with column drag and drop */}
             {currentUser?.roles?.includes('admin') ? (
@@ -1518,7 +1528,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                             onTaskDragOver={onTaskDragOver}
                             onTaskDrop={onTaskDrop}
                             onSelectTask={onSelectTask}
-                            isAdmin={true}
+                            isAdmin={isAdmin && canMutate}
+                            canMutate={canMutate}
                             taskViewMode={taskViewMode}
                             availablePriorities={availablePriorities}
                             availableTags={availableTags}
@@ -1626,6 +1637,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                       onTaskDrop={onTaskDrop}
                       onSelectTask={onSelectTask}
                       isAdmin={false}
+                      canMutate={canMutate}
                       taskViewMode={taskViewMode}
                       availablePriorities={availablePriorities}
                       availableTags={availableTags}

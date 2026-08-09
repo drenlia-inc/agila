@@ -21,6 +21,7 @@ import { feDebug } from '../utils/clientDebug';
 import { parseEffortUnit, isTaskSoftDeleted } from '../utils/taskUtils';
 import { AGENT_MEMBER_ID, SYSTEM_MEMBER_ID } from '../constants/appConstants';
 import { mergeTaskTagsWithLiveData } from '../utils/tagUtils';
+import { userCanMutate } from '../utils/permissions';
 import MemberAvatar, { getPriorityPillStyle } from './ui/MemberAvatar';
 import MemberPicker from './ui/MemberPicker';
 import TagPicker from './ui/TagPicker';
@@ -449,6 +450,10 @@ export default function TaskPage({
 
   // Handler for opening children dropdown
   const handleChildrenDropdownToggle = () => {
+    if (!userCanMutate(currentUser)) return;
+    const softDeleted =
+      isTaskSoftDeleted(editedTask) || (task ? isTaskSoftDeleted(task) : false);
+    if (softDeleted) return;
     setShowChildrenDropdown(!showChildrenDropdown);
     if (!showChildrenDropdown) {
       setChildrenSearchTerm('');
@@ -467,7 +472,8 @@ export default function TaskPage({
     currentUser,
     onUpdate: setTask,
     siteSettings,
-    boards
+    boards,
+    canMutate: userCanMutate(currentUser),
   });
 
   const {
@@ -943,8 +949,12 @@ export default function TaskPage({
   const priority = availablePriorities.find(p => p.id === editedTask.priorityId);
   const liveTaskTags = mergeTaskTagsWithLiveData(taskTags, availableTags);
   const isInTrash = isTaskSoftDeleted(editedTask) || isTaskSoftDeleted(task);
+  const canMutate = userCanMutate(currentUser);
+  const fieldsLocked = isInTrash || !canMutate;
+  const commentsLocked = isInTrash;
 
   const toggleTaskTag = async (tag: Tag) => {
+    if (fieldsLocked) return;
     try {
       if (taskTags.some((t) => t.id === tag.id)) {
         await handleRemoveTag(tag.id);
@@ -1070,8 +1080,8 @@ export default function TaskPage({
                 type="text"
                 value={editedTask.title}
                 onChange={(e) => handleTaskUpdate({ title: e.target.value })}
-                readOnly={isInTrash}
-                disabled={isInTrash}
+                readOnly={fieldsLocked}
+                disabled={fieldsLocked}
                 title={isInTrash ? t('trash.readOnlyHint') : undefined}
                 className={`w-full min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 disabled:opacity-70 disabled:cursor-not-allowed ${
                   isInTrash
@@ -1091,20 +1101,25 @@ export default function TaskPage({
                   await savePendingAttachments();
                 }}
                 onChange={(content) => handleTextUpdate('description', content)}
-                onAttachmentsChange={handleAttachmentsChange}
-                onAttachmentDelete={handleAttachmentDelete}
-                onImageRemovalNeeded={handleImageRemoval}
+                onAttachmentsChange={fieldsLocked ? undefined : handleAttachmentsChange}
+                onAttachmentDelete={fieldsLocked ? undefined : handleAttachmentDelete}
+                onImageRemovalNeeded={fieldsLocked ? undefined : handleImageRemoval}
                 initialContent={editedTask.description || ''}
                 placeholder={t('placeholders.enterDescription')}
                 minHeight="120px"
                 showSubmitButtons={false}
-                showAttachments={true}
+                showAttachments={!fieldsLocked}
                 attachmentContext="task"
                 attachmentParentId={task?.id}
                 existingAttachments={displayAttachments}
                 compact={false}
                 resizable={true}
                 className="min-h-[200px] sm:min-h-[300px] max-w-full"
+                editable={!fieldsLocked}
+                showToolbar={!fieldsLocked}
+                allowImagePaste={!fieldsLocked}
+                allowImageDelete={!fieldsLocked}
+                allowImageResize={!fieldsLocked}
                 toolbarOptions={{
                   bold: true,
                   italic: true,
@@ -1112,7 +1127,7 @@ export default function TaskPage({
                   link: true,
                   lists: true,
                   alignment: false,
-                  attachments: true
+                  attachments: !fieldsLocked
                 }}
               />
               
@@ -1153,12 +1168,14 @@ export default function TaskPage({
                         >
                           {t('taskPage.view')}
                         </a>
+                        {!fieldsLocked && (
                         <button
                           onClick={() => handleAttachmentDelete(attachment.id)}
                           className="text-red-600 hover:text-red-800 text-sm"
                         >
                           {t('taskPage.delete')}
                         </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1180,6 +1197,7 @@ export default function TaskPage({
                 ).length })}
               </h3>
               {/* Add Comment Section */}
+              {!commentsLocked && (
               <div className="mb-6">
                 <TextEditor 
                   onSubmit={async (content: string, attachments: File[] = []) => {
@@ -1212,6 +1230,10 @@ export default function TaskPage({
                   }}
                 />
               </div>
+              )}
+              {commentsLocked && (
+                <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">{t('trash.readOnlyHint')}</p>
+              )}
 
               <div className="space-y-4">
                 {(() => {
@@ -1436,6 +1458,7 @@ export default function TaskPage({
                   value={editedTask.memberId}
                   onChange={(memberId) => handleTaskUpdate({ memberId })}
                   mode="single"
+                  disabled={fieldsLocked}
                 />
 
                 <MemberPicker
@@ -1445,6 +1468,7 @@ export default function TaskPage({
                   onChange={(memberId) => handleTaskUpdate({ requesterId: memberId })}
                   mode="single"
                   showAgentSection={false}
+                  disabled={fieldsLocked}
                 />
                 
                 {/* Watchers */}
@@ -1459,6 +1483,7 @@ export default function TaskPage({
                         >
                           <MemberAvatar memberId={watcher.id} members={members} size="xs" />
                           <span className="max-w-[7rem] truncate">{truncateMemberName(watcher.name)}</span>
+                          {!fieldsLocked && (
                           <button
                             type="button"
                             onClick={async () => {
@@ -1473,9 +1498,20 @@ export default function TaskPage({
                           >
                             ×
                           </button>
+                          )}
                         </span>
                       ))}
                     </div>
+                    {fieldsLocked ? (
+                      taskWatchers.length === 0 && (
+                        <div
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"
+                          aria-readonly="true"
+                        >
+                          {t('taskPage.noWatchers')}
+                        </div>
+                      )
+                    ) : (
                     <MemberPicker
                       members={members}
                       mode="add"
@@ -1490,6 +1526,7 @@ export default function TaskPage({
                         }
                       }}
                     />
+                    )}
                   </div>
                 </div>
 
@@ -1505,6 +1542,7 @@ export default function TaskPage({
                         >
                           <MemberAvatar memberId={collaborator.id} members={members} size="xs" />
                           <span className="max-w-[7rem] truncate">{truncateMemberName(collaborator.name)}</span>
+                          {!fieldsLocked && (
                           <button
                             type="button"
                             onClick={async () => {
@@ -1519,9 +1557,20 @@ export default function TaskPage({
                           >
                             ×
                           </button>
+                          )}
                         </span>
                       ))}
                     </div>
+                    {fieldsLocked ? (
+                      taskCollaborators.length === 0 && (
+                        <div
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"
+                          aria-readonly="true"
+                        >
+                          {t('taskPage.noCollaborators')}
+                        </div>
+                      )
+                    ) : (
                     <MemberPicker
                       members={members}
                       mode="add"
@@ -1536,6 +1585,7 @@ export default function TaskPage({
                         }
                       }}
                     />
+                    )}
                   </div>
                 </div>
               </div>
@@ -1581,7 +1631,9 @@ export default function TaskPage({
                     className="w-full"
                     selectedSprintId={editedTask.sprintId || null}
                     sprints={sprints as any}
+                    disabled={fieldsLocked}
                     onSprintChange={(sprint) => {
+                      if (fieldsLocked) return;
                       if (!sprint) {
                         handleTaskUpdate({ sprintId: null });
                         return;
@@ -1605,7 +1657,13 @@ export default function TaskPage({
                     type="date"
                     value={toDateInputValue(editedTask.startDate)}
                     onChange={(e) => handleTaskUpdate({ startDate: e.target.value || null })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    readOnly={fieldsLocked}
+                    tabIndex={fieldsLocked ? -1 : undefined}
+                    className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                      fieldsLocked
+                        ? 'cursor-default pointer-events-none'
+                        : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
                   />
                 </div>
 
@@ -1615,7 +1673,13 @@ export default function TaskPage({
                     type="date"
                     value={toDateInputValue(editedTask.dueDate)}
                     onChange={(e) => handleTaskUpdate({ dueDate: e.target.value || null })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    readOnly={fieldsLocked}
+                    tabIndex={fieldsLocked ? -1 : undefined}
+                    className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                      fieldsLocked
+                        ? 'cursor-default pointer-events-none'
+                        : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
                   />
                 </div>
 
@@ -1634,8 +1698,16 @@ export default function TaskPage({
                         handleTaskUpdate({ effort: v === '' ? null : parseInt(v, 10) });
                       }
                     }}
-                    onFocus={(e) => e.currentTarget.select()}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    onFocus={(e) => {
+                      if (!fieldsLocked) e.currentTarget.select();
+                    }}
+                    readOnly={fieldsLocked}
+                    tabIndex={fieldsLocked ? -1 : undefined}
+                    className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                      fieldsLocked
+                        ? 'cursor-default'
+                        : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
                     placeholder="0"
                   />
                 </div>
@@ -1644,6 +1716,7 @@ export default function TaskPage({
                   label={t('labels.priority')}
                   priorities={availablePriorities}
                   value={editedTask.priorityId}
+                  disabled={fieldsLocked}
                   onChange={(priorityId, priorityName) =>
                     handleTaskUpdate({
                       priorityId,
@@ -1662,11 +1735,12 @@ export default function TaskPage({
                         {t('labels.blockedHint')}
                       </p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <label className={`relative inline-flex items-center shrink-0 ${fieldsLocked ? 'cursor-default' : 'cursor-pointer'}`}>
                       <input
                         type="checkbox"
                         className="sr-only peer"
                         checked={Boolean(editedTask.isBlocked)}
+                        disabled={fieldsLocked}
                         onChange={(e) =>
                           handleTaskUpdate({
                             isBlocked: e.target.checked,
@@ -1674,13 +1748,17 @@ export default function TaskPage({
                           })
                         }
                       />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600" />
+                      <div className={`w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600 ${
+                        fieldsLocked ? '' : 'peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300'
+                      }`} />
                     </label>
                   </div>
                   {editedTask.isBlocked && (
                     <input
                       type="text"
                       value={blockedReasonDraft}
+                      readOnly={fieldsLocked}
+                      tabIndex={fieldsLocked ? -1 : undefined}
                       onChange={(e) => {
                         const value = e.target.value;
                         setBlockedReasonDraft(value);
@@ -1701,7 +1779,9 @@ export default function TaskPage({
                         window.setTimeout(() => saveImmediately(), 0);
                       }}
                       placeholder={t('labels.blockedReasonPlaceholder')}
-                      className="mt-2 w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm"
+                      className={`mt-2 w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm ${
+                        fieldsLocked ? 'cursor-default' : ''
+                      }`}
                     />
                   )}
                 </div>
@@ -1746,6 +1826,8 @@ export default function TaskPage({
                   <TagPicker
                     availableTags={availableTags}
                     selectedTags={taskTags}
+                    disabled={fieldsLocked}
+                    allowCreate={!fieldsLocked}
                     onToggle={toggleTaskTag}
                     onTagCreated={async (tag) => {
                       try {
@@ -1832,6 +1914,7 @@ export default function TaskPage({
                             >
                               {child.ticket}
                             </span>
+                            {!fieldsLocked && (
                             <button
                               type="button"
                               onClick={() => handleRemoveChildTask(child.id)}
@@ -1840,12 +1923,14 @@ export default function TaskPage({
                             >
                               ×
                             </button>
+                            )}
                           </span>
                         ))}
                       </div>
                     )}
                     
                     {/* Children Dropdown */}
+                    {!fieldsLocked && (
                     <div className="relative" ref={childrenDropdownRef}>
                       <button
                         type="button"
@@ -1895,6 +1980,7 @@ export default function TaskPage({
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
                 </div>
               </div>

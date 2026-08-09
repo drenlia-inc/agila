@@ -8,6 +8,33 @@ import { reports as reportQueries } from '../utils/sqlManager/index.js';
 
 const router = express.Router();
 
+/** Enforce REPORTS_VISIBLE_TO=admin for non-settings report data routes */
+async function requireReportsAccess(req, res, next) {
+  try {
+    const db = getRequestDatabase(req);
+    const reportSettings = await reportQueries.getReportSettings(db);
+    const settingsObj = {};
+    reportSettings.forEach((row) => {
+      settingsObj[row.key] = row.value;
+    });
+    if (settingsObj.REPORTS_ENABLED === 'false') {
+      return res.status(403).json({ error: 'Reports are disabled' });
+    }
+    const visibleTo = settingsObj.REPORTS_VISIBLE_TO || 'all';
+    if (visibleTo === 'admin') {
+      const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+      const isAdmin = req.user?.role === 'admin' || roles.includes('admin');
+      if (!isAdmin) {
+        return res.status(403).json({ error: 'Reports are restricted to administrators' });
+      }
+    }
+    next();
+  } catch (error) {
+    console.error('Reports access check failed:', error);
+    return res.status(500).json({ error: 'Failed to verify report access' });
+  }
+}
+
 /**
  * GET /api/reports/settings
  * Get report visibility settings (public endpoint for all authenticated users)
@@ -43,7 +70,7 @@ router.get('/settings', authenticateToken, async (req, res) => {
  * Get points and achievements for current user or specified user
  * Query params: userId (optional, admin only)
  */
-router.get('/user-points', authenticateToken, async (req, res) => {
+router.get('/user-points', authenticateToken, requireReportsAccess, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const { userId, lang } = req.query;
@@ -201,7 +228,7 @@ router.get('/user-points', authenticateToken, async (req, res) => {
  * Get team rankings
  * Query params: year, month (optional)
  */
-router.get('/leaderboard', authenticateToken, async (req, res) => {
+router.get('/leaderboard', authenticateToken, requireReportsAccess, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const { year, month } = req.query;
@@ -235,7 +262,7 @@ router.get('/leaderboard', authenticateToken, async (req, res) => {
  * Get burndown data for a planning period
  * Query params: startDate, endDate, boardId (optional)
  */
-router.get('/burndown', authenticateToken, async (req, res) => {
+router.get('/burndown', authenticateToken, requireReportsAccess, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const { startDate, endDate, boardId } = req.query;
@@ -380,7 +407,7 @@ router.get('/burndown', authenticateToken, async (req, res) => {
  * Get team performance metrics
  * Query params: startDate, endDate, boardId (optional)
  */
-router.get('/team-performance', authenticateToken, async (req, res) => {
+router.get('/team-performance', authenticateToken, requireReportsAccess, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const { startDate, endDate, boardId } = req.query;
@@ -490,7 +517,7 @@ router.get('/team-performance', authenticateToken, async (req, res) => {
  * Get comprehensive task list with metrics
  * Query params: startDate, endDate, boardId, status, assigneeId, priorityName (all optional)
  */
-router.get('/task-list', authenticateToken, async (req, res) => {
+router.get('/task-list', authenticateToken, requireReportsAccess, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const { startDate, endDate, boardId, status, assigneeId, priorityName } = req.query;

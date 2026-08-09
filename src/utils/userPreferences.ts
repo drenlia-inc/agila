@@ -1,6 +1,5 @@
 import { Priority } from '../types';
 import { updateUserSetting, getUserSettings } from '../api';
-import api from '../api';
 
 // Global state to track preference saving operations
 let globalSavingCallbacks: Set<() => void> = new Set();
@@ -343,29 +342,37 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
 // Admin-configurable default preferences (loaded from system settings)
 let ADMIN_DEFAULT_PREFERENCES: Partial<UserPreferences> | null = null;
 
-// Function to load admin defaults from system settings (all authenticated users)
+function tokenHasAdminRole(): boolean {
+  try {
+    const token = localStorage.getItem('authToken');
+    if (!token) return false;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return Array.isArray(payload.roles) && payload.roles.includes('admin');
+  } catch {
+    return false;
+  }
+}
+
+/** Load site preference defaults. Uses public settings for non-admins (no /admin/settings 403). */
 export const loadAdminDefaults = async (): Promise<void> => {
   try {
-    // Use the cached getSettings function to prevent duplicate calls with SettingsContext
-    const { getSettings } = await import('../api');
-    const settings = await getSettings();
+    const { getSettings, getPublicSettings } = await import('../api');
+    const settings = tokenHasAdminRole()
+      ? await getSettings()
+      : await getPublicSettings();
     
-    // Parse admin defaults from settings (if they exist)
     ADMIN_DEFAULT_PREFERENCES = {};
     
-    // Example: Admin can set default view mode
     if (settings.DEFAULT_VIEW_MODE) {
       ADMIN_DEFAULT_PREFERENCES.viewMode = settings.DEFAULT_VIEW_MODE;
     }
     
-    // Example: Admin can set default task view mode
     if (settings.DEFAULT_TASK_VIEW_MODE) {
       ADMIN_DEFAULT_PREFERENCES.taskViewMode = normalizeTaskViewMode(
         settings.DEFAULT_TASK_VIEW_MODE
       );
     }
     
-    // Example: Admin can set default activity feed position
     if (settings.DEFAULT_ACTIVITY_FEED_POSITION) {
       try {
         const { normalizeStoredActivityFeedPosition, DEFAULT_ACTIVITY_FEED_STORED_POSITION } =
@@ -382,7 +389,6 @@ export const loadAdminDefaults = async (): Promise<void> => {
       }
     }
     
-    // Example: Admin can set default activity feed dimensions
     if (settings.DEFAULT_ACTIVITY_FEED_WIDTH || settings.DEFAULT_ACTIVITY_FEED_HEIGHT) {
       const widthRaw = settings.DEFAULT_ACTIVITY_FEED_WIDTH;
       const heightRaw = settings.DEFAULT_ACTIVITY_FEED_HEIGHT;

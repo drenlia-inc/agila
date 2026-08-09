@@ -81,6 +81,17 @@ export interface Task {
   deletedBy?: string | null;
 }
 
+/** Options for parent task refresh handlers (e.g. App.handleEditTask). */
+export type TaskUpdateOptions = {
+  /** Persist the task but skip activity-feed logging for this write. */
+  skipActivity?: boolean;
+  /**
+   * Refresh local/parent UI only — do not PATCH /tasks/:id.
+   * Use after comment/tag/watcher/collaborator APIs that already persisted the change.
+   */
+  localOnly?: boolean;
+};
+
 export interface Tag {
   id: number;
   tag: string;

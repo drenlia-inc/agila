@@ -32,6 +32,8 @@ interface GanttViewV2Props {
   onCopyTask?: (task: Task) => Promise<void>;
   onRemoveTask?: (taskId: string, event?: React.MouseEvent) => Promise<void>;
   siteSettings?: { [key: string]: string };
+  /** false for viewer — disable timeline drag / create / mutation actions */
+  canMutate?: boolean;
 }
 
 // Parse date helper
@@ -67,7 +69,7 @@ const GanttViewV2 = ({
   onSelectTask,
   selectedTask,
   taskViewMode = 'expand',
-  onUpdateTask,
+  onUpdateTask: onUpdateTaskProp,
   onTaskDragStart,
   onTaskDragEnd,
   onClearDragState,
@@ -79,9 +81,14 @@ const GanttViewV2 = ({
   relationships = [],
   onCopyTask,
   onRemoveTask,
-  siteSettings
+  siteSettings,
+  canMutate = true,
 }: GanttViewV2Props) => {
   const { t } = useTranslation('common');
+  const onUpdateTask = (task: Task) => {
+    if (!canMutate || !onUpdateTaskProp) return;
+    return onUpdateTaskProp(task);
+  };
   // State
   const [priorities, setPriorities] = useState<any[]>([]);
   const [activeDragItem, setActiveDragItem] = useState<any>(null);
@@ -158,6 +165,20 @@ const GanttViewV2 = ({
       setSelectedParentTask(null);
     }
   }, [boardId]); // Reset when boardId changes
+
+  // Viewers cannot use select/link modes
+  useEffect(() => {
+    if (canMutate) return;
+    if (isMultiSelectMode) {
+      setIsMultiSelectMode(false);
+      setSelectedTasks([]);
+      setHighlightedTaskId(null);
+    }
+    if (isRelationshipMode) {
+      setIsRelationshipMode(false);
+      setSelectedParentTask(null);
+    }
+  }, [canMutate, isMultiSelectMode, isRelationshipMode, setIsMultiSelectMode]);
   
   // Ref to store current columns for keyboard navigation
   const columnsRef = useRef(columns);
@@ -1067,11 +1088,11 @@ const GanttViewV2 = ({
   }, [boardId, getSavedScrollPosition, calculateCenterDate, generateDateRange, calculateScrollPosition]);
   
 
-  // DnD sensors
+  // DnD sensors (effectively disabled for viewers)
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: canMutate ? 8 : 100000,
       },
     }),
     useSensor(KeyboardSensor)
@@ -1328,6 +1349,7 @@ const GanttViewV2 = ({
 
   // Handle relationship creation with optimistic updates
   const handleCreateRelationship = useCallback(async (parentTaskId: string, childTaskId: string) => {
+    if (!canMutate) return;
     // Debounce rapid clicks (prevent multiple clicks within 500ms)
     const now = Date.now();
     if (now - lastRelationshipClickRef.current < 500) {
@@ -1404,10 +1426,11 @@ const GanttViewV2 = ({
         alert(`${t('gantt.failedToCreateRelationship', { ns: 'common' })}: ${errorMessage}`);
       }
     }
-  }, [localRelationships, onRefreshData]);
+  }, [localRelationships, onRefreshData, canMutate, t]);
 
   // Handle relationship deletion with optimistic updates
   const handleDeleteRelationship = useCallback(async (relationshipId: string, fromTaskId: string) => {
+    if (!canMutate) return;
     // Store the relationship to restore if deletion fails
     const relationshipToDelete = localRelationships.find(rel => rel.id === relationshipId);
     
@@ -1432,10 +1455,11 @@ const GanttViewV2 = ({
       const errorMessage = (error as any)?.response?.data?.message || (error as any)?.message || t('gantt.unknownError', { ns: 'common' });
       alert(`${t('gantt.failedToDeleteRelationship', { ns: 'common' })}: ${errorMessage}`);
     }
-  }, [localRelationships]);
+  }, [localRelationships, canMutate, t]);
 
   // Relationship click
   const handleRelationshipClick = useCallback((taskId: string) => {
+    if (!canMutate) return;
     if (!selectedParentTask) {
       setSelectedParentTask(taskId);
     } else if (selectedParentTask === taskId) {
@@ -1446,15 +1470,16 @@ const GanttViewV2 = ({
       setSelectedParentTask(null);
       // Don't exit relationship mode - allow continuous creation
     }
-  }, [selectedParentTask, handleCreateRelationship]);
+  }, [selectedParentTask, handleCreateRelationship, canMutate]);
 
   // Task creation handlers
   const handleTaskCreationMouseDown = useCallback((e: React.MouseEvent, dateString: string) => {
+    if (!canMutate) return;
     e.preventDefault();
     setIsCreatingTask(true);
     setTaskCreationStart({ date: dateString });
     setTaskCreationEnd({ date: dateString });
-  }, []);
+  }, [canMutate]);
 
   const handleTaskCreationMouseEnter = useCallback((e: React.MouseEvent, dateString: string) => {
     if (isCreatingTask && taskCreationStart) {
@@ -1463,7 +1488,7 @@ const GanttViewV2 = ({
   }, [isCreatingTask, taskCreationStart]);
 
   const handleTaskCreationMouseUp = useCallback(async (e: React.MouseEvent) => {
-    if (!isCreatingTask || !taskCreationStart || !taskCreationEnd) return;
+    if (!canMutate || !isCreatingTask || !taskCreationStart || !taskCreationEnd) return;
     
     e.preventDefault();
     
@@ -1500,10 +1525,11 @@ const GanttViewV2 = ({
     setIsCreatingTask(false);
     setTaskCreationStart(null);
     setTaskCreationEnd(null);
-  }, [isCreatingTask, taskCreationStart, taskCreationEnd, columns, onAddTask]);
+  }, [isCreatingTask, taskCreationStart, taskCreationEnd, columns, onAddTask, canMutate]);
 
   // Drag handlers for timeline (task bars)
   const handleTimelineDragStart = useCallback((event: DragStartEvent) => {
+    if (!canMutate) return;
     const dragData = event.active.data.current as any;
     
     if (dragData?.dragType) {
@@ -1546,7 +1572,7 @@ const GanttViewV2 = ({
         }
       }
     }
-  }, [ganttTasks, columns, onTaskDragStart]);
+  }, [ganttTasks, columns, onTaskDragStart, canMutate]);
 
   const handleTimelineDragOver = useCallback((event: DragOverEvent) => {
     const { over, activatorEvent } = event;
@@ -1729,6 +1755,7 @@ const GanttViewV2 = ({
           onJumpToTask={handleJumpToTask}
           selectedParentTask={selectedParentTask}
           setSelectedParentTask={setSelectedParentTask}
+          canMutate={canMutate}
         />
       </div>
       

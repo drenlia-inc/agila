@@ -65,6 +65,8 @@ interface KanbanColumnProps {
   onSelectTask: (task: Task | null, options?: { scrollToComments?: boolean }) => void;
   onTaskDrop: (columnId: string, index: number) => void;
   isAdmin?: boolean;
+  /** false for viewer role — hide add/edit/DnD controls */
+  canMutate?: boolean;
   taskViewMode?: TaskViewMode;
   availablePriorities?: PriorityOption[];
   availableTags?: Tag[];
@@ -163,6 +165,7 @@ export default function KanbanColumn({
   onSelectTask,
   onTaskDrop,
   isAdmin = false,
+  canMutate = true,
   taskViewMode = 'expand',
   availablePriorities = [],
   availableTags = [],
@@ -764,7 +767,7 @@ export default function KanbanColumn({
             siteSettings={siteSettings}
             columnIsFinished={column.is_finished || false}
             columnIsArchived={column.is_archived || false}
-            isDragDisabled={!!draggedColumn}
+            isDragDisabled={!!draggedColumn || !canMutate}
             isColumnBeingDragged={!!draggedColumn}
             taskViewMode={taskViewMode}
             availablePriorities={availablePriorities}
@@ -778,9 +781,12 @@ export default function KanbanColumn({
             availableSprints={availableSprints}
             isChecked={!!checkedTaskIds?.has(task.id)}
             onToggleChecked={
-              onToggleTaskChecked ? () => onToggleTaskChecked(task.id) : undefined
+              canMutate && onToggleTaskChecked
+                ? () => onToggleTaskChecked(task.id)
+                : undefined
             }
             isMultiSelectDragLocked={isMultiSelectDragLocked}
+            canMutate={canMutate}
             
             // Task linking props
             isLinkingMode={isLinkingMode}
@@ -1279,6 +1285,7 @@ export default function KanbanColumn({
                   </span>
                 </KanbanChromeTooltip>
               )}
+              {canMutate && (
               <KanbanChromeTooltip label={!isOnline ? t('column.networkOffline') : t('column.addTask')}>
                 <button
                   data-column-header
@@ -1294,6 +1301,7 @@ export default function KanbanColumn({
                   <Plus size={18} />
                 </button>
               </KanbanChromeTooltip>
+              )}
             </>
           )}
         </div>
@@ -1460,6 +1468,7 @@ export default function KanbanColumn({
                     <p className="text-xs text-gray-400 dark:text-gray-500">
                       {t('column.emptyColumnTitle')}
                     </p>
+                    {canMutate && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -1477,6 +1486,7 @@ export default function KanbanColumn({
                       <Plus size={12} />
                       {t('column.addTask')}
                     </button>
+                    )}
                   </div>
                 )}
             </div>
@@ -1520,7 +1530,8 @@ export default function KanbanColumn({
         )}
       </div>
 
-      {checkedTaskIds &&
+      {canMutate &&
+        checkedTaskIds &&
         shouldShowColumnBulkFab(checkedTaskIds, filteredTasks) &&
         onBulkCopy &&
         onBulkDelete && (

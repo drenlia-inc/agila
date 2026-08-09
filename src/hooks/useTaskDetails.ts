@@ -1,21 +1,33 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Task, TeamMember, Comment, Attachment, Tag, PriorityOption, CurrentUser } from '../types';
+import { Task, TeamMember, Comment, Attachment, Tag, PriorityOption, CurrentUser, TaskUpdateOptions } from '../types';
 import { createComment, uploadFile, updateTask, deleteComment, updateComment, fetchCommentAttachments, getAllTags, getTaskTags, addTagToTask, removeTagFromTask, getAllPriorities, addWatcherToTask, removeWatcherFromTask, addCollaboratorToTask, removeCollaboratorFromTask, fetchTaskAttachments, addTaskAttachments, deleteAttachment } from '../api';
 import { getLocalISOString, formatToYYYYMMDDHHmmss } from '../utils/dateUtils';
 import { generateUUID } from '../utils/uuid';
 import websocketClient from '../services/websocketClient';
 import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
+import { userCanMutate } from '../utils/permissions';
 
 interface UseTaskDetailsProps {
   task: Task;
   members: TeamMember[];
   currentUser: CurrentUser | null;
-  onUpdate: (updatedTask: Task) => void;
+  onUpdate: (updatedTask: Task, options?: TaskUpdateOptions) => void;
   siteSettings?: { [key: string]: string };
   boards?: any[];
+  /** When false (viewer), task field/relationship writes are no-ops; comments still work. */
+  canMutate?: boolean;
 }
 
-export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSettings, boards }: UseTaskDetailsProps) => {
+export const useTaskDetails = ({
+  task,
+  members,
+  currentUser,
+  onUpdate,
+  siteSettings,
+  boards,
+  canMutate: canMutateProp,
+}: UseTaskDetailsProps) => {
+  const canMutate = canMutateProp ?? userCanMutate(currentUser);
   // Get project identifier from the board this task belongs to
   const getProjectIdentifier = () => {
     if (!boards || !task.boardId) return null;
@@ -142,8 +154,13 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
 
+  const canMutateRef = useRef(canMutate);
+  canMutateRef.current = canMutate;
+
   // Immediate save — always persist the latest editedTaskRef snapshot
   const saveImmediately = useCallback(async (taskToSave?: Task) => {
+    if (!canMutateRef.current) return;
+
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
@@ -269,6 +286,8 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
 
   // Handle task field updates
   const handleTaskUpdate = useCallback((updates: Partial<Task>) => {
+    if (!canMutateRef.current) return;
+
     const normalizeRichText = (html: string | null | undefined) => {
       const trimmed = (html || '').trim();
       if (!trimmed || trimmed === '<p></p>' || trimmed === '<p><br></p>' || trimmed === '<p><br/></p>') {
@@ -303,6 +322,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
 
   // Handle attachment changes
   const handleAttachmentChange = useCallback((files: { file: File; tempId: string }[]) => {
+    if (!canMutateRef.current) return;
     setPendingAttachments(files);
     
     if (files.length > 0) {
@@ -313,12 +333,14 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
 
   // Handle image removal
   const handleImageRemoval = useCallback((filename: string) => {
+    if (!canMutateRef.current) return;
     setPendingAttachments(prev => prev.filter(att => att.file.name !== filename));
     setTaskAttachments(prev => prev.filter(att => att.name !== filename));
   }, []);
 
   // Handle attachment deletion
   const handleAttachmentDelete = useCallback(async (attachment: Attachment) => {
+    if (!canMutateRef.current) return;
     try {
       await deleteAttachment(attachment.id);
       
@@ -332,6 +354,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
 
   // Handle watcher operations
   const handleAddWatcher = useCallback(async (memberId: string) => {
+    if (!canMutateRef.current) return;
     try {
       await addWatcherToTask(task.id, memberId);
       const member = members.find(m => m.id === memberId);
@@ -342,7 +365,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
         // Update task and notify parent
         const updatedTask = { ...editedTask, watchers: newWatchers };
         setEditedTask(updatedTask);
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       }
     } catch (error) {
       console.error('Error adding watcher:', error);
@@ -351,6 +374,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
   }, [task.id, members, taskWatchers, editedTask, onUpdate]);
 
   const handleRemoveWatcher = useCallback(async (memberId: string) => {
+    if (!canMutateRef.current) return;
     try {
       await removeWatcherFromTask(task.id, memberId);
       const newWatchers = taskWatchers.filter(w => w.id !== memberId);
@@ -359,7 +383,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
       // Update task and notify parent
       const updatedTask = { ...editedTask, watchers: newWatchers };
       setEditedTask(updatedTask);
-      onUpdate(updatedTask);
+      onUpdate(updatedTask, { localOnly: true });
     } catch (error) {
       console.error('Error removing watcher:', error);
       throw error;
@@ -368,6 +392,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
 
   // Handle collaborator operations
   const handleAddCollaborator = useCallback(async (memberId: string) => {
+    if (!canMutateRef.current) return;
     try {
       await addCollaboratorToTask(task.id, memberId);
       const member = members.find(m => m.id === memberId);
@@ -378,7 +403,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
         // Update task and notify parent
         const updatedTask = { ...editedTask, collaborators: newCollaborators };
         setEditedTask(updatedTask);
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       }
     } catch (error) {
       console.error('Error adding collaborator:', error);
@@ -387,6 +412,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
   }, [task.id, members, taskCollaborators, editedTask, onUpdate]);
 
   const handleRemoveCollaborator = useCallback(async (memberId: string) => {
+    if (!canMutateRef.current) return;
     try {
       await removeCollaboratorFromTask(task.id, memberId);
       const newCollaborators = taskCollaborators.filter(c => c.id !== memberId);
@@ -395,7 +421,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
       // Update task and notify parent
       const updatedTask = { ...editedTask, collaborators: newCollaborators };
       setEditedTask(updatedTask);
-      onUpdate(updatedTask);
+      onUpdate(updatedTask, { localOnly: true });
     } catch (error) {
       console.error('Error removing collaborator:', error);
       throw error;
@@ -404,6 +430,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
 
   // Handle tag operations
   const handleAddTag = useCallback(async (tagId: number) => {
+    if (!canMutateRef.current) return;
     try {
       await addTagToTask(task.id, tagId);
       const tag = availableTags.find(t => t.id === tagId);
@@ -414,7 +441,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
         // Update task and notify parent
         const updatedTask = { ...editedTask, tags: newTags };
         setEditedTask(updatedTask);
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       }
     } catch (error) {
       console.error('Error adding tag:', error);
@@ -423,6 +450,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
   }, [task.id, availableTags, taskTags, editedTask, onUpdate]);
 
   const handleRemoveTag = useCallback(async (tagId: number) => {
+    if (!canMutateRef.current) return;
     try {
       await removeTagFromTask(task.id, tagId);
       const newTags = taskTags.filter(t => t.id !== tagId);
@@ -431,7 +459,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
       // Update task and notify parent
       const updatedTask = { ...editedTask, tags: newTags };
       setEditedTask(updatedTask);
-      onUpdate(updatedTask);
+      onUpdate(updatedTask, { localOnly: true });
     } catch (error) {
       console.error('Error removing tag:', error);
       throw error;
@@ -447,7 +475,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
       // Update task and notify parent
       const updatedTask = { ...editedTask, comments: newComments };
       setEditedTask(updatedTask);
-      onUpdate(updatedTask);
+      onUpdate(updatedTask, { localOnly: true });
     } catch (error) {
       console.error('Error deleting comment:', error);
       throw error;
@@ -502,7 +530,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
       const updatedTask = { ...editedTask, comments: newComments };
       
       setEditedTask(updatedTask);
-      onUpdate(updatedTask);
+      onUpdate(updatedTask, { localOnly: true });
       
       return savedComment;
     } catch (error) {
@@ -525,7 +553,7 @@ export const useTaskDetails = ({ task, members, currentUser, onUpdate, siteSetti
       
       const updatedTask = { ...editedTask, comments: updatedComments };
       setEditedTask(updatedTask);
-      onUpdate(updatedTask);
+      onUpdate(updatedTask, { localOnly: true });
     } catch (error) {
       console.error('Error updating comment:', error);
       throw error;

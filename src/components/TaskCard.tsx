@@ -120,6 +120,8 @@ interface TaskCardProps {
   onToggleChecked?: () => void;
   /** True when multi-check spans multiple columns — disables this card’s DnD. */
   isMultiSelectDragLocked?: boolean;
+  /** false for viewer — hide toolbar, pencil, multi-select, inline editors */
+  canMutate?: boolean;
 }
 
 
@@ -130,7 +132,7 @@ const TaskCard = React.memo(function TaskCard({
   members,
   currentUser,
   onRemove,
-  onEdit,
+  onEdit: onEditProp,
   onCopy,
   onDragStart,
   onDragEnd,
@@ -170,10 +172,17 @@ const TaskCard = React.memo(function TaskCard({
   isChecked = false,
   onToggleChecked,
   isMultiSelectDragLocked = false,
+  canMutate = true,
 }: TaskCardProps) {
   const { t } = useTranslation('tasks');
   const relationSummary =
     relationSummaryProp ?? getTaskRelationshipSummary(undefined, task.id);
+  const allowMutations = canMutate;
+  const toggleChecked = allowMutations ? onToggleChecked : undefined;
+  const onEdit = (updated: Task) => {
+    if (!allowMutations) return;
+    return onEditProp(updated);
+  };
   const [showMemberSelect, setShowMemberSelect] = useState(false);
   const [showCommentTooltip, setShowCommentTooltip] = useState(false);
 
@@ -369,7 +378,7 @@ const TaskCard = React.memo(function TaskCard({
 
   // Hover + "S" toggles the multi-select checkbox (same as clicking it / Ctrl+click).
   useEffect(() => {
-    if (!isCardHovered || !onToggleChecked || isLinkingMode) return;
+    if (!isCardHovered || !toggleChecked || isLinkingMode) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 's' && e.key !== 'S') return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -378,11 +387,11 @@ const TaskCard = React.memo(function TaskCard({
       if (isEditableEscapeTarget(e.target)) return;
       if (isAnyEditingActive) return;
       e.preventDefault();
-      onToggleChecked();
+      toggleChecked();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [isCardHovered, onToggleChecked, isLinkingMode, isAnyEditingActive]);
+  }, [isCardHovered, toggleChecked, isLinkingMode, isAnyEditingActive]);
 
   // Sync editedEffort with task.effort when task updates (but not while editing)
   useEffect(() => {
@@ -689,6 +698,7 @@ const TaskCard = React.memo(function TaskCard({
   }, [showAgentPanel, task.id, task.memberId]);
 
   const handleMemberChange = async (memberId: string) => {
+    if (!allowMutations) return;
     setShowMemberSelect(false);
     if (memberId === AGENT_MEMBER_ID) {
       if (siteSettings?.AI_ENABLED !== 'true') return;
@@ -898,6 +908,7 @@ const TaskCard = React.memo(function TaskCard({
     e: React.MouseEvent<HTMLElement>,
     options?: { selectAll?: boolean }
   ) => {
+    if (!allowMutations) return;
     if (options?.selectAll) {
       setClickPosition(null);
       setSelectAllTitleOnFocus(true);
@@ -958,6 +969,7 @@ const TaskCard = React.memo(function TaskCard({
   const handleDescriptionClick = (e: React.MouseEvent<HTMLElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!allowMutations) return;
     
     // Save title first if it's being edited
     if (isEditingTitle) {
@@ -1008,6 +1020,7 @@ const TaskCard = React.memo(function TaskCard({
 
   const handleDateRangeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!allowMutations) return;
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     setDateRangePickerPosition({
@@ -1034,6 +1047,7 @@ const TaskCard = React.memo(function TaskCard({
 
   // Sprint selector handlers
   const handleSprintSelectorOpen = (triggerElement?: React.RefObject<HTMLElement>) => {
+    if (!allowMutations) return;
     // Use provided ref or fall back to calendar icon ref
     const elementRef = triggerElement || calendarIconRef;
     if (!elementRef.current) return;
@@ -1498,6 +1512,11 @@ const TaskCard = React.memo(function TaskCard({
       e.stopPropagation(); // Prevent event from bubbling to card onClick
       e.preventDefault();
     }
+    if (!allowMutations) {
+      setShowTagRemovalMenu(false);
+      setSelectedTagForRemoval(null);
+      return;
+    }
     if (selectedTagForRemoval && onTagRemove) {
       onTagRemove(selectedTagForRemoval.id.toString());
       setShowTagRemovalMenu(false);
@@ -1579,25 +1598,17 @@ const TaskCard = React.memo(function TaskCard({
         {...attributes}
         {...listeners}
         onClickCapture={(e) => {
-          // Use capture phase to detect tag clicks BEFORE onClick fires
-          // This allows us to set a flag that onClick can check
+          // Use capture phase to detect tag clicks BEFORE onClick fires.
+          // Only the dedicated tag container — do NOT treat every rounded-full
+          // (priority/member chips) as a tag, or the clickable strip beside an
+          // overlapping activity feed becomes dead.
           const target = e.target as HTMLElement;
-          
-          // If clicking on a tag or tag container, mark it
-          if (
-            target.closest('[data-tag-container]') ||
-            target.classList.contains('rounded-full') ||
-            target.closest('span.rounded-full') ||
-            target.closest('.flex.flex-wrap.gap-1')
-          ) {
-            // Clear any pending click timer immediately
+          if (target.closest('[data-tag-container]')) {
             if (clickTimerRef.current) {
               clearTimeout(clickTimerRef.current);
               clickTimerRef.current = null;
             }
-            // Set flag - don't stop propagation so tag's onClick can still fire
             isInteractingWithTagRef.current = true;
-            // Reset flag after a delay (longer than the 250ms click timer)
             setTimeout(() => {
               isInteractingWithTagRef.current = false;
             }, 500);
@@ -1608,42 +1619,29 @@ const TaskCard = React.memo(function TaskCard({
           if (isLinkingMode) return;
 
           // Ctrl/Cmd+click toggles multi-select (same as the card checkbox).
-          if ((e.ctrlKey || e.metaKey) && onToggleChecked) {
+          if ((e.ctrlKey || e.metaKey) && toggleChecked) {
             e.preventDefault();
             e.stopPropagation();
             if (clickTimerRef.current) {
               clearTimeout(clickTimerRef.current);
               clickTimerRef.current = null;
             }
-            onToggleChecked();
+            toggleChecked();
             return;
           }
           
           const target = e.target as HTMLElement;
           
-          // CRITICAL: Check if clicking on a tag FIRST - before any other logic
-          // Use multiple detection methods to catch all tag clicks
-          const isTagClick = 
-            target.closest('[data-tag-container]') !== null ||
-            target.classList.contains('rounded-full') ||
-            target.closest('span.rounded-full') !== null ||
-            target.closest('.flex.flex-wrap.gap-1') !== null ||
-            (target.tagName === 'SPAN' && target.style.backgroundColor && target.style.borderRadius === '9999px') ||
-            (target.tagName === 'SPAN' && target.closest('.flex.justify-end.mb-2') !== null);
-          
-          if (isTagClick) {
-            // Immediately clear any pending click timer
+          // Tags only — container already stopPropagates; keep this as a safety net
+          if (target.closest('[data-tag-container]')) {
             if (clickTimerRef.current) {
               clearTimeout(clickTimerRef.current);
               clickTimerRef.current = null;
             }
-            // Set flag to prevent any delayed selection
             isInteractingWithTagRef.current = true;
-            // Reset flag after delay (longer than the 250ms click timer)
             setTimeout(() => {
               isInteractingWithTagRef.current = false;
             }, 500);
-            // Stop propagation to prevent card selection
             e.stopPropagation();
             return;
           }
@@ -1949,12 +1947,12 @@ const TaskCard = React.memo(function TaskCard({
           </div>
         )}
 
-        {/* TaskCard Toolbar - Extracted to separate component */}
+        {/* TaskCard Toolbar — viewers still get assignee avatar (read-only) */}
         <TaskCardToolbar
           task={task}
           member={member}
           members={members}
-          isDragDisabled={isDragDisabled || isAnyEditingActive || isDndGloballyDisabled() || isAgentWorkActive}
+          isDragDisabled={isDragDisabled || isAnyEditingActive || isDndGloballyDisabled() || isAgentWorkActive || !allowMutations}
           showMemberSelect={showMemberSelect}
           onCopy={onCopy}
           onEdit={onEdit}
@@ -1962,6 +1960,7 @@ const TaskCard = React.memo(function TaskCard({
           onRemove={onRemove}
           onMemberChange={handleMemberChange}
           onToggleMemberSelect={() => {
+            if (!allowMutations) return;
             void (async () => {
               if (!showMemberSelect) {
                 await flushPendingEdits();
@@ -1991,7 +1990,7 @@ const TaskCard = React.memo(function TaskCard({
           // Task linking props
           isLinkingMode={isLinkingMode}
           linkingSourceTask={linkingSourceTask}
-          onStartLinking={onStartLinking}
+          onStartLinking={allowMutations ? onStartLinking : undefined}
           
           // Hover highlighting props
           hoveredLinkTask={hoveredLinkTask}
@@ -2007,6 +2006,7 @@ const TaskCard = React.memo(function TaskCard({
           isEditingDescription={isEditingDescription}
           isSelected={isSelected}
           isAdmin={Boolean(currentUser?.roles?.includes('admin'))}
+          canMutate={allowMutations}
         />
 
         {/* Relationship Type Indicator - when focus card highlights related ones */}
@@ -2060,7 +2060,7 @@ const TaskCard = React.memo(function TaskCard({
               {...(isMultiSelectDragLocked ? {} : listeners)}
             >
               {/* Multi-check reuses the former left pencil slot (no layout growth). */}
-              {onToggleChecked && (
+              {toggleChecked && (
                 <label
                   className="absolute -left-[10px] top-[19px] z-10 -translate-x-1 -translate-y-1/2 -m-1.5 flex cursor-pointer items-center p-1.5"
                   data-no-dnd="true"
@@ -2070,7 +2070,7 @@ const TaskCard = React.memo(function TaskCard({
                 >
                   <ModernCheckbox
                     checked={isChecked}
-                    onChange={onToggleChecked}
+                    onChange={toggleChecked}
                     size="sm"
                     aria-label={t('kanbanSelect.selectTask')}
                     data-testid={`task-check-${task.id}`}
@@ -2080,7 +2080,7 @@ const TaskCard = React.memo(function TaskCard({
               <FirstLineEndAnchor
                 contentClassName="min-w-0 flow-root"
                 anchor={
-                  isHoveringTitle ? (
+                  allowMutations && isHoveringTitle ? (
                     <KanbanChromeTooltip label={t('taskCard.editTitle')} wrapperClassName="inline-flex">
                       <button
                         type="button"
@@ -2192,7 +2192,7 @@ const TaskCard = React.memo(function TaskCard({
                   <FirstLineEndAnchor
                     contentClassName="min-w-0"
                     anchor={
-                      isHoveringDescription ? (
+                      allowMutations && isHoveringDescription ? (
                         <KanbanChromeTooltip
                           label={t('taskCard.editDescription')}
                           wrapperClassName="inline-flex"
@@ -2261,10 +2261,13 @@ const TaskCard = React.memo(function TaskCard({
               >
                 <span
                   ref={sprintBadgeRef}
-                  className="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700 max-w-full truncate cursor-pointer hover:bg-indigo-200 transition-colors"
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700 max-w-full truncate transition-colors ${
+                    allowMutations ? 'cursor-pointer hover:bg-indigo-200' : 'cursor-default'
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
+                    if (!allowMutations) return;
                     // Set flag to prevent card selection
                     isInteractingWithDropdownRef.current = true;
                     // Clear any pending click timer
@@ -2355,13 +2358,19 @@ const TaskCard = React.memo(function TaskCard({
                 showAllTags ? 'max-w-none' : 'max-w-full overflow-hidden'
               }`}>
                 {(showAllTags ? liveTags : liveTags.slice(0, 3)).map((tag) => (
-                  <KanbanChromeTooltip key={tag.id} label={t('taskCard.clickToRemoveTag')}>
+                  <KanbanChromeTooltip
+                    key={tag.id}
+                    label={allowMutations ? t('taskCard.clickToRemoveTag') : tag.tag}
+                  >
                     <span
-                      className="px-1.5 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                      className={`px-1.5 py-0.5 rounded-full text-xs font-medium transition-opacity ${
+                        allowMutations ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                      }`}
                       style={getTagDisplayStyle(tag)}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
+                        if (!allowMutations) return;
                         isInteractingWithTagRef.current = true; // Mark interaction
                         // Clear any pending click timer on the card to prevent selection
                         if (clickTimerRef.current) {
@@ -2500,9 +2509,14 @@ const TaskCard = React.memo(function TaskCard({
                   />
                 </div>
               </KanbanChromeTooltip>
-              <KanbanChromeTooltip label={t('taskCard.clickToChangeDates')} wrapperClassName="inline-flex">
+              <KanbanChromeTooltip
+                label={allowMutations ? t('taskCard.clickToChangeDates') : undefined}
+                wrapperClassName="inline-flex"
+              >
                 <div
-                  className="text-[8px] leading-none font-mono cursor-pointer hover:bg-gray-100 rounded px-0.5 py-0.5 transition-colors"
+                  className={`text-[8px] leading-none font-mono rounded px-0.5 py-0.5 transition-colors ${
+                    allowMutations ? 'cursor-pointer hover:bg-gray-100' : 'cursor-default'
+                  }`}
                   onClick={handleDateRangeClick}
                 >
                 {/* Start Date */}
@@ -2589,6 +2603,7 @@ const TaskCard = React.memo(function TaskCard({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
+                      if (!allowMutations) return;
                       // Set flag to prevent card selection
                       isInteractingWithDropdownRef.current = true;
                       // Clear any pending click timer
@@ -2602,6 +2617,7 @@ const TaskCard = React.memo(function TaskCard({
                         isInteractingWithDropdownRef.current = false;
                       }, 500);
                     }}
+                    disabled={!allowMutations}
                     onMouseDown={(e) => {
                       e.stopPropagation();
                       isInteractingWithDropdownRef.current = true;
@@ -2752,9 +2768,13 @@ const TaskCard = React.memo(function TaskCard({
                   ref={priorityButtonRef}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!allowMutations) return;
                     setShowPrioritySelect(!showPrioritySelect);
                   }}
-                  className={`px-2 py-1 rounded-full text-xs cursor-pointer hover:opacity-80 transition-all ${showPrioritySelect ? 'ring-2 ring-blue-400' : ''}`}
+                  disabled={!allowMutations}
+                  className={`px-2 py-1 rounded-full text-xs hover:opacity-80 transition-all ${
+                    allowMutations ? 'cursor-pointer' : 'cursor-default'
+                  } ${showPrioritySelect ? 'ring-2 ring-blue-400' : ''}`}
                   style={(() => {
                 // Always use priorityId to find the current priority (handles renamed priorities)
                 // Fall back to priorityName from API (from JOIN), then stored priority name

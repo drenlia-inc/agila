@@ -27,6 +27,9 @@ interface TaskRelationship {
 export interface UserStatus {
   isActive: boolean;
   isAdmin: boolean;
+  isViewer?: boolean;
+  canMutate?: boolean;
+  roles?: string[];
   forceLogout: boolean;
 }
 

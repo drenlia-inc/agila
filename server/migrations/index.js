@@ -666,6 +666,21 @@ const migrations = [
         console.log('✅ Migration 33: TASK_EMAIL_NOTIFICATIONS_ENABLED=true');
       }
     }
+  },
+  {
+    version: 34,
+    name: 'add_viewer_role',
+    description: 'Add viewer (read-only) role for instance-wide view-only users',
+    up: async (db) => {
+      await dbRun(
+        db.prepare(
+          `INSERT INTO roles (name, description)
+           VALUES ('viewer', 'Read-only role')
+           ON CONFLICT (name) DO NOTHING`
+        )
+      );
+      console.log('✅ Migration 34: viewer role ensured');
+    }
   }
 ];
 

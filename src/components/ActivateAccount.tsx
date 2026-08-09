@@ -96,32 +96,66 @@ export default function ActivateAccount({ token, email, onBackToLogin, onAutoLog
     checkGoogleOAuth();
   }, []);
 
-  // Verify token on component mount
+  const translateVerifyError = (backendMessage: string): string => {
+    const messageMap: Record<string, string> = {
+      'Token and email are required': 'activateAccount.missingTokenOrEmail',
+      'Invalid or expired invitation token': 'activateAccount.linkExpired',
+      'Invitation token has expired': 'activateAccount.invitationExpired',
+      'Account is already active': 'activateAccount.accountAlreadyActive',
+      'Failed to verify invitation token': 'activateAccount.failedToVerifyToken',
+      'Too many invitation checks, please try again in 1 hour': 'activateAccount.tooManyChecks',
+      'Too many activation attempts, please try again in 1 hour': 'activateAccount.tooManyAttempts',
+    };
+    const key = messageMap[backendMessage];
+    return key ? t(key) : backendMessage || t('activateAccount.failedToVerifyToken');
+  };
+
+  // Verify invitation token on mount — before showing the password form
   useEffect(() => {
-    // Wait for props to be loaded
     if (isLoadingProps) {
       return;
     }
-    
+
     if (!token || !email) {
       setTokenValid(false);
       setError(t('activateAccount.missingTokenOrEmail'));
       return;
     }
-    
+
+    let cancelled = false;
+
     const verifyToken = async () => {
       try {
-        // For account activation, we don't need a separate verify endpoint
-        // We'll validate during activation
-        setTokenValid(true);
-      } catch (error) {
+        const params = new URLSearchParams({
+          token,
+          email: decodeURIComponent(email)
+        });
+        const response = await fetch(`/api/auth/verify-invitation?${params.toString()}`);
+        const data = await response.json().catch(() => ({}));
+
+        if (cancelled) return;
+
+        if (response.ok && data.valid) {
+          setTokenValid(true);
+          setError('');
+          return;
+        }
+
+        setTokenValid(false);
+        setError(translateVerifyError(data.error || ''));
+      } catch {
+        if (cancelled) return;
         setTokenValid(false);
         setError(t('activateAccount.failedToVerifyToken'));
       }
     };
 
+    setTokenValid(null);
     verifyToken();
-  }, [token, email, isLoadingProps]);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, email, isLoadingProps, t]);
 
   const handleGoogleSignIn = async () => {
     if (!googleOAuthEnabled) {
@@ -200,7 +234,11 @@ export default function ActivateAccount({ token, email, onBackToLogin, onAutoLog
           }, 3000);
         }
       } else {
-        setError(data.error || t('activateAccount.failedToActivate'));
+        setError(
+          data.error
+            ? translateVerifyError(data.error)
+            : t('activateAccount.failedToActivate')
+        );
       }
     } catch (error) {
       setError(t('activateAccount.networkError'));
@@ -235,11 +273,8 @@ export default function ActivateAccount({ token, email, onBackToLogin, onAutoLog
           </div>
           <h2 className="mt-6 text-2xl font-bold text-gray-900">{t('activateAccount.invalidLink')}</h2>
           <p className="mt-2 text-gray-600">
-            {t('activateAccount.linkExpired')}
+            {error || t('activateAccount.linkExpired')}
           </p>
-          {error && (
-            <p className="mt-2 text-sm text-red-600">{error}</p>
-          )}
           <button
             onClick={onBackToLogin}
             className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"

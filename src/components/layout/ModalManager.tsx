@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Task, TeamMember, CurrentUser } from '../../types';
+import { Task, TeamMember, CurrentUser, TaskUpdateOptions } from '../../types';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 import { isTaskSoftDeleted } from '../../utils/taskUtils';
 
@@ -14,7 +14,7 @@ interface ModalManagerProps {
   taskDetailsOptions?: { scrollToComments?: boolean };
   members: TeamMember[];
   onTaskClose: () => void;
-  onTaskUpdate: (task: Task) => Promise<void>;
+  onTaskUpdate: (task: Task, options?: TaskUpdateOptions) => Promise<void>;
   onRestoreTask?: () => Promise<void>;
   onPurgeTask?: () => Promise<void>;
   
@@ -35,6 +35,7 @@ interface ModalManagerProps {
   profileInitialFocus?: 'displayName' | 'bio';
   siteSettings?: { [key: string]: string };
   boards?: any[];
+  canMutate?: boolean;
 }
 
 const ModalManager: React.FC<ModalManagerProps> = ({
@@ -58,6 +59,7 @@ const ModalManager: React.FC<ModalManagerProps> = ({
   onAccountDeleted,
   siteSettings,
   boards,
+  canMutate = true,
 }) => {
   const isReadOnly = isTaskSoftDeleted(selectedTask);
   const isAdmin = !!currentUser?.roles?.includes('admin');
@@ -77,6 +79,7 @@ const ModalManager: React.FC<ModalManagerProps> = ({
             boards={boards}
             scrollToComments={taskDetailsOptions?.scrollToComments}
             readOnly={isReadOnly}
+            canMutate={canMutate}
             onRestore={isReadOnly ? onRestoreTask : undefined}
             onPurge={isReadOnly && isAdmin ? onPurgeTask : undefined}
             isAdmin={isAdmin}

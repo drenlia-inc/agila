@@ -40,6 +40,8 @@ interface MainLayoutProps {
   // Kanban props
   siteSettings: { [key: string]: string };
   isOnline?: boolean; // Network status
+  /** false for viewer (read-only) role */
+  canMutate?: boolean;
   loading: {
     general: boolean;
     tasks: boolean;

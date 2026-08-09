@@ -830,6 +830,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
     // Insert default roles
     await wrapQuery(db.prepare('INSERT INTO roles (name, description) VALUES (?, ?)'), 'INSERT').run('admin', 'Administrator role');
     await wrapQuery(db.prepare('INSERT INTO roles (name, description) VALUES (?, ?)'), 'INSERT').run('user', 'Regular user role');
+    await wrapQuery(db.prepare('INSERT INTO roles (name, description) VALUES (?, ?)'), 'INSERT').run('viewer', 'Read-only role');
 
     // Create default admin user with random password
     const adminId = crypto.randomUUID();
@@ -890,9 +891,9 @@ const initializeDefaultData = async (db, tenantId = null) => {
       // Admin-configurable user preference defaults
       ['DEFAULT_VIEW_MODE', 'kanban'], // Default view mode for new users
       ['DEFAULT_TASK_VIEW_MODE', 'expand'], // Default task view mode for new users
-      ['DEFAULT_ACTIVITY_FEED_POSITION', '{"x": 10, "y": 66}'], // Signed X: inset from left (clear of TaskDetails)
+      ['DEFAULT_ACTIVITY_FEED_POSITION', '{"x": 0, "y": 88}'], // Signed X: inset from left (clear of TaskDetails)
       ['DEFAULT_ACTIVITY_FEED_WIDTH', '160'], // Default activity feed width
-      ['DEFAULT_ACTIVITY_FEED_HEIGHT', '400'], // Default activity feed height
+      ['DEFAULT_ACTIVITY_FEED_HEIGHT', '650'], // Default activity feed height
       // Project and task identification settings
       ['DEFAULT_PROJ_PREFIX', 'PROJ-'], // Default project prefix
       ['DEFAULT_TASK_PREFIX', 'TASK-'], // Default task prefix

@@ -80,19 +80,40 @@ export async function getActivityFeed(db, limit = 20, userLanguage = 'en') {
  * @returns {Promise<Object|null>} User status object or null
  */
 export async function getUserStatus(db, userId) {
-  const query = `
+  const userQuery = `
     SELECT 
       u.is_active as "isActive", 
-      u.force_logout as "forceLogout", 
-      r.name as role 
+      u.force_logout as "forceLogout"
     FROM users u
-    LEFT JOIN user_roles ur ON u.id = ur.user_id
-    LEFT JOIN roles r ON ur.role_id = r.id
     WHERE u.id = $1
   `;
-  
-  const stmt = wrapQuery(db.prepare(query), 'SELECT');
-  return await stmt.get(userId);
+  const user = await wrapQuery(db.prepare(userQuery), 'SELECT').get(userId);
+  if (!user) return null;
+
+  const roles = await wrapQuery(
+    db.prepare(`
+      SELECT r.name FROM roles r
+      JOIN user_roles ur ON r.id = ur.role_id
+      WHERE ur.user_id = $1
+    `),
+    'SELECT'
+  ).all(userId);
+
+  const roleNames = (roles || []).map((r) => r.name);
+  const role = roleNames.includes('admin')
+    ? 'admin'
+    : roleNames.includes('user')
+      ? 'user'
+      : roleNames.includes('viewer')
+        ? 'viewer'
+        : (roleNames[0] || 'user');
+
+  return {
+    isActive: user.isActive,
+    forceLogout: user.forceLogout,
+    role,
+    roles: roleNames
+  };
 }
 
 /**

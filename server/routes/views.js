@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, userCanMutate } from '../middleware/auth.js';
 import notificationService from '../services/notificationService.js';
 import { getRequestDatabase, getTenantId } from '../middleware/tenantRouting.js';
 // MIGRATED: Import sqlManager
@@ -7,6 +7,19 @@ import { views as viewQueries } from '../utils/sqlManager/index.js';
 import { parseBody, createViewBodySchema, updateViewBodySchema } from '../utils/requestValidation.js';
 
 const router = express.Router();
+
+/** Viewers may manage personal filters only — never share. */
+function rejectViewerSharedView(req, res, shared) {
+  if (userCanMutate(req.user)) return false;
+  if (shared === true || shared === 1 || shared === '1' || shared === 'true') {
+    res.status(403).json({
+      error: 'Viewers can only save personal filter views',
+      code: 'READ_ONLY'
+    });
+    return true;
+  }
+  return false;
+}
 
 // Helper function to validate filter data
 const validateFilterData = (filters) => {
@@ -172,6 +185,7 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: parsed.error });
     }
     const { filterName, filters, shared = false } = parsed.data;
+    if (rejectViewerSharedView(req, res, shared)) return;
     
     // MIGRATED: Check if view name exists using sqlManager
     const existingView = await viewQueries.checkViewNameExists(db, filterName.trim(), userId);
@@ -238,6 +252,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: parsed.error });
     }
     const { filterName, filters, shared } = parsed.data;
+    if (shared !== undefined && rejectViewerSharedView(req, res, shared)) return;
     
     // MIGRATED: Check if view exists using sqlManager
     const existingView = await viewQueries.getViewById(db, viewId, userId);

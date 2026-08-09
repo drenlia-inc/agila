@@ -6,13 +6,15 @@ import { Task, TeamMember, Priority, PriorityOption, Tag, Columns, Board, Curren
 import { TaskViewMode, getEffectiveUserPreferences, subscribeToUserPreferences, updateUserPreference, ColumnVisibility } from '../utils/userPreferences';
 import { formatToYYYYMMDD, formatToYYYYMMDDHHmmss, parseLocalDate } from '../utils/dateUtils';
 import { formatMembersTooltip } from '../utils/taskUtils';
-import { getBoardColumns, addTagToTask, removeTagFromTask } from '../api';
+import { getBoardColumns, addTagToTask, removeTagFromTask, createComment } from '../api';
 import DOMPurify from 'dompurify';
 import { generateTaskUrl } from '../utils/routingUtils';
 import { mergeTaskTagsWithLiveData, getTagDisplayStyle } from '../utils/tagUtils';
 import { getAuthenticatedAvatarUrl, getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { truncateMemberName } from '../utils/memberUtils';
+import { commentTextToHtml } from '../utils/commentContent';
+import { generateUUID } from '../utils/uuid';
 import MemberSearchList from './ui/MemberSearchList';
 import { CHROME_TOOLTIP_POPOVER_CLASS, CHROME_TOOLTIP_PANEL_SURFACE_CLASS, KanbanChromeTooltip } from './KanbanChromeTooltip';
 import AgentPanel from './AgentPanel';
@@ -21,6 +23,7 @@ import ExportMenu from './ExportMenu';
 import DateRangePicker from './DateRangePicker';
 import TextEditor from './TextEditor';
 import AddTagModal from './AddTagModal';
+import AddCommentModal from './AddCommentModal';
 import { putTaskWork, getTaskWork, setTaskWorkControl, type TaskWorkMap } from '../api';
 import { AGENT_MEMBER_ID, SYSTEM_MEMBER_ID } from '../constants/appConstants';
 import {
@@ -28,6 +31,7 @@ import {
   isAgentMemberId,
   resolveTaskMember,
 } from '../utils/agentMemberUi';
+import { userCanExport } from '../utils/permissions';
 
 interface ListViewScrollControls {
   canScrollLeft: boolean;
@@ -44,7 +48,7 @@ interface ListViewProps {
   availableTags: Tag[];
   availableSprints?: any[]; // Optional: sprints passed from parent (avoids duplicate API calls)
   taskViewMode: TaskViewMode;
-  onSelectTask: (task: Task | null) => void;
+  onSelectTask: (task: Task | null, options?: { scrollToComments?: boolean }) => void;
   selectedTask: Task | null;
   onRemoveTask: (taskId: string, event?: React.MouseEvent) => void;
   onEditTask: (task: Task) => void;
@@ -59,6 +63,8 @@ interface ListViewProps {
   boardRelationships?: BoardTaskRelationship[];
   /** When set (specific sprint or `backlog`), Sprint column is hidden (redundant). `null` = all sprints, show column per prefs. */
   selectedSprintId?: string | null;
+  /** false for viewer — disable inline edits / row mutation actions */
+  canMutate?: boolean;
 }
 
 /** Matches GET /boards/:boardId/relationships rows */
@@ -298,7 +304,7 @@ export default function ListView({
   onSelectTask,
   selectedTask,
   onRemoveTask,
-  onEditTask,
+  onEditTask: onEditTaskProp,
   onCopyTask,
   onMoveTaskToColumn,
   animateCopiedTaskId,
@@ -307,9 +313,14 @@ export default function ListView({
   siteSettings,
   currentUser,
   boardRelationships = [],
-  selectedSprintId = null
+  selectedSprintId = null,
+  canMutate = true,
 }: ListViewProps) {
   const { t } = useTranslation(['tasks', 'common']);
+  const onEditTask = async (task: Task) => {
+    if (!canMutate) return;
+    return onEditTaskProp(task);
+  };
   
   const [sortField, setSortField] = useState<SortField>('column');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -370,6 +381,7 @@ export default function ListView({
   const commentTooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const commentTooltipShowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const commentContainerRefs = useRef<{[taskId: string]: HTMLDivElement | null}>({});
+  const [addCommentTaskId, setAddCommentTaskId] = useState<string | null>(null);
   
   // Add Tag Modal state
   const [showAddTagModal, setShowAddTagModal] = useState(false);
@@ -1103,6 +1115,7 @@ export default function ListView({
 
   // Inline editing functions
   const startEditing = (taskId: string, field: string, currentValue: string) => {
+    if (!canMutate) return;
     setEditingCell({ taskId, field });
     setEditValue(currentValue);
     setShowDropdown(null);
@@ -1143,6 +1156,7 @@ export default function ListView({
   // Date range picker handlers
   const handleDateRangeClick = (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!canMutate) return;
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     setDateRangePickerPosition({
@@ -1241,6 +1255,7 @@ export default function ListView({
 
   // Sprint selector handlers
   const handleSprintSelectorOpen = (taskId: string, event: React.SyntheticEvent<HTMLDivElement>) => {
+    if (!canMutate) return;
     const target = event.currentTarget;
     const coords = calculateDropdownCoords(target, 'sprint');
     setSprintSelectorCoords(coords);
@@ -1248,6 +1263,7 @@ export default function ListView({
   };
 
   const handleSprintSelect = (taskId: string, sprint: any | null) => {
+    if (!canMutate) return;
     const task = allTasks.find(t => t.id === taskId);
     if (!task) return;
 
@@ -1458,7 +1474,41 @@ export default function ListView({
     return { left, top, height: dropdownHeight };
   };
 
+  const openAddCommentForTask = (taskId: string) => {
+    setShowCommentTooltip(null);
+    setAddCommentTaskId(taskId);
+  };
+
+  const handleListCommentSubmit = async (commentText: string) => {
+    if (!addCommentTaskId) return;
+    if (!currentUser) {
+      throw new Error('You must be logged in to add comments');
+    }
+    const currentMember = members.find((m) => m.user_id === currentUser.id);
+    if (!currentMember) {
+      throw new Error('Unable to identify user for comment');
+    }
+    const task = allTasks.find((t) => t.id === addCommentTaskId);
+    if (!task) return;
+
+    const newComment = {
+      id: generateUUID(),
+      text: commentText,
+      authorId: currentMember.id,
+      createdAt: new Date().toISOString(),
+      taskId: task.id,
+      attachments: [] as never[],
+    };
+    await createComment(newComment);
+    // Bypass canMutate gate: comments are allowed for viewers; parent skips task PATCH when locked.
+    await onEditTaskProp({
+      ...task,
+      comments: [...(task.comments || []), newComment],
+    });
+  };
+
   const toggleDropdown = (taskId: string, field: string, event?: React.MouseEvent) => {
+    if (!canMutate) return;
     if (showDropdown?.taskId === taskId && showDropdown?.field === field) {
       setShowDropdown(null);
       setAssigneeDropdownCoords(null);
@@ -1497,6 +1547,7 @@ export default function ListView({
   };
 
   const handleDropdownSelect = async (taskId: string, field: string, value: string | Tag[]) => {
+    if (!canMutate) return;
     const task = allTasks.find(t => t.id === taskId);
     if (!task) return;
 
@@ -1758,12 +1809,13 @@ export default function ListView({
             <tr>
               {/* Row number column with column management dropdown */}
               <th
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider relative group"
+                className="px-4 py-3 align-middle text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider relative group"
                 style={{ width: 64, minWidth: 64, maxWidth: 64 }}
               >
                 <div className="flex items-center justify-between">
                   <span>#</span>
                   <div className="flex items-center gap-1">
+                    {userCanExport(currentUser) && (
                     <ExportMenu
                       boards={boards || []}
                       selectedBoard={boards?.find(b => b.id === selectedBoard) || boards?.[0] || { id: '', title: '', columns: {} }}
@@ -1772,6 +1824,7 @@ export default function ListView({
                       availablePriorities={availablePriorities}
                       isAdmin={currentUser?.roles?.includes('admin') || false}
                     />
+                    )}
                     <span className="relative inline-flex shrink-0">
                       <button
                         ref={columnMenuButtonRef}
@@ -1798,7 +1851,7 @@ export default function ListView({
               {visibleColumns.map(column => (
                 <th
                   key={column.key}
-                  className={`px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 relative group ${
+                  className={`px-4 py-3 align-middle text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 relative group ${
                     resizingColumnKey === column.key ? 'bg-gray-100 dark:bg-gray-600' : ''
                   }`}
                   style={columnSizeStyle(column)}
@@ -1902,9 +1955,10 @@ export default function ListView({
                     } ${getAnimationClasses()}`}
                   >
                   {/* Row number and actions cell */}
-                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500 w-24">
-                    <div className="flex items-center gap-1">
+                  <td className="px-4 py-2 align-middle whitespace-nowrap text-xs text-gray-500 w-24">
+                    <div className="flex items-center gap-1 min-h-[1.75rem]">
                       <span className="text-xs text-gray-500 mr-1">{index + 1}</span>
+                      {canMutate && (
                       <div
                         className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                         onMouseLeave={() => setRowActionTooltip(null)}
@@ -1961,12 +2015,13 @@ export default function ListView({
                           ) : null}
                         </span>
                       </div>
+                      )}
                     </div>
                   </td>
                   {visibleColumns.map(column => (
                     <td 
                       key={column.key} 
-                      className={`px-3 py-2 overflow-hidden ${column.key !== 'title' ? 'whitespace-nowrap' : ''}`}
+                      className={`px-4 py-2 align-middle overflow-hidden ${column.key !== 'title' ? 'whitespace-nowrap' : ''}`}
                       style={columnSizeStyle(column)}
                     >
                       {column.key === 'title' && (
@@ -2147,9 +2202,9 @@ export default function ListView({
                         </div>
                       )}
                       {column.key === 'priority' && (
-                        <div className="relative">
+                        <div className="relative flex items-center min-h-[1.75rem]">
                           <div 
-                            className="cursor-pointer"
+                            className="cursor-pointer inline-flex items-center"
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleDropdown(task.id, 'priority', e);
@@ -2216,9 +2271,9 @@ export default function ListView({
                         </div>
                       )}
                       {column.key === 'column' && (
-                        <div className="relative">
+                        <div className="relative flex items-center min-h-[1.75rem]">
                           <span 
-                            className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded text-xs cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                            className="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded text-xs cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleDropdown(task.id, 'column', e);
@@ -2229,7 +2284,7 @@ export default function ListView({
                         </div>
                       )}
                       {column.key === 'startDate' && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 min-h-[1.75rem]">
                           <div className="relative inline-flex shrink-0">
                             <div
                               role="button"
@@ -2296,7 +2351,8 @@ export default function ListView({
                         </div>
                       )}
                       {column.key === 'dueDate' && (
-                        task.dueDate ? (
+                        <div className="flex items-center min-h-[1.75rem]">
+                        {task.dueDate ? (
                           (() => {
                             const validation = getDateValidation(task);
                             const isOverdue = (() => {
@@ -2313,7 +2369,7 @@ export default function ListView({
                             })();
                             
                             const hasValidationError = !validation.dueDateValid;
-                            const className = `text-xs font-mono cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/60 rounded px-1 py-0.5 ${
+                            const className = `inline-flex items-center text-xs font-mono cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/60 rounded px-1 py-0.5 ${
                               hasValidationError 
                                 ? 'font-semibold ring-1 ring-red-400'
                                 : ''
@@ -2350,18 +2406,19 @@ export default function ListView({
                           })()
                         ) : (
                           <span 
-                            className="text-gray-400 dark:text-gray-500 text-xs cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/60 rounded px-1 py-0.5 border border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
+                            className="inline-flex items-center text-gray-400 dark:text-gray-500 text-xs cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/60 rounded px-1 py-0.5 border border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
                             onClick={(e) => handleDateRangeClick(task.id, e)}
                             title={t('listView.clickToSetDate')}
                           >
                             {t('listView.clickToSetDate')}
                           </span>
-                        )
+                        )}
+                        </div>
                       )}
                       {column.key === 'tags' && (
-                        <div className="relative">
+                        <div className="relative flex items-center min-h-[1.75rem]">
                           <div 
-                            className="cursor-pointer"
+                            className="cursor-pointer inline-flex items-center"
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleDropdown(task.id, 'tags', e);
@@ -2371,35 +2428,53 @@ export default function ListView({
                           </div>
                         </div>
                       )}
-                      {column.key === 'comments' && (
-                        task.comments && task.comments.length > 0 ? (
-                          <div 
-                            ref={(el) => commentContainerRefs.current[task.id] = el}
+                      {column.key === 'comments' && (() => {
+                        const commentCount = task.comments?.length || 0;
+                        return (
+                          <div
+                            ref={(el) => { commentContainerRefs.current[task.id] = el; }}
                             className="relative"
-                            onMouseEnter={() => handleCommentTooltipShow(task.id)}
+                            onMouseEnter={() => {
+                              if (commentCount > 0) handleCommentTooltipShow(task.id);
+                            }}
                             onMouseLeave={handleCommentTooltipHide}
                           >
-                            <div
-                              className="flex items-center gap-0.5 rounded px-1 py-1 cursor-pointer"
-                              title={t('listView.hoverToViewComments')}
+                            <KanbanChromeTooltip
+                              label={
+                                commentCount > 0
+                                  ? t('listView.hoverToViewComments')
+                                  : t('listView.addComment')
+                              }
+                              wrapperClassName="inline-flex"
                             >
-                              <MessageCircle 
-                                size={12} 
-                                className="text-blue-600" 
-                              />
-                              <span className="text-blue-600 font-medium text-xs">
-                                {task.comments.length}
-                              </span>
-                            </div>
-                          
+                              <button
+                                type="button"
+                                className={`flex items-center gap-0.5 rounded px-1 py-1 transition-colors ${
+                                  commentCount > 0
+                                    ? 'text-blue-600'
+                                    : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (commentCount === 0) {
+                                    openAddCommentForTask(task.id);
+                                  }
+                                }}
+                                aria-label={
+                                  commentCount > 0
+                                    ? t('listView.hoverToViewComments')
+                                    : t('listView.addComment')
+                                }
+                              >
+                                <MessageCircle size={12} />
+                                {commentCount > 0 && (
+                                  <span className="font-medium text-xs">{commentCount}</span>
+                                )}
+                              </button>
+                            </KanbanChromeTooltip>
                           </div>
-                        ) : (
-                          // Hide comment counter when there are no comments
-                          <span className="text-xs text-transparent">
-                            {/* Empty space to maintain column alignment */}
-                          </span>
-                        )
-                      )}
+                        );
+                      })()}
                       {column.key === 'createdAt' && (
                         <span className="text-xs text-gray-500 font-mono">
                           {formatToYYYYMMDDHHmmss(task.createdAt)}
@@ -2534,20 +2609,36 @@ export default function ListView({
                 </div>
                 
                 {/* Sticky footer */}
-                <div className="border-t border-gray-600 p-3 bg-gray-800 rounded-b-md flex items-center justify-between">
+                <div className="border-t border-gray-600 p-3 bg-gray-800 rounded-b-md flex items-center justify-between gap-2">
                   <span className="text-gray-300 font-medium">
-                    Comments ({task.comments.length})
+                    {t('taskCard.comments', { count: task.comments.length })}
                   </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCommentTooltipClose(); // Close tooltip immediately
-                      onSelectTask(task);
-                    }}
-                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                  >
-                    Open
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <KanbanChromeTooltip label={t('listView.addComment')} wrapperClassName="inline-flex">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAddCommentForTask(task.id);
+                        }}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded bg-gray-700 hover:bg-gray-600 text-gray-100 transition-colors"
+                        aria-label={t('listView.addComment')}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </KanbanChromeTooltip>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCommentTooltipClose();
+                        onSelectTask(task, { scrollToComments: true });
+                      }}
+                      className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                    >
+                      {t('taskCard.open')}
+                    </button>
+                  </div>
                 </div>
               </>
             );
@@ -3070,6 +3161,13 @@ export default function ListView({
         />,
         document.body
       )}
+
+      <AddCommentModal
+        isOpen={Boolean(addCommentTaskId)}
+        taskTitle={allTasks.find((t) => t.id === addCommentTaskId)?.title || ''}
+        onClose={() => setAddCommentTaskId(null)}
+        onSubmit={handleListCommentSubmit}
+      />
     </div>
   );
 }

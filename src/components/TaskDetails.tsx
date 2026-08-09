@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Task, TeamMember, Comment, Attachment, Tag, PriorityOption, CurrentUser } from '../types';
+import { Task, TeamMember, Comment, Attachment, Tag, PriorityOption, CurrentUser, TaskUpdateOptions } from '../types';
 import { X, Paperclip, ChevronDown, Check, Edit2, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import TextEditor from './TextEditor';
@@ -70,12 +70,14 @@ interface TaskDetailsProps {
   members: TeamMember[];
   currentUser: CurrentUser | null;
   onClose: () => void;
-  onUpdate: (updatedTask: Task) => void;
+  onUpdate: (updatedTask: Task, options?: TaskUpdateOptions) => void;
   siteSettings?: { [key: string]: string };
   boards?: any[]; // To get project identifier from board
   scrollToComments?: boolean;
   /** When true (or task is soft-deleted), disable all writers and show restore/purge. */
   readOnly?: boolean;
+  /** Board/task field edits (false for viewers). Comments still allowed unless lifecycle read-only. */
+  canMutate?: boolean;
   onRestore?: () => Promise<void>;
   onPurge?: () => Promise<void>;
   isAdmin?: boolean;
@@ -91,6 +93,7 @@ export default function TaskDetails({
   boards,
   scrollToComments,
   readOnly = false,
+  canMutate = true,
   onRestore,
   onPurge,
   isAdmin = false,
@@ -183,8 +186,12 @@ export default function TaskDetails({
     isAgentAssigned &&
     !!agentStatus &&
     (AGENT_DRAG_BLOCKING_STATUSES as readonly string[]).includes(agentStatus);
+  /** Soft-deleted / trash: blocks comments and task fields. */
   const isReadOnlyMode = readOnly || isTaskSoftDeleted(task);
-  const isWritersLocked = isAgentWorkActive || isReadOnlyMode;
+  /** Task field writers (title, assignee, etc.) — viewers cannot mutate board data. */
+  const isWritersLocked = isAgentWorkActive || isReadOnlyMode || !canMutate;
+  /** Comments allowed for viewers on live tasks; blocked in trash. */
+  const commentsLocked = isReadOnlyMode;
 
   useEffect(() => {
     if (!isAgentAssigned) {
@@ -689,7 +696,7 @@ export default function TaskDetails({
     const updatedComments = [...(editedTask.comments || []), newComment];
     setEditedTask((prev) => ({ ...prev, comments: updatedComments }));
     setAgentModalComments(updatedComments);
-    await onUpdate({ ...editedTask, comments: updatedComments });
+    await onUpdate({ ...editedTask, comments: updatedComments }, { localOnly: true });
     if (options.restart) {
       await handleAgentControl('resume');
     }
@@ -923,6 +930,7 @@ export default function TaskDetails({
   }, []);
 
   const toggleTag = async (tag: Tag) => {
+    if (isWritersLocked) return;
     try {
       const isSelected = taskTags.some(t => t.id === tag.id);
       
@@ -935,7 +943,7 @@ export default function TaskDetails({
         // Update parent task with new tags
         const updatedTask = { ...editedTask, tags: newTaskTags, attachmentCount: taskAttachments.length };
         setEditedTask(updatedTask);
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       } else {
         // Add tag
         await addTagToTask(task.id, tag.id);
@@ -945,7 +953,7 @@ export default function TaskDetails({
         // Update parent task with new tags
         const updatedTask = { ...editedTask, tags: newTaskTags, attachmentCount: taskAttachments.length };
         setEditedTask(updatedTask);
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       }
     } catch (error) {
       console.error('Failed to toggle tag:', error);
@@ -964,7 +972,7 @@ export default function TaskDetails({
       // Update parent task with new tags
       const updatedTask = { ...editedTask, tags: newTaskTags, attachmentCount: taskAttachments.length };
       setEditedTask(updatedTask);
-      onUpdate(updatedTask);
+      onUpdate(updatedTask, { localOnly: true });
     } catch (error) {
       console.error('Failed to add new tag to task:', error);
     }
@@ -983,7 +991,7 @@ export default function TaskDetails({
         // Update parent task with new watchers
         const updatedTask = { ...editedTask, watchers: newWatchers, attachmentCount: taskAttachments.length };
         setEditedTask(updatedTask);
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       } else {
         // Add watcher
         await addWatcherToTask(task.id, member.id);
@@ -993,7 +1001,7 @@ export default function TaskDetails({
         // Update parent task with new watchers
         const updatedTask = { ...editedTask, watchers: newWatchers, attachmentCount: taskAttachments.length };
         setEditedTask(updatedTask);
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       }
     } catch (error) {
       console.error('Failed to toggle watcher:', error);
@@ -1013,7 +1021,7 @@ export default function TaskDetails({
         // Update parent task with new collaborators
         const updatedTask = { ...editedTask, collaborators: newCollaborators, attachmentCount: taskAttachments.length };
         setEditedTask(updatedTask);
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       } else {
         // Add collaborator
         await addCollaboratorToTask(task.id, member.id);
@@ -1023,7 +1031,7 @@ export default function TaskDetails({
         // Update parent task with new collaborators
         const updatedTask = { ...editedTask, collaborators: newCollaborators, attachmentCount: taskAttachments.length };
         setEditedTask(updatedTask);
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       }
     } catch (error) {
       console.error('Failed to toggle collaborator:', error);
@@ -1032,6 +1040,7 @@ export default function TaskDetails({
 
   // Handler for opening tags dropdown with position calculation
   const handleTagsDropdownToggle = () => {
+    if (isWritersLocked) return;
     if (!showTagsDropdown) {
       const position = calculateDropdownPosition(tagsButtonRef);
       setTagsDropdownPosition(position);
@@ -1130,6 +1139,7 @@ export default function TaskDetails({
 
   // Handler for opening children dropdown
   const handleChildrenDropdownToggle = () => {
+    if (isWritersLocked) return;
     setShowChildrenDropdown(!showChildrenDropdown);
     if (!showChildrenDropdown) {
       setChildrenSearchTerm('');
@@ -1143,7 +1153,7 @@ export default function TaskDetails({
   );
 
   const handleAddComment = async (content: string, attachments: File[] = []) => {
-    if (isReadOnlyMode) return;
+    if (commentsLocked) return;
     if (isSubmitting) return;
 
     try {
@@ -1195,12 +1205,12 @@ export default function TaskDetails({
         comments: [...(editedTask.comments || []), savedComment]
       };
 
-      // Update local state immediately (don't call updateTask - comments are handled separately)
+      // Update local state immediately (comments already persisted via createComment)
       setEditedTask(updatedTask);
       
-      // Update parent component to refresh TaskCard
+      // Refresh parent TaskCard without a full task PATCH
       if (onUpdate) {
-        onUpdate(updatedTask);
+        onUpdate(updatedTask, { localOnly: true });
       }
 
     } catch (error) {
@@ -1236,22 +1246,17 @@ export default function TaskDetails({
     try {
       setIsSubmitting(true);
 
-      // Delete comment from server
+      // Delete comment from server (comments are not persisted via task PATCH)
       await deleteComment(commentId);
 
       // Remove comment from local state
       const updatedComments = editedTask.comments?.filter(c => c.id !== commentId) || [];
       
-      // Update task with filtered comments
       const updatedTask = {
         ...editedTask,
         comments: updatedComments
       };
 
-      // Save updated task to server
-      await updateTask(updatedTask);
-
-      // Update local state
       setEditedTask(updatedTask);
       
       // Remove attachments for the deleted comment from local state
@@ -1261,9 +1266,9 @@ export default function TaskDetails({
         return newAttachments;
       });
 
-      // Update parent component to refresh TaskCard
+      // Refresh parent TaskCard without a full task PATCH
       if (onUpdate) {
-        await onUpdate(updatedTask);
+        await onUpdate(updatedTask, { localOnly: true });
       }
 
     } catch (error) {
@@ -1298,9 +1303,9 @@ export default function TaskDetails({
       const updatedTask = { ...editedTask, comments: updatedComments };
       setEditedTask(updatedTask);
 
-      // Update parent component
+      // Refresh parent TaskCard without a full task PATCH
       if (onUpdate) {
-        await onUpdate(updatedTask);
+        await onUpdate(updatedTask, { localOnly: true });
       }
 
       // Clear editing state
@@ -1837,9 +1842,10 @@ export default function TaskDetails({
                       >
                         <MemberAvatar memberId={watcher.id} members={members} size="xs" />
                         <span className="max-w-[7rem] truncate">{truncateMemberName(watcher.name)}</span>
+                        {!isWritersLocked && (
                         <button
                           type="button"
-                          disabled={isSubmitting || isWritersLocked}
+                          disabled={isSubmitting}
                           onClick={() => toggleWatcher(watcher)}
                           className="ml-0.5 h-4 w-4 rounded-full bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-800 flex items-center justify-center text-blue-700 dark:text-blue-200 disabled:opacity-50"
                           aria-label={t('remove.watcher')}
@@ -1847,21 +1853,33 @@ export default function TaskDetails({
                         >
                           ×
                         </button>
+                        )}
                       </span>
                     ))}
                   </div>
+                  {isWritersLocked ? (
+                    taskWatchers.length === 0 && (
+                      <div
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"
+                        aria-readonly="true"
+                      >
+                        {t('taskPage.noWatchers')}
+                      </div>
+                    )
+                  ) : (
                   <MemberPicker
                     members={members}
                     mode="add"
                     placeholder={t('taskPage.addWatcher')}
                     excludeIds={taskWatchers.map((w) => w.id)}
                     showAgentSection={false}
-                    disabled={isSubmitting || isWritersLocked}
+                    disabled={isSubmitting}
                     onChange={(memberId) => {
                       const member = members.find((m) => m.id === memberId);
                       if (member) toggleWatcher(member);
                     }}
                   />
+                  )}
                 </div>
               </div>
 
@@ -1879,9 +1897,10 @@ export default function TaskDetails({
                       >
                         <MemberAvatar memberId={collaborator.id} members={members} size="xs" />
                         <span className="max-w-[7rem] truncate">{truncateMemberName(collaborator.name)}</span>
+                        {!isWritersLocked && (
                         <button
                           type="button"
-                          disabled={isSubmitting || isWritersLocked}
+                          disabled={isSubmitting}
                           onClick={() => toggleCollaborator(collaborator)}
                           className="ml-0.5 h-4 w-4 rounded-full bg-emerald-100 dark:bg-emerald-900 hover:bg-emerald-200 dark:hover:bg-emerald-800 flex items-center justify-center disabled:opacity-50"
                           aria-label={t('remove.collaborator')}
@@ -1889,21 +1908,33 @@ export default function TaskDetails({
                         >
                           ×
                         </button>
+                        )}
                       </span>
                     ))}
                   </div>
+                  {isWritersLocked ? (
+                    taskCollaborators.length === 0 && (
+                      <div
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"
+                        aria-readonly="true"
+                      >
+                        {t('taskPage.noCollaborators')}
+                      </div>
+                    )
+                  ) : (
                   <MemberPicker
                     members={members}
                     mode="add"
                     placeholder={t('taskPage.addCollaborator')}
                     excludeIds={taskCollaborators.map((c) => c.id)}
                     showAgentSection={false}
-                    disabled={isSubmitting || isWritersLocked}
+                    disabled={isSubmitting}
                     onChange={(memberId) => {
                       const member = members.find((m) => m.id === memberId);
                       if (member) toggleCollaborator(member);
                     }}
                   />
+                  )}
                 </div>
               </div>
             </div>
@@ -1918,8 +1949,11 @@ export default function TaskDetails({
                   value={localStartDate}
                   onChange={e => setLocalStartDate(e.target.value)}
                   onBlur={e => handleUpdate({ startDate: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-                  disabled={isSubmitting || isWritersLocked}
+                  readOnly={isSubmitting || isWritersLocked}
+                  tabIndex={isSubmitting || isWritersLocked ? -1 : undefined}
+                  className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 ${
+                    isSubmitting || isWritersLocked ? 'cursor-default pointer-events-none' : ''
+                  }`}
                 />
               </div>
 
@@ -1932,8 +1966,11 @@ export default function TaskDetails({
                   value={localDueDate}
                   onChange={e => setLocalDueDate(e.target.value)}
                   onBlur={e => handleUpdate({ dueDate: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-                  disabled={isSubmitting || isWritersLocked}
+                  readOnly={isSubmitting || isWritersLocked}
+                  tabIndex={isSubmitting || isWritersLocked ? -1 : undefined}
+                  className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 ${
+                    isSubmitting || isWritersLocked ? 'cursor-default pointer-events-none' : ''
+                  }`}
                 />
               </div>
 
@@ -1952,7 +1989,9 @@ export default function TaskDetails({
                       setEffortDraft(v);
                     }
                   }}
-                  onFocus={(e) => e.currentTarget.select()}
+                  onFocus={(e) => {
+                    if (!(isSubmitting || isWritersLocked)) e.currentTarget.select();
+                  }}
                   onBlur={() => {
                     const trimmed = effortDraft.trim();
                     const n = trimmed === '' ? 0 : parseInt(trimmed, 10);
@@ -1968,8 +2007,11 @@ export default function TaskDetails({
                       (e.target as HTMLInputElement).blur();
                     }
                   }}
-                  className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-                  disabled={isSubmitting || isWritersLocked}
+                  readOnly={isSubmitting || isWritersLocked}
+                  tabIndex={isSubmitting || isWritersLocked ? -1 : undefined}
+                  className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 ${
+                    isSubmitting || isWritersLocked ? 'cursor-default' : ''
+                  }`}
                 />
               </div>
 
@@ -2037,6 +2079,17 @@ export default function TaskDetails({
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                   {t('labels.priority')}
                 </label>
+                {isWritersLocked || isSubmitting ? (
+                  <div
+                    className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 cursor-default"
+                    aria-readonly="true"
+                  >
+                    {editedTask.priorityId
+                      ? availablePriorities.find((p) => p.id === editedTask.priorityId)?.priority ||
+                        t('taskPage.noPriority')
+                      : t('taskPage.noPriority')}
+                  </div>
+                ) : (
                 <select
                   value={editedTask.priorityId || ''}
                   onChange={e => {
@@ -2048,7 +2101,6 @@ export default function TaskDetails({
                     });
                   }}
                   className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-                  disabled={isSubmitting || isWritersLocked}
                 >
                   <option value="">{t('taskPage.noPriority')}</option>
                   {availablePriorities.map(priority => (
@@ -2057,6 +2109,7 @@ export default function TaskDetails({
                     </option>
                   ))}
                 </select>
+                )}
               </div>
             </div>
 
@@ -2064,6 +2117,18 @@ export default function TaskDetails({
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{t('labels.tags')}</label>
               <div className="relative" ref={tagsDropdownRef}>
+                {isWritersLocked || isSubmitting ? (
+                  <div
+                    className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm flex items-center text-gray-900 dark:text-gray-100 cursor-default"
+                    aria-readonly="true"
+                  >
+                    <span className={taskTags.length === 0 ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-200'}>
+                      {taskTags.length === 0
+                        ? t('taskPage.noTagsAssigned')
+                        : `${taskTags.length} ${taskTags.length !== 1 ? t('tag.plural') : t('tag.singular')} ${t('tag.selected')}`}
+                    </span>
+                  </div>
+                ) : (
                 <button
                   ref={tagsButtonRef}
                   type="button"
@@ -2078,6 +2143,7 @@ export default function TaskDetails({
                   </span>
                   <ChevronDown size={14} className="text-gray-400" />
                 </button>
+                )}
                 
                 {showTagsDropdown && (
                   <div className={`absolute left-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg z-10 w-full max-h-[400px] overflow-y-auto ${
@@ -2139,6 +2205,7 @@ export default function TaskDetails({
                         style={getTagDisplayStyle(tag)}
                     >
                       {tag.tag}
+                      {!isWritersLocked && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -2146,10 +2213,11 @@ export default function TaskDetails({
                           toggleTag(tag);
                         }}
                         className="ml-1 hover:bg-red-500 hover:text-white rounded-full w-3 h-3 flex items-center justify-center text-xs font-bold transition-colors"
-                        title="Remove tag"
+                        title={t('taskPage.removeTag', { defaultValue: 'Remove tag' })}
                       >
                         ×
                       </button>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -2213,6 +2281,7 @@ export default function TaskDetails({
                             >
                               {child.ticket}
                             </span>
+                          {!isWritersLocked && (
                           <button
                             type="button"
                             onClick={() => handleRemoveChildTask(child.id)}
@@ -2221,12 +2290,14 @@ export default function TaskDetails({
                           >
                             ×
                           </button>
+                          )}
                         </span>
                       ))}
                     </div>
                   )}
                   
                   {/* Children Dropdown */}
+                  {!isWritersLocked && (
                   <div className="relative" ref={childrenDropdownRef}>
                     <button
                       type="button"
@@ -2276,6 +2347,7 @@ export default function TaskDetails({
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2300,7 +2372,7 @@ export default function TaskDetails({
             )}
           </div>
           <div className="mb-4">
-            {!isReadOnlyMode && (
+            {!commentsLocked && (
             <TextEditor 
               onSubmit={handleAddComment}
               onCancel={() => {
@@ -2325,7 +2397,7 @@ export default function TaskDetails({
               allowImageResize={true}
             />
             )}
-            {isReadOnlyMode && (
+            {commentsLocked && (
               <p className="text-sm text-gray-500 dark:text-gray-400">{t('trash.readOnlyHint')}</p>
             )}
           </div>
@@ -2389,7 +2461,7 @@ export default function TaskDetails({
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleEditComment(comment)}
-                          disabled={isSubmitting || isWritersLocked}
+                          disabled={isSubmitting || commentsLocked}
                           className="p-1 text-gray-400 hover:text-blue-500 hover:bg-gray-100 rounded-full transition-colors"
                           title={t('comments.editCommentTitle')}
                         >
@@ -2397,7 +2469,7 @@ export default function TaskDetails({
                         </button>
                         <button
                           onClick={() => handleDeleteComment(comment.id)}
-                          disabled={isSubmitting || isWritersLocked}
+                          disabled={isSubmitting || commentsLocked}
                           className="p-1 text-gray-400 hover:text-red-500 hover:bg-gray-100 rounded-full transition-colors"
                           title={t('comments.deleteCommentTitle')}
                         >

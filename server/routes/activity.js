@@ -52,9 +52,14 @@ router.get('/status', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
+    const roles = Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : []);
+    const canMutate = roles.includes('admin') || roles.includes('user') || user.role === 'admin' || user.role === 'user';
     res.json({
       isActive: Boolean(user.isActive),
-      isAdmin: user.role === 'admin',
+      isAdmin: user.role === 'admin' || roles.includes('admin'),
+      isViewer: user.role === 'viewer' || (roles.includes('viewer') && !canMutate),
+      canMutate,
+      roles,
       forceLogout: !user.isActive || Boolean(user.forceLogout) // Force logout if user is deactivated or role changed
     });
   } catch (error) {

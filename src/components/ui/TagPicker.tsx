@@ -18,6 +18,7 @@ export interface TagPickerProps {
   label?: string;
   className?: string;
   allowCreate?: boolean;
+  disabled?: boolean;
 }
 
 /**
@@ -32,6 +33,7 @@ export default function TagPicker({
   label,
   className = '',
   allowCreate = true,
+  disabled = false,
 }: TagPickerProps) {
   const { t } = useTranslation('tasks');
   const [open, setOpen] = useState(false);
@@ -50,6 +52,20 @@ export default function TagPicker({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  const summary =
+    liveSelected.length === 0
+      ? t('labels.selectTags')
+      : `${liveSelected.length} ${
+          liveSelected.length !== 1 ? t('tag.plural') : t('tag.singular')
+        } ${t('tag.selected')}`;
+
+  const shellClass =
+    'w-full flex items-center justify-between gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
+
   return (
     <div className={`relative ${className}`} ref={rootRef}>
       {label && (
@@ -57,28 +73,30 @@ export default function TagPicker({
           {label}
         </label>
       )}
+      {disabled ? (
+        <div className={`${shellClass} cursor-default`} aria-readonly="true">
+          <span className={`truncate text-left ${liveSelected.length === 0 ? 'text-gray-500 dark:text-gray-400' : ''}`}>
+            {liveSelected.length === 0 ? t('taskPage.noTagsAssigned') : summary}
+          </span>
+        </div>
+      ) : (
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`w-full flex items-center justify-between gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+        className={`${shellClass} focus:outline-none focus:ring-2 focus:ring-blue-500 ${
           open ? 'ring-2 ring-blue-500 border-blue-500' : ''
         }`}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className="truncate text-left">
-          {liveSelected.length === 0
-            ? t('labels.selectTags')
-            : `${liveSelected.length} ${
-                liveSelected.length !== 1 ? t('tag.plural') : t('tag.singular')
-              } ${t('tag.selected')}`}
-        </span>
+        <span className="truncate text-left">{summary}</span>
         <ChevronDown
           className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ${
             open ? 'rotate-180' : ''
           }`}
         />
       </button>
+      )}
 
       {open && (
         <div className="absolute left-0 right-0 top-full mt-1 z-50 max-h-[400px] overflow-y-auto rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg">
@@ -140,6 +158,7 @@ export default function TagPicker({
               style={getTagDisplayStyle(tag)}
             >
               {tag.tag}
+              {!disabled && (
               <button
                 type="button"
                 onClick={() => onToggle(tag)}
@@ -148,6 +167,7 @@ export default function TagPicker({
               >
                 ×
               </button>
+              )}
             </span>
           ))}
         </div>

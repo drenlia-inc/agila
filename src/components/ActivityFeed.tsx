@@ -145,12 +145,27 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   const [liveAbsolutePosition, setLiveAbsolutePosition] = useState<{ x: number; y: number } | null>(null);
   const currentDragPositionRef = useRef<{ x: number; y: number } | null>(null);
   const currentDragDimensionsRef = useRef<{ width: number; height: number } | null>(null);
+  /** Fixed opposite edges for the active resize gesture (avoids drift across frames). */
+  const resizeAnchorRef = useRef<{ left: number; top: number; right: number; bottom: number } | null>(null);
+  const isDraggingRef = useRef(false);
+  const isResizingRef = useRef<typeof isResizing>(null);
+  const dragOffsetRef = useRef(dragOffset);
+  const dimensionsRef = useRef(dimensions);
+  const viewportSizeRef = useRef({ w: 1200, h: 800 });
+  const isMinimizedRef = useRef(isMinimized);
+  const positionRef = useRef(position);
   const feedRef = useRef<HTMLDivElement>(null);
   const [showDimensionsTooltip, setShowDimensionsTooltip] = useState(false);
   const [viewportSize, setViewportSize] = useState(() => ({
     w: typeof window !== 'undefined' ? window.innerWidth : 1200,
     h: typeof window !== 'undefined' ? window.innerHeight : 800,
   }));
+
+  dragOffsetRef.current = dragOffset;
+  dimensionsRef.current = dimensions;
+  viewportSizeRef.current = viewportSize;
+  isMinimizedRef.current = isMinimized;
+  positionRef.current = position;
   
   // Filter state
   const [filterText, setFilterText] = useState('');
@@ -161,15 +176,17 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Clear live override when stored position changes from outside (e.g. prefs load)
+  // Clear live override when stored position changes from outside (e.g. prefs load).
+  // Do not key off isDragging/isResizing — clearing on resize-end before position
+  // commits is what caused the snap-back flash.
   useEffect(() => {
-    if (!isDragging && !isResizing) {
+    if (!isDraggingRef.current && !isResizingRef.current) {
       setLiveAbsolutePosition(null);
     }
-  }, [position.x, position.y, isDragging, isResizing]);
+  }, [position.x, position.y]);
 
   const persistStoredPosition = async (absolute: { x: number; y: number }, width: number) => {
-    const stored = toStoredActivityFeedPosition(absolute, width);
+    const stored = toStoredActivityFeedPosition(absolute, width, viewportSizeRef.current.w);
     onPositionChange?.(stored);
     try {
       await updateActivityFeedPreference('position', stored, userId);
@@ -180,8 +197,8 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
 
   // Utility function to ensure ActivityFeed stays within viewport and above header
   function constrainAbsolute(pos: { x: number; y: number }, dims: { width: number; height: number }) {
-    const viewportWidth = viewportSize.w;
-    const viewportHeight = viewportSize.h;
+    const viewportWidth = viewportSizeRef.current.w;
+    const viewportHeight = viewportSizeRef.current.h;
     const margin = 10;
     const constrainedX = Math.max(margin, Math.min(viewportWidth - dims.width - margin, pos.x));
     const minY = HEADER_CLEARANCE;
@@ -257,10 +274,13 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     if (!feedRef.current) return;
     
     const rect = feedRef.current.getBoundingClientRect();
-    setDragOffset({
+    const offset = {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top
-    });
+    };
+    dragOffsetRef.current = offset;
+    setDragOffset(offset);
+    isDraggingRef.current = true;
     setIsDragging(true);
     setShowDimensionsTooltip(true);
     
@@ -269,43 +289,55 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   };
 
   const handleDragMove = (e: MouseEvent) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
+
+    const offset = dragOffsetRef.current;
+    const dims = dimensionsRef.current;
+    const vw = viewportSizeRef.current;
+    const minimized = isMinimizedRef.current;
     
-    const newX = e.clientX - dragOffset.x;
-    const feedDims = isMinimized
-      ? { width: dimensions.width, height: MINIMIZED_HEIGHT }
-      : dimensions;
+    const newX = e.clientX - offset.x;
+    const feedDims = minimized
+      ? { width: dims.width, height: MINIMIZED_HEIGHT }
+      : dims;
     // Minimized: stay on the bottom edge; free horizontal placement
-    const newY = isMinimized
-      ? viewportSize.h - MINIMIZED_HEIGHT - BOTTOM_MARGIN
-      : e.clientY - dragOffset.y;
+    const newY = minimized
+      ? vw.h - MINIMIZED_HEIGHT - BOTTOM_MARGIN
+      : e.clientY - offset.y;
     const newPosition = constrainAbsolute({ x: newX, y: newY }, feedDims);
     currentDragPositionRef.current = newPosition;
     setLiveAbsolutePosition(newPosition);
   };
 
   const handleDragEnd = async () => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    setShowDimensionsTooltip(false);
-    
-    const absoluteToSave = currentDragPositionRef.current || displayAbsolute;
+    if (!isDraggingRef.current) return;
+
+    const dims = dimensionsRef.current;
+    const absoluteToSave =
+      currentDragPositionRef.current ||
+      resolveActivityFeedPosition(positionRef.current, dims.width, viewportSizeRef.current.w);
     currentDragPositionRef.current = null;
 
-    if (isMinimized) {
-      const bottomY = viewportSize.h - MINIMIZED_HEIGHT - BOTTOM_MARGIN;
+    if (isMinimizedRef.current) {
+      const bottomY = viewportSizeRef.current.h - MINIMIZED_HEIGHT - BOTTOM_MARGIN;
       const clamped = constrainAbsolute(
         { x: absoluteToSave.x, y: bottomY },
-        { width: dimensions.width, height: MINIMIZED_HEIGHT }
+        { width: dims.width, height: MINIMIZED_HEIGHT }
       );
       // Update shared preferred position: new X, keep expanded Y
       const stored = toStoredActivityFeedPosition(
-        { x: clamped.x, y: position.y },
-        dimensions.width
+        { x: clamped.x, y: positionRef.current.y },
+        dims.width,
+        viewportSizeRef.current.w
       );
-      stored.y = position.y;
+      stored.y = positionRef.current.y;
+      // Commit parent state before clearing live overlay (avoids snap-back)
       onPositionChange?.(stored);
-      setLiveAbsolutePosition(null);
+      isDraggingRef.current = false;
+      setIsDragging(false);
+      setShowDimensionsTooltip(false);
+      // Clear live after parent props can commit (same-event batch + next frame)
+      requestAnimationFrame(() => setLiveAbsolutePosition(null));
       try {
         await updateActivityFeedPreference('position', stored, userId);
       } catch (error) {
@@ -314,8 +346,21 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
       return;
     }
 
-    setLiveAbsolutePosition(null);
-    await persistStoredPosition(absoluteToSave, dimensions.width);
+    const stored = toStoredActivityFeedPosition(
+      absoluteToSave,
+      dims.width,
+      viewportSizeRef.current.w
+    );
+    onPositionChange?.(stored);
+    isDraggingRef.current = false;
+    setIsDragging(false);
+    setShowDimensionsTooltip(false);
+    requestAnimationFrame(() => setLiveAbsolutePosition(null));
+    try {
+      await updateActivityFeedPreference('position', stored, userId);
+    } catch (error) {
+      console.error('Failed to save activity feed position:', error);
+    }
   };
 
   // Resize functionality — any edge or corner
@@ -324,6 +369,18 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     resizeType: 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
   ) => {
     if (!feedRef.current) return;
+    const startPos =
+      liveAbsolutePosition ||
+      resolveActivityFeedPosition(position, dimensions.width, viewportSize.w);
+    currentDragPositionRef.current = startPos;
+    currentDragDimensionsRef.current = { ...dimensions };
+    resizeAnchorRef.current = {
+      left: startPos.x,
+      top: startPos.y,
+      right: startPos.x + dimensions.width,
+      bottom: startPos.y + dimensions.height,
+    };
+    isResizingRef.current = resizeType;
     setIsResizing(resizeType);
     setShowDimensionsTooltip(true);
     e.preventDefault();
@@ -331,51 +388,50 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   };
 
   const handleResizeMove = (e: MouseEvent) => {
-    if (!isResizing || !feedRef.current) return;
+    const resizeType = isResizingRef.current;
+    const anchor = resizeAnchorRef.current;
+    if (!resizeType || !anchor) return;
 
     const minW = 120;
     const maxW = 600;
     const minH = 200;
-    const maxH = viewportSize.h * 0.8;
-    const right = displayAbsolute.x + dimensions.width;
-    const bottom = displayAbsolute.y + dimensions.height;
+    const maxH = viewportSizeRef.current.h * 0.8;
 
-    let newWidth = dimensions.width;
-    let newHeight = dimensions.height;
-    let newX = displayAbsolute.x;
-    let newY = displayAbsolute.y;
+    let newWidth = anchor.right - anchor.left;
+    let newHeight = anchor.bottom - anchor.top;
+    let newX = anchor.left;
+    let newY = anchor.top;
 
-    const resizeE = isResizing === 'e' || isResizing === 'ne' || isResizing === 'se';
-    const resizeW = isResizing === 'w' || isResizing === 'nw' || isResizing === 'sw';
-    const resizeS = isResizing === 's' || isResizing === 'se' || isResizing === 'sw';
-    const resizeN = isResizing === 'n' || isResizing === 'ne' || isResizing === 'nw';
+    const resizeE = resizeType === 'e' || resizeType === 'ne' || resizeType === 'se';
+    const resizeW = resizeType === 'w' || resizeType === 'nw' || resizeType === 'sw';
+    const resizeS = resizeType === 's' || resizeType === 'se' || resizeType === 'sw';
+    const resizeN = resizeType === 'n' || resizeType === 'ne' || resizeType === 'nw';
 
     if (resizeE) {
-      newWidth = Math.max(minW, Math.min(maxW, e.clientX - displayAbsolute.x));
+      newWidth = Math.max(minW, Math.min(maxW, e.clientX - anchor.left));
     }
 
     if (resizeW) {
-      const proposedWidth = Math.max(minW, Math.min(maxW, right - e.clientX));
+      const proposedWidth = Math.max(minW, Math.min(maxW, anchor.right - e.clientX));
       newWidth = proposedWidth;
-      newX = right - proposedWidth;
-      // Keep within left margin
+      newX = anchor.right - proposedWidth;
       if (newX < 10) {
         newX = 10;
-        newWidth = Math.max(minW, Math.min(maxW, right - newX));
+        newWidth = Math.max(minW, Math.min(maxW, anchor.right - newX));
       }
     }
 
     if (resizeS) {
-      newHeight = Math.max(minH, Math.min(maxH, e.clientY - displayAbsolute.y));
+      newHeight = Math.max(minH, Math.min(maxH, e.clientY - anchor.top));
     }
 
     if (resizeN) {
-      const proposedHeight = Math.max(minH, Math.min(maxH, bottom - e.clientY));
+      const proposedHeight = Math.max(minH, Math.min(maxH, anchor.bottom - e.clientY));
       newHeight = proposedHeight;
-      newY = bottom - proposedHeight;
+      newY = anchor.bottom - proposedHeight;
       if (newY < HEADER_CLEARANCE) {
         newY = HEADER_CLEARANCE;
-        newHeight = Math.max(minH, Math.min(maxH, bottom - newY));
+        newHeight = Math.max(minH, Math.min(maxH, anchor.bottom - newY));
       }
     }
 
@@ -391,60 +447,71 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   };
 
   const handleResizeEnd = async () => {
-    if (!isResizing) return;
+    if (!isResizingRef.current) return;
+
+    const dimensionsToSave =
+      currentDragDimensionsRef.current || dimensionsRef.current;
+    const absoluteToSave =
+      currentDragPositionRef.current ||
+      resolveActivityFeedPosition(
+        positionRef.current,
+        dimensionsToSave.width,
+        viewportSizeRef.current.w
+      );
+    const stored = toStoredActivityFeedPosition(
+      absoluteToSave,
+      dimensionsToSave.width,
+      viewportSizeRef.current.w
+    );
+
+    // Commit parent layout before clearing live overlay (avoids snap-back)
+    onDimensionsChange?.(dimensionsToSave);
+    onPositionChange?.(stored);
+    isResizingRef.current = null;
+    resizeAnchorRef.current = null;
     setIsResizing(null);
     setShowDimensionsTooltip(false);
-    
-    // Use the dimensions that were actually set during resizing
-    const dimensionsToSave = currentDragDimensionsRef.current || dimensions;
-    const absoluteToSave = currentDragPositionRef.current || displayAbsolute;
-    
-    // Save current dimensions to user preferences
+    currentDragDimensionsRef.current = null;
+    currentDragPositionRef.current = null;
+    // Wait a frame so new position/dimensions props apply before dropping the override
+    requestAnimationFrame(() => setLiveAbsolutePosition(null));
+
     try {
       await updateActivityFeedPreference('width', dimensionsToSave.width, userId);
       await updateActivityFeedPreference('height', dimensionsToSave.height, userId);
-      
-      // Persist signed position (left-edge resize changes absolute X)
-      setLiveAbsolutePosition(null);
-      await persistStoredPosition(absoluteToSave, dimensionsToSave.width);
+      await updateActivityFeedPreference('position', stored, userId);
     } catch (error) {
       console.error('Failed to save activity feed dimensions/position:', error);
     }
-    
-    // Clear the resize dimensions and position
-    currentDragDimensionsRef.current = null;
-    currentDragPositionRef.current = null;
   };
 
   // Add global mouse event listeners for dragging and resizing
   useEffect(() => {
-    if (isDragging) {
-      const handleMove = (e: MouseEvent) => handleDragMove(e);
-      const handleEnd = () => handleDragEnd();
-      
-      document.addEventListener('mousemove', handleMove);
-      document.addEventListener('mouseup', handleEnd);
-      
-      return () => {
-        document.removeEventListener('mousemove', handleMove);
-        document.removeEventListener('mouseup', handleEnd);
-      };
-    }
+    if (!isDragging) return;
+    const handleMove = (e: MouseEvent) => handleDragMove(e);
+    const handleEnd = () => {
+      void handleDragEnd();
+    };
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+    };
   }, [isDragging]);
 
   useEffect(() => {
-    if (isResizing) {
-      const handleMove = (e: MouseEvent) => handleResizeMove(e);
-      const handleEnd = () => handleResizeEnd();
-      
-      document.addEventListener('mousemove', handleMove);
-      document.addEventListener('mouseup', handleEnd);
-      
-      return () => {
-        document.removeEventListener('mousemove', handleMove);
-        document.removeEventListener('mouseup', handleEnd);
-      };
-    }
+    if (!isResizing) return;
+    const handleMove = (e: MouseEvent) => handleResizeMove(e);
+    const handleEnd = () => {
+      void handleResizeEnd();
+    };
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+    };
   }, [isResizing]);
 
   const formatTimeAgo = (timestamp: string | undefined, short: boolean = false) => {
@@ -522,8 +589,8 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     />
   );
 
-  const getActionIcon = (action: string) => {
-    const className = 'w-3.5 h-3.5 shrink-0';
+  const getActionIcon = (action: string, sizeClass = 'w-3.5 h-3.5') => {
+    const className = `${sizeClass} shrink-0`;
     if (action.includes('agent_job_done')) {
       return <CheckCircle2 className={`${className} text-emerald-600 dark:text-emerald-400`} />;
     }
@@ -876,60 +943,59 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
           {displayActivities.map((activity) => {
             const { name, descriptionHtml, viaApi } = formatActivityDescription(activity);
             const isUnread = activity.id > lastSeenActivityId;
+            const actorClass = isUnread
+              ? 'text-sky-800 dark:text-sky-200'
+              : 'text-slate-800 dark:text-slate-100';
             return (
               <div 
                 key={activity.id} 
-                className={`flex items-start rounded-xl transition-colors ${
-                  isNarrowMode ? 'gap-1.5 p-1.5' : 'gap-2 p-2'
+                className={`min-w-0 rounded-xl transition-colors ${
+                  isNarrowMode ? 'p-1.5' : 'p-2'
                 } ${
                   isUnread 
                     ? 'bg-sky-50/90 dark:bg-sky-950/30 ring-1 ring-inset ring-sky-200/70 dark:ring-sky-800/50' 
                     : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
                 }`}
               >
-                {!isExtraNarrowMode && (
-                  <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                    {getActionIcon(activity.action)}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-slate-800 dark:text-slate-100 leading-snug">
-                    {isNarrowMode ? (
-                      <div className="space-y-0.5">
-                        <div className={`font-semibold truncate ${isUnread ? 'text-sky-800 dark:text-sky-200' : 'text-slate-800 dark:text-slate-100'}`}>
-                          {highlightText(name, filterText)}
-                          {viaApi && (
-                            <span className="ml-1 text-slate-400 dark:text-slate-500 font-normal">{t('activityFeed.viaApi')}</span>
-                          )}
-                        </div>
-                        <div className="text-xs leading-snug text-slate-600 dark:text-slate-300">
-                          {renderActivityHtml(descriptionHtml, filterText)}
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <span className={`font-semibold ${isUnread ? 'text-sky-800 dark:text-sky-200' : 'text-slate-800 dark:text-slate-100'}`}>
-                          {highlightText(name, filterText)}
-                        </span>
-                        {viaApi && (
-                          <span className="ml-1 text-slate-400 dark:text-slate-500 font-normal">{t('activityFeed.viaApi')}</span>
-                        )}
-                        {' '}
-                        <span className="text-slate-600 dark:text-slate-300">
-                          {renderActivityHtml(descriptionHtml, filterText)}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <div className={`flex items-center mt-1 ${isNarrowMode ? 'gap-1' : 'gap-1.5'}`}>
-                    <Clock className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-none truncate">
-                      {isNarrowMode ? formatTimeAgo(activity.createdAt, true) : formatTimeAgo(activity.createdAt)}
+                <div className="text-xs text-slate-800 dark:text-slate-100 leading-snug">
+                  {/* Icon sits with the actor only; wrapped lines use full feed width */}
+                  <span className={`inline-flex items-center gap-1 max-w-full font-semibold align-middle ${actorClass}`}>
+                    <span
+                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800"
+                      aria-hidden
+                    >
+                      {getActionIcon(activity.action, 'w-2.5 h-2.5')}
                     </span>
-                    {isUnread && (
-                      <span className="w-1.5 h-1.5 bg-sky-500 rounded-full flex-shrink-0" aria-hidden />
+                    <span className={isNarrowMode ? 'truncate' : undefined}>
+                      {highlightText(name, filterText)}
+                    </span>
+                    {viaApi && (
+                      <span className="text-slate-400 dark:text-slate-500 font-normal shrink-0">
+                        {t('activityFeed.viaApi')}
+                      </span>
                     )}
-                  </div>
+                  </span>
+                  {isNarrowMode ? (
+                    <div className="mt-0.5 text-xs leading-snug text-slate-600 dark:text-slate-300">
+                      {renderActivityHtml(descriptionHtml, filterText)}
+                    </div>
+                  ) : (
+                    <>
+                      {' '}
+                      <span className="text-slate-600 dark:text-slate-300 align-middle">
+                        {renderActivityHtml(descriptionHtml, filterText)}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className={`flex items-center mt-1 ${isNarrowMode ? 'gap-1' : 'gap-1.5'}`}>
+                  <Clock className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-none truncate">
+                    {isNarrowMode ? formatTimeAgo(activity.createdAt, true) : formatTimeAgo(activity.createdAt)}
+                  </span>
+                  {isUnread && (
+                    <span className="w-1.5 h-1.5 bg-sky-500 rounded-full flex-shrink-0" aria-hidden />
+                  )}
                 </div>
               </div>
             );

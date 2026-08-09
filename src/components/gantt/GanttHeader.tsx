@@ -50,6 +50,9 @@ interface GanttHeaderProps {
   // Relationship mode handlers
   selectedParentTask?: string | null;
   setSelectedParentTask?: (taskId: string | null) => void;
+
+  /** When false, Select / Link mode toggles are disabled (viewers). */
+  canMutate?: boolean;
 }
 
 export const GanttHeader: React.FC<GanttHeaderProps> = ({
@@ -71,7 +74,8 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
   isLoading,
   onJumpToTask,
   selectedParentTask,
-  setSelectedParentTask
+  setSelectedParentTask,
+  canMutate = true,
 }) => {
   const { t } = useTranslation('common');
   return (
@@ -96,7 +100,9 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
         <div className="flex items-center gap-4 flex-shrink-0">
           {/* Multi-Select Mode Toggle */}
               <button
+                disabled={!canMutate}
                 onClick={() => {
+                  if (!canMutate) return;
                   if (isMultiSelectMode) {
                     // Exit multi-select mode and clear selections
                     setIsMultiSelectMode(false);
@@ -115,7 +121,7 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                     setIsMultiSelectMode(true);
                   }
                 }}
-                className={`px-3 py-2 text-sm font-medium rounded-md border transition-colors ${
+                className={`px-3 py-2 text-sm font-medium rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   isMultiSelectMode
                     ? 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200'
                     : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
@@ -158,7 +164,9 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
           
           {/* Relationship Mode Toggle */}
           <button
+            disabled={!canMutate}
             onClick={() => {
+              if (!canMutate) return;
               if (isRelationshipMode) {
                 // Exit relationship mode and clear selected parent
                 setIsRelationshipMode(false);
@@ -177,7 +185,7 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                 setIsRelationshipMode(true);
               }
             }}
-            className={`px-3 py-2 text-sm font-medium rounded-md border transition-colors ${
+            className={`px-3 py-2 text-sm font-medium rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               isRelationshipMode
                 ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700 hover:bg-blue-200 dark:hover:bg-blue-800'
                 : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'

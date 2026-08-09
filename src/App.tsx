@@ -64,6 +64,7 @@ import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reord
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit } from './utils/kanbanFlowUtils';
 import { isAgentMemberId } from './utils/agentMemberUi';
+import { userCanMutate } from './utils/permissions';
 import { isDemoModeClient } from './utils/demoReset';
 import { useLoadingState } from './hooks/useLoadingState';
 import { useDebug } from './hooks/useDebug';
@@ -586,6 +587,7 @@ function AppContent() {
 
   // Per-admin Performance Test Overlay preference (user_settings.FE_PERF_TESTS)
   const isAdminUser = Boolean(currentUser?.roles?.includes('admin'));
+  const canMutate = userCanMutate(currentUser);
   const [userPerfTestsEnabled, setUserPerfTestsEnabled] = useState(false);
   useEffect(() => {
     if (!currentUser?.id || !isAdminUser) {
@@ -748,6 +750,10 @@ function AppContent() {
 
     if (activityFeed.activityFeedMinimized) return;
 
+    // Already auto-minimized for this TaskDetails session — if the user expands
+    // while the panel is still open, do not immediately collapse again.
+    if (activityFeedAutoMinForTaskRef.current) return;
+
     const prefs = loadUserPreferences(currentUser?.id || null);
     const prefWidth = Number(prefs.taskDetailsWidth) || 480;
     const mobile = window.matchMedia('(max-width: 1023px)').matches;
@@ -802,25 +808,15 @@ function AppContent() {
     }
     
     // Handle permission changes (soft updates) - only if we have a previous status to compare
-    if (previousStatus !== null && previousStatus.isAdmin !== newUserStatus.isAdmin) {
-      const permissionChange = newUserStatus.isAdmin ? 'promoted to admin' : 'demoted to user';
-      // console.log(`🔄 User permission changed: ${permissionChange}`);
-      // console.log(`🔄 Previous isAdmin: ${previousStatus.isAdmin}, New isAdmin: ${newUserStatus.isAdmin}`);
-      // console.log('🔄 Calling handleProfileUpdated to refresh user roles...');
-      
-      // Refresh the current user data to update roles in the UI
-      handleProfileUpdated().then(() => {
-        // console.log('✅ User profile refreshed successfully');
-      }).catch(error => {
-        // console.error('❌ Failed to refresh user profile after permission change:', error);
+    const prevCanMutate = previousStatus?.canMutate ?? previousStatus?.isAdmin;
+    const nextCanMutate = newUserStatus.canMutate ?? !newUserStatus.isViewer;
+    if (
+      previousStatus !== null &&
+      (previousStatus.isAdmin !== newUserStatus.isAdmin || prevCanMutate !== nextCanMutate)
+    ) {
+      handleProfileUpdated().catch((error) => {
+        console.error('Failed to refresh user profile after permission change:', error);
       });
-      
-      // Optional: Show a notification about permission change
-      // You could add a toast notification here if desired
-    } else if (previousStatus === null) {
-      // console.log('🔍 [UserStatus] Initial status set, no action needed');
-    } else {
-      // console.log('🔍 [UserStatus] No permission change detected');
     }
     
     // Update both state and ref - but only update state if values actually changed
@@ -830,6 +826,8 @@ function AppContent() {
     if (previousStatus === null || 
         previousStatus.isActive !== newUserStatus.isActive ||
         previousStatus.isAdmin !== newUserStatus.isAdmin ||
+        previousStatus.canMutate !== newUserStatus.canMutate ||
+        previousStatus.isViewer !== newUserStatus.isViewer ||
         previousStatus.forceLogout !== newUserStatus.forceLogout) {
       setUserStatus(newUserStatus);
     }
@@ -882,6 +880,10 @@ function AppContent() {
 
   // Now define the handleRemoveTask function
   handleRemoveTask = async (taskId: string, clickEvent?: React.MouseEvent) => {
+    if (!canMutate) {
+      toast.error(t('messages.readOnlyMode', { ns: 'common' }), '');
+      return;
+    }
     // If the task being deleted is currently open in TaskDetails, close it first
     if (selectedTask && selectedTask.id === taskId) {
       handleSelectTask(null);
@@ -2019,9 +2021,9 @@ function AppContent() {
   // DnD sensors for both columns and tasks - optimized for smooth UX
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      // Make drag activation very permissive for better UX
+      // Make drag activation very permissive for better UX (disabled for viewers)
       activationConstraint: {
-        distance: 1, // Very low threshold
+        distance: canMutate ? 1 : 100000,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -2938,6 +2940,10 @@ function AppContent() {
   };
 
   const handleAddTask = async (columnId: string, startDate?: string, dueDate?: string): Promise<boolean> => {
+    if (!canMutate) {
+      toast.error(t('messages.readOnlyMode', { ns: 'common' }), '');
+      return false;
+    }
     if (!selectedBoard || !currentUser) return false;
     
     // Prevent task creation when network is offline
@@ -3139,29 +3145,28 @@ function AppContent() {
     }
   };
 
-  const handleEditTask = useCallback(async (task: Task, options?: { skipActivity?: boolean }) => {
+  const handleEditTask = useCallback(async (task: Task, options?: { skipActivity?: boolean; localOnly?: boolean }) => {
     // Optimistic update
     const previousColumns = { ...columns };
     const previousFilteredColumns = { ...(taskFilters.filteredColumns || {}) };
     const previousSelectedTask = selectedTask;
 
     const patchTaskInColumns = (prev: Columns): Columns => {
-      // Resolve column: prefer payload, else find where the task currently lives
-      let targetColumnId = task.columnId;
+      // Find where the card currently lives (source), independent of the requested target.
+      // Looking only in task.columnId breaks archive/move: the card isn't in the archive yet,
+      // so the old path appended a duplicate and only cleaned up after the server/WS sync.
+      let sourceColumnId: string | undefined;
       let existingTask: Task | undefined;
-      if (!targetColumnId || !prev[targetColumnId]) {
-        for (const columnId of Object.keys(prev)) {
-          const found = prev[columnId]?.tasks?.find((t) => t.id === task.id);
-          if (found) {
-            targetColumnId = columnId;
-            existingTask = found;
-            break;
-          }
+      for (const columnId of Object.keys(prev)) {
+        const found = prev[columnId]?.tasks?.find((t) => t.id === task.id);
+        if (found) {
+          sourceColumnId = columnId;
+          existingTask = found;
+          break;
         }
-      } else {
-        existingTask = prev[targetColumnId]?.tasks?.find((t) => t.id === task.id);
       }
 
+      const targetColumnId = task.columnId || sourceColumnId;
       if (!targetColumnId || !prev[targetColumnId]) {
         console.warn('Column not found for task update:', task.columnId, 'Available columns:', Object.keys(prev));
         return prev;
@@ -3175,9 +3180,10 @@ function AppContent() {
       };
 
       const updatedColumns: Columns = { ...prev };
+      const isSameColumn = !sourceColumnId || sourceColumnId === targetColumnId;
 
       // Same-column in-place update (preserves order; avoids remove/re-add flicker)
-      if (!task.columnId || task.columnId === targetColumnId || !existingTask) {
+      if (isSameColumn) {
         const column = updatedColumns[targetColumnId];
         const taskIndex = column.tasks.findIndex((t) => t.id === task.id);
         if (taskIndex !== -1) {
@@ -3198,7 +3204,7 @@ function AppContent() {
         return updatedColumns;
       }
 
-      // Cross-column move: remove from all, then insert into target
+      // Cross-column move (archive, status change, etc.): remove from source, insert into target
       Object.keys(updatedColumns).forEach((columnId) => {
         const column = updatedColumns[columnId];
         const taskIndex = column.tasks.findIndex((t) => t.id === task.id);
@@ -3213,11 +3219,11 @@ function AppContent() {
         }
       });
 
-      const targetColumn = updatedColumns[task.columnId];
+      const targetColumn = updatedColumns[targetColumnId];
       if (targetColumn) {
-        updatedColumns[task.columnId] = {
+        updatedColumns[targetColumnId] = {
           ...targetColumn,
-          tasks: [...targetColumn.tasks, { ...mergedTask, columnId: task.columnId }],
+          tasks: [...targetColumn.tasks, { ...mergedTask, columnId: targetColumnId }],
         };
       }
       return updatedColumns;
@@ -3230,6 +3236,11 @@ function AppContent() {
     // Update selectedTask if this is the selected task
     if (selectedTask && selectedTask.id === task.id) {
       setSelectedTask({ ...selectedTask, ...task, columnId: task.columnId || selectedTask.columnId });
+    }
+
+    // Viewers / comment·relationship refreshes: update local board state only (no task PATCH).
+    if (!canMutate || options?.localOnly) {
+      return;
     }
 
     try {
@@ -3251,9 +3262,13 @@ function AppContent() {
       }
       toast.error(t('errors.updateTaskTitle'), t('errors.updateTaskMessage'));
     }
-  }, [withLoading, fetchQueryLogs, columns, selectedTask, taskFilters, t]);
+  }, [withLoading, fetchQueryLogs, columns, selectedTask, taskFilters, t, canMutate]);
 
   const handleCopyTask = async (task: Task) => {
+    if (!canMutate) {
+      toast.error(t('messages.readOnlyMode', { ns: 'common' }), '');
+      return;
+    }
     const originalPosition = task.position || 0;
     const copyTitle = `${task.title} (Copy)`;
 
@@ -3328,6 +3343,7 @@ function AppContent() {
   };
 
   const handleTagAdd = (taskId: string) => async (tagId: string) => {
+    if (!canMutate) return;
     try {
       const numericTagId = parseInt(tagId);
       await addTagToTask(taskId, numericTagId);
@@ -3339,6 +3355,7 @@ function AppContent() {
   };
 
   const handleTagRemove = (taskId: string) => async (tagId: string) => {
+    if (!canMutate) return;
     try {
       const numericTagId = parseInt(tagId);
       await removeTagFromTask(taskId, numericTagId);
@@ -3350,10 +3367,11 @@ function AppContent() {
   };
 
   const handleTaskDragStart = useCallback((task: Task) => {
+    if (!canMutate) return;
     // console.log('🎯 [App] handleTaskDragStart called with task:', task.id);
     setDraggedTask(task);
     // Pause polling during drag to prevent state conflicts
-  }, []);
+  }, [canMutate]);
 
   // Clear drag state (for Gantt drag end)
   const handleTaskDragEnd = useCallback(() => {
@@ -3440,6 +3458,7 @@ function AppContent() {
 
   // Unified task drag handler for both vertical and horizontal moves
   const handleUnifiedTaskDragEnd = (event: DragEndEvent) => {
+    if (!canMutate) return;
     // Clean up hover timeout and reset state
     if (boardTabHoverTimeoutRef.current) {
       clearTimeout(boardTabHoverTimeoutRef.current);
@@ -4184,6 +4203,7 @@ function AppContent() {
   };
 
   const handleColumnDragEnd = async (event: DragEndEvent) => {
+    if (!canMutate) return;
     const { active, over } = event;
     
     setDraggedColumn(null);
@@ -4754,6 +4774,7 @@ function AppContent() {
               onSettingsChanged={refreshContextSettings} // Use context refresh instead
               onAdminDraftGateChange={handleAdminDraftGateChange}
         loading={loading}
+        canMutate={canMutate}
                     members={members}
         boards={boards}
         selectedBoard={selectedBoard}
@@ -4933,6 +4954,7 @@ function AppContent() {
           }}
           siteSettings={siteSettings}
           boards={boards}
+          canMutate={canMutate}
         />
       </Suspense>
 

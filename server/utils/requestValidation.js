@@ -181,7 +181,7 @@ export const adminCreateUserBodySchema = z.object({
   password: z.string().max(1024).optional().default(''),
   firstName: z.string().min(1, 'First name is required').max(100),
   lastName: z.string().min(1, 'Last name is required').max(100),
-  role: z.enum(['admin', 'user'], { message: 'User role is required' }),
+  role: z.enum(['admin', 'user', 'viewer'], { message: 'User role is required' }),
   displayName: z.string().max(100).optional(),
   isActive: booleanish,
   baseUrl: z.string().max(2048).optional()
@@ -196,7 +196,7 @@ export const adminUpdateUserBodySchema = z.object({
 
 /** Accept either `{ role }` (Admin.tsx) or `{ action: promote|demote }` (api helper). */
 export const adminUpdateUserRoleBodySchema = z.union([
-  z.object({ role: z.enum(['admin', 'user']) }),
+  z.object({ role: z.enum(['admin', 'user', 'viewer']) }),
   z.object({ action: z.enum(['promote', 'demote']) }).transform(({ action }) => ({
     role: action === 'promote' ? 'admin' : 'user'
   }))
@@ -332,7 +332,7 @@ export const registerBodySchema = z.object({
   password: z.string().min(1, 'Password is required').max(1024),
   firstName: z.string().min(1, 'First name is required').max(100),
   lastName: z.string().min(1, 'Last name is required').max(100),
-  role: z.enum(['admin', 'user'], { message: 'User role is required' })
+  role: z.enum(['admin', 'user', 'viewer'], { message: 'User role is required' })
 });
 
 export const updateProfileBodySchema = z.object({

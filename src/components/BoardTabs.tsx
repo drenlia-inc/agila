@@ -681,7 +681,10 @@ export default function BoardTabs({
   // Get the current board's project identifier
   const currentBoard = boards.find(board => board.id === selectedBoard);
   const currentProject = currentBoard?.project;
-  const showActionColumn = isAdmin || (trashCount > 0 && Boolean(onToggleTrash));
+  // Always reserve the Progression-aligned slot when trash can appear; only inner
+  // buttons toggle. Otherwise non-admins jump ~168px when trashCount resolves
+  // after a board switch (admins already keep this column via the + button).
+  const showActionColumn = isAdmin || Boolean(onToggleTrash);
 
   return (
     <div className="mb-6">

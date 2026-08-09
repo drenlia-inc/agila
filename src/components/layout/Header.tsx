@@ -534,6 +534,16 @@ const Header: React.FC<HeaderProps> = ({
               );
             })()}
           </a>
+          {currentUser?.roles?.includes('viewer') &&
+            !currentUser.roles.includes('admin') &&
+            !currentUser.roles.includes('user') && (
+            <span
+              className="hidden sm:inline-flex items-center rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+              title={t('messages.readOnlyMode')}
+            >
+              {t('messages.readOnlyBadge')}
+            </span>
+          )}
           {/* Sprint Selector - only show in Kanban view, hide on TaskPage / very narrow */}
           {currentUser && currentPage === 'kanban' && !hideSprintSelector && (
             <div className="hidden sm:block min-w-0 shrink">

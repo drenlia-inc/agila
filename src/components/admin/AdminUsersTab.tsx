@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { Edit, Trash2, Crown, User as UserIcon, Mail, Loader2, Search, X, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
+import { Edit, Trash2, User as UserIcon, Mail, Loader2, Search, X, ArrowUp, ArrowDown, ChevronsUpDown, ChevronDown, Check } from 'lucide-react';
 import { getAuthenticatedAvatarUrl } from '../../utils/authImageUrl';
 import { AGENT_BOT_AVATAR_SRC } from '../../utils/agentMemberUi';
 import { toast } from '../../utils/toast';
@@ -35,7 +35,7 @@ interface AdminUsersTabProps {
   ownerEmail: string | null;
   showDeleteConfirm: string | null;
   userTaskCounts: { [userId: string]: number };
-  onRoleChange: (userId: string, action: 'promote' | 'demote') => Promise<void>;
+  onRoleChange: (userId: string, role: 'admin' | 'user' | 'viewer') => Promise<void>;
   onDeleteUser: (userId: string) => Promise<void>;
   onConfirmDeleteUser: (userId: string, reassignToUserId?: string | null) => Promise<void>;
   onCancelDeleteUser: () => void;
@@ -45,6 +45,264 @@ interface AdminUsersTabProps {
   onColorChange: (userId: string, color: string) => Promise<void>;
   onRemoveAvatar: (userId: string) => Promise<void>;
   onResendInvitation: (userId: string) => Promise<{ email?: string } | void>;
+}
+
+type RoleValue = 'admin' | 'user' | 'viewer';
+
+const ROLE_OPTIONS: RoleValue[] = ['user', 'viewer', 'admin'];
+
+function roleToneClasses(role: string): string {
+  if (role === 'admin') {
+    return 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:border-violet-800';
+  }
+  if (role === 'viewer') {
+    return 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800';
+  }
+  return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+}
+
+function roleDotClass(role: RoleValue): string {
+  if (role === 'admin') return 'bg-violet-500';
+  if (role === 'viewer') return 'bg-sky-500';
+  return 'bg-slate-400 dark:bg-slate-500';
+}
+
+function RoleBadgeSelect({
+  value,
+  onChange,
+  disabled = false,
+  size = 'sm',
+  title,
+  labels,
+  descriptions,
+}: {
+  value: RoleValue;
+  onChange: (role: RoleValue) => void;
+  disabled?: boolean;
+  size?: 'sm' | 'md';
+  title?: string;
+  labels: Record<RoleValue, string>;
+  descriptions?: Partial<Record<RoleValue, string>>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const isMd = size === 'md';
+  const hasDescriptions = Boolean(descriptions && ROLE_OPTIONS.some((r) => descriptions[r]));
+
+  const updateMenuPos = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const menuWidth = Math.max(rect.width, isMd ? 280 : 140);
+    let left = rect.left;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, rect.right - menuWidth);
+    }
+    const estimatedHeight = hasDescriptions ? 220 : 132;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top =
+      spaceBelow < estimatedHeight && rect.top > estimatedHeight
+        ? rect.top - estimatedHeight - 4
+        : rect.bottom + 4;
+    setMenuPos({ top, left, width: menuWidth });
+  };
+
+  const selectRole = (role: RoleValue) => {
+    onChange(role);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const idx = Math.max(0, ROLE_OPTIONS.indexOf(value));
+    setActiveIndex(idx);
+    updateMenuPos();
+    // Focus the active option after paint so keyboard nav works immediately
+    requestAnimationFrame(() => {
+      optionRefs.current[idx]?.focus();
+    });
+
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onReposition = () => updateMenuPos();
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', onReposition);
+    window.addEventListener('scroll', onReposition, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', onReposition);
+      window.removeEventListener('scroll', onReposition, true);
+    };
+  }, [open, isMd, hasDescriptions, value]);
+
+  const onMenuKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      const next = (activeIndex + delta + ROLE_OPTIONS.length) % ROLE_OPTIONS.length;
+      setActiveIndex(next);
+      optionRefs.current[next]?.focus();
+      return;
+    }
+    if (e.key === 'Home') {
+      e.preventDefault();
+      setActiveIndex(0);
+      optionRefs.current[0]?.focus();
+      return;
+    }
+    if (e.key === 'End') {
+      e.preventDefault();
+      const last = ROLE_OPTIONS.length - 1;
+      setActiveIndex(last);
+      optionRefs.current[last]?.focus();
+      return;
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      selectRole(ROLE_OPTIONS[activeIndex]);
+    }
+  };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        title={title}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={title}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((prev) => !prev);
+        }}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+        className={
+          isMd
+            ? `w-full inline-flex items-center justify-between gap-2 px-3 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors ${
+                disabled
+                  ? 'opacity-60 cursor-not-allowed'
+                  : 'hover:border-slate-400 dark:hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 cursor-pointer'
+              }`
+            : `inline-flex items-center justify-between gap-1.5 font-medium rounded-md border transition-colors max-w-[7.5rem] px-1.5 py-1 text-[11px] ${roleToneClasses(value)} ${
+                disabled
+                  ? 'opacity-60 cursor-not-allowed'
+                  : 'hover:brightness-[0.98] dark:hover:brightness-110 cursor-pointer'
+              }`
+        }
+      >
+        <span className="inline-flex items-center gap-2 min-w-0">
+          {isMd && (
+            <span
+              className={`shrink-0 h-2 w-2 rounded-full ${roleDotClass(value)}`}
+              aria-hidden
+            />
+          )}
+          <span className="truncate font-medium">{labels[value]}</span>
+        </span>
+        <ChevronDown
+          size={isMd ? 16 : 12}
+          className={`shrink-0 opacity-70 transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
+      {open &&
+        menuPos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="listbox"
+            aria-label={title}
+            tabIndex={-1}
+            onKeyDown={onMenuKeyDown}
+            className="fixed z-[11000] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1"
+            style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          >
+            {ROLE_OPTIONS.map((role, index) => {
+              const selected = role === value;
+              const active = index === activeIndex;
+              const description = descriptions?.[role];
+              return (
+                <button
+                  key={role}
+                  ref={(el) => {
+                    optionRefs.current[index] = el;
+                  }}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  tabIndex={active ? 0 : -1}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => selectRole(role)}
+                  className={`w-full flex gap-2.5 rounded-md px-2.5 text-left transition-colors ${
+                    isMd ? 'items-start py-2' : 'items-center py-1.5'
+                  } ${
+                    selected
+                      ? 'bg-blue-50 dark:bg-blue-950/40'
+                      : active
+                        ? 'bg-slate-100 dark:bg-slate-800'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
+                  }`}
+                >
+                  <span
+                    className={`shrink-0 h-2 w-2 rounded-full ${roleDotClass(role)} ${
+                      isMd ? 'mt-1.5' : ''
+                    }`}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`flex items-center justify-between gap-2 ${
+                        isMd ? 'text-sm' : 'text-[11px]'
+                      }`}
+                    >
+                      <span className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                        {labels[role]}
+                      </span>
+                      {selected && (
+                        <Check
+                          size={isMd ? 15 : 12}
+                          className="shrink-0 text-blue-600 dark:text-blue-400"
+                          aria-hidden
+                        />
+                      )}
+                    </span>
+                    {description && (
+                      <span className="mt-0.5 block text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+                        {description}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>,
+          document.body
+        )}
+    </>
+  );
 }
 
 const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
@@ -76,9 +334,9 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   }, [users, systemSettings?.AI_ENABLED]);
 
   type StatusFilter = 'all' | 'active' | 'inactive';
-  type RoleFilter = 'all' | 'admin' | 'member';
+  type RoleFilter = 'all' | 'admin' | 'member' | 'viewer';
   type AuthFilter = 'all' | 'local' | 'google';
-  type SortKey = 'name' | 'status' | 'role' | 'auth' | 'joined';
+  type SortKey = 'name' | 'status' | 'auth' | 'joined' | 'role';
   type SortDir = 'asc' | 'desc';
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -95,17 +353,19 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     let inactive = 0;
     let admin = 0;
     let member = 0;
+    let viewer = 0;
     let local = 0;
     let google = 0;
     for (const user of visibleUsers) {
       if (user.isActive) active += 1;
       else inactive += 1;
       if (user.roles.includes('admin')) admin += 1;
+      else if (user.roles.includes('viewer')) viewer += 1;
       else member += 1;
       if (user.authProvider === 'google') google += 1;
       else local += 1;
     }
-    return { total: visibleUsers.length, active, inactive, admin, member, local, google };
+    return { total: visibleUsers.length, active, inactive, admin, member, viewer, local, google };
   }, [visibleUsers]);
 
   const filteredUsers = useMemo(() => {
@@ -114,7 +374,13 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       if (statusFilter === 'active' && !user.isActive) return false;
       if (statusFilter === 'inactive' && user.isActive) return false;
       if (roleFilter === 'admin' && !user.roles.includes('admin')) return false;
-      if (roleFilter === 'member' && user.roles.includes('admin')) return false;
+      if (roleFilter === 'viewer' && !user.roles.includes('viewer')) return false;
+      if (
+        roleFilter === 'member' &&
+        (user.roles.includes('admin') || user.roles.includes('viewer'))
+      ) {
+        return false;
+      }
       if (authFilter === 'local' && user.authProvider === 'google') return false;
       if (authFilter === 'google' && user.authProvider !== 'google') return false;
       if (!q) return true;
@@ -137,6 +403,8 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     const dir = sortDir === 'asc' ? 1 : -1;
     const nameOf = (u: User) =>
       (u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || '').toLowerCase();
+    const roleRank = (u: User) =>
+      u.roles.includes('admin') ? 0 : u.roles.includes('viewer') ? 2 : 1;
     const joinedOf = (u: User) => {
       const raw = u.joined || u.createdAt || '';
       const t = Date.parse(raw);
@@ -156,11 +424,11 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
         case 'status':
           cmp = Number(b.isActive) - Number(a.isActive);
           break;
-        case 'role':
-          cmp = Number(b.roles.includes('admin')) - Number(a.roles.includes('admin'));
-          break;
         case 'auth':
           cmp = (a.authProvider || 'local').localeCompare(b.authProvider || 'local');
+          break;
+        case 'role':
+          cmp = roleRank(a) - roleRank(b);
           break;
         case 'joined':
           cmp = joinedOf(a) - joinedOf(b);
@@ -248,7 +516,6 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
 
   const getEmptyNewUser = () => ({
     email: '',
-    password: '',
     firstName: '',
     lastName: '',
     displayName: '',
@@ -400,12 +667,36 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     lastName: '',
     displayName: '',
     isActive: true,
+    role: 'user' as 'admin' | 'user' | 'viewer',
     avatarUrl: '',
     googleAvatarUrl: '',
     memberColor: '#4ECDC4',
     selectedFile: null as File | null,
     authProvider: ''
   });
+  /** Saved row for the user currently in the edit modal (ignore unsaved Active checkbox). */
+  const persistedEditingUser = users.find((u) => u.id === editingUserData.id) || null;
+  const [editingUserInitialRole, setEditingUserInitialRole] = useState<'admin' | 'user' | 'viewer'>('user');
+
+  const fieldClass =
+    'w-full px-3 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
+  const labelClass = 'block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5';
+  const roleLabels = useMemo(
+    () => ({
+      user: t('users.user'),
+      viewer: t('users.viewer'),
+      admin: t('users.admin'),
+    }),
+    [t]
+  );
+  const roleDescriptions = useMemo(
+    () => ({
+      user: t('users.roleUserHint'),
+      viewer: t('users.roleViewerHint'),
+      admin: t('users.roleAdminHint'),
+    }),
+    [t]
+  );
   
   const [newUser, setNewUser] = useState(getEmptyNewUser);
 
@@ -529,6 +820,11 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       setAvatarPreviewUrl(null);
     }
     
+    const role: 'admin' | 'user' | 'viewer' = user.roles.includes('admin')
+      ? 'admin'
+      : user.roles.includes('viewer')
+        ? 'viewer'
+        : 'user';
     setEditingUserData({
       id: user.id,
       email: user.email,
@@ -536,12 +832,14 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       lastName: user.lastName,
       displayName: user.displayName || `${user.firstName} ${user.lastName}`,
       isActive: user.isActive,
+      role,
       avatarUrl: user.avatarUrl || '',
       googleAvatarUrl: user.googleAvatarUrl || '',
       memberColor: user.memberColor || '#4ECDC4',
       selectedFile: null,
       authProvider: user.authProvider || ''
     });
+    setEditingUserInitialRole(role);
     setShowEditUserForm(true);
     onEditUser(user);
   };
@@ -561,6 +859,13 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
         return;
       }
       await onSaveUser({ ...editingUserData, email: emailNorm });
+      if (
+        editingUserData.role !== editingUserInitialRole &&
+        canModifyUser(editingUserData.email) &&
+        editingUserData.id !== currentUser?.id
+      ) {
+        await onRoleChange(editingUserData.id, editingUserData.role);
+      }
       
       // Clean up preview URL after successful save
       if (avatarPreviewUrl) {
@@ -598,17 +903,25 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       lastName: '',
       displayName: '',
       isActive: true,
+      role: 'user',
       avatarUrl: '',
       googleAvatarUrl: '',
       memberColor: '#4ECDC4',
       selectedFile: null,
       authProvider: ''
     });
+    setEditingUserInitialRole('user');
   };
 
   const handleResendInvitation = async (userId?: string) => {
     const targetId = userId || editingUserData.id;
     if (!targetId || isResendingInvitation) return;
+    const savedUser = users.find((u) => u.id === targetId);
+    // Never resend from unsaved edit-form state — only when the account is inactive in saved data
+    if (!savedUser || !canResendInvitation(savedUser)) {
+      toast.error(t('users.saveDeactivationBeforeResend'), '');
+      return;
+    }
     try {
       setIsResendingInvitation(true);
       setResendingUserId(targetId);
@@ -783,9 +1096,15 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   <button
                     type="button"
                     onClick={() => toggleStatusFilter('inactive')}
-                    className={filterChipClass(statusFilter === 'inactive', userSummary.inactive > 0 && statusFilter !== 'inactive')}
+                    className={
+                      statusFilter === 'inactive'
+                        ? 'rounded-md px-1.5 py-0.5 transition-colors bg-orange-600 text-white shadow-sm dark:bg-orange-500 font-semibold'
+                        : userSummary.inactive > 0
+                          ? 'rounded-md px-1.5 py-0.5 transition-colors text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/40'
+                          : filterChipClass(false)
+                    }
                     aria-pressed={statusFilter === 'inactive'}
-                  >
+                    >
                     {t('users.summary.inactive', { count: userSummary.inactive })}
                   </button>
                 </div>
@@ -814,6 +1133,17 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                     aria-pressed={roleFilter === 'member'}
                   >
                     {t('users.summary.member', { count: userSummary.member })}
+                  </button>
+                  <span className="text-slate-300 dark:text-slate-600 select-none" aria-hidden>
+                    ·
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleRoleFilter('viewer')}
+                    className={filterChipClass(roleFilter === 'viewer')}
+                    aria-pressed={roleFilter === 'viewer'}
+                  >
+                    {t('users.summary.viewer', { count: userSummary.viewer })}
                   </button>
                 </div>
 
@@ -901,90 +1231,77 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
             </div>
           )}
           <div className="overflow-x-auto overflow-y-visible">
-            <table className="min-w-full">
+            <table className="min-w-full table-fixed">
+              {(() => {
+                const thClass =
+                  'px-3 py-2.5 text-left whitespace-nowrap align-middle';
+                const headerLabelClass =
+                  'text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+                const headerControlClass =
+                  'inline-flex items-center gap-1 -mx-1 px-1 py-0.5 rounded-md text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400';
+                const tdClass = 'px-3 py-2.5 align-middle';
+                const tdNowrap = `${tdClass} whitespace-nowrap`;
+                const pillClass =
+                  'inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-md border';
+                const staticHeader = (label: string) => (
+                  <th className={thClass}>
+                    <span className={headerControlClass}>{label}</span>
+                  </th>
+                );
+                const sortHeader = (key: SortKey, label: string) => {
+                  const active = sortKey === key;
+                  const SortIcon = !active ? ChevronsUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
+                  return (
+                    <th key={key} className={thClass}>
+                      <button
+                        type="button"
+                        onClick={() => handleSort(key)}
+                        className={`${headerControlClass} hover:bg-slate-100 dark:hover:bg-slate-800/80`}
+                        aria-sort={
+                          active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
+                        }
+                        title={
+                          active
+                            ? sortDir === 'asc'
+                              ? t('users.sortDescending')
+                              : t('users.sortAscending')
+                            : t('users.sortBy', { column: label })
+                        }
+                      >
+                        <span className={headerLabelClass}>{label}</span>
+                        <SortIcon
+                          size={12}
+                          className={`shrink-0 ${
+                            active
+                              ? 'text-slate-600 dark:text-slate-300 opacity-100'
+                              : 'text-slate-400 dark:text-slate-500 opacity-70'
+                          }`}
+                          aria-hidden
+                        />
+                      </button>
+                    </th>
+                  );
+                };
+                return (
+                  <>
+              <colgroup>
+                <col className="w-[7.5rem]" />
+                <col className="w-[7.5rem]" />
+                <col />
+                <col className="w-[6.5rem]" />
+                <col className="w-[5.5rem]" />
+                <col className="w-[4.5rem]" />
+                <col className="w-[10rem]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/60">
-                  <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
-                    {t('users.tableHeaders.actions')}
-                  </th>
-                  {(
-                    [
-                      ['name', t('users.tableHeaders.name')],
-                      ['status', t('users.tableHeaders.status')],
-                      ['role', t('users.tableHeaders.role')],
-                      ['auth', t('users.tableHeaders.authType')],
-                    ] as const
-                  ).map(([key, label]) => {
-                    const active = sortKey === key;
-                    const SortIcon = !active ? ChevronsUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
-                    return (
-                      <th
-                        key={key}
-                        className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleSort(key)}
-                          className={`inline-flex items-center gap-1 rounded-md -mx-1 px-1 py-0.5 hover:text-slate-800 dark:hover:text-slate-100 ${
-                            active ? 'text-slate-800 dark:text-slate-100' : ''
-                          }`}
-                          aria-sort={
-                            active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
-                          }
-                          title={
-                            active
-                              ? sortDir === 'asc'
-                                ? t('users.sortDescending')
-                                : t('users.sortAscending')
-                              : t('users.sortBy', { column: label })
-                          }
-                        >
-                          {label}
-                          <SortIcon
-                            size={12}
-                            className={active ? 'opacity-90' : 'opacity-40'}
-                            aria-hidden
-                          />
-                        </button>
-                      </th>
-                    );
-                  })}
-                  <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
-                    {t('users.tableHeaders.color')}
-                  </th>
-                  {(() => {
-                    const active = sortKey === 'joined';
-                    const SortIcon = !active ? ChevronsUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
-                    const label = t('users.tableHeaders.joined');
-                    return (
-                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => handleSort('joined')}
-                          className={`inline-flex items-center gap-1 rounded-md -mx-1 px-1 py-0.5 hover:text-slate-800 dark:hover:text-slate-100 ${
-                            active ? 'text-slate-800 dark:text-slate-100' : ''
-                          }`}
-                          aria-sort={
-                            active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
-                          }
-                          title={
-                            active
-                              ? sortDir === 'asc'
-                                ? t('users.sortDescending')
-                                : t('users.sortAscending')
-                              : t('users.sortBy', { column: label })
-                          }
-                        >
-                          {label}
-                          <SortIcon
-                            size={12}
-                            className={active ? 'opacity-90' : 'opacity-40'}
-                            aria-hidden
-                          />
-                        </button>
-                      </th>
-                    );
-                  })()}
+                  {staticHeader(t('users.tableHeaders.actions'))}
+                  {sortHeader('role', t('users.tableHeaders.role'))}
+                  {sortHeader('name', t('users.tableHeaders.name'))}
+                  {sortHeader('status', t('users.tableHeaders.status'))}
+                  {sortHeader('auth', t('users.tableHeaders.authType'))}
+                  {staticHeader(t('users.tableHeaders.color'))}
+                  {sortHeader('joined', t('users.tableHeaders.joined'))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -992,39 +1309,18 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   displayedUsers.map((user) => {
                     const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim();
                     const fullName = `${user.firstName} ${user.lastName}`.trim();
+                    const primaryRole = user.roles.includes('admin')
+                      ? 'admin'
+                      : user.roles.includes('viewer')
+                        ? 'viewer'
+                        : 'user';
+                    const roleSelectLocked =
+                      user.id === currentUser?.id || !canModifyUser(user.email);
+                    const isSystemAccount = isLocalPseudoAccount(user.email);
                     return (
                 <tr key={user.id} data-user-id={user.id} className={ADMIN_TABLE_ROW_CLASS}>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
-                    <div className="flex items-center gap-0.5">
-                      {user.roles.includes('admin') ? (
-                        <button
-                          onClick={() => onRoleChange(user.id, 'demote')}
-                          onMouseEnter={(e) => handleButtonMouseEnter(user.id, 'demote', e)}
-                          onMouseLeave={handleButtonMouseLeave}
-                          disabled={user.id === currentUser?.id || (!canModifyUser(user.email))}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            user.id === currentUser?.id || (!canModifyUser(user.email))
-                              ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                              : 'text-rose-600 hover:text-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/40'
-                          }`}
-                        >
-                          <UserIcon size={15} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => onRoleChange(user.id, 'promote')}
-                          onMouseEnter={(e) => handleButtonMouseEnter(user.id, 'promote', e)}
-                          onMouseLeave={handleButtonMouseLeave}
-                          disabled={!canModifyUser(user.email)}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            !canModifyUser(user.email)
-                              ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                              : 'text-amber-600 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40'
-                          }`}
-                        >
-                          <Crown size={15} />
-                        </button>
-                      )}
+                  <td className={tdNowrap}>
+                    <div className="flex items-center gap-0.5 h-8">
                       <button 
                         onClick={() => handleEditUserClick(user)}
                         onMouseEnter={(e) => handleButtonMouseEnter(user.id, 'edit', e)}
@@ -1106,7 +1402,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                           <Trash2 size={15} />
                         </button>
                       </div>
-                      {canResendInvitation(user) && (
+                      {canResendInvitation(user) ? (
                         <button
                           type="button"
                           onClick={() => void handleResendInvitation(user.id)}
@@ -1131,27 +1427,46 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                             <Mail size={15} />
                           )}
                         </button>
+                      ) : (
+                        <span className="inline-flex w-[27px]" aria-hidden />
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 min-w-[14rem]">
+                  <td className={tdNowrap}>
+                    {isSystemAccount ? (
+                      <span className={`${pillClass} bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700`}>
+                        —
+                      </span>
+                    ) : (
+                      <RoleBadgeSelect
+                        value={primaryRole}
+                        disabled={roleSelectLocked}
+                        title={t('users.changeRole')}
+                        labels={roleLabels}
+                        onChange={(role) => {
+                          void onRoleChange(user.id, role);
+                        }}
+                      />
+                    )}
+                  </td>
+                  <td className={`${tdClass} min-w-0`}>
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="shrink-0 h-9 w-9">
+                      <div className="shrink-0 h-8 w-8">
                         {user.email === 'agent@local' && !(user.googleAvatarUrl || user.avatarUrl) ? (
                           <img
                             src={AGENT_BOT_AVATAR_SRC}
                             alt={fullName}
-                            className="h-9 w-9 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-600"
+                            className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-600"
                           />
                         ) : (user.googleAvatarUrl || user.avatarUrl) ? (
                           <img
                             src={getAuthenticatedAvatarUrl(user.googleAvatarUrl || user.avatarUrl)}
                             alt={fullName}
-                            className="h-9 w-9 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-600"
+                            className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-600"
                           />
                         ) : (
                           <div 
-                            className="h-9 w-9 rounded-full flex items-center justify-center text-xs font-semibold text-white ring-1 ring-black/5"
+                            className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold text-white ring-1 ring-black/5"
                             style={{ backgroundColor: user.memberColor || '#4ECDC4' }}
                           >
                             {user.firstName?.[0]}{user.lastName?.[0]}
@@ -1159,8 +1474,15 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                         )}
                       </div>
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                          {displayName}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                            {displayName}
+                          </div>
+                          {isSystemAccount && (
+                            <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded border bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800">
+                              {t('users.systemAccount')}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                           {user.email}
@@ -1173,34 +1495,25 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-md ${
+                  <td className={tdNowrap}>
+                    <span className={`${pillClass} ${
                       user.isActive 
-                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
+                        : 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800'
                     }`}>
                       {user.isActive ? t('users.active') : t('users.inactive')}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-md ${
-                      user.roles.includes('admin') 
-                        ? 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-                    }`}>
-                      {user.roles.includes('admin') ? t('users.admin') : t('users.user')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-md ${
+                  <td className={tdNowrap}>
+                    <span className={`${pillClass} ${
                       user.authProvider === 'google' 
-                        ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                        ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800'
+                        : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
                     }`}>
                       {user.authProvider === 'google' ? t('users.google') : t('users.local')}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
+                  <td className={tdNowrap}>
                     <div 
                       ref={(el) => { colorButtonRefs.current[user.id] = el; }}
                       className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-600 cursor-pointer hover:scale-110 transition-transform shadow-sm"
@@ -1209,7 +1522,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                       title={t('users.clickToChangeColor')}
                     />
                   </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap text-xs font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                  <td className={`${tdNowrap} text-xs tabular-nums text-slate-600 dark:text-slate-300`}>
                     {formatToYYYYMMDDHHmmss(user.joined || user.createdAt)}
                   </td>
                 </tr>
@@ -1217,7 +1530,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   })
                 ) : (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                  <td colSpan={7} className={`${tdClass} py-8 text-center text-sm text-slate-500 dark:text-slate-400`}>
                     {loading
                       ? t('users.loadingUsers')
                       : hasActiveFilters
@@ -1227,343 +1540,385 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 </tr>
               )}
               </tbody>
+                  </>
+                );
+              })()}
             </table>
           </div>
         </div>
       </div>
 
+
       {/* Add User Modal */}
-      {showAddUserForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border border-gray-300 dark:border-gray-600 w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">{t('users.addNewUser')}</h3>
-              <div className="space-y-4">
+      {showAddUserForm && createPortal(
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4"
+          role="presentation"
+          onClick={() => {
+            if (!isAddingUser) handleCancelAddUser();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-add-user-title"
+            className="w-full max-w-lg max-h-[min(90vh,720px)] overflow-y-auto rounded-xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-5 py-4 backdrop-blur">
+              <h3 id="admin-add-user-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                {t('users.addNewUser')}
+              </h3>
+              <button
+                type="button"
+                onClick={handleCancelAddUser}
+                disabled={isAddingUser}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
+                aria-label={t('users.cancel')}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-5">
+              <div>
+                <label className={labelClass}>{t('users.email')}</label>
+                <input
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => handleNewUserChange('email', e.target.value)}
+                  className={fieldClass}
+                  placeholder="user@example.com"
+                  autoFocus
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('users.email')}</label>
-                  <input
-                    type="email"
-                    value={newUser.email}
-                    onChange={(e) => handleNewUserChange('email', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    placeholder="user@example.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('users.password')}</label>
-                  <input
-                    type="password"
-                    value={newUser.password}
-                    onChange={(e) => handleNewUserChange('password', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    placeholder={t('users.enterPassword')}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('users.firstName')}</label>
+                  <label className={labelClass}>{t('users.firstName')}</label>
                   <input
                     type="text"
                     value={newUser.firstName}
                     onChange={(e) => setNewUser(prev => ({ ...prev, firstName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className={fieldClass}
                     placeholder={t('users.firstName')}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('users.lastName')}</label>
+                  <label className={labelClass}>{t('users.lastName')}</label>
                   <input
                     type="text"
                     value={newUser.lastName}
                     onChange={(e) => setNewUser(prev => ({ ...prev, lastName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className={fieldClass}
                     placeholder={t('users.lastName')}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('users.displayName')}</label>
-                  <input
-                    type="text"
-                    value={newUser.displayName || `${newUser.firstName} ${newUser.lastName}`}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, displayName: e.target.value }))}
-                    maxLength={30}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    placeholder={t('users.displayName')}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('users.role')}</label>
-                  <select
-                    value={newUser.role}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  >
-                    <option value="user">{t('users.user')}</option>
-                    <option value="admin">{t('users.admin')}</option>
-                  </select>
-                </div>
-                <div className="flex items-center">
-                  <ModernCheckbox
-                    id="isActive"
-                    checked={isDemoMode || newUser.isActive}
-                    disabled={isDemoMode}
-                    onChange={(e) => {
-                      if (isDemoMode) return;
-                      setNewUser(prev => ({ ...prev, isActive: e.target.checked }));
-                    }}
-                    title={isDemoMode ? t('users.activeCreateLocallyDemo') : undefined}
-                  />
-                  <label
-                    htmlFor="isActive"
-                    className={`ml-2 block text-sm ${
-                      isDemoMode
-                        ? 'text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                        : 'text-gray-700 dark:text-gray-300'
-                    }`}
-                    title={isDemoMode ? t('users.activeCreateLocallyDemo') : undefined}
-                  >
-                    {t('users.activeCreateLocally')}
-                  </label>
-                </div>
-                {isDemoMode && (
-                  <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded px-2 py-1.5">
-                    {t('users.activeCreateLocallyDemo')}
-                  </p>
+              </div>
+              <div>
+                <label className={labelClass}>{t('users.displayName')}</label>
+                <input
+                  type="text"
+                  value={newUser.displayName || `${newUser.firstName} ${newUser.lastName}`.trim()}
+                  onChange={(e) => setNewUser(prev => ({ ...prev, displayName: e.target.value }))}
+                  maxLength={30}
+                  className={fieldClass}
+                  placeholder={t('users.displayName')}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>{t('users.role')}</label>
+                <RoleBadgeSelect
+                  size="md"
+                  value={(newUser.role as RoleValue) || 'user'}
+                  labels={roleLabels}
+                  descriptions={roleDescriptions}
+                  title={t('users.changeRole')}
+                  onChange={(role) => setNewUser((prev) => ({ ...prev, role }))}
+                />
+              </div>
+              <div className="flex items-start gap-2 pt-0.5">
+                <ModernCheckbox
+                  id="isActive"
+                  checked={isDemoMode || newUser.isActive}
+                  disabled={isDemoMode}
+                  onChange={(e) => {
+                    if (isDemoMode) return;
+                    setNewUser(prev => ({ ...prev, isActive: e.target.checked }));
+                  }}
+                  title={isDemoMode ? t('users.activeCreateLocallyDemo') : undefined}
+                />
+                <label
+                  htmlFor="isActive"
+                  className={`text-sm leading-snug ${
+                    isDemoMode
+                      ? 'text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                      : 'text-slate-700 dark:text-slate-300'
+                  }`}
+                  title={isDemoMode ? t('users.activeCreateLocallyDemo') : undefined}
+                >
+                  {t('users.activeCreateLocally')}
+                </label>
+              </div>
+              {isDemoMode && (
+                <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-md px-2.5 py-2">
+                  {t('users.activeCreateLocallyDemo')}
+                </p>
+              )}
+            </div>
+            <div className="sticky bottom-0 flex justify-end gap-2.5 border-t border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-5 py-4 backdrop-blur">
+              <button
+                type="button"
+                onClick={handleCancelAddUser}
+                disabled={isAddingUser}
+                className="px-4 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+              >
+                {t('users.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleAddUser}
+                disabled={isAddingUser}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAddingUser && (
+                  <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" aria-hidden />
                 )}
-              </div>
-              <div className="flex space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={handleAddUser}
-                  disabled={isAddingUser}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isAddingUser && (
-                    <span
-                      className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent"
-                      aria-hidden
-                    />
-                  )}
-                  {isAddingUser
-                    ? newUser.isActive || isDemoMode
-                      ? t('users.creatingUser')
-                      : t('users.sendingInvitation')
-                    : newUser.isActive || isDemoMode
-                      ? t('users.save')
-                      : t('users.inviteUser')}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelAddUser}
-                  disabled={isAddingUser}
-                  className="flex-1 px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {t('users.cancel')}
-                </button>
-              </div>
+                {isAddingUser
+                  ? newUser.isActive || isDemoMode
+                    ? t('users.creatingUser')
+                    : t('users.sendingInvitation')
+                  : newUser.isActive || isDemoMode
+                    ? t('users.save')
+                    : t('users.inviteUser')}
+              </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      
+
       {/* Edit User Modal */}
-      {showEditUserForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border border-gray-300 dark:border-gray-600 w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">{t('users.editUser')}</h3>
+      {showEditUserForm && createPortal(
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4"
+          role="presentation"
+          onClick={() => {
+            if (!isSubmitting) handleCancelEditUser();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-edit-user-title"
+            className="w-full max-w-lg max-h-[min(90vh,720px)] overflow-y-auto rounded-xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-5 py-4 backdrop-blur">
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 id="admin-edit-user-title" className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+                  {t('users.editUser')}
+                </h3>
+                {isLocalPseudoAccount(editingUserData.email) && (
+                  <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded border bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800">
+                    {t('users.systemAccount')}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelEditUser}
+                disabled={isSubmitting}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 disabled:opacity-50"
+                aria-label={t('users.cancel')}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-5">
               {isLocalPseudoAccount(editingUserData.email) && (
-                <p className="mb-3 text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-2">
+                <p className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-md px-2.5 py-2">
                   {t('users.pseudoProfileHint')}
                 </p>
               )}
-              <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('users.firstName')}</label>
+                  <label className={labelClass}>{t('users.firstName')}</label>
                   <input
                     type="text"
                     value={editingUserData.firstName}
                     onChange={(e) => setEditingUserData(prev => ({ ...prev, firstName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className={fieldClass}
                     placeholder={t('users.firstName')}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('users.lastName')}</label>
+                  <label className={labelClass}>{t('users.lastName')}</label>
                   <input
                     type="text"
                     value={editingUserData.lastName}
                     onChange={(e) => setEditingUserData(prev => ({ ...prev, lastName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className={fieldClass}
                     placeholder={t('users.lastName')}
                   />
                 </div>
+              </div>
+              <div>
+                <label className={labelClass}>{t('users.displayName')}</label>
+                <input
+                  type="text"
+                  value={editingUserData.displayName}
+                  onChange={(e) => setEditingUserData(prev => ({ ...prev, displayName: e.target.value }))}
+                  maxLength={30}
+                  className={fieldClass}
+                  placeholder={t('users.displayName')}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  {t('users.email')}
+                  {isOwner(editingUserData.email) && (
+                    <span className="ml-2 text-[11px] text-amber-600 font-normal">{t('users.ownerCannotBeChanged')}</span>
+                  )}
+                  {isLocalPseudoAccount(editingUserData.email) && (
+                    <span className="ml-2 text-[11px] text-amber-600 font-normal">{t('users.pseudoEmailLocked')}</span>
+                  )}
+                </label>
+                <input
+                  type="email"
+                  value={editingUserData.email}
+                  onChange={(e) => setEditingUserData(prev => ({ ...prev, email: e.target.value }))}
+                  disabled={isOwner(editingUserData.email) || isLocalPseudoAccount(editingUserData.email)}
+                  className={`${fieldClass} ${
+                    isOwner(editingUserData.email) || isLocalPseudoAccount(editingUserData.email)
+                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : ''
+                  }`}
+                  placeholder="user@example.com"
+                />
+              </div>
+              {!isLocalPseudoAccount(editingUserData.email) && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('users.displayName')}</label>
-                  <input
-                    type="text"
-                    value={editingUserData.displayName}
-                    onChange={(e) => setEditingUserData(prev => ({ ...prev, displayName: e.target.value }))}
-                    maxLength={30}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                    placeholder={t('users.displayName')}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('users.email')}
-                    {isOwner(editingUserData.email) && (
-                      <span className="ml-2 text-xs text-amber-600 font-normal">{t('users.ownerCannotBeChanged')}</span>
-                    )}
-                    {isLocalPseudoAccount(editingUserData.email) && (
-                      <span className="ml-2 text-xs text-amber-600 font-normal">{t('users.pseudoEmailLocked')}</span>
-                    )}
-                  </label>
-                  <input
-                    type="email"
-                    value={editingUserData.email}
-                    onChange={(e) => setEditingUserData(prev => ({ ...prev, email: e.target.value }))}
-                    disabled={isOwner(editingUserData.email) || isLocalPseudoAccount(editingUserData.email)}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                      isOwner(editingUserData.email) || isLocalPseudoAccount(editingUserData.email)
-                        ? 'bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-300 dark:border-gray-500'
-                        : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
-                    }`}
-                    placeholder="user@example.com"
-                    title={
-                      isOwner(editingUserData.email)
-                        ? t('users.instanceOwnerEmailCannotBeChanged')
-                        : isLocalPseudoAccount(editingUserData.email)
-                          ? t('users.pseudoEmailLocked')
-                          : ''
+                  <label className={labelClass}>{t('users.role')}</label>
+                  <RoleBadgeSelect
+                    size="md"
+                    value={editingUserData.role}
+                    labels={roleLabels}
+                    descriptions={roleDescriptions}
+                    title={t('users.changeRole')}
+                    disabled={
+                      editingUserData.id === currentUser?.id ||
+                      !canModifyUser(editingUserData.email)
+                    }
+                    onChange={(role) =>
+                      setEditingUserData((prev) => ({
+                        ...prev,
+                        role,
+                      }))
                     }
                   />
-                  {isOwner(editingUserData.email) && (
-                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                      {t('users.instanceOwnerEmailCannotBeModified')}
-                    </p>
-                  )}
                 </div>
-                {!isLocalPseudoAccount(editingUserData.email) && (
-                <div>
-                  <label className="flex items-center">
-                    <ModernCheckbox
-                      checked={editingUserData.isActive}
-                      onChange={(e) => setEditingUserData(prev => ({ ...prev, isActive: e.target.checked }))}
-                    />
-                    <span className="ml-2 text-sm text-gray-700">{t('users.active')}</span>
+              )}
+              {!isLocalPseudoAccount(editingUserData.email) && (
+                <div className="flex items-center gap-2">
+                  <ModernCheckbox
+                    id="editIsActive"
+                    checked={editingUserData.isActive}
+                    disabled={!canModifyUser(editingUserData.email)}
+                    onChange={(e) => setEditingUserData(prev => ({ ...prev, isActive: e.target.checked }))}
+                  />
+                  <label htmlFor="editIsActive" className="text-sm text-slate-700 dark:text-slate-300">
+                    {t('users.active')}
                   </label>
                 </div>
-                )}
-                
-                {/* Avatar Section */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('users.avatar')}</label>
-                  <div className="flex items-center space-x-3">
-                    {/* Current Avatar Display */}
-                    <div className="flex-shrink-0">
-                      {avatarPreviewUrl ? (
-                        <img
-                          src={avatarPreviewUrl}
-                          alt="Avatar preview"
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      ) : editingUserData.email === 'agent@local' && !(editingUserData.googleAvatarUrl || editingUserData.avatarUrl) ? (
-                        <img
-                          src={AGENT_BOT_AVATAR_SRC}
-                          alt="Agent avatar"
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      ) : (editingUserData.googleAvatarUrl || editingUserData.avatarUrl) ? (
-                        <img
-                          src={getAuthenticatedAvatarUrl(editingUserData.googleAvatarUrl || editingUserData.avatarUrl)}
-                          alt="User avatar"
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div 
-                          className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg"
-                          style={{ backgroundColor: editingUserData.memberColor || '#4ECDC4' }}
-                        >
-                          {editingUserData.firstName?.charAt(0)}{editingUserData.lastName?.charAt(0)}
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Avatar Upload Controls - Only for local users */}
-                    {editingUserData.authProvider === 'local' ? (
-                      <div className="flex-1 space-y-2">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleUserAvatarSelect}
-                          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                        />
-                        {editingUserData.avatarUrl && (
-                          <button
-                            type="button"
-                            onClick={() => onRemoveAvatar(editingUserData.id)}
-                            className="text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-2 py-1 rounded transition-colors"
-                          >
-                            {t('users.removeAvatar')}
-                          </button>
-                        )}
-                      </div>
+              )}
+              <div>
+                <label className={labelClass}>{t('users.avatar')}</label>
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0">
+                    {avatarPreviewUrl ? (
+                      <img src={avatarPreviewUrl} alt="" className="w-12 h-12 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-600" />
+                    ) : editingUserData.email === 'agent@local' && !(editingUserData.googleAvatarUrl || editingUserData.avatarUrl) ? (
+                      <img src={AGENT_BOT_AVATAR_SRC} alt="" className="w-12 h-12 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-600" />
+                    ) : (editingUserData.googleAvatarUrl || editingUserData.avatarUrl) ? (
+                      <img
+                        src={getAuthenticatedAvatarUrl(editingUserData.googleAvatarUrl || editingUserData.avatarUrl)}
+                        alt=""
+                        className="w-12 h-12 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-600"
+                      />
                     ) : (
-                      <div className="flex-1">
-                        <div className="text-sm text-gray-600 bg-blue-50 p-2 rounded border border-blue-200">
-                          <p className="text-blue-800 font-medium">{t('users.googleAccount')}</p>
-                          <p className="text-blue-700 text-xs mt-1">
-                            {t('users.avatarManagedByGoogle')}
-                          </p>
-                        </div>
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg ring-1 ring-black/5"
+                        style={{ backgroundColor: editingUserData.memberColor || '#4ECDC4' }}
+                      >
+                        {editingUserData.firstName?.charAt(0)}{editingUserData.lastName?.charAt(0)}
                       </div>
                     )}
                   </div>
+                  {editingUserData.authProvider === 'local' ? (
+                    <div className="flex-1 space-y-1.5 min-w-0">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUserAvatarSelect}
+                        className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-950/40 dark:file:text-blue-300"
+                      />
+                      {editingUserData.avatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => onRemoveAvatar(editingUserData.id)}
+                          className="text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 py-1 rounded transition-colors"
+                        >
+                          {t('users.removeAvatar')}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex-1 text-xs text-sky-800 dark:text-sky-200 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-md px-2.5 py-2">
+                      <p className="font-medium">{t('users.googleAccount')}</p>
+                      <p className="mt-0.5 opacity-90">{t('users.avatarManagedByGoogle')}</p>
+                    </div>
+                  )}
                 </div>
               </div>
-              {/* Resend invite — never for @local pseudo accounts */}
-              {canResendInvitation(editingUserData) && (
-                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md dark:bg-amber-950/30 dark:border-amber-800">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{t('users.accountPendingActivation')}</p>
-                      <p className="text-xs text-amber-600 dark:text-amber-400">{t('users.accountNotActivatedYet')}</p>
-                    </div>
-                    <button
-                      onClick={() => void handleResendInvitation()}
-                      disabled={isResendingInvitation || isSubmitting}
-                      aria-busy={isResendingInvitation}
-                      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 text-xs bg-amber-600 text-white rounded hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-wait"
-                    >
-                      {isResendingInvitation && (
-                        <Loader2 size={12} className="animate-spin" aria-hidden />
-                      )}
-                      {isResendingInvitation ? t('users.sendingInvitation') : t('users.resendInvitation')}
-                    </button>
+              {persistedEditingUser && canResendInvitation(persistedEditingUser) && (
+                <div className="flex items-center justify-between gap-3 p-3 bg-amber-50 border border-amber-200 rounded-md dark:bg-amber-950/30 dark:border-amber-800">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{t('users.accountPendingActivation')}</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">{t('users.accountNotActivatedYet')}</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleResendInvitation()}
+                    disabled={isResendingInvitation || isSubmitting}
+                    aria-busy={isResendingInvitation}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50 disabled:cursor-wait"
+                  >
+                    {isResendingInvitation && <Loader2 size={12} className="animate-spin" aria-hidden />}
+                    {isResendingInvitation ? t('users.sendingInvitation') : t('users.resendInvitation')}
+                  </button>
                 </div>
               )}
-
-
-              <div className="flex space-x-3 mt-6">
-                <button
-                  onClick={handleSaveUser}
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? t('users.saving') : t('users.saveChanges')}
-                </button>
-                <button
-                  onClick={handleCancelEditUser}
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {t('users.cancel')}
-                </button>
-              </div>
+            </div>
+            <div className="sticky bottom-0 flex justify-end gap-2.5 border-t border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-5 py-4 backdrop-blur">
+              <button
+                type="button"
+                onClick={handleCancelEditUser}
+                disabled={isSubmitting}
+                className="px-4 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+              >
+                {t('users.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveUser}
+                disabled={isSubmitting}
+                className="px-4 py-2.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? t('users.saving') : t('users.saveChanges')}
+              </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Portal-based Delete Confirmation Dialog */}

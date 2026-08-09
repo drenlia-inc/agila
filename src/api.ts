@@ -126,6 +126,8 @@ api.interceptors.request.use((config) => {
       '/auth/register',
       '/api/auth/activate-account',
       '/auth/activate-account',
+      '/api/auth/verify-invitation',
+      '/auth/verify-invitation',
       '/api/auth/forgot-password',
       '/auth/forgot-password',
       '/api/auth/reset-password',

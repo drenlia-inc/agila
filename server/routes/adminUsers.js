@@ -374,9 +374,8 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     return res.status(400).json({ error: 'Cannot create users with @local email addresses' });
   }
 
-  if (isActive && !password) {
-    return res.status(400).json({ error: 'Password is required' });
-  }
+  // Password is optional: invites and admin-created actives use a random hash until
+  // the user activates via invite link, password reset, or Google SSO.
   
   // Get baseUrl for invitation emails - use APP_URL from database (tenant-specific)
   // Priority: 1) APP_URL from database, 2) baseUrl from request body, 3) Construct from tenantId, 4) Fallback
@@ -642,7 +641,12 @@ router.post('/:userId/resend-invitation', authenticateToken, requireRole(['admin
       return res.status(400).json({ error: 'Cannot send invitations to @local accounts' });
     }
 
-    if (user.is_active) {
+    const isActive =
+      user.is_active === true ||
+      user.is_active === 1 ||
+      user.isActive === true ||
+      user.isActive === 1;
+    if (isActive) {
       return res.status(400).json({ error: 'User account is already active' });
     }
 
