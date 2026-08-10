@@ -73,16 +73,9 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
     await i18n.changeLanguage(newLanguage);
   };
   const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
-  const [adminCredentials, setAdminCredentials] = useState<{
-    email: string;
-    password: string;
-  } | null>(null);
   const [credentialsReady, setCredentialsReady] = useState(false);
   const [waitingForCredentials, setWaitingForCredentials] = useState(false);
   const [refreshingCredentials, setRefreshingCredentials] = useState(false);
-  /** Guided demo CTA: pulse Fill form, then Sign in after fill. */
-  const [demoGuideStep, setDemoGuideStep] = useState<'fill' | 'signIn' | null>(null);
-  const [demoFieldsFlash, setDemoFieldsFlash] = useState(false);
   const [backendAvailable, setBackendAvailable] = useState<boolean>(true);
   const [checkingBackend, setCheckingBackend] = useState<boolean>(true);
 
@@ -126,48 +119,19 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
     if (refreshingCredentials) return;
     setRefreshingCredentials(true);
     clearError();
-    // Clear typed password so testers don't submit the pre-reset value
-    setPassword('');
-    setDemoGuideStep('fill');
     try {
       const creds = await fetchAdminCredentials();
       if (creds) {
-        setAdminCredentials(creds);
         setCredentialsReady(true);
         setWaitingForCredentials(false);
-        setDemoGuideStep('fill');
       } else {
-        setAdminCredentials(null);
         setCredentialsReady(false);
         setWaitingForCredentials(true);
-        setDemoGuideStep(null);
       }
     } finally {
       setRefreshingCredentials(false);
     }
   };
-
-  const handleFillCredentials = () => {
-    if (!adminCredentials || !credentialsReady) return;
-    setEmail(adminCredentials.email);
-    setPassword(adminCredentials.password);
-    clearError();
-    setDemoGuideStep('signIn');
-    setDemoFieldsFlash(true);
-    window.setTimeout(() => setDemoFieldsFlash(false), 900);
-  };
-
-  useEffect(() => {
-    if (!isDemoMode) {
-      setDemoGuideStep(null);
-      return;
-    }
-    if (credentialsReady) {
-      setDemoGuideStep((prev) => prev ?? 'fill');
-    } else {
-      setDemoGuideStep(null);
-    }
-  }, [isDemoMode, credentialsReady]);
 
   // Check backend availability on mount and periodically
   useEffect(() => {
@@ -219,10 +183,9 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
     };
   }, []);
 
-  // Poll for real admin credentials in demo mode (no fake "admin" fallback).
+  // Poll until demo admin credentials are available (no fake "admin" fallback).
   useEffect(() => {
     if (!isDemoMode) {
-      setAdminCredentials(null);
       setCredentialsReady(false);
       setWaitingForCredentials(false);
       return;
@@ -236,13 +199,11 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
       if (cancelled) return;
 
       if (creds) {
-        setAdminCredentials(creds);
         setCredentialsReady(true);
         setWaitingForCredentials(false);
         return;
       }
 
-      setAdminCredentials(null);
       setCredentialsReady(false);
       setWaitingForCredentials(true);
       timer = setTimeout(poll, 2000);
@@ -323,14 +284,34 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
     setIsLoading(true);
 
     try {
+      if (isDemoMode) {
+        // Always fetch fresh credentials so a prior demo reset cannot leave us with a stale password
+        const creds = await fetchAdminCredentials();
+        if (!creds) {
+          setCredentialsReady(false);
+          setWaitingForCredentials(true);
+          setI18nError('login.demoSignInFailedRefresh');
+          return;
+        }
+        setCredentialsReady(true);
+        setWaitingForCredentials(false);
+        const response = await login(creds.email, creds.password);
+        await onLogin(response.user, response.token);
+        return;
+      }
+
       const response = await login(email, password);
       await onLogin(response.user, response.token);
     } catch (error: any) {
-      const apiMessage = error.response?.data?.error;
-      if (typeof apiMessage === 'string' && apiMessage.trim()) {
-        setRawError(apiMessage);
+      if (isDemoMode) {
+        setI18nError('login.demoSignInFailedRefresh');
       } else {
-        setI18nError('login.loginFailed');
+        const apiMessage = error.response?.data?.error;
+        if (typeof apiMessage === 'string' && apiMessage.trim()) {
+          setRawError(apiMessage);
+        } else {
+          setI18nError('login.loginFailed');
+        }
       }
     } finally {
       setIsLoading(false);
@@ -477,52 +458,44 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
         
         {!checkingBackend && backendAvailable && (
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div
-            className={`rounded-md shadow-sm -space-y-px bg-white dark:bg-gray-800 p-6 rounded-lg ${
-              demoFieldsFlash ? 'demo-guide-fields-flash' : ''
-            }`}
-          >
-            <div>
-              <label htmlFor="email" className="sr-only">
-                {t('login.emailAddress')}
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder={t('login.emailAddress')}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                {t('login.password')}
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder={t('login.password')}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {errorMessage && (
-            <div className="text-red-600 text-sm text-center">
-              {errorMessage}
+          {!isDemoMode && (
+            <div className="rounded-md shadow-sm -space-y-px bg-white dark:bg-gray-800 p-6 rounded-lg">
+              <div>
+                <label htmlFor="email" className="sr-only">
+                  {t('login.emailAddress')}
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  required
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder={t('login.emailAddress')}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="password" className="sr-only">
+                  {t('login.password')}
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder={t('login.password')}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
             </div>
           )}
 
@@ -533,7 +506,7 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
                 aria-hidden
               />
               <div className="relative">
-                <div className="mb-3 flex items-start gap-2.5">
+                <div className="flex items-start gap-2.5">
                   <div className="mt-0.5 inline-flex rounded-lg bg-blue-600 p-1.5 text-white shadow-sm">
                     <Sparkles className="h-4 w-4" aria-hidden />
                   </div>
@@ -542,101 +515,15 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
                       {t('login.demoCredentials')}
                     </p>
                     <p className="mt-0.5 text-xs text-blue-800/80 dark:text-blue-200/80">
-                      {demoGuideStep === 'signIn'
-                        ? t('login.demoGuideHintSignIn')
-                        : t('login.demoGuideHintFill')}
+                      {credentialsReady
+                        ? t('login.demoGuideHint')
+                        : t('login.demoCredentialsWaitingHint')}
                     </p>
                   </div>
                 </div>
 
-                {credentialsReady && adminCredentials ? (
-                  <>
-                    <div className="mb-3 flex gap-2" aria-hidden>
-                      <div
-                        className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
-                          demoGuideStep === 'fill'
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200'
-                        }`}
-                      >
-                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px]">
-                          1
-                        </span>
-                        {t('login.demoGuideStepFill')}
-                      </div>
-                      <div
-                        className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
-                          demoGuideStep === 'signIn'
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'bg-slate-100 text-slate-500 dark:bg-gray-800 dark:text-gray-400'
-                        }`}
-                      >
-                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-black/10 text-[10px] dark:bg-white/15">
-                          2
-                        </span>
-                        {t('login.demoGuideStepSignIn')}
-                      </div>
-                    </div>
-
-                    <div className="mb-3 rounded-lg border border-blue-100 bg-white/80 p-3 text-left dark:border-blue-900/60 dark:bg-gray-900/60">
-                      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                        {t('login.adminAccount')}
-                      </p>
-                      <div className="space-y-1.5 font-mono text-xs text-gray-800 dark:text-gray-200">
-                        <div className="break-all rounded-md bg-slate-50 px-2 py-1.5 dark:bg-gray-800">
-                          {adminCredentials.email}
-                        </div>
-                        <div className="break-all rounded-md bg-slate-50 px-2 py-1.5 dark:bg-gray-800">
-                          {adminCredentials.password}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="relative">
-                      {demoGuideStep === 'fill' && (
-                        <div
-                          className="demo-guide-cue absolute -top-1 left-1/2 z-10 flex -translate-x-1/2 -translate-y-full flex-col items-center text-blue-600 dark:text-blue-300"
-                          aria-hidden
-                        >
-                          <MousePointerClick className="h-5 w-5 drop-shadow-sm" />
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={handleRefreshCredentials}
-                          disabled={refreshingCredentials}
-                          className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-700 dark:bg-gray-900 dark:text-blue-300 dark:hover:bg-blue-950/40"
-                          title={t('login.refreshCredentials')}
-                          aria-label={t('login.refreshCredentials')}
-                        >
-                          <RefreshCw
-                            className={`h-3.5 w-3.5 ${refreshingCredentials ? 'animate-spin' : ''}`}
-                          />
-                          {refreshingCredentials
-                            ? t('login.refreshingCredentials')
-                            : t('login.refreshCredentials')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleFillCredentials}
-                          disabled={refreshingCredentials}
-                          className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                            demoGuideStep === 'fill'
-                              ? 'demo-guide-target bg-blue-600 hover:bg-blue-700'
-                              : 'bg-blue-600 hover:bg-blue-700'
-                          }`}
-                          title={t('login.fillCredentials')}
-                          aria-label={t('login.fillCredentials')}
-                        >
-                          <MousePointerClick className="h-4 w-4" aria-hidden />
-                          {t('login.fillCredentials')}
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center gap-2 py-3">
+                {!credentialsReady && (
+                  <div className="mt-4 flex flex-col items-center gap-2">
                     <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
                       <RefreshCw
                         className={`h-4 w-4 ${
@@ -647,9 +534,6 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
                         {t('login.demoCredentialsWaiting')}
                       </span>
                     </div>
-                    <p className="text-center text-xs text-blue-600/80 dark:text-blue-400/80">
-                      {t('login.demoCredentialsWaitingHint')}
-                    </p>
                     <button
                       type="button"
                       onClick={handleRefreshCredentials}
@@ -671,9 +555,27 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
             </div>
           )}
 
+          {errorMessage && (
+            <div className="space-y-2 text-center">
+              <div className="text-sm text-red-600 dark:text-red-400">{errorMessage}</div>
+              {isDemoMode && errorKey === 'login.demoSignInFailedRefresh' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.clear();
+                    window.location.reload();
+                  }}
+                  className="inline-flex items-center justify-center rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"
+                >
+                  {t('login.clearSession')}
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="space-y-3">
             <div className="relative">
-              {isDemoMode && demoGuideStep === 'signIn' && (
+              {isDemoMode && credentialsReady && !isLoading && (
                 <div
                   className="demo-guide-cue absolute -top-1 left-1/2 z-10 flex -translate-x-1/2 -translate-y-full flex-col items-center text-blue-600 dark:text-blue-300"
                   aria-hidden
@@ -683,13 +585,13 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
               )}
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || (isDemoMode && !credentialsReady)}
                 className={`group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-semibold rounded-lg text-white ${
-                  isLoading
+                  isLoading || (isDemoMode && !credentialsReady)
                     ? 'bg-blue-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
                 } ${
-                  isDemoMode && demoGuideStep === 'signIn' && !isLoading ? 'demo-guide-target' : ''
+                  isDemoMode && credentialsReady && !isLoading ? 'demo-guide-target' : ''
                 }`}
               >
                 {isLoading ? (
@@ -718,8 +620,8 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
               </button>
             </div>
 
-            {/* Google Sign-In Button - Only show if OAuth is configured */}
-            {googleOAuthEnabled && (
+            {/* Google Sign-In Button - Only show if OAuth is configured (non-demo) */}
+            {googleOAuthEnabled && !isDemoMode && (
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
