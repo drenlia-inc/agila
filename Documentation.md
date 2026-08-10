@@ -633,8 +633,10 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 
 ### Board (Kanban page, when not typing / no dialog open)
 - **/** or **Ctrl/Cmd+K**: Focus header task search
+- **S**: Open or close the Tools Search & Filter panel
 - **N**: Create a new task in the first column
 - **1 / 2 / 3**: Switch Kanban / List / Gantt view
+- **F / P / M**: Card density — Full / Preview / Minimal
 - **Escape** (in search/filter panel): Clear the focused field, then clear all filters (same as the X controls)
 
 ### Admin
@@ -654,7 +656,6 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 ### Task Management
 - **Click**: Select task
 - **Drag**: Move tasks between columns using the handle
-- **S** (Kanban view only, while hovering a card): Toggle multi-select checkbox
 - **Ctrl/Cmd + click** on a card: Toggle multi-select
 
 ---

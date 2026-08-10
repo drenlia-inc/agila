@@ -34,12 +34,18 @@ export const AGENT_ACTIONS = {
   JOB_FAILED: 'agent_job_failed'
 };
 
+/** Membership / account lifecycle (team-facing feed) */
+export const MEMBER_ACTIONS = {
+  JOINED: 'member_joined'
+};
+
 // All actions combined for easy reference
 export const ALL_ACTIONS = [
   ...Object.values(TASK_ACTIONS),
   ...Object.values(TAG_ACTIONS),
   ...Object.values(COMMENT_ACTIONS),
-  ...Object.values(AGENT_ACTIONS)
+  ...Object.values(AGENT_ACTIONS),
+  ...Object.values(MEMBER_ACTIONS)
 ];
 
 // Helper function to check if action is valid

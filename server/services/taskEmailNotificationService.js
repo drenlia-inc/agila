@@ -2,7 +2,7 @@ import EmailService from './emailService.js';
 import { EmailTemplates } from './emailTemplates.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { getNotificationThrottlerForDb } from './notificationThrottler.js';
-import { activity as activityQueries, tasks as taskQueries } from '../utils/sqlManager/index.js';
+import { activity as activityQueries, tasks as taskQueries, helpers } from '../utils/sqlManager/index.js';
 import { buildTaskEmailUrl, buildEmailAuthorAvatar } from '../utils/emailContent.js';
 import { getUserTimeZone } from '../utils/dateFormatter.js';
 import { getTenantStoragePaths } from '../middleware/tenantRouting.js';
@@ -276,6 +276,31 @@ class TaskEmailNotificationService {
   }
 
   async resolvePeopleDisplayValues(changedField, oldValue, newValue) {
+    if (changedField === 'columnId') {
+      const looksLikeColumnId = (value) => {
+        const s = String(value || '').trim();
+        if (!s) return false;
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) {
+          return true;
+        }
+        // Column ids are often slug-prefixed UUIDs (e.g. todo-<uuid>)
+        return /^[a-z0-9]+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+      };
+
+      const resolveTitle = async (value) => {
+        if (!value) return '';
+        if (!looksLikeColumnId(value)) return String(value);
+        const column = await helpers.getColumnById(this.db, value);
+        return column?.title || String(value);
+      };
+
+      const [oldTitle, newTitle] = await Promise.all([
+        resolveTitle(oldValue),
+        resolveTitle(newValue),
+      ]);
+      return { oldValue: oldTitle, newValue: newTitle, newAssigneeUserId: null };
+    }
+
     if (changedField !== 'memberId' && changedField !== 'requesterId') {
       return { oldValue, newValue, newAssigneeUserId: null };
     }

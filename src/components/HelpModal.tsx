@@ -39,10 +39,11 @@ const HELP_SHORTCUT_SECTIONS: { titleKey: string; rows: ShortcutRow[] }[] = [
     titleKey: 'help.shortcuts.board',
     rows: [
       { keys: '/ or Ctrl/Cmd+K', actionKey: 'help.shortcuts.boardSearch' },
+      { keys: 'S', actionKey: 'help.shortcuts.boardSearchPanel' },
       { keys: 'N', actionKey: 'help.shortcuts.boardNewTask' },
       { keys: '1 / 2 / 3', actionKey: 'help.shortcuts.boardViews' },
+      { keys: 'F / P / M', actionKey: 'help.shortcuts.boardDensity' },
       { keys: 'Escape', actionKey: 'help.shortcuts.boardFilterEscape' },
-      { keys: 'S', actionKey: 'help.shortcuts.boardMultiSelectS' },
       { keys: 'Ctrl/Cmd+click', actionKey: 'help.shortcuts.boardMultiSelectClick' },
     ],
   },

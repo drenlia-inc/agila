@@ -1,4 +1,4 @@
-import { isValidAction } from '../constants/activityActions.js';
+import { isValidAction, MEMBER_ACTIONS } from '../constants/activityActions.js';
 import notificationService from './notificationService.js';
 import { notifyTaskActivity, notifyCommentActivity, notifyBulkTaskFieldActivity } from './taskEmailNotificationService.js';
 import { getBilingualTranslation, t } from '../utils/i18n.js';
@@ -1118,5 +1118,29 @@ export const logBulkTaskFieldActivity = async (userId, field, payload = {}, addi
     });
   } catch (error) {
     console.error('❌ Error logging bulk task activity:', error);
+  }
+};
+
+/**
+ * Log a team-facing "joined the team" feed item once per user (first invite/SSO activation).
+ * Skips password resets and later re-activations when a prior join/activation row exists.
+ */
+export const logMemberJoinedIfFirstTime = async (userId, additionalData = {}) => {
+  const database = additionalData.db || db;
+  if (!database || !userId) return false;
+
+  try {
+    const alreadyJoined = await activityQueries.hasUserJoinActivity(database, userId);
+    if (alreadyJoined) return false;
+
+    const details = JSON.stringify(getBilingualTranslation('activity.joinedTeam'));
+    await logActivity(userId, MEMBER_ACTIONS.JOINED, details, {
+      ...additionalData,
+      db: database,
+    });
+    return true;
+  } catch (error) {
+    console.error('❌ Error logging member joined activity:', error);
+    return false;
   }
 };

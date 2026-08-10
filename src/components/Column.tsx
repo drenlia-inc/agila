@@ -11,6 +11,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
 import { parseFinishedColumnNames } from '../utils/columnUtils';
 import { getWipStatus, hasWipLimit } from '../utils/kanbanFlowUtils';
+import { TASK_COUNT_PILL_BASE, taskCountPillToneClass, taskCountPillWeightClass } from '../utils/taskCountPill';
 import { sumTaskEffort, formatEffortDisplay, parseEffortUnit } from '../utils/taskUtils';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { resolveTaskMember } from '../utils/agentMemberUi';
@@ -843,14 +844,7 @@ export default function KanbanColumn({
   const columnWipStatus = getWipStatus(unfilteredTaskCount, column.wip_limit);
   const showWipMeter = hasWipLimit(column.wip_limit);
   const showTaskCount = displayedTaskCount > 0 || showWipMeter;
-  const taskCountPillClass =
-    columnWipStatus === 'over'
-      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200'
-      : columnWipStatus === 'at'
-        ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-        : hasActiveFilters
-          ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/35 dark:text-blue-300'
-          : 'bg-blue-50/80 text-blue-500 dark:bg-blue-900/25 dark:text-blue-400';
+  const taskCountPillClass = `${taskCountPillToneClass(columnWipStatus)} ${taskCountPillWeightClass(hasActiveFilters)}`;
   const taskCountLabel = showWipMeter
     ? t('column.wipMeterTooltip', {
         count: hasActiveFilters ? displayedTaskCount : unfilteredTaskCount,
@@ -864,7 +858,7 @@ export default function KanbanColumn({
     : displayedTaskCount;
   const taskCountBadge = showTaskCount ? (
     <span
-      className={`inline-flex items-center justify-center px-1.5 py-0.5 text-[0.65rem] leading-none rounded-full font-medium min-w-[1.25rem] text-center tabular-nums whitespace-nowrap ${taskCountPillClass}`}
+      className={`${TASK_COUNT_PILL_BASE} ${taskCountPillClass}`}
       aria-label={taskCountLabel}
     >
       {taskCountDisplay}
@@ -1006,28 +1000,29 @@ export default function KanbanColumn({
         data-column-header
       >
         <div className={`flex gap-2 flex-1 min-w-0 ${isEditing ? 'items-start' : 'items-center'}`}>
-          {/* Column selection lives in the board-level strip above the columns. */}
+          {/* Task count pill (same chrome for all roles). Admins: hover reveals drag handle. */}
           {isAdmin ? (
             <KanbanChromeTooltip
               label={t('column.clickToEditDragToReorder')}
               wrapperClassName={`relative inline-flex shrink-0 items-center ${isEditing ? 'mt-2' : ''}`}
             >
-              <div className="group/column-handle relative h-5 w-5">
-                <div
-                  {...listeners}
-                  className="h-5 w-5 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors opacity-50 hover:opacity-100"
-                >
-                  <GripVertical
-                    size={12}
-                    className={`text-gray-400 transition-opacity group-hover/column-handle:opacity-100 ${
-                      !isEditing && taskCountBadge ? 'opacity-0' : 'opacity-100'
-                    }`}
-                  />
-                </div>
-                {!isEditing && taskCountBadge && (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity group-hover/column-handle:opacity-0 group-hover/column-handle:invisible peer-focus:invisible">
-                    {taskCountBadge}
-                  </div>
+              <div
+                {...listeners}
+                className={`group/column-handle relative flex min-h-5 min-w-5 cursor-grab items-center justify-center rounded px-0.5 transition-colors hover:bg-gray-200 active:cursor-grabbing dark:hover:bg-gray-700 ${
+                  !isEditing && taskCountBadge ? '' : 'h-5 w-5 p-1 opacity-50 hover:opacity-100'
+                }`}
+              >
+                {!isEditing && taskCountBadge ? (
+                  <>
+                    <div className="transition-opacity group-hover/column-handle:invisible group-hover/column-handle:opacity-0">
+                      {taskCountBadge}
+                    </div>
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/column-handle:opacity-100">
+                      <GripVertical size={12} className="text-gray-400" aria-hidden />
+                    </div>
+                  </>
+                ) : (
+                  <GripVertical size={12} className="text-gray-400" aria-hidden />
                 )}
               </div>
             </KanbanChromeTooltip>
@@ -1038,9 +1033,7 @@ export default function KanbanColumn({
                 label={taskCountLabel}
                 wrapperClassName="relative inline-flex shrink-0 items-center"
               >
-                <div className="relative flex h-5 w-5 items-center justify-center">
-                  {taskCountBadge}
-                </div>
+                {taskCountBadge}
               </KanbanChromeTooltip>
             )
           )}

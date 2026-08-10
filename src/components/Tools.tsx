@@ -3,6 +3,7 @@ import { Minimize2, Maximize2, Search, Minus, LayoutGrid, List, Calendar, Chevro
 import { useTranslation } from 'react-i18next';
 import { TaskViewMode, ViewMode } from '../utils/userPreferences';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
+import { KbdBadge } from './ui/KbdBadge';
 
 interface ToolsProps {
   taskViewMode: TaskViewMode;
@@ -38,6 +39,22 @@ const buttonIdleClass =
 
 function ToolIcon({ icon: Icon }: { icon: LucideIcon }) {
   return <Icon size={ICON_SIZE} strokeWidth={ICON_STROKE} absoluteStrokeWidth />;
+}
+
+function TooltipWithShortcut({
+  label,
+  shortcut,
+}: {
+  label: string;
+  shortcut?: string;
+}) {
+  if (!shortcut) return <>{label}</>;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span>{label}</span>
+      <KbdBadge>{shortcut}</KbdBadge>
+    </span>
+  );
 }
 
 export default function Tools({
@@ -78,20 +95,33 @@ export default function Tools({
     };
   }, [openMenu]);
 
-  const viewModeOptions: { mode: ViewMode; icon: LucideIcon; label: string; tooltip: string }[] = [
-    { mode: 'kanban', icon: LayoutGrid, label: t('tools.shortKanban'), tooltip: t('tools.currentKanbanView') },
-    { mode: 'list', icon: List, label: t('tools.shortList'), tooltip: t('tools.currentListView') },
-    { mode: 'gantt', icon: Calendar, label: t('tools.shortGantt'), tooltip: t('tools.currentGanttView') },
+  const viewModeOptions: {
+    mode: ViewMode;
+    icon: LucideIcon;
+    label: string;
+    tooltip: string;
+    shortcut: string;
+  }[] = [
+    { mode: 'kanban', icon: LayoutGrid, label: t('tools.shortKanban'), tooltip: t('tools.currentKanbanView'), shortcut: '1' },
+    { mode: 'list', icon: List, label: t('tools.shortList'), tooltip: t('tools.currentListView'), shortcut: '2' },
+    { mode: 'gantt', icon: Calendar, label: t('tools.shortGantt'), tooltip: t('tools.currentGanttView'), shortcut: '3' },
   ];
 
-  const densityOptions: { mode: TaskViewMode; icon: LucideIcon; label: string; tooltip: string }[] = [
-    { mode: 'expand', icon: Maximize2, label: t('tools.shortExpand'), tooltip: t('tools.currentExpandView') },
-    { mode: 'shrink', icon: Minimize2, label: t('tools.shortShrink'), tooltip: t('tools.currentShrinkView') },
+  const densityOptions: {
+    mode: TaskViewMode;
+    icon: LucideIcon;
+    label: string;
+    tooltip: string;
+    shortcut: string;
+  }[] = [
+    { mode: 'expand', icon: Maximize2, label: t('tools.shortExpand'), tooltip: t('tools.currentExpandView'), shortcut: 'F' },
+    { mode: 'shrink', icon: Minimize2, label: t('tools.shortShrink'), tooltip: t('tools.currentShrinkView'), shortcut: 'P' },
     {
       mode: 'compact',
       icon: Minus,
       label: t('tools.shortCompact'),
       tooltip: t('tools.currentCompactViewHiddenDescriptions'),
+      shortcut: 'M',
     },
   ];
 
@@ -115,32 +145,34 @@ export default function Tools({
     selected: boolean,
     icon: LucideIcon,
     label: string,
-    tooltip: string,
+    shortcut: string,
     onSelect: () => void
   ) => (
-    <KanbanChromeTooltip key={key} label={tooltip} wrapperClassName="block w-full">
-      <button
-        type="button"
-        role="menuitem"
-        onClick={onSelect}
-        className={`w-full flex items-center gap-0 text-left text-sm transition-colors ${
-          selected
-            ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-            : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+    <button
+      key={key}
+      type="button"
+      role="menuitem"
+      onClick={onSelect}
+      className={`w-full flex items-center gap-0 text-left text-sm transition-colors ${
+        selected
+          ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+      }`}
+    >
+      {/* Same footprint as the toolbar button so icons line up under the trigger */}
+      <span
+        className={`${buttonBaseClass} border-transparent bg-transparent rounded-none ${
+          selected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'
         }`}
+        aria-hidden="true"
       >
-        {/* Same footprint as the toolbar button so icons line up under the trigger */}
-        <span
-          className={`${buttonBaseClass} border-transparent bg-transparent rounded-none ${
-            selected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'
-          }`}
-          aria-hidden="true"
-        >
-          <ToolIcon icon={icon} />
-        </span>
-        <span className="pr-3 py-2 whitespace-nowrap">{label}</span>
-      </button>
-    </KanbanChromeTooltip>
+        <ToolIcon icon={icon} />
+      </span>
+      <span className="flex-1 py-2 whitespace-nowrap">{label}</span>
+      <span className="pr-3 pl-2">
+        <KbdBadge>{shortcut}</KbdBadge>
+      </span>
+    </button>
   );
 
   return (
@@ -217,7 +249,7 @@ export default function Tools({
           {openMenu === 'view' && (
             <div
               role="menu"
-              className="absolute left-0 top-full z-[60] mt-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden"
+              className="absolute left-0 top-full z-[60] mt-1 min-w-[9.5rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden"
             >
               {viewModeOptions.map((option) =>
                 renderMenuItem(
@@ -225,7 +257,7 @@ export default function Tools({
                   viewMode === option.mode,
                   option.icon,
                   option.label,
-                  option.tooltip,
+                  option.shortcut,
                   () => {
                     onViewModeChange(option.mode);
                     setOpenMenu(null);
@@ -236,7 +268,7 @@ export default function Tools({
           )}
         </div>
 
-        {/* Search Toggle */}
+        {/* Search Toggle — no dropdown; show S in tooltip */}
         {(() => {
           const searchLabel =
             hasActiveFilters && activeFilterTooltip
@@ -251,13 +283,13 @@ export default function Tools({
               className={`${buttonBaseClass} ${
                 isSearchActive ? buttonActiveClass : buttonIdleClass
               }`}
-              aria-label={
+              aria-label={`${
                 hasActiveFilters && activeFilterTooltip
                   ? activeFilterTooltip.replace(/\n/g, '. ')
                   : isSearchActive
                     ? t('tools.hideSearchFilters')
                     : t('tools.showSearchFilters')
-              }
+              } (S)`}
               data-tour-id="search-filter"
             >
               <ToolIcon icon={Search} />
@@ -276,7 +308,13 @@ export default function Tools({
 
           return (
             <KanbanChromeTooltip
-              label={searchLabel}
+              content={
+                hasActiveFilters && activeFilterTooltip ? (
+                  searchLabel
+                ) : (
+                  <TooltipWithShortcut label={searchLabel} shortcut="S" />
+                )
+              }
               delayMs={hasActiveFilters && activeFilterTooltip ? 0 : undefined}
               placement="bottom"
               wrapperClassName="relative shrink-0 inline-flex"
@@ -312,7 +350,7 @@ export default function Tools({
             {openMenu === 'density' && (
               <div
                 role="menu"
-                className="absolute left-0 top-full z-[60] mt-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden"
+                className="absolute left-0 top-full z-[60] mt-1 min-w-[9.5rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden"
               >
                 {densityOptions.map((option) =>
                   renderMenuItem(
@@ -320,7 +358,7 @@ export default function Tools({
                     taskViewMode === option.mode,
                     option.icon,
                     option.label,
-                    option.tooltip,
+                    option.shortcut,
                     () => {
                       onTaskViewModeChange(option.mode);
                       setOpenMenu(null);

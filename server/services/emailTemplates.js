@@ -68,6 +68,8 @@ function resolveActionMessageKey(actionType, changedField, notificationType) {
   if (notificationType === 'addedAsCollaborator') return 'added_as_collaborator';
   if (changedField === 'memberId') return 'assignee_changed';
   if (changedField === 'requesterId') return 'requester_changed';
+  if (changedField === 'columnId') return 'status_changed';
+  if (changedField === 'isBlocked') return 'status_changed';
   if (!actionType) return 'default';
   return ACTION_MESSAGE_KEY_MAP[actionType] || 'default';
 }
@@ -76,7 +78,7 @@ function isPeopleField(changedField) {
   return changedField === 'memberId' || changedField === 'requesterId';
 }
 
-/** Detect leftover raw member/user ids so we never show them in the diff. */
+/** Detect leftover raw member/user/column ids so we never show them in the diff. */
 function looksLikeId(value) {
   const s = String(value || '').trim();
   if (!s) return false;
@@ -84,6 +86,10 @@ function looksLikeId(value) {
     return true;
   }
   if (/^user-[a-z0-9-]+$/i.test(s)) return true;
+  // Column ids are often slug-prefixed UUIDs (e.g. todo-<uuid>, archive-<uuid>)
+  if (/^[a-z0-9]+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) {
+    return true;
+  }
   return false;
 }
 
@@ -360,8 +366,23 @@ ${t('emails.userInvite.body6', { siteName: brand })}`,
         return getPeopleChangeDetails();
       }
 
-      const before = stripHtmlForEmail(oldValue);
-      const after = stripHtmlForEmail(newValue);
+      let before = stripHtmlForEmail(oldValue);
+      let after = stripHtmlForEmail(newValue);
+
+      // Localize boolean blocked flag for the recipient language
+      if (changedField === 'isBlocked') {
+        const toBlockedLabel = (value) => {
+          const blocked =
+            value === true ||
+            value === 1 ||
+            value === '1' ||
+            String(value).toLowerCase() === 'true';
+          return blocked ? t('activity.blocked') : t('activity.unblocked');
+        };
+        before = toBlockedLabel(oldValue);
+        after = toBlockedLabel(newValue);
+      }
+
       if (!before && !after) return '';
       if (before === after) return '';
       // People-like short values without changedField (legacy queue rows)
@@ -435,8 +456,22 @@ ${t('emails.userInvite.body6', { siteName: brand })}`,
         : notificationType === 'newTaskAssigned'
           ? t('emails.taskNotification.newTaskAssigned.receivingReason')
           : t('emails.taskNotification.common.receivingReason');
-    const beforeText = stripHtmlForEmail(oldValue);
-    const afterText = stripHtmlForEmail(newValue);
+    const beforeTextRaw = stripHtmlForEmail(oldValue);
+    const afterTextRaw = stripHtmlForEmail(newValue);
+    let beforeText = beforeTextRaw;
+    let afterText = afterTextRaw;
+    if (changedField === 'isBlocked') {
+      const toBlockedLabel = (value) => {
+        const blocked =
+          value === true ||
+          value === 1 ||
+          value === '1' ||
+          String(value).toLowerCase() === 'true';
+        return blocked ? t('activity.blocked') : t('activity.unblocked');
+      };
+      beforeText = toBlockedLabel(oldValue);
+      afterText = toBlockedLabel(newValue);
+    }
     let textChangeBlock = '';
     if (
       beforeText !== afterText &&

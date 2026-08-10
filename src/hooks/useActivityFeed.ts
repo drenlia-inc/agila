@@ -51,7 +51,7 @@ function readActivityFeedPrefs(userId: string | null) {
     };
   } catch {
     return {
-      isMinimized: false,
+      isMinimized: true,
       position: DEFAULT_ACTIVITY_FEED_STORED_POSITION,
       width: 160,
       height: 400,

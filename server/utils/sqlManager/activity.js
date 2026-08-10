@@ -306,3 +306,19 @@ export async function insertActivity(db, activityData) {
   );
 }
 
+/**
+ * True if this user already has a first-join / legacy activation activity.
+ * Used so password re-set / re-invite does not spam the feed.
+ */
+export async function hasUserJoinActivity(db, userId) {
+  const query = `
+    SELECT 1 AS present
+    FROM activity
+    WHERE userid = $1
+      AND action IN ('member_joined', 'account_activated')
+    LIMIT 1
+  `;
+  const row = await wrapQuery(db.prepare(query), 'SELECT').get(userId);
+  return Boolean(row);
+}
+

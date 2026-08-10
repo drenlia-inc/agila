@@ -14,6 +14,11 @@ import {
 } from '../utils/crossBoardDragUtils';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import {
+  TASK_COUNT_PILL_DEFAULT,
+  formatTaskCountPill,
+  taskCountPillWeightClass,
+} from '../utils/taskCountPill';
 
 /** Inactive tab — sits on the track */
 const tabTrackInactive =
@@ -203,13 +208,11 @@ const DroppableBoardTab: React.FC<{
           {taskCount !== undefined && taskCount > 0 && (
             <span
               className={`
-              px-1.5 py-0.5 text-[0.65rem] leading-none rounded-full font-medium min-w-[1.25rem] text-center pointer-events-none tabular-nums
-              ${hasActiveFilters
-                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/35 dark:text-blue-300'
-                : 'bg-blue-50/80 text-blue-500 dark:bg-blue-900/25 dark:text-blue-400'}
+              px-1.5 py-0.5 text-[0.65rem] leading-none rounded-full min-w-[1.25rem] text-center pointer-events-none tabular-nums
+              ${TASK_COUNT_PILL_DEFAULT} ${taskCountPillWeightClass(hasActiveFilters)}
             `}
             >
-              {taskCount}
+              {formatTaskCountPill(taskCount)}
             </span>
           )}
           <span className="truncate max-w-[150px] pointer-events-none">{board.title}</span>
@@ -275,7 +278,7 @@ const SortableBoardTab: React.FC<{
             }
           }}
           className={`
-            relative inline-flex shrink-0 cursor-pointer items-center
+            relative inline-flex shrink-0 cursor-pointer items-center gap-1.5 !px-2
             ${isSelected ? tabTrackActive : tabTrackInactive}
             ${isDragging ? 'opacity-60 shadow-lg ring-2 ring-gray-300/50 dark:ring-gray-500/40' : ''}
           `}
@@ -283,44 +286,52 @@ const SortableBoardTab: React.FC<{
         {/* Task count covers the drag handle until hover reveals it. */}
         <KanbanChromeTooltip
           label={t('boardTabs.dragToReorder')}
-          wrapperClassName="absolute left-1 top-1/2 z-[2] -translate-y-1/2"
+          wrapperClassName="relative z-[2] shrink-0"
         >
           <div
-            className="group/board-handle flex h-7 w-6 cursor-grab touch-none items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-200/80 hover:text-gray-600 active:cursor-grabbing dark:hover:bg-gray-600/50 dark:hover:text-gray-300"
+            className="group/board-handle relative flex h-7 min-w-7 cursor-grab touch-none items-center justify-center rounded-md px-0.5 text-gray-400 transition-colors hover:bg-gray-200/80 hover:text-gray-600 active:cursor-grabbing dark:hover:bg-gray-600/50 dark:hover:text-gray-300"
             {...attributes}
             {...listeners}
             onClick={(e) => e.stopPropagation()}
           >
-            <GripVertical
-              className={`h-4 w-4 transition-opacity group-hover/board-handle:opacity-100 ${
-                showTaskCount && taskCount !== undefined && taskCount > 0 ? 'opacity-0' : 'opacity-60'
-              }`}
-              aria-hidden
-            />
-            {showTaskCount && taskCount !== undefined && taskCount > 0 && (
-              <span
-                className={`pointer-events-none absolute left-1/2 top-1/2 min-w-[1.25rem] -translate-x-1/2 -translate-y-1/2 rounded-full px-1.5 py-0.5 text-center text-[0.65rem] font-medium leading-none tabular-nums transition-opacity group-hover/board-handle:opacity-0 ${
-                  hasActiveFilters
-                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/35 dark:text-blue-300'
-                    : 'bg-blue-50/80 text-blue-500 dark:bg-blue-900/25 dark:text-blue-400'
-                }`}
-              >
-                {taskCount}
-              </span>
+            {showTaskCount && taskCount !== undefined && taskCount > 0 ? (
+              <>
+                {/* Invisible sizer so 3–4 character counts set width without extra tab padding */}
+                <span
+                  className="invisible px-1 py-0.5 text-[0.65rem] leading-none tabular-nums font-bold"
+                  aria-hidden
+                >
+                  {formatTaskCountPill(taskCount)}
+                </span>
+                <span
+                  className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity group-hover/board-handle:opacity-0`}
+                >
+                  <span
+                    className={`rounded-full px-1 py-0.5 text-center text-[0.65rem] leading-none tabular-nums ${TASK_COUNT_PILL_DEFAULT} ${taskCountPillWeightClass(hasActiveFilters)}`}
+                  >
+                    {formatTaskCountPill(taskCount)}
+                  </span>
+                </span>
+                <GripVertical
+                  className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/board-handle:opacity-100"
+                  aria-hidden
+                />
+              </>
+            ) : (
+              <GripVertical className="h-4 w-4 opacity-60" aria-hidden />
             )}
           </div>
         </KanbanChromeTooltip>
 
-        <div className="flex items-center pl-8">
-          <div className="flex items-center gap-2">
-            <span className="truncate max-w-[10rem]">{board.title}</span>
-          </div>
+        <div className="flex min-w-0 items-center">
+          <span className="truncate max-w-[10rem]">{board.title}</span>
+        </div>
 
           {/* Space is always reserved: revealing the trash on hover must not resize the tab,
               or neighbouring tabs shift under the cursor and the wrong board gets deleted. */}
           {canDelete && (
             <div
-              className="flex w-[2.25rem] shrink-0 items-center justify-end opacity-0 transition-opacity duration-200 ease-out pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+              className="flex w-7 shrink-0 items-center justify-center opacity-0 transition-opacity duration-200 ease-out pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
             >
               <KanbanChromeTooltip label={t('boardTabs.deleteBoard')}>
                 <button
@@ -337,7 +348,6 @@ const SortableBoardTab: React.FC<{
               </KanbanChromeTooltip>
             </div>
           )}
-        </div>
         </div>
       </KanbanChromeTooltip>
 
@@ -411,13 +421,9 @@ const RegularBoardTab: React.FC<{
           <div className="flex items-center gap-2">
             {showTaskCount && taskCount !== undefined && taskCount > 0 && (
               <span
-                className={`shrink-0 px-1.5 py-0.5 text-[0.65rem] font-medium leading-none rounded-full tabular-nums ${
-                  hasActiveFilters
-                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/35 dark:text-blue-300'
-                    : 'bg-blue-50/80 text-blue-500 dark:bg-blue-900/25 dark:text-blue-400'
-                }`}
+                className={`shrink-0 px-1.5 py-0.5 text-[0.65rem] leading-none rounded-full tabular-nums ${TASK_COUNT_PILL_DEFAULT} ${taskCountPillWeightClass(hasActiveFilters)}`}
               >
-                {taskCount}
+                {formatTaskCountPill(taskCount)}
               </span>
             )}
             <span className="truncate max-w-[11rem]">{board.title}</span>

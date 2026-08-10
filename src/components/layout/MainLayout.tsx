@@ -228,6 +228,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 onUsersChanged={onUsersChanged}
                 onSettingsChanged={onSettingsChanged}
                 onDraftGateChange={onAdminDraftGateChange}
+                isPageActive={adminVisible}
               />
             </div>
           )}

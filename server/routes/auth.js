@@ -12,6 +12,7 @@ import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js'
 // MIGRATED: Import sqlManager
 import { auth as authQueries, users as userQueries, settings as settingsQueries } from '../utils/sqlManager/index.js';
 import { parseBody, loginBodySchema, activateAccountBodySchema, registerBodySchema } from '../utils/requestValidation.js';
+import { logMemberJoinedIfFirstTime } from '../services/activityLogger.js';
 
 const router = express.Router();
 
@@ -181,13 +182,11 @@ router.post('/activate-account', activationLimiter, async (req, res) => {
     // MIGRATED: Mark invitation as used using sqlManager
     await authQueries.markInvitationAsUsed(db, invitation.id);
     
-    // MIGRATED: Log activation activity using sqlManager
-    await authQueries.logActivity(
+    // First-time join only (skips re-activation); bilingual "joined the team"
+    await logMemberJoinedIfFirstTime(invitation.user_id, {
       db,
-      'account_activated',
-      `User ${invitation.first_name} ${invitation.last_name} (${invitation.email}) activated their account`,
-      invitation.user_id
-    );
+      tenantId: getTenantId(req),
+    });
     
     // MIGRATED: Get the updated user data using sqlManager
     const updatedUser = await authQueries.getUserBasicInfoForActivation(db, invitation.user_id);
@@ -690,6 +689,11 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
             // Update user object to reflect activation
             user.is_active = true;
             user.auth_provider = 'google';
+
+            await logMemberJoinedIfFirstTime(user.id, {
+              db,
+              tenantId: getTenantId(req),
+            });
             
             // MIGRATED: Get member info using sqlManager
             const memberInfo = await authQueries.getMemberByUserId(db, user.id);

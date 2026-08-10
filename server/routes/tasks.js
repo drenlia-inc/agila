@@ -1211,17 +1211,40 @@ router.put('/:id', authenticateToken, async (req, res) => {
         .toLowerCase();
     const priorityIdChanged =
       normalizePriorityId(priorityId) !== normalizePriorityId(currentPriorityId);
-    const oldPriorityLabel = currentPriorityName || 'Unknown';
-    const newPriorityLabel = priorityName || 'Unknown';
+    const oldPriorityLabel = currentPriorityName || t('activity.unknownPriority', {}, 'en');
+    const newPriorityLabel = priorityName || t('activity.unknownPriority', {}, 'en');
     const priorityLabelChanged =
       normalizePriorityLabel(oldPriorityLabel) !== normalizePriorityLabel(newPriorityLabel);
     // ID coercion alone ("5" vs 5) must never create activity; require a real label change.
     const priorityChanged = priorityIdChanged && priorityLabelChanged;
     
     if (priorityChanged) {
-      changes.push(
-        await generateTaskUpdateDetails('priorityId', oldPriorityLabel, newPriorityLabel, '', db)
-      );
+      // Priority names are user content (same in both langs); only missing-name fallbacks differ.
+      if (currentPriorityName && priorityName) {
+        changes.push(
+          await generateTaskUpdateDetails('priorityId', currentPriorityName, priorityName, '', db)
+        );
+      } else {
+        const detailEn = JSON.parse(
+          await generateTaskUpdateDetails(
+            'priorityId',
+            currentPriorityName || t('activity.unknownPriority', {}, 'en'),
+            priorityName || t('activity.unknownPriority', {}, 'en'),
+            '',
+            db
+          )
+        );
+        const detailFr = JSON.parse(
+          await generateTaskUpdateDetails(
+            'priorityId',
+            currentPriorityName || t('activity.unknownPriority', {}, 'fr'),
+            priorityName || t('activity.unknownPriority', {}, 'fr'),
+            '',
+            db
+          )
+        );
+        changes.push(JSON.stringify({ en: detailEn.en, fr: detailFr.fr }));
+      }
     }
     
     // Check if sprint changed - handle separately like priority
@@ -1335,6 +1358,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
     
     // Process fields sequentially to handle async operations
+    let columnMoveDisplayOld = null;
+    let columnMoveDisplayNew = null;
     for (const field of fieldsToTrack) {
       const oldValue = normalizedCurrentTask[field];
       const newValue = task[field];
@@ -1345,19 +1370,26 @@ router.put('/:id', authenticateToken, async (req, res) => {
           const oldColumn = await helpers.getColumnById(db, oldValue);
           const newColumn = await helpers.getColumnById(db, newValue);
           const taskRef = task.ticket ? ` (${task.ticket})` : '';
+          const fromColumnEn = oldColumn?.title || t('activity.unknownColumn', {}, 'en');
+          const toColumnEn = newColumn?.title || t('activity.unknownColumn', {}, 'en');
+          const fromColumnFr = oldColumn?.title || t('activity.unknownColumn', {}, 'fr');
+          const toColumnFr = newColumn?.title || t('activity.unknownColumn', {}, 'fr');
+          // Email "Changed" card must use titles, not column IDs
+          columnMoveDisplayOld = fromColumnEn;
+          columnMoveDisplayNew = toColumnEn;
           // Create bilingual message for column move
           const movedTaskText = JSON.stringify({
             en: t('activity.movedTaskFromTo', {
               taskTitle: task.title,
               taskRef,
-              fromColumn: oldColumn?.title || 'Unknown',
-              toColumn: newColumn?.title || 'Unknown'
+              fromColumn: fromColumnEn,
+              toColumn: toColumnEn
             }, 'en'),
             fr: t('activity.movedTaskFromTo', {
               taskTitle: task.title,
               taskRef,
-              fromColumn: oldColumn?.title || 'Unknown',
-              toColumn: newColumn?.title || 'Unknown'
+              fromColumn: fromColumnFr,
+              toColumn: toColumnFr
             }, 'fr')
           });
           changes.push(movedTaskText);
@@ -1461,8 +1493,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
           hasChanged(normalizedCurrentTask[field], task[field])
         );
         if (changedField) {
-          oldValue = normalizedCurrentTask[changedField];
-          newValue = task[changedField];
+          if (
+            changedField === 'columnId' &&
+            columnMoveDisplayOld != null &&
+            columnMoveDisplayNew != null
+          ) {
+            oldValue = columnMoveDisplayOld;
+            newValue = columnMoveDisplayNew;
+          } else {
+            oldValue = normalizedCurrentTask[changedField];
+            newValue = task[changedField];
+          }
         }
       }
       
@@ -2212,14 +2253,14 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
           en: t('activity.movedTaskFromTo', {
             taskTitle: move.title,
             taskRef,
-            fromColumn: oldColumn?.title || 'Unknown',
-            toColumn: newColumn?.title || 'Unknown'
+            fromColumn: oldColumn?.title || t('activity.unknownColumn', {}, 'en'),
+            toColumn: newColumn?.title || t('activity.unknownColumn', {}, 'en')
           }, 'en'),
           fr: t('activity.movedTaskFromTo', {
             taskTitle: move.title,
             taskRef,
-            fromColumn: oldColumn?.title || 'Unknown',
-            toColumn: newColumn?.title || 'Unknown'
+            fromColumn: oldColumn?.title || t('activity.unknownColumn', {}, 'fr'),
+            toColumn: newColumn?.title || t('activity.unknownColumn', {}, 'fr')
           }, 'fr')
         });
         
@@ -2257,8 +2298,8 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
             title: move.title,
             ticket: taskTicket || null,
             boardId: move.previousBoardId || currentTask?.boardId || currentTask?.boardid,
-            fromColumnName: oldColumn?.title || 'Unknown',
-            toColumnName: newColumn?.title || 'Unknown',
+            fromColumnName: oldColumn?.title || t('activity.unknownColumn', {}, 'en'),
+            toColumnName: newColumn?.title || t('activity.unknownColumn', {}, 'en'),
           });
         }
       });
@@ -2619,13 +2660,13 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
     const moveDetails = JSON.stringify({
       en: t('activity.movedTaskBoard', {
         taskTitle: task.title,
-        fromBoard: originalBoard?.title || 'Unknown',
-        toBoard: targetBoard?.title || 'Unknown'
+        fromBoard: originalBoard?.title || t('activity.unknownBoard', {}, 'en'),
+        toBoard: targetBoard?.title || t('activity.unknownBoard', {}, 'en')
       }, 'en'),
       fr: t('activity.movedTaskBoard', {
         taskTitle: task.title,
-        fromBoard: originalBoard?.title || 'Unknown',
-        toBoard: targetBoard?.title || 'Unknown'
+        fromBoard: originalBoard?.title || t('activity.unknownBoard', {}, 'fr'),
+        toBoard: targetBoard?.title || t('activity.unknownBoard', {}, 'fr')
       }, 'fr')
     });
     

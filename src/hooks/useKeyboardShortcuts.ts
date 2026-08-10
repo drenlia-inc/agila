@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { ViewMode } from '../utils/userPreferences';
+import type { TaskViewMode, ViewMode } from '../utils/userPreferences';
 import {
   focusHeaderTaskSearch,
   isTypingTarget,
@@ -14,7 +14,11 @@ export type KeyboardShortcutHandlers = {
   onNewTask?: () => void;
   /** Switch Kanban / List / Gantt (1 / 2 / 3). */
   onViewMode?: (mode: ViewMode) => void;
-  /** When true, N, 1–3, /, Ctrl+K board search are active. */
+  /** Card density Full / Preview / Minimal (F / P / M). */
+  onTaskViewMode?: (mode: TaskViewMode) => void;
+  /** Toggle Tools Search & Filter panel (S). */
+  onToggleSearchPanel?: () => void;
+  /** When true, board letter shortcuts are active. */
   boardShortcutsEnabled?: boolean;
 };
 
@@ -28,6 +32,8 @@ export const useKeyboardShortcuts = ({
   onFocusSearch,
   onNewTask,
   onViewMode,
+  onTaskViewMode,
+  onToggleSearchPanel,
   boardShortcutsEnabled = false,
 }: KeyboardShortcutHandlers) => {
   useEffect(() => {
@@ -53,7 +59,7 @@ export const useKeyboardShortcuts = ({
 
       const mod = event.metaKey || event.ctrlKey;
 
-      // Ctrl/Cmd+K — focus search
+      // Ctrl/Cmd+K — focus header search
       if (mod && !event.altKey && (event.key === 'k' || event.key === 'K')) {
         event.preventDefault();
         if (onFocusSearch) onFocusSearch();
@@ -61,7 +67,7 @@ export const useKeyboardShortcuts = ({
         return;
       }
 
-      // Plain / — focus search (Admin page keeps its own / handler when boardShortcutsEnabled is false)
+      // Plain / — focus header search (Admin keeps its own / when boardShortcutsEnabled is false)
       if (event.key === '/' && !mod && !event.altKey) {
         event.preventDefault();
         if (onFocusSearch) onFocusSearch();
@@ -77,7 +83,34 @@ export const useKeyboardShortcuts = ({
         return;
       }
 
-      // 1 / 2 / 3 — view modes (key value so AZERTY Shift+digit still works)
+      // S — Tools Search & Filter panel (not header search)
+      if ((event.key === 's' || event.key === 'S') && !mod && !event.altKey) {
+        if (!onToggleSearchPanel) return;
+        event.preventDefault();
+        onToggleSearchPanel();
+        return;
+      }
+
+      // F / P / M — card density (Full / Preview / Minimal)
+      if (!mod && !event.altKey && onTaskViewMode) {
+        if (event.key === 'f' || event.key === 'F') {
+          event.preventDefault();
+          onTaskViewMode('expand');
+          return;
+        }
+        if (event.key === 'p' || event.key === 'P') {
+          event.preventDefault();
+          onTaskViewMode('shrink');
+          return;
+        }
+        if (event.key === 'm' || event.key === 'M') {
+          event.preventDefault();
+          onTaskViewMode('compact');
+          return;
+        }
+      }
+
+      // 1 / 2 / 3 — board view modes (key value so AZERTY Shift+digit still works)
       if (!mod && !event.altKey && onViewMode) {
         if (event.key === '1') {
           event.preventDefault();
@@ -99,5 +132,13 @@ export const useKeyboardShortcuts = ({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onHelp, onFocusSearch, onNewTask, onViewMode, boardShortcutsEnabled]);
+  }, [
+    onHelp,
+    onFocusSearch,
+    onNewTask,
+    onViewMode,
+    onTaskViewMode,
+    onToggleSearchPanel,
+    boardShortcutsEnabled,
+  ]);
 };

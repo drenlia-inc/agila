@@ -136,7 +136,7 @@ import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
 import { hasEscapeConsumingOverlay, isEditableEscapeTarget } from './utils/escapeKeyUtils';
 import { focusHeaderTaskSearch } from './utils/keyboardShortcutUtils';
 import { handleInviteUser as handleInviteUserUtil } from './utils/userInvitationUtils';
-import { notifyBoardTrashChanged } from './utils/boardTrashEvents';
+import { notifyBoardTrashChanged, notifyLifecycleDataChanged } from './utils/boardTrashEvents';
 import BoardLimitReachedDialog, { BoardLimitInfo } from './components/BoardLimitReachedDialog';
 import { KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DndContext, DragOverlay } from '@dnd-kit/core';
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -847,11 +847,15 @@ function AppContent() {
     focusSearch: () => void;
     newTask: () => void;
     setViewMode: (mode: ViewMode) => void;
+    setTaskViewMode: (mode: TaskViewMode) => void;
+    toggleSearchPanel: () => void;
   }>({
     openHelp: () => {},
     focusSearch: () => {},
     newTask: () => {},
     setViewMode: () => {},
+    setTaskViewMode: () => {},
+    toggleSearchPanel: () => {},
   });
 
   const openHelpShortcut = useCallback(() => {
@@ -866,12 +870,20 @@ function AppContent() {
   const viewModeShortcut = useCallback((mode: ViewMode) => {
     keyboardShortcutApiRef.current.setViewMode(mode);
   }, []);
+  const taskViewModeShortcut = useCallback((mode: TaskViewMode) => {
+    keyboardShortcutApiRef.current.setTaskViewMode(mode);
+  }, []);
+  const toggleSearchPanelShortcut = useCallback(() => {
+    keyboardShortcutApiRef.current.toggleSearchPanel();
+  }, []);
 
   useKeyboardShortcuts({
     onHelp: openHelpShortcut,
     onFocusSearch: focusSearchShortcut,
     onNewTask: newTaskShortcut,
     onViewMode: viewModeShortcut,
+    onTaskViewMode: taskViewModeShortcut,
+    onToggleSearchPanel: toggleSearchPanelShortcut,
     boardShortcutsEnabled: isAuthenticated && currentPage === 'kanban',
   });
   
@@ -2928,6 +2940,7 @@ function AppContent() {
         handleBoardSelection(firstBoard.id);
         setColumns(firstBoard.columns);
       }
+      notifyLifecycleDataChanged();
       await fetchQueryLogs();
     } catch (error) {
       // console.error('Failed to remove board:', error);
@@ -4552,6 +4565,8 @@ function AppContent() {
       })();
     },
     setViewMode: handleViewModeChange,
+    setTaskViewMode: handleTaskViewModeChange,
+    toggleSearchPanel: taskFilters.handleToggleSearch,
   };
 
   // Handle password reset pages (accessible without authentication)

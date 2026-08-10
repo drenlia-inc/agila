@@ -454,8 +454,13 @@
     "removedSprint": "a retiré le sprint \"{sprintName}\" de la tâche \"{taskTitle}\"{taskRef} dans le tableau \"{boardTitle}\"",
     "unknownTask": "Tâche inconnue",
     "unknownBoard": "Tableau inconnu",
+    "unknownColumn": "Inconnu",
+    "unknownPriority": "Inconnue",
     "unassigned": "Non assigné",
-    "unknownUser": "Utilisateur inconnu"
+    "unknownUser": "Utilisateur inconnu",
+    "joinedTeam": "a rejoint l'équipe",
+    "blocked": "Bloquée",
+    "unblocked": "Non bloquée"
   }
 }
 

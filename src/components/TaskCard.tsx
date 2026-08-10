@@ -38,7 +38,6 @@ import { KanbanChromeTooltip, CHROME_TOOLTIP_PANEL_SURFACE_CLASS, CHROME_TOOLTIP
 import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { feDebug } from '../utils/clientDebug';
 import { commentTextToHtml } from '../utils/commentContent';
-import { isEditableEscapeTarget } from '../utils/escapeKeyUtils';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import {
   AGENT_MEMBER_ID,
@@ -203,8 +202,6 @@ const TaskCard = React.memo(function TaskCard({
   const [tagRemovalPosition, setTagRemovalPosition] = useState<{left: number, top: number}>({left: 0, top: 0});
   const [isHoveringTitle, setIsHoveringTitle] = useState(false);
   const [isHoveringDescription, setIsHoveringDescription] = useState(false);
-  /** Pointer is over this card — used for "S" to toggle multi-select. */
-  const [isCardHovered, setIsCardHovered] = useState(false);
   
   // Get project identifier from the board this task belongs to
   const getProjectIdentifier = () => {
@@ -375,23 +372,6 @@ const TaskCard = React.memo(function TaskCard({
     (AGENT_DRAG_BLOCKING_STATUSES as readonly string[]).includes(agentStatus);
 
   const isAnyEditingActive = isEditingTitle || isEditingEffort || isEditingDescription || showMemberSelect || showPrioritySelect || showCommentTooltip || showTagRemovalMenu || showAttachmentsDropdown || showSprintSelector || showDateRangePicker || isAgentWorkActive;
-
-  // Hover + "S" toggles the multi-select checkbox (same as clicking it / Ctrl+click).
-  useEffect(() => {
-    if (!isCardHovered || !toggleChecked || isLinkingMode) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 's' && e.key !== 'S') return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.repeat) return;
-      if (e.defaultPrevented) return;
-      if (isEditableEscapeTarget(e.target)) return;
-      if (isAnyEditingActive) return;
-      e.preventDefault();
-      toggleChecked();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [isCardHovered, toggleChecked, isLinkingMode, isAnyEditingActive]);
 
   // Sync editedEffort with task.effort when task updates (but not while editing)
   useEffect(() => {
@@ -1852,7 +1832,6 @@ const TaskCard = React.memo(function TaskCard({
           }
         }}
         onMouseEnter={() => {
-          setIsCardHovered(true);
           // Don't set hover state if we're in the process of selecting
           // Also don't set hover if the card is currently selected (it has its own styling)
           if (!isSelectingRef.current && !isSelected) {
@@ -1867,7 +1846,6 @@ const TaskCard = React.memo(function TaskCard({
           }
         }}
         onMouseLeave={() => {
-          setIsCardHovered(false);
           // Only clear hover if card is not selected (selected cards have their own styling)
           if (!isSelected) {
             setIsHoveringTitle(false);

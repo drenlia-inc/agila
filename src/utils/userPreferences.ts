@@ -329,7 +329,7 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
     taskInfo: false
   },
   activityFeed: {
-    isMinimized: false,
+    isMinimized: true, // New users start minimized; expanded state is saved when they open it
     position: { x: 10, y: 66 }, // Signed X: positive = inset from left (clear of TaskDetails)
     width: 160, // Default width (now supports 120-600px range)
     height: 400, // Default height (matches database default)

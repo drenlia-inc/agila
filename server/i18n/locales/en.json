@@ -454,8 +454,13 @@
     "removedSprint": "removed sprint \"{sprintName}\" from task \"{taskTitle}\"{taskRef} in board \"{boardTitle}\"",
     "unknownTask": "Unknown Task",
     "unknownBoard": "Unknown Board",
+    "unknownColumn": "Unknown",
+    "unknownPriority": "Unknown",
     "unassigned": "Unassigned",
-    "unknownUser": "Unknown User"
+    "unknownUser": "Unknown User",
+    "joinedTeam": "joined the team",
+    "blocked": "Blocked",
+    "unblocked": "Not blocked"
   }
 }
 

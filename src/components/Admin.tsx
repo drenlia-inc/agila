@@ -16,6 +16,7 @@ import { AdminUnsavedChangesBanner } from './admin/AdminUnsavedChanges';
 import type { AdminDraftGate } from './admin/AdminLeaveUnsavedDialog';
 import { AdminAttentionDot } from './admin/AdminFieldDraftControls';
 import websocketClient from '../services/websocketClient';
+import { LIFECYCLE_DATA_CHANGED_EVENT } from '../utils/boardTrashEvents';
 import { useSettings } from '../contexts/SettingsContext';
 import { isMaskedApiKeyDisplay } from '../utils/maskSecret';
 import {
@@ -40,6 +41,8 @@ interface AdminProps {
   onSettingsChanged?: () => void;
   /** Notify App when Admin has unsaved drafts (for leave-Admin prompt). */
   onDraftGateChange?: (gate: AdminDraftGate | null) => void;
+  /** False while Admin is mounted-but-hidden (user on Kanban/Reports). */
+  isPageActive?: boolean;
 }
 
 interface User {
@@ -104,6 +107,7 @@ const Admin: React.FC<AdminProps> = ({
   onUsersChanged,
   onSettingsChanged,
   onDraftGateChange,
+  isPageActive = true,
 }) => {
   const { t } = useTranslation('admin');
   const { systemSettings, refreshSettings, updateSiteSetting, updateSiteSettings } = useSettings(); // Use SettingsContext for admin settings
@@ -156,6 +160,11 @@ const Admin: React.FC<AdminProps> = ({
     void refreshLifecyclePending();
   }, [refreshLifecyclePending]);
 
+  // Admin stays mounted while on Kanban; refresh badge when returning
+  useEffect(() => {
+    if (isPageActive) void refreshLifecyclePending();
+  }, [isPageActive, refreshLifecyclePending]);
+
   useEffect(() => {
     if (!currentUser?.roles?.includes('admin')) return;
     const refresh = () => {
@@ -166,12 +175,14 @@ const Admin: React.FC<AdminProps> = ({
     websocketClient.onTaskPurged(refresh);
     websocketClient.onBoardDeleted(refresh);
     websocketClient.onBoardRestored(refresh);
+    window.addEventListener(LIFECYCLE_DATA_CHANGED_EVENT, refresh);
     return () => {
       websocketClient.offTaskDeleted(refresh);
       websocketClient.offTaskRestored(refresh);
       websocketClient.offTaskPurged(refresh);
       websocketClient.offBoardDeleted(refresh);
       websocketClient.offBoardRestored(refresh);
+      window.removeEventListener(LIFECYCLE_DATA_CHANGED_EVENT, refresh);
     };
   }, [currentUser, refreshLifecyclePending]);
 
@@ -1668,7 +1679,7 @@ const Admin: React.FC<AdminProps> = ({
                 discardNonce={settingsDiscardNonce}
                 lifecyclePendingCount={lifecyclePendingCount}
                 onLifecyclePendingRefresh={refreshLifecyclePending}
-                isActive={activeTab === 'project-settings'}
+                isActive={isPageActive && activeTab === 'project-settings'}
               />
             </AdminTabPanel>
           )}

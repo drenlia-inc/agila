@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   ArrowRightLeft,
+  UserPlus,
 } from 'lucide-react';
 import { updateActivityFeedPreference } from '../utils/userPreferences';
 import DOMPurify from 'dompurify';
@@ -596,6 +597,9 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     }
     if (action.includes('agent_job_failed')) {
       return <AlertTriangle className={`${className} text-amber-600 dark:text-amber-400`} />;
+    }
+    if (action.includes('member_joined') || action.includes('account_activated')) {
+      return <UserPlus className={`${className} text-emerald-600 dark:text-emerald-400`} />;
     }
     if (action.includes('create')) {
       return <Plus className={`${className} text-sky-600 dark:text-sky-400`} />;

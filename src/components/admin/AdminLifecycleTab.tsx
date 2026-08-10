@@ -28,6 +28,9 @@ import {
 import { AdminUnsavedHint } from './AdminUnsavedChanges';
 import { AdminSection, adminInputClass } from './AdminSection';
 import websocketClient from '../../services/websocketClient';
+import {
+  LIFECYCLE_DATA_CHANGED_EVENT,
+} from '../../utils/boardTrashEvents';
 
 type LifecycleConfirmDialog = {
   title: string;
@@ -130,20 +133,28 @@ const AdminLifecycleTab: React.FC<AdminLifecycleTabProps> = ({
 
   // Keep list in sync with soft-delete / restore / purge elsewhere in the app
   useEffect(() => {
-    const refresh = () => {
-      void loadData({ silent: true });
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        void loadData({ silent: true });
+      }, 200);
     };
-    websocketClient.onTaskDeleted(refresh);
-    websocketClient.onTaskRestored(refresh);
-    websocketClient.onTaskPurged(refresh);
-    websocketClient.onBoardDeleted(refresh);
-    websocketClient.onBoardRestored(refresh);
+    websocketClient.onTaskDeleted(scheduleRefresh);
+    websocketClient.onTaskRestored(scheduleRefresh);
+    websocketClient.onTaskPurged(scheduleRefresh);
+    websocketClient.onBoardDeleted(scheduleRefresh);
+    websocketClient.onBoardRestored(scheduleRefresh);
+    window.addEventListener(LIFECYCLE_DATA_CHANGED_EVENT, scheduleRefresh);
     return () => {
-      websocketClient.offTaskDeleted(refresh);
-      websocketClient.offTaskRestored(refresh);
-      websocketClient.offTaskPurged(refresh);
-      websocketClient.offBoardDeleted(refresh);
-      websocketClient.offBoardRestored(refresh);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      websocketClient.offTaskDeleted(scheduleRefresh);
+      websocketClient.offTaskRestored(scheduleRefresh);
+      websocketClient.offTaskPurged(scheduleRefresh);
+      websocketClient.offBoardDeleted(scheduleRefresh);
+      websocketClient.offBoardRestored(scheduleRefresh);
+      window.removeEventListener(LIFECYCLE_DATA_CHANGED_EVENT, scheduleRefresh);
     };
   }, [loadData]);
 
