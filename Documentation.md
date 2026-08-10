@@ -25,7 +25,7 @@
 
 ## Application Overview
 
-Easy-Kanban is a comprehensive project management platform that combines Kanban boards, Gantt charts, and list views for complete project visibility. It features real-time collaboration, advanced task management, and team coordination tools.
+Agila is a comprehensive agile project management platform that combines Kanban boards, Gantt charts, and list views for complete project visibility. It features real-time collaboration, advanced task management, and team coordination tools.
 
 **Platform:** PostgreSQL-backed (single-tenant Docker or multi-tenant Kubernetes). Real-time updates use PostgreSQL `LISTEN/NOTIFY` with Socket.IO (Redis adapter for multi-pod deployments).
 
