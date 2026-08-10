@@ -572,7 +572,7 @@ export default function BoardTrashView({
       className="relative mb-3 rounded-xl border border-amber-200/80 bg-amber-50/40 py-2 dark:border-amber-900/50 dark:bg-amber-950/20"
       data-tour-id="board-trash-view"
     >
-      <div className="relative z-10 mb-2 flex min-h-[1.75rem] items-center gap-1.5 overflow-x-auto px-1 pb-0.5">
+      <div className="relative z-10 mb-2 flex min-h-[1.75rem] items-center gap-1.5 overflow-x-auto hide-scrollbar px-1 pb-0.5">
         <h3 className="shrink-0 whitespace-nowrap text-sm font-semibold text-gray-800 dark:text-gray-100">
           {t('trash.title')}
           <span className="ml-2 rounded-full bg-amber-200/80 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/60 dark:text-amber-100">
@@ -674,10 +674,11 @@ export default function BoardTrashView({
         </div>
       )}
 
-      {/* Same grid as live board — no horizontal padding so columns line up */}
+      {/* Same grid as live board — no horizontal padding so columns line up.
+          Scrollbar hidden: horizontal position stays synced with the board scroller. */}
       <div
         ref={scrollContainerRef}
-        className="overflow-x-auto w-full"
+        className="overflow-x-auto w-full hide-scrollbar"
         data-kanban-scroll="trash"
       >
         <div style={trashGridStyle}>
