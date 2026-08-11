@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Users, Columns, ClipboardList, MessageSquare, ArrowRight, LayoutGrid, List, Calendar, Search, Eye, Settings, Play, BarChart3, Shield, Download, Bot, KeyRound, CheckSquare, AlertTriangle, Trash2, ListChecks, Keyboard, Minus, ChevronUp, Circle, HardDrive } from 'lucide-react';
+import { X, Users, Columns, ClipboardList, MessageSquare, MessageCircle, ArrowRight, LayoutGrid, List, Calendar, Search, Eye, Settings, Play, BarChart3, Shield, Download, Bot, KeyRound, CheckSquare, AlertTriangle, Trash2, ListChecks, Keyboard, Minus, ChevronUp, Circle, HardDrive, Plus, Pencil, Copy, Paperclip, Tag, Link, Archive, GripVertical, type LucideIcon } from 'lucide-react';
 import { useTour } from '../contexts/TourContext';
 import { useOwnerSetupOptional } from '../contexts/OwnerSetupContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -92,6 +92,14 @@ function adminGo(hash: string, highlights: readonly string[]): HelpGoTarget {
   return { kind: 'admin', hash, highlights: [...highlights] };
 }
 
+function viewGo(mode: ViewMode, highlights?: readonly string[]): HelpGoTarget {
+  return {
+    kind: 'view',
+    mode,
+    ...(highlights?.length ? { highlights: [...highlights] } : {}),
+  };
+}
+
 interface HelpModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -132,7 +140,7 @@ const HELP_DELIVERY_KEYS = [
   'help.delivery.hygieneArchive', 'help.delivery.hygieneRetention',
   'help.delivery.antiPatterns',
   'help.delivery.antiPattern1', 'help.delivery.antiPattern2', 'help.delivery.antiPattern3', 'help.delivery.antiPattern4',
-  'help.delivery.antiPattern5', 'help.delivery.antiPattern6', 'help.delivery.antiPattern7',
+  'help.delivery.antiPattern6', 'help.delivery.antiPattern7',
   'help.delivery.conventions', 'help.delivery.conventionsIntro',
   'help.delivery.convention1', 'help.delivery.convention2', 'help.delivery.convention3', 'help.delivery.convention4', 'help.delivery.convention5',
   'help.delivery.convention6', 'help.delivery.convention7', 'help.delivery.convention8', 'help.delivery.convention9', 'help.delivery.convention10',
@@ -140,7 +148,7 @@ const HELP_DELIVERY_KEYS = [
 ] as const;
 
 const HELP_ADMIN_KEYS = [
-  'help.admin.overview', 'help.admin.overviewDesc', 'help.admin.overviewTip1', 'help.admin.overviewTip2',
+  'help.admin.overview', 'help.admin.overviewDesc',
   'help.admin.users', 'help.admin.usersDesc',
   'help.admin.usersStep1', 'help.admin.usersStep2', 'help.admin.usersStep3', 'help.admin.usersStep4', 'help.admin.usersStep5', 'help.admin.usersNote',
   'help.admin.siteSettings', 'help.admin.siteSettingsDesc',
@@ -202,6 +210,27 @@ const HELP_AI_KEYS = [
 
 /** [[tab:shortcuts]]Shortcuts tab[[/tab]] → in-modal link that switches Help tabs */
 const HELP_TAB_LINK_RE = /\[\[tab:([a-z]+)\]\]([\s\S]*?)\[\[\/tab\]\]/g;
+
+/** [[icon:pencil]] → inline Lucide glyph matching the UI control */
+const HELP_ICON_RE = /\[\[icon:([a-zA-Z0-9]+)\]\]/g;
+
+const HELP_INLINE_ICONS: Record<string, LucideIcon> = {
+  layoutGrid: LayoutGrid,
+  columns: Columns,
+  list: List,
+  calendar: Calendar,
+  search: Search,
+  plus: Plus,
+  pencil: Pencil,
+  copy: Copy,
+  trash: Trash2,
+  paperclip: Paperclip,
+  message: MessageCircle,
+  tag: Tag,
+  link: Link,
+  archive: Archive,
+  grip: GripVertical,
+};
 
 type ShortcutRow = { keys: string; actionKey: string };
 
@@ -507,6 +536,7 @@ export default function HelpModal({
   const stripHelpTabMarkers = useCallback((text: string): string => {
     return text
       .replace(/\[\[tab:([a-z]+)\]\]([\s\S]*?)\[\[\/tab\]\]/g, '$2')
+      .replace(/\[\[icon:([a-zA-Z0-9]+)\]\]/g, '')
       .replace(/\*\*([^*]+)\*\*/g, '$1');
   }, []);
 
@@ -593,13 +623,13 @@ export default function HelpModal({
 
   const renderHelpContent = useCallback((text: string, searchTerm: string): React.ReactNode => {
     if (!text) return text;
-    if (!text.includes('[[tab:')) {
+    if (!text.includes('[[tab:') && !text.includes('[[icon:')) {
       return renderInlineMarkup(text, searchTerm);
     }
 
     const nodes: React.ReactNode[] = [];
     let lastIndex = 0;
-    const re = new RegExp(HELP_TAB_LINK_RE.source, 'g');
+    const re = /\[\[tab:([a-z]+)\]\]([\s\S]*?)\[\[\/tab\]\]|\[\[icon:([a-zA-Z0-9]+)\]\]/g;
     let match: RegExpExecArray | null;
     let key = 0;
 
@@ -612,33 +642,47 @@ export default function HelpModal({
         );
       }
 
-      const tabId = match[1] as TabType;
-      const label = match[2];
-      const isValidTab = HELP_TAB_IDS.has(tabId);
-      const isAvailable =
-        isValidTab &&
-        !(tabId === 'ai' && !aiEnabled) &&
-        !(tabId === 'admin' && !isAdmin) &&
-        !(tabId === 'delivery' && !isAdmin);
+      if (match[1] != null) {
+        const tabId = match[1] as TabType;
+        const label = match[2];
+        const isValidTab = HELP_TAB_IDS.has(tabId);
+        const isAvailable =
+          isValidTab &&
+          !(tabId === 'ai' && !aiEnabled) &&
+          !(tabId === 'admin' && !isAdmin) &&
+          !(tabId === 'delivery' && !isAdmin);
 
-      if (isAvailable) {
-        nodes.push(
-          <button
-            key={key++}
-            type="button"
-            onClick={() => goToHelpTab(tabId)}
-            className="mx-0.5 inline-flex items-center gap-1 align-baseline px-2 py-0.5 rounded-full bg-slate-100 dark:bg-gray-700/90 text-slate-700 dark:text-gray-200 text-[13px] font-medium border border-slate-200/90 dark:border-gray-600 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-800 dark:hover:bg-teal-900/40 dark:hover:border-teal-600 dark:hover:text-teal-200 transition-colors"
-          >
-            {renderInlineMarkup(label, searchTerm)}
-            <ArrowRight size={12} className="opacity-60 shrink-0" aria-hidden />
-          </button>
-        );
-      } else {
-        nodes.push(
-          <React.Fragment key={key++}>
-            {renderInlineMarkup(label, searchTerm)}
-          </React.Fragment>
-        );
+        if (isAvailable) {
+          nodes.push(
+            <button
+              key={key++}
+              type="button"
+              onClick={() => goToHelpTab(tabId)}
+              className="mx-0.5 inline-flex items-center gap-1 align-baseline px-2 py-0.5 rounded-full bg-slate-100 dark:bg-gray-700/90 text-slate-700 dark:text-gray-200 text-[13px] font-medium border border-slate-200/90 dark:border-gray-600 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-800 dark:hover:bg-teal-900/40 dark:hover:border-teal-600 dark:hover:text-teal-200 transition-colors"
+            >
+              {renderInlineMarkup(label, searchTerm)}
+              <ArrowRight size={12} className="opacity-60 shrink-0" aria-hidden />
+            </button>
+          );
+        } else {
+          nodes.push(
+            <React.Fragment key={key++}>
+              {renderInlineMarkup(label, searchTerm)}
+            </React.Fragment>
+          );
+        }
+      } else if (match[3]) {
+        const Icon = HELP_INLINE_ICONS[match[3]];
+        if (Icon) {
+          nodes.push(
+            <Icon
+              key={key++}
+              size={14}
+              className="inline-block align-text-bottom mx-0.5 text-slate-600 dark:text-gray-300"
+              aria-hidden
+            />
+          );
+        }
       }
 
       lastIndex = match.index + match[0].length;
@@ -899,7 +943,8 @@ export default function HelpModal({
     footerKeys: string[],
     icon: any,
     iconColor: string,
-    iconBg: string
+    iconBg: string,
+    itemTargets?: Partial<Record<string, HelpGoTarget>>
   ) => {
     const title = t(titleKey);
     const intros = introKeys.map((key) => t(key));
@@ -942,12 +987,19 @@ export default function HelpModal({
             <div key={group.titleKey} className="space-y-2">
               <h4 className={subtitleClass}>{highlightText(group.title, debouncedSearchTerm)}</h4>
               <ul className="space-y-1.5">
-                {group.items.map((item, index) => (
-                  <li key={group.itemKeys[index]} className={`flex gap-2.5 ${bodyTextClass}`}>
-                    <Circle className="mt-1.5 h-2 w-2 shrink-0 fill-current text-slate-400 dark:text-gray-500" aria-hidden />
-                    <span>{renderHelpContent(item, debouncedSearchTerm)}</span>
-                  </li>
-                ))}
+                {group.items.map((item, index) => {
+                  const itemKey = group.itemKeys[index];
+                  const itemTarget = itemTargets?.[itemKey];
+                  return (
+                    <li key={itemKey} className={`flex gap-2.5 ${bodyTextClass}`}>
+                      <Circle className="mt-1.5 h-2 w-2 shrink-0 fill-current text-slate-400 dark:text-gray-500" aria-hidden />
+                      <span className="min-w-0 flex flex-wrap items-center gap-2">
+                        <span>{renderHelpContent(item, debouncedSearchTerm)}</span>
+                        {itemTarget ? renderGoThereButton(itemTarget) : null}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
@@ -959,7 +1011,7 @@ export default function HelpModal({
         </div>
       </section>
     );
-  }, [t, debouncedSearchTerm, highlightText, renderHelpContent, anyTextMatches]);
+  }, [t, debouncedSearchTerm, highlightText, renderHelpContent, anyTextMatches, renderGoThereButton]);
 
   const renderDeliveryTab = () => {
     const sections = [
@@ -1076,7 +1128,10 @@ export default function HelpModal({
         ['help.delivery.sprintsNote'],
         MessageSquare,
         'text-indigo-600 dark:text-indigo-400',
-        'bg-indigo-50 dark:bg-indigo-900/40'
+        'bg-indigo-50 dark:bg-indigo-900/40',
+        {
+          'help.delivery.sprints3': adminGo('admin#project-settings#reporting', HELP_HL.reporting),
+        }
       ),
       renderSectionWithList(
         'help.delivery.features',
@@ -1087,7 +1142,8 @@ export default function HelpModal({
         ],
         Eye,
         'text-cyan-600 dark:text-cyan-400',
-        'bg-cyan-50 dark:bg-cyan-900/40'
+        'bg-cyan-50 dark:bg-cyan-900/40',
+        adminGo('admin#project-settings#features', HELP_HL.features)
       ),
       renderSectionWithList(
         'help.delivery.hygiene',
@@ -1105,7 +1161,7 @@ export default function HelpModal({
         [],
         [
           'help.delivery.antiPattern1', 'help.delivery.antiPattern2', 'help.delivery.antiPattern3',
-          'help.delivery.antiPattern4', 'help.delivery.antiPattern5', 'help.delivery.antiPattern6',
+          'help.delivery.antiPattern4', 'help.delivery.antiPattern6',
           'help.delivery.antiPattern7',
         ],
         AlertTriangle,
@@ -1185,8 +1241,8 @@ export default function HelpModal({
         'help.overview.tools',
         [],
         [
-          'help.overview.views', 'help.overview.searchFilterTools', 'help.overview.multiSelectTools',
-          'help.overview.taskViewModes', 'help.overview.activityFeedTools', 'help.overview.userProfileTools',
+          'help.overview.multiSelectTools',
+          'help.overview.taskViewModes', 'help.overview.activityFeedTools',
           'help.overview.realtimeCollaboration', 'help.overview.keyboardShortcuts',
           ...(isAdmin ? ['help.overview.deliveryPlaybook'] : []),
         ],
@@ -1281,7 +1337,8 @@ export default function HelpModal({
         ['help.kanban.overviewDesc1', 'help.kanban.overviewDesc2', 'help.kanban.overviewDesc3'],
         Columns,
         'text-blue-600 dark:text-blue-400',
-        'bg-blue-50 dark:bg-blue-900/40'
+        'bg-blue-50 dark:bg-blue-900/40',
+        viewGo('kanban')
       ),
       renderGroupedSection(
         'help.kanban.taskManagement',
@@ -1369,7 +1426,8 @@ export default function HelpModal({
         ['help.list.overviewDesc1', 'help.list.overviewDesc2', 'help.list.overviewDesc3'],
         List,
         'text-blue-600 dark:text-blue-400',
-        'bg-blue-50 dark:bg-blue-900/40'
+        'bg-blue-50 dark:bg-blue-900/40',
+        viewGo('list')
       ),
       renderSectionWithList(
         'help.list.columnConfiguration',
@@ -1413,11 +1471,7 @@ export default function HelpModal({
               'text-emerald-600 dark:text-emerald-400',
               'bg-emerald-50 dark:bg-emerald-900/40',
               {
-                titleTarget: {
-                  kind: 'view',
-                  mode: 'list',
-                  highlights: [...HELP_HL.export],
-                },
+                titleTarget: viewGo('list', HELP_HL.export),
               }
             ),
           ]
@@ -1434,7 +1488,8 @@ export default function HelpModal({
         ['help.gantt.overviewDesc1', 'help.gantt.overviewDesc2', 'help.gantt.overviewDesc3'],
         Calendar,
         'text-blue-600 dark:text-blue-400',
-        'bg-blue-50 dark:bg-blue-900/40'
+        'bg-blue-50 dark:bg-blue-900/40',
+        viewGo('gantt')
       ),
       renderSectionWithList(
         'help.gantt.timelineNavigation',
@@ -1449,7 +1504,7 @@ export default function HelpModal({
         [],
         [
           'help.gantt.createTasks', 'help.gantt.editTasks', 'help.gantt.resizeTasks', 'help.gantt.moveTasks',
-          'help.gantt.reorderTasks', 'help.gantt.copyTasks',
+          'help.gantt.copyTasks',
           isAdmin ? 'help.gantt.deleteTasksAdmin' : 'help.gantt.deleteTasks',
         ],
         ClipboardList,
@@ -1535,7 +1590,8 @@ export default function HelpModal({
         ['help.ai.overviewDesc1', 'help.ai.overviewDesc2'],
         Bot,
         'text-violet-600 dark:text-violet-400',
-        'bg-violet-50 dark:bg-violet-900/40'
+        'bg-violet-50 dark:bg-violet-900/40',
+        isAdmin ? adminGo('admin#system-settings#ai', HELP_HL.ai) : undefined
       ),
       renderChecklistSection(
         'help.ai.assigning',
@@ -1579,7 +1635,8 @@ export default function HelpModal({
               ],
               Settings,
               'text-red-600 dark:text-red-400',
-              'bg-red-50 dark:bg-red-900/40'
+              'bg-red-50 dark:bg-red-900/40',
+              { titleTarget: adminGo('admin#system-settings#ai', HELP_HL.ai) }
             ),
             renderChecklistSection(
               'help.ai.automation',
@@ -1600,10 +1657,9 @@ export default function HelpModal({
 
   const renderAdminTab = () => {
     const sections = [
-      renderSectionWithList(
+      renderSection(
         'help.admin.overview',
         ['help.admin.overviewDesc'],
-        ['help.admin.overviewTip1', 'help.admin.overviewTip2'],
         Shield,
         'text-blue-600 dark:text-blue-400',
         'bg-blue-50 dark:bg-blue-900/40'
@@ -1872,8 +1928,8 @@ export default function HelpModal({
           'help.overview.sprintsDesc1', 'help.overview.sprintsDesc2', 'help.overview.sprintFilter', 'help.overview.teamManagement',
           'help.overview.teamMembers', 'help.overview.memberSelection', 'help.overview.clearButton', 'help.overview.roleBasedFiltering',
           'help.overview.assignees', 'help.overview.watchers', 'help.overview.collaborators', 'help.overview.requesters',
-          'help.overview.tools', 'help.overview.views', 'help.overview.searchFilterTools',
-          'help.overview.multiSelectTools', 'help.overview.taskViewModes', 'help.overview.activityFeedTools', 'help.overview.userProfileTools',
+          'help.overview.tools',
+          'help.overview.multiSelectTools', 'help.overview.taskViewModes', 'help.overview.activityFeedTools',
           'help.overview.realtimeCollaboration', 'help.overview.keyboardShortcuts');
         if (isAdmin) {
           tabKeys.push('help.overview.boardSelectorAdmin', 'help.overview.boardTrash', 'help.overview.adminPanel', 'help.overview.system', 'help.overview.deliveryPlaybook');
@@ -1937,7 +1993,7 @@ export default function HelpModal({
         tabKeys.push('help.gantt.overview', 'help.gantt.overviewDesc1', 'help.gantt.overviewDesc2', 'help.gantt.overviewDesc3',
           'help.gantt.timelineNavigation', 'help.gantt.scrollNavigation', 'help.gantt.todayButton', 'help.gantt.taskNavigation',
           'help.gantt.relationshipMode', 'help.gantt.taskManagement', 'help.gantt.createTasks', 'help.gantt.editTasks',
-          'help.gantt.resizeTasks', 'help.gantt.moveTasks', 'help.gantt.reorderTasks', 'help.gantt.copyTasks',
+          'help.gantt.resizeTasks', 'help.gantt.moveTasks', 'help.gantt.copyTasks',
           'help.gantt.dependencies', 'help.gantt.createDependencies', 'help.gantt.dependencyTypes',
           'help.gantt.visualArrows', 'help.gantt.cycleDetection', 'help.gantt.taskRelationships', 'help.gantt.timelineFeatures',
           'help.gantt.timelineNavigationDesc', 'help.gantt.todayIndicator', 'help.gantt.lateBadge', 'help.gantt.columnOrganization',
@@ -2041,7 +2097,6 @@ export default function HelpModal({
         aria-labelledby="help-modal-title"
       >
         <div className="relative flex items-center justify-between gap-3 px-4 py-3 sm:px-5 border-b border-slate-200/80 dark:border-gray-700 bg-gradient-to-r from-blue-50 via-white to-indigo-50 dark:from-gray-800 dark:via-gray-800 dark:to-slate-900">
-          <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-400" aria-hidden />
           <div className="min-w-0 shrink">
             <h2 id="help-modal-title" className="text-lg sm:text-xl font-bold text-slate-800 dark:text-gray-100 tracking-tight truncate">
               {t('help.title')}

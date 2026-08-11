@@ -181,7 +181,7 @@ Turn counts **on** for search, filters, and WIP coaching. Leave effort off until
 | **Delete**          | Soft-delete → board trash; restore from trash or Admin → **Lifecycle**            |
 | **Purge**           | Admins can permanently purge (e.g. Shift+click delete with confirm)—use sparingly |
 | **Archive columns** | For work you want off the active path without deleting                            |
-| **Retention**       | Configure Lifecycle retention/auto-purge with an admin—don’t surprise the team    |
+| **Retention**       | Set Lifecycle retention/auto-purge with an admin, and tell the team first—soft-deleted boards and tasks can be permanently removed after the retention period |
 
 
 ---
@@ -194,7 +194,6 @@ Turn counts **on** for search, filters, and WIP coaching. Leave effort off until
 - Expecting board WIP to include Done/trash (it counts **active** work only).
 - Many near-empty boards before one board works.
 - Creating sprints in the UI after assigning tasks—create sprints first.
-- Turning on every report and gamification on day one.
 - Using columns as permanent personal swimlanes.
 - Assuming Agila enforces Scrum/SAFe ceremony—it won’t; facilitate that yourself.
 
@@ -212,7 +211,7 @@ Copy this into a wiki or pin it next to the board:
 | Board name                      |            |
 | Column path                     |            |
 | Finished column name(s)         |            |
-| Column WIP (where)              |            |
+| Column WIP (which columns & soft limits) |            |
 | Board WIP (active work)         |            |
 | Effort: hours / points / unused |            |
 | Sprints: yes / no; length       |            |
