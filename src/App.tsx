@@ -331,7 +331,10 @@ function AppContent() {
     });
   };
 
-  const handleTaskDelete = async (taskId: string) => {
+  const handleTaskDelete = async (
+    taskId: string,
+    options?: { skipEmail?: boolean }
+  ) => {
     try {
       recentlyDeletedTasksRef.current.add(taskId);
       setTimeout(() => {
@@ -347,7 +350,7 @@ function AppContent() {
         }
       }
 
-      await deleteTask(taskId);
+      await deleteTask(taskId, options);
       removeTaskFromLocalColumns(taskId);
 
       // NOTE: Backend already renumbers tasks after deletion and sends a WebSocket event
@@ -411,7 +414,12 @@ function AppContent() {
       });
       // Keep TaskDetails open, but switch from read-only lifecycle mode to editable
       handleSelectTask(normalized);
-      toast.success(t('trash.restored'));
+      const ticket = normalized.ticket || selectedTask.ticket;
+      toast.success(
+        ticket
+          ? t('trash.restored', { ticket })
+          : t('trash.restoredNoTicket')
+      );
     } catch (error: any) {
       const code = error?.response?.data?.code;
       if (code === 'board_soft_deleted') {
@@ -420,7 +428,7 @@ function AppContent() {
         toast.error(error?.response?.data?.error || t('trash.restoreFailed'));
       }
     }
-  }, [selectedTask?.id, t, handleSelectTask]);
+  }, [selectedTask, t, handleSelectTask]);
 
   const handlePurgeSelectedTask = useCallback(async () => {
     if (!selectedTask?.id) return;
@@ -3297,7 +3305,7 @@ function AppContent() {
     }
   }, [withLoading, fetchQueryLogs, columns, selectedTask, taskFilters, t, canMutate]);
 
-  const handleCopyTask = async (task: Task) => {
+  const handleCopyTask = async (task: Task, options?: { skipEmail?: boolean }) => {
     if (!canMutate) {
       toast.error(t('messages.readOnlyMode', { ns: 'common' }), '');
       return;
@@ -3317,7 +3325,7 @@ function AppContent() {
         // - Copying all task fields
         // - Placing copy at originalPos - 0.5 (above original)
         // - Copying tags, watchers, and collaborators
-        copiedTask = await copyTask(task.id, task.boardId);
+        copiedTask = await copyTask(task.id, task.boardId, options);
       });
       
       // After copy is created, renumber the column and send to backend
@@ -3360,7 +3368,10 @@ function AppContent() {
         setTaskCreationPause(false);
       }, TASK_CREATION_PAUSE_DURATION);
 
-      toast.success(t('errors.copyTaskSuccessTitle'), t('errors.copyTaskSuccessMessage'));
+      if (!options?.skipEmail) {
+        toast.success(t('errors.copyTaskSuccessTitle'), t('errors.copyTaskSuccessMessage'));
+      }
+      return copiedTask;
       
     } catch (error) {
       console.error('Failed to copy task:', error);
@@ -3369,8 +3380,10 @@ function AppContent() {
       // Check if it's an instance unavailable error
       if (await handleInstanceStatusError(error)) {
         // Instance status error handled by utility function
-      } else {
+      } else if (!options?.skipEmail) {
         toast.error(t('errors.copyTaskTitle'), t('errors.copyTaskMessage'));
+      } else {
+        throw error;
       }
     }
   };
@@ -3855,7 +3868,11 @@ function AppContent() {
     setShowColumnDeleteConfirm(null);
   };
 
-  const performCrossBoardMove = useCallback(async (taskId: string, targetBoardId: string) => {
+  const performCrossBoardMove = useCallback(async (
+    taskId: string,
+    targetBoardId: string,
+    options?: { skipEmail?: boolean }
+  ) => {
     const targetBoard = boards.find((b) => b.id === targetBoardId);
     if (targetBoard && hasWipLimit(targetBoard.wip_limit)) {
       const nextCount =
@@ -3873,7 +3890,7 @@ function AppContent() {
         );
       }
     }
-    await moveTaskToBoard(taskId, targetBoardId);
+    await moveTaskToBoard(taskId, targetBoardId, options);
     // Force refresh: cross-board move often coincides with justUpdatedFromWebSocket; a skipped
     // refresh leaves boards[] stale for the target board until the user switches tabs again.
     await refreshBoardData({ force: true });
@@ -3942,7 +3959,15 @@ function AppContent() {
     onEditTask: handleEditTask,
     onCopyTask: handleCopyTask,
     onTagAdd: handleTagAdd,
+    onTagRemove: handleTagRemove,
     onSoftDelete: handleTaskDelete,
+    onRestoreTasks: async (taskIds) => {
+      for (const id of taskIds) {
+        await restoreTask(id);
+      }
+      await refreshBoardData({ force: true });
+      notifyBoardTrashChanged(selectedBoardRef.current);
+    },
     onPermanentDelete: currentUser?.roles?.includes('admin')
       ? handleTaskPermanentDelete
       : undefined,
@@ -3955,6 +3980,7 @@ function AppContent() {
     },
     availablePriorities,
     availableSprints,
+    availableTags,
   });
 
   const {
@@ -3982,6 +4008,7 @@ function AppContent() {
     bulkUndo,
     clearBulkUndo,
     onBulkUndo,
+    recordColumnMoveUndo,
   } = kanbanMultiSelect;
 
   const handleBulkMoveTaskIds = useCallback(
@@ -4011,6 +4038,16 @@ function AppContent() {
             )
           : taskIds;
 
+      const previousByTaskId: Record<string, Partial<Task>> = {};
+      for (const id of orderedIds) {
+        const task = findTaskInColumns(id);
+        if (!task) continue;
+        previousByTaskId[id] = {
+          columnId: task.columnId,
+          position: task.position,
+        };
+      }
+
       await handleBulkMoveTasks(
         orderedIds,
         targetColumnId,
@@ -4021,10 +4058,25 @@ function AppContent() {
         refreshBoardData,
         taskFilters.setFilteredColumns
       );
+      if (orderedIds.length >= 2 && Object.keys(previousByTaskId).length > 0) {
+        const movedAcross =
+          sourceColumnId != null && sourceColumnId !== targetColumnId;
+        if (movedAcross) {
+          recordColumnMoveUndo(orderedIds, previousByTaskId);
+        }
+      }
       clearAllChecked();
       setDraggedTaskIds([]);
     },
-    [columns, clearAllChecked, warnWipOnce, refreshBoardData, taskFilters.setFilteredColumns]
+    [
+      columns,
+      clearAllChecked,
+      findTaskInColumns,
+      recordColumnMoveUndo,
+      warnWipOnce,
+      refreshBoardData,
+      taskFilters.setFilteredColumns,
+    ]
   );
 
   const handleColumnReorder = useCallback(async (columnId: string, newPosition: number) => {
@@ -4988,6 +5040,7 @@ function AppContent() {
                                     onBulkRemoveCollaborator={onBulkRemoveCollaborator}
                                     bulkUndoTaskIds={bulkUndo?.taskIds ?? null}
                                     bulkUndoLabelKey={bulkUndo?.labelKey}
+                                    bulkUndoAnchorColumnIds={bulkUndo?.anchorColumnIds ?? null}
                                     onBulkUndo={onBulkUndo}
                                     onClearBulkUndo={clearBulkUndo}
                                     draggedTaskIds={draggedTaskIds}

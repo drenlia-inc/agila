@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   UserPlus,
+  RotateCcw,
 } from 'lucide-react';
 import { updateActivityFeedPreference } from '../utils/userPreferences';
 import DOMPurify from 'dompurify';
@@ -612,6 +613,9 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     }
     if (action.includes('delete')) {
       return <Trash2 className={`${className} text-rose-600 dark:text-rose-400`} />;
+    }
+    if (action.includes('restore')) {
+      return <RotateCcw className={`${className} text-emerald-600 dark:text-emerald-400`} />;
     }
     if (action.includes('tag')) {
       return <Tag className={`${className} text-violet-600 dark:text-violet-400`} />;

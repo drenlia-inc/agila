@@ -124,11 +124,24 @@ export const updateTaskBodySchema = z.object({
 
 export const copyTaskBodySchema = z.object({
   taskId: idSchema,
-  boardId: idSchema.optional()
+  boardId: idSchema.optional(),
+  skipEmail: z.boolean().optional(),
 }).passthrough();
 
 export const bulkFieldActivityBodySchema = z.object({
-  field: z.enum(['memberId', 'requesterId', 'priorityId', 'sprintId']),
+  field: z.enum([
+    'memberId',
+    'requesterId',
+    'priorityId',
+    'sprintId',
+    'columnId',
+    'delete',
+    'moveBoard',
+    'collaborator',
+    'watcher',
+    'tag',
+    'copy',
+  ]),
   taskIds: z.array(idSchema).min(1).max(500),
   newValue: z.preprocess(
     (v) => (v === '' ? null : v),
@@ -139,7 +152,17 @@ export const bulkFieldActivityBodySchema = z.object({
     z.union([z.string().max(128), z.null()]).optional()
   ),
   newLabel: z.union([z.string().max(500), z.null()]).optional(),
-  boardId: optionalNullableId
+  boardId: optionalNullableId,
+  /** Undo restored mixed prior values — use “restored previous …” copy */
+  restoredPrevious: z.boolean().optional(),
+  /** columnId: forward archive/move vs undo */
+  reason: z.enum(['archive', 'move', 'undidArchive', 'undidMove']).optional(),
+});
+
+export const moveTaskToBoardBodySchema = z.object({
+  taskId: idSchema,
+  targetBoardId: idSchema,
+  skipEmail: z.boolean().optional(),
 });
 
 export const batchUpdateTasksBodySchema = z.object({
@@ -165,11 +188,6 @@ export const reorderTaskBodySchema = z.object({
   newPosition: z.union([z.number(), z.string().max(32)]),
   columnId: idSchema
 }).passthrough();
-
-export const moveTaskToBoardBodySchema = z.object({
-  taskId: idSchema,
-  targetBoardId: idSchema
-});
 
 export const permanentBatchBodySchema = z.object({
   taskIds: z.array(idSchema).min(1).max(500)

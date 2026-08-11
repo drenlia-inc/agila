@@ -242,7 +242,8 @@
     "emptyTitle": "La corbeille est vide",
     "emptyHint": "Les tâches en suppression récupérable de ce tableau apparaissent ici.",
     "loadFailed": "Échec du chargement de la corbeille",
-    "restored": "Tâche restaurée",
+    "restored": "Tâche {{ticket}} restaurée",
+    "restoredNoTicket": "Tâche restaurée",
     "purged": "Tâche définitivement supprimée",
     "restoreFailed": "Échec de la restauration",
     "purgeFailed": "Échec de la suppression définitive",
@@ -318,6 +319,12 @@
     "undoPriority": "Annuler le changement de priorité sur {{count}} tâche(s) et resélectionner",
     "undoSprint": "Annuler le changement de sprint sur {{count}} tâche(s) et resélectionner",
     "undoArchive": "Annuler l'archivage sur {{count}} tâche(s) et resélectionner",
+    "undoTag": "Annuler le changement d'étiquette sur {{count}} tâche(s) et resélectionner",
+    "undoWatcher": "Annuler le changement d'observateur sur {{count}} tâche(s) et resélectionner",
+    "undoCollaborator": "Annuler le changement de collaborateur sur {{count}} tâche(s) et resélectionner",
+    "undoDelete": "Annuler la suppression — restaurer {{count}} tâche(s) depuis la corbeille et resélectionner",
+    "undoMove": "Annuler le déplacement sur {{count}} tâche(s) et resélectionner",
+    "undoMoveBoard": "Annuler le changement de tableau sur {{count}} tâche(s) et resélectionner",
     "undoRestoredCount": "{{count}} tâche(s) rétablie(s)"
   },
   "addCommentModal": {

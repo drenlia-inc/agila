@@ -16,6 +16,7 @@ const DEFAULT_PREFERENCES = {
   myTaskUpdated: true,
   watchedTaskUpdated: true,
   addedAsCollaborator: true,
+  addedAsWatcher: true,
   collaboratingTaskUpdated: true,
   commentAdded: true,
   requesterTaskCreated: true,
@@ -58,6 +59,19 @@ class TaskEmailNotificationService {
   async isMailReady() {
     const validation = await this.emailService.validateEmailConfig();
     return validation;
+  }
+
+  /** Admin pause for task emails (queue still accepts; immediate paths must check too). */
+  async areTaskEmailsEnabled() {
+    try {
+      const row = await wrapQuery(
+        this.db.prepare('SELECT value FROM settings WHERE key = ?'),
+        'SELECT'
+      ).get('TASK_EMAIL_NOTIFICATIONS_ENABLED');
+      return row?.value !== 'false';
+    } catch {
+      return true;
+    }
   }
 
   async getUserNotificationPreferences(userId) {
@@ -225,6 +239,7 @@ class TaskEmailNotificationService {
       collaboratingTaskUpdated: 60,
       watchedTaskUpdated: 50,
       addedAsCollaborator: 40,
+      addedAsWatcher: 35,
     };
 
     const add = (recipientUserId, notificationType) => {
@@ -263,6 +278,7 @@ class TaskEmailNotificationService {
       case 'associate_tag':
       case 'disassociate_tag':
       case 'delete_task':
+      case 'restore_task':
       case 'copy_task':
       default:
         asUpdate();
@@ -338,6 +354,7 @@ class TaskEmailNotificationService {
   async sendTaskNotification(activityData) {
     try {
       if (process.env.DEMO_ENABLED === 'true') return;
+      if (!(await this.areTaskEmailsEnabled())) return;
 
       const mail = await this.isMailReady();
       if (!mail.valid) {
@@ -436,6 +453,7 @@ class TaskEmailNotificationService {
   async sendCommentNotification(commentData) {
     try {
       if (process.env.DEMO_ENABLED === 'true') return;
+      if (!(await this.areTaskEmailsEnabled())) return;
 
       const { userId, action, taskId, commentContent } = commentData;
       if (action !== 'create_comment' || !userId || !taskId) return;
@@ -550,6 +568,7 @@ class TaskEmailNotificationService {
   async sendCollaboratorAddedNotification({ actorUserId, taskId, memberId }) {
     try {
       if (process.env.DEMO_ENABLED === 'true') return;
+      if (!(await this.areTaskEmailsEnabled())) return;
       if (!actorUserId || !taskId || !memberId) return;
 
       const mail = await this.isMailReady();
@@ -636,12 +655,106 @@ class TaskEmailNotificationService {
   }
 
   /**
+   * Email the newly added watcher immediately (respects addedAsWatcher pref).
+   * Does not notify other task participants.
+   */
+  async sendWatcherAddedNotification({ actorUserId, taskId, memberId }) {
+    try {
+      if (process.env.DEMO_ENABLED === 'true') return;
+      if (!(await this.areTaskEmailsEnabled())) return;
+      if (!actorUserId || !taskId || !memberId) return;
+
+      const mail = await this.isMailReady();
+      if (!mail.valid) return;
+
+      const recipientUserId = await activityQueries.getUserIdForMember(this.db, memberId);
+      if (!recipientUserId || recipientUserId === actorUserId) return;
+      if (NON_MAILABLE_USER_IDS.has(recipientUserId)) return;
+
+      const userPrefs = await this.getUserNotificationPreferences(recipientUserId);
+      if (!userPrefs.addedAsWatcher) return;
+
+      const recipient = await wrapQuery(
+        this.db.prepare(
+          'SELECT id, email, first_name, last_name, is_active FROM users WHERE id = ?'
+        ),
+        'SELECT'
+      ).get(recipientUserId);
+      if (!isMailableRecipient(recipient)) return;
+
+      const participants = await this.getTaskParticipants(taskId);
+      if (!participants.task) return;
+
+      const actor = await this.getActor(actorUserId);
+      const actorName =
+        actor?.name ||
+        [actor?.first_name, actor?.last_name].filter(Boolean).join(' ') ||
+        actor?.email ||
+        'Someone';
+
+      const appUrlSetting = await wrapQuery(
+        this.db.prepare('SELECT value FROM settings WHERE key = ?'),
+        'SELECT'
+      ).get('APP_URL');
+      let baseUrl =
+        appUrlSetting?.value || process.env.BASE_URL || 'http://localhost:3000';
+      baseUrl = baseUrl.replace(/\/$/, '');
+      const ticket = participants.task.ticket || participants.task.id;
+      const taskUrl = buildTaskEmailUrl(baseUrl, {
+        projectId: participants.projectId,
+        ticket,
+        taskId: participants.task.id,
+      });
+
+      const siteNameSetting = await wrapQuery(
+        this.db.prepare('SELECT value FROM settings WHERE key = ?'),
+        'SELECT'
+      ).get('SITE_NAME');
+      const siteName = siteNameSetting?.value || 'Agila';
+      const recipientTimeZone = await getUserTimeZone(this.db, recipientUserId);
+
+      const { getTranslatorForUser } = await import('../utils/i18n.js');
+      const t = await getTranslatorForUser(this.db, recipientUserId);
+      const actionDetails = `${t('emails.taskNotification.addedAsWatcher.addedBy')} ${actorName}`;
+
+      const emailContent = await EmailTemplates.taskNotification({
+        user: recipient,
+        task: participants.task,
+        board: {
+          id: participants.task.boardId,
+          name: participants.boardTitle || 'Board',
+          title: participants.boardTitle || 'Board',
+        },
+        project: participants.projectId || null,
+        actionType: 'update_task',
+        actionDetails,
+        taskUrl,
+        siteName,
+        notificationType: 'addedAsWatcher',
+        timestamp: new Date().toISOString(),
+        recipientTimeZone,
+        db: this.db,
+      });
+
+      await this.emailService.sendEmail({
+        to: recipient.email,
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+      });
+    } catch (error) {
+      console.error('❌ [TASK-EMAIL] Error sending watcher-added notification:', error);
+    }
+  }
+
+  /**
    * One digest email per recipient for kanban multi-select field updates.
    * Lists only the tasks that recipient is involved in.
    */
   async sendBulkTaskFieldNotification(bulkData) {
     try {
       if (process.env.DEMO_ENABLED === 'true') return;
+      if (!(await this.areTaskEmailsEnabled())) return;
 
       const mail = await this.isMailReady();
       if (!mail.valid) return;
@@ -654,6 +767,7 @@ class TaskEmailNotificationService {
         newValue = null,
         newLabel = null,
         details = null,
+        reason = null,
       } = bulkData || {};
 
       if (!userId || !field || !Array.isArray(taskIds) || taskIds.length === 0) {
@@ -679,6 +793,10 @@ class TaskEmailNotificationService {
         } else {
           changeAfter = newLabel || String(newValue);
         }
+      } else if (field === 'moveBoard' || field === 'collaborator' || field === 'watcher' || field === 'tag') {
+        changeAfter = newLabel || String(newValue ?? '');
+      } else if (field === 'columnId' && newLabel) {
+        changeAfter = newLabel;
       }
 
       const typePriority = {
@@ -687,52 +805,97 @@ class TaskEmailNotificationService {
         requesterTaskUpdated: 70,
         collaboratingTaskUpdated: 60,
         watchedTaskUpdated: 50,
+        addedAsCollaborator: 40,
+        addedAsWatcher: 35,
       };
 
       /** @type {Map<string, { notificationType: string, tasks: object[], boardTitle: string }>} */
       const byRecipient = new Map();
       let boardTitle = 'Board';
 
-      for (const taskId of taskIds) {
-        const participants = await this.getTaskParticipants(taskId);
-        if (!participants?.task) continue;
-        boardTitle = participants.boardTitle || boardTitle;
-
-        const notifications = this.determineNotifications(
-          'update_task',
-          participants,
-          userId,
-          {
-            changedField: field,
-            newAssigneeUserId: display.newAssigneeUserId,
+      // Bulk collaborator/watcher add: one digest to the new member only
+      if ((field === 'collaborator' || field === 'watcher') && newValue) {
+        const recipientUserId = await activityQueries.getUserIdForMember(this.db, newValue);
+        const notificationType =
+          field === 'collaborator' ? 'addedAsCollaborator' : 'addedAsWatcher';
+        if (recipientUserId && recipientUserId !== userId && !NON_MAILABLE_USER_IDS.has(recipientUserId)) {
+          const tasks = [];
+          for (const taskId of taskIds) {
+            const participants = await this.getTaskParticipants(taskId);
+            if (!participants?.task) continue;
+            boardTitle = participants.boardTitle || boardTitle;
+            tasks.push({
+              id: participants.task.id,
+              title: participants.task.title,
+              ticket: participants.task.ticket,
+              boardId: participants.task.boardId,
+              projectId: participants.projectId || participants.task.projectId || null,
+            });
           }
-        );
-
-        const taskSummary = {
-          id: participants.task.id,
-          title: participants.task.title,
-          ticket: participants.task.ticket,
-          boardId: participants.task.boardId,
-          projectId: participants.projectId || participants.task.projectId || null,
-        };
-
-        for (const { recipientUserId, notificationType } of notifications) {
-          const existing = byRecipient.get(recipientUserId);
-          if (!existing) {
+          if (tasks.length > 0) {
             byRecipient.set(recipientUserId, {
               notificationType,
-              tasks: [taskSummary],
-              boardTitle: participants.boardTitle || boardTitle,
+              tasks,
+              boardTitle,
             });
-          } else {
-            if (
-              (typePriority[notificationType] || 0) >
-              (typePriority[existing.notificationType] || 0)
-            ) {
-              existing.notificationType = notificationType;
+          }
+        }
+      } else {
+        for (const taskId of taskIds) {
+          const participants = await this.getTaskParticipants(taskId);
+          if (!participants?.task) continue;
+          boardTitle = participants.boardTitle || boardTitle;
+
+          const action =
+            field === 'delete'
+              ? 'delete_task'
+              : field === 'copy'
+                ? 'copy_task'
+                : field === 'tag'
+                  ? 'associate_tag'
+                  : field === 'moveBoard' || field === 'columnId'
+                    ? 'move_task'
+                    : 'update_task';
+
+          const notifications = this.determineNotifications(
+            action,
+            participants,
+            userId,
+            {
+              changedField:
+                field === 'delete' || field === 'moveBoard' || field === 'copy' || field === 'tag'
+                  ? null
+                  : field,
+              newAssigneeUserId: display.newAssigneeUserId,
             }
-            if (!existing.tasks.some((t) => t.id === taskSummary.id)) {
-              existing.tasks.push(taskSummary);
+          );
+
+          const taskSummary = {
+            id: participants.task.id,
+            title: participants.task.title,
+            ticket: participants.task.ticket,
+            boardId: participants.task.boardId,
+            projectId: participants.projectId || participants.task.projectId || null,
+          };
+
+          for (const { recipientUserId, notificationType } of notifications) {
+            const existing = byRecipient.get(recipientUserId);
+            if (!existing) {
+              byRecipient.set(recipientUserId, {
+                notificationType,
+                tasks: [taskSummary],
+                boardTitle: participants.boardTitle || boardTitle,
+              });
+            } else {
+              if (
+                (typePriority[notificationType] || 0) >
+                (typePriority[existing.notificationType] || 0)
+              ) {
+                existing.notificationType = notificationType;
+              }
+              if (!existing.tasks.some((t) => t.id === taskSummary.id)) {
+                existing.tasks.push(taskSummary);
+              }
             }
           }
         }
@@ -786,6 +949,7 @@ class TaskEmailNotificationService {
           actorName,
           boardTitle: payload.boardTitle || boardTitle,
           field,
+          reason,
           tasks: payload.tasks,
           changeBefore,
           changeAfter,
@@ -817,6 +981,7 @@ class TaskEmailNotificationService {
   async sendBulkColumnMoveNotification(bulkData) {
     try {
       if (process.env.DEMO_ENABLED === 'true') return;
+      if (!(await this.areTaskEmailsEnabled())) return;
 
       const mail = await this.isMailReady();
       if (!mail.valid) return;
@@ -980,6 +1145,12 @@ export function notifyCollaboratorAdded(db, data, tenantId = null) {
   if (!db) return Promise.resolve();
   const service = new TaskEmailNotificationService(db, tenantId);
   return service.sendCollaboratorAddedNotification(data);
+}
+
+export function notifyWatcherAdded(db, data, tenantId = null) {
+  if (!db) return Promise.resolve();
+  const service = new TaskEmailNotificationService(db, tenantId);
+  return service.sendWatcherAddedNotification(data);
 }
 
 export function notifyBulkColumnMove(db, data, tenantId = null) {

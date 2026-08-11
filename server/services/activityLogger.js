@@ -2,7 +2,7 @@ import { isValidAction, MEMBER_ACTIONS } from '../constants/activityActions.js';
 import notificationService from './notificationService.js';
 import { notifyTaskActivity, notifyCommentActivity, notifyBulkTaskFieldActivity } from './taskEmailNotificationService.js';
 import { getBilingualTranslation, t } from '../utils/i18n.js';
-import { activity as activityQueries } from '../utils/sqlManager/index.js';
+import { activity as activityQueries, helpers } from '../utils/sqlManager/index.js';
 
 /**
  * Activity Logger Service
@@ -182,7 +182,13 @@ export const logTaskActivity = async (userId, action, taskId, details, additiona
           boardTitle: translatedBoardTitle.fr
         }, 'fr');
       }
-    } else if (action === 'delete_task') {
+    } else if (
+      action === 'delete_task' ||
+      action === 'restore_task' ||
+      action === 'copy_task' ||
+      action === 'associate_tag' ||
+      action === 'disassociate_tag'
+    ) {
       // Check if details is already bilingual JSON (from route)
       let isBilingualJson = false;
       try {
@@ -197,20 +203,38 @@ export const logTaskActivity = async (userId, action, taskId, details, additiona
       
       // If not already bilingual JSON, create bilingual messages
       if (!isBilingualJson) {
-        // For delete_task, if taskTitle is "Unknown Task", use the provided details
-        if (taskTitle === 'Unknown Task' && details.includes('deleted task')) {
-          enhancedDetailsBilingual = { en: details, fr: details };
-        } else {
-          enhancedDetailsBilingual.en = t('activity.deletedTask', {
+        if (action === 'copy_task') {
+          enhancedDetailsBilingual.en = t('activity.copiedTask', {
             taskTitle: translatedTaskTitle.en,
-            taskRef,
             boardTitle: translatedBoardTitle.en
           }, 'en');
-          enhancedDetailsBilingual.fr = t('activity.deletedTask', {
+          enhancedDetailsBilingual.fr = t('activity.copiedTask', {
             taskTitle: translatedTaskTitle.fr,
-            taskRef,
             boardTitle: translatedBoardTitle.fr
           }, 'fr');
+        } else if (action === 'associate_tag' || action === 'disassociate_tag') {
+          enhancedDetailsBilingual = { en: details, fr: details };
+        } else {
+          const key = action === 'restore_task' ? 'activity.restoredTask' : 'activity.deletedTask';
+          // For delete_task, if taskTitle is "Unknown Task", use the provided details
+          if (
+            action === 'delete_task' &&
+            taskTitle === 'Unknown Task' &&
+            details.includes('deleted task')
+          ) {
+            enhancedDetailsBilingual = { en: details, fr: details };
+          } else {
+            enhancedDetailsBilingual.en = t(key, {
+              taskTitle: translatedTaskTitle.en,
+              taskRef,
+              boardTitle: translatedBoardTitle.en
+            }, 'en');
+            enhancedDetailsBilingual.fr = t(key, {
+              taskTitle: translatedTaskTitle.fr,
+              taskRef,
+              boardTitle: translatedBoardTitle.fr
+            }, 'fr');
+          }
         }
       }
     } else if (action === 'move_task') {
@@ -1013,7 +1037,103 @@ export const logBulkTaskFieldActivity = async (userId, field, payload = {}, addi
     let detailsEn = '';
     let detailsFr = '';
 
-    if (field === 'memberId' || field === 'requesterId') {
+    if (payload.restoredPrevious === true && field !== 'columnId') {
+      const keyByField = {
+        memberId: 'activity.bulkRestoredPreviousAssignee',
+        requesterId: 'activity.bulkRestoredPreviousRequester',
+        priorityId: 'activity.bulkRestoredPreviousPriority',
+        sprintId: 'activity.bulkRestoredPreviousSprint',
+      };
+      const key = keyByField[field];
+      if (!key) {
+        console.warn(`Unsupported restoredPrevious bulk field: ${field}`);
+        return;
+      }
+      detailsEn = t(key, { count, boardTitle: boardTitleEn }, 'en');
+      detailsFr = t(key, { count, boardTitle: boardTitleFr }, 'fr');
+    } else if (field === 'columnId') {
+      const reason = payload.reason || 'undidMove';
+      const keyByReason = {
+        archive: 'activity.bulkArchived',
+        move: 'activity.bulkMovedColumn',
+        undidArchive: 'activity.bulkUndidArchive',
+        undidMove: 'activity.bulkUndidColumnMove',
+      };
+      const key = keyByReason[reason] || keyByReason.undidMove;
+      detailsEn = t(key, { count, boardTitle: boardTitleEn }, 'en');
+      detailsFr = t(key, { count, boardTitle: boardTitleFr }, 'fr');
+    } else if (field === 'delete') {
+      detailsEn = t('activity.bulkDeleted', { count, boardTitle: boardTitleEn }, 'en');
+      detailsFr = t('activity.bulkDeleted', { count, boardTitle: boardTitleFr }, 'fr');
+    } else if (field === 'moveBoard') {
+      let toBoard = payload.newLabel || '';
+      if (!toBoard && payload.newValue) {
+        try {
+          const { boards: boardQueries } = await import('../utils/sqlManager/index.js');
+          const board = await boardQueries.getBoardById(database, payload.newValue);
+          toBoard = board?.title || String(payload.newValue);
+        } catch {
+          toBoard = String(payload.newValue);
+        }
+      }
+      detailsEn = t('activity.bulkMovedBoard', {
+        count,
+        boardTitle: boardTitleEn,
+        toBoard: toBoard || payload.newValue || '',
+      }, 'en');
+      detailsFr = t('activity.bulkMovedBoard', {
+        count,
+        boardTitle: boardTitleFr,
+        toBoard: toBoard || payload.newValue || '',
+      }, 'fr');
+    } else if (field === 'collaborator') {
+      const newName = await resolveMemberName(payload.newValue);
+      detailsEn = t('activity.bulkAddedCollaborator', {
+        newName: newName.en,
+        count,
+        boardTitle: boardTitleEn,
+      }, 'en');
+      detailsFr = t('activity.bulkAddedCollaborator', {
+        newName: newName.fr,
+        count,
+        boardTitle: boardTitleFr,
+      }, 'fr');
+    } else if (field === 'watcher') {
+      const newName = await resolveMemberName(payload.newValue);
+      detailsEn = t('activity.bulkAddedWatcher', {
+        newName: newName.en,
+        count,
+        boardTitle: boardTitleEn,
+      }, 'en');
+      detailsFr = t('activity.bulkAddedWatcher', {
+        newName: newName.fr,
+        count,
+        boardTitle: boardTitleFr,
+      }, 'fr');
+    } else if (field === 'tag') {
+      let tagLabel = payload.newLabel || '';
+      if (!tagLabel && payload.newValue != null && payload.newValue !== '') {
+        try {
+          const tag = await helpers.getTagById(database, parseInt(String(payload.newValue), 10));
+          tagLabel = tag?.tag || String(payload.newValue);
+        } catch {
+          tagLabel = String(payload.newValue);
+        }
+      }
+      detailsEn = t('activity.bulkAddedTag', {
+        tagName: tagLabel,
+        count,
+        boardTitle: boardTitleEn,
+      }, 'en');
+      detailsFr = t('activity.bulkAddedTag', {
+        tagName: tagLabel,
+        count,
+        boardTitle: boardTitleFr,
+      }, 'fr');
+    } else if (field === 'copy') {
+      detailsEn = t('activity.bulkCopied', { count, boardTitle: boardTitleEn }, 'en');
+      detailsFr = t('activity.bulkCopied', { count, boardTitle: boardTitleFr }, 'fr');
+    } else if (field === 'memberId' || field === 'requesterId') {
       const newName = await resolveMemberName(payload.newValue);
       const hasSharedOld =
         payload.oldValue !== undefined &&
@@ -1110,6 +1230,7 @@ export const logBulkTaskFieldActivity = async (userId, field, payload = {}, addi
         oldValue: payload.oldValue ?? null,
         newValue: payload.newValue ?? null,
         newLabel: payload.newLabel ?? null,
+        reason: payload.reason ?? null,
         details,
       },
       additionalData.tenantId || null

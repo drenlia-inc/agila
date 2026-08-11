@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Undo2 } from 'lucide-react';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
+import { useFixedColumnFabPosition } from '../hooks/useFixedColumnFabPosition';
 
 export type ColumnBulkUndoFabProps = {
   columnId: string;
@@ -31,48 +32,7 @@ export default function ColumnBulkUndoFab({
 }: ColumnBulkUndoFabProps) {
   const { t } = useTranslation('tasks');
   const rootRef = useRef<HTMLDivElement>(null);
-  const [rootPos, setRootPos] = useState<{ top: number; left: number; visible: boolean }>({
-    top: 0,
-    left: 0,
-    visible: false,
-  });
-
-  useEffect(() => {
-    const update = () => {
-      const anchor = anchorRef.current;
-      const column = anchor?.closest('.column-container') as HTMLElement | null;
-      if (!anchor || !column) {
-        setRootPos((prev) => ({ ...prev, visible: false }));
-        return;
-      }
-
-      const columnRect = column.getBoundingClientRect();
-      const headerRect = anchor.getBoundingClientRect();
-      const visible =
-        columnRect.right > 0 &&
-        columnRect.left < window.innerWidth &&
-        columnRect.bottom > 0 &&
-        columnRect.top < window.innerHeight;
-
-      setRootPos({
-        top: Math.max(96, headerRect.bottom + 4),
-        left: Math.max(16, columnRect.left + 2),
-        visible,
-      });
-    };
-
-    update();
-    const observer =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
-    if (anchorRef.current) observer?.observe(anchorRef.current);
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
-    };
-  }, [anchorRef]);
+  const rootPos = useFixedColumnFabPosition(anchorRef);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

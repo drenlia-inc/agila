@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { authenticateToken } from '../middleware/auth.js';
 import { wrapQuery } from '../utils/queryLogger.js';
-import { logActivity } from '../services/activityLogger.js';
+import { logActivity, logTaskActivity } from '../services/activityLogger.js';
 import { TAG_ACTIONS } from '../constants/activityActions.js';
 import * as reportingLogger from '../services/reportingLogger.js';
 import notificationService from '../services/notificationService.js';
@@ -14,7 +14,7 @@ import { getLicenseManager } from '../config/license.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 import { helpers, tasks as taskQueries, files as fileQueries, activity as activityQueries } from '../utils/sqlManager/index.js';
 import { getBilingualTranslation, getTranslatorForLanguage } from '../utils/i18n.js';
-import { notifyCollaboratorAdded } from '../services/taskEmailNotificationService.js';
+import { notifyCollaboratorAdded, notifyWatcherAdded } from '../services/taskEmailNotificationService.js';
 import { parseBody, taskAttachmentsBodySchema } from '../utils/requestValidation.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -41,6 +41,10 @@ router.post('/:taskId/tags/:tagId', authenticateToken, async (req, res) => {
   const { taskId, tagId } = req.params;
   const userId = req.user?.id || 'system';
   const db = getRequestDatabase(req);
+  const skipEmail =
+    req.query.skipEmail === 'true' ||
+    req.query.skipEmail === '1' ||
+    req.body?.skipEmail === true;
   
   try {
     // MIGRATED: Check if association already exists using sqlManager
@@ -111,17 +115,19 @@ router.post('/:taskId/tags/:tagId', authenticateToken, async (req, res) => {
           };
           
           // Fire-and-forget: Don't await activity logging to avoid blocking API response
-          await logActivity(
+          await logTaskActivity(
             userId,
             TAG_ACTIONS.ASSOCIATE,
+            taskId,
             JSON.stringify(bilingualDetails),
             {
-              taskId: taskId,
               tagId: parseInt(tagId),
               columnId: normalizedTask.columnId,
               boardId: normalizedTask.boardId,
               tenantId: getTenantId(req),
-              db: db
+              authType: req.user?.authType,
+              db: db,
+              skipEmail: skipEmail === true,
             }
           );
         } catch (error) {
@@ -333,16 +339,17 @@ router.delete('/:taskId/tags/:tagId', authenticateToken, async (req, res) => {
           };
           
           // Fire-and-forget: Don't await activity logging to avoid blocking API response
-          await logActivity(
+          await logTaskActivity(
             userId,
             TAG_ACTIONS.DISASSOCIATE,
+            taskId,
             JSON.stringify(bilingualDetails),
             {
-              taskId: taskId,
               tagId: parseInt(tagId),
               columnId: normalizedTask.columnId,
               boardId: normalizedTask.boardId,
               tenantId: getTenantId(req),
+              authType: req.user?.authType,
               db: db
             }
           );
@@ -466,6 +473,10 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
   const { taskId, memberId } = req.params;
   const userId = req.user?.id || 'system';
   const db = getRequestDatabase(req);
+  const skipEmail =
+    req.query.skipEmail === 'true' ||
+    req.query.skipEmail === '1' ||
+    req.body?.skipEmail === true;
   
   try {
     // MIGRATED: Check if association already exists using sqlManager
@@ -479,6 +490,16 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
     
     // MIGRATED: Add watcher using sqlManager
     await helpers.addWatcher(db, taskId, memberId);
+
+    if (!skipEmail) {
+      notifyWatcherAdded(
+        db,
+        { actorUserId: userId, taskId, memberId },
+        getTenantId(req)
+      ).catch((err) => {
+        console.error('Failed to send watcher-added email:', err);
+      });
+    }
     
     // Log to reporting system
     try {
@@ -560,6 +581,10 @@ router.post('/:taskId/collaborators/:memberId', authenticateToken, async (req, r
   const { taskId, memberId } = req.params;
   const userId = req.user?.id || 'system';
   const db = getRequestDatabase(req);
+  const skipEmail =
+    req.query.skipEmail === 'true' ||
+    req.query.skipEmail === '1' ||
+    req.body?.skipEmail === true;
   
   try {
     // MIGRATED: Check if association already exists using sqlManager
@@ -574,14 +599,15 @@ router.post('/:taskId/collaborators/:memberId', authenticateToken, async (req, r
     // MIGRATED: Add collaborator using sqlManager
     await helpers.addCollaborator(db, taskId, memberId);
 
-    notifyCollaboratorAdded(
-      db,
-      { actorUserId: userId, taskId, memberId },
-      getTenantId(req)
-    ).catch((err) => {
-      console.error('Failed to send collaborator-added email:', err);
-    });
-    
+    if (!skipEmail) {
+      notifyCollaboratorAdded(
+        db,
+        { actorUserId: userId, taskId, memberId },
+        getTenantId(req)
+      ).catch((err) => {
+        console.error('Failed to send collaborator-added email:', err);
+      });
+    }
     // Log to reporting system
     try {
       const userInfo = await reportingLogger.getUserInfo(db, userId);

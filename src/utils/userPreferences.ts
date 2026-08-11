@@ -110,6 +110,7 @@ export interface UserPreferences {
     myTaskUpdated: boolean; // Notify when my task is updated
     watchedTaskUpdated: boolean; // Notify when a task I'm watching is updated
     addedAsCollaborator: boolean; // Notify when I'm added as a collaborator on a task
+    addedAsWatcher: boolean; // Notify when I'm added as a watcher on a task
     collaboratingTaskUpdated: boolean; // Notify when a task I'm collaborating in is updated
     commentAdded: boolean; // Notify when a comment is added to a task I'm involved in
     requesterTaskCreated: boolean; // Notify when a task is created and I'm the requester
@@ -315,6 +316,7 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
     myTaskUpdated: true,
     watchedTaskUpdated: true,
     addedAsCollaborator: true,
+    addedAsWatcher: true,
     collaboratingTaskUpdated: true,
     commentAdded: true,
     requesterTaskCreated: true,

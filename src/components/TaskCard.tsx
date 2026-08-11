@@ -430,6 +430,13 @@ const TaskCard = React.memo(function TaskCard({
           return;
         }
 
+        // Cmd/Ctrl+click is multi-select — do not activate dnd-kit.
+        // With a low activation distance, pointerdown otherwise starts a drag and the
+        // column wrapper applies opacity-50 (looks disabled) until drag end.
+        if (e.metaKey || e.ctrlKey) {
+          return;
+        }
+
         // Call original listener - CRITICAL: Don't prevent default or stop propagation
         // The sensor needs these events to track pointer movement
         originalListeners.onPointerDown?.(e);

@@ -242,7 +242,8 @@
     "emptyTitle": "Trash is empty",
     "emptyHint": "Soft-deleted tasks from this board appear here.",
     "loadFailed": "Failed to load trash",
-    "restored": "Task restored",
+    "restored": "Task {{ticket}} restored",
+    "restoredNoTicket": "Task restored",
     "purged": "Task permanently deleted",
     "restoreFailed": "Failed to restore task",
     "purgeFailed": "Failed to permanently delete task",
@@ -318,6 +319,12 @@
     "undoPriority": "Undo priority change on {{count}} task(s) and reselect",
     "undoSprint": "Undo sprint change on {{count}} task(s) and reselect",
     "undoArchive": "Undo archive on {{count}} task(s) and reselect",
+    "undoTag": "Undo tag change on {{count}} task(s) and reselect",
+    "undoWatcher": "Undo watcher change on {{count}} task(s) and reselect",
+    "undoCollaborator": "Undo collaborator change on {{count}} task(s) and reselect",
+    "undoDelete": "Undo delete — restore {{count}} task(s) from trash and reselect",
+    "undoMove": "Undo move on {{count}} task(s) and reselect",
+    "undoMoveBoard": "Undo board move on {{count}} task(s) and reselect",
     "undoRestoredCount": "Reverted {{count}} task(s)"
   },
   "addCommentModal": {

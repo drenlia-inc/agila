@@ -37,6 +37,7 @@ const AdminNotificationsSettingsTab: React.FC<AdminNotificationsSettingsTabProps
       myTaskUpdated: true,
       watchedTaskUpdated: true,
       addedAsCollaborator: true,
+      addedAsWatcher: true,
       collaboratingTaskUpdated: true,
       commentAdded: true,
       requesterTaskCreated: true,
@@ -113,6 +114,12 @@ const AdminNotificationsSettingsTab: React.FC<AdminNotificationsSettingsTabProps
       label: t('appSettings.notificationTypes.addedAsCollaborator'),
       description: t('appSettings.notificationTypes.addedAsCollaboratorDescription'),
       dotClass: 'bg-yellow-500',
+    },
+    {
+      key: 'addedAsWatcher',
+      label: t('appSettings.notificationTypes.addedAsWatcher'),
+      description: t('appSettings.notificationTypes.addedAsWatcherDescription'),
+      dotClass: 'bg-cyan-500',
     },
     {
       key: 'collaboratingTaskUpdated',

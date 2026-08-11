@@ -8,6 +8,7 @@ export const TASK_ACTIONS = {
   CREATE: 'create_task',
   UPDATE: 'update_task',
   DELETE: 'delete_task',
+  RESTORE: 'restore_task',
   MOVE: 'move_task',
   COPY: 'copy_task'
 };

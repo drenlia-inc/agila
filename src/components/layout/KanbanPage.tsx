@@ -268,6 +268,7 @@ interface KanbanPageProps {
   onBulkRemoveCollaborator?: (taskIds: string[], memberId: string) => void;
   bulkUndoTaskIds?: string[] | null;
   bulkUndoLabelKey?: string;
+  bulkUndoAnchorColumnIds?: string[] | null;
   onBulkUndo?: () => void;
   onClearBulkUndo?: () => void;
   draggedTaskIds?: string[];
@@ -415,6 +416,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   onBulkRemoveCollaborator,
   bulkUndoTaskIds = null,
   bulkUndoLabelKey,
+  bulkUndoAnchorColumnIds = null,
   onBulkUndo,
   onClearBulkUndo,
   draggedTaskIds,
@@ -612,7 +614,12 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         if (selectedTask?.id === taskId) {
           onSelectTask(normalized);
         }
-        toast.success(t('trash.restored'));
+        const ticket = normalized.ticket;
+        toast.success(
+          ticket
+            ? t('trash.restored', { ticket })
+            : t('trash.restoredNoTicket')
+        );
         setTrashTasks((prev) => {
           const next = prev.filter((task) => task.id !== taskId);
           if (next.length === 0) {
@@ -1630,6 +1637,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                             onBulkRemoveCollaborator={onBulkRemoveCollaborator}
                             bulkUndoTaskIds={bulkUndoTaskIds}
                             bulkUndoLabelKey={bulkUndoLabelKey}
+                            bulkUndoAnchorColumnIds={bulkUndoAnchorColumnIds}
                             onBulkUndo={onBulkUndo}
                             onClearBulkUndo={onClearBulkUndo}
                             selectedBoardId={selectedBoard}
@@ -1738,6 +1746,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                       onBulkRemoveCollaborator={onBulkRemoveCollaborator}
                       bulkUndoTaskIds={bulkUndoTaskIds}
                       bulkUndoLabelKey={bulkUndoLabelKey}
+                      bulkUndoAnchorColumnIds={bulkUndoAnchorColumnIds}
                       onBulkUndo={onBulkUndo}
                       onClearBulkUndo={onClearBulkUndo}
                       selectedBoardId={selectedBoard}

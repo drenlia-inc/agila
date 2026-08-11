@@ -128,6 +128,7 @@ interface KanbanColumnProps {
   onBulkRemoveCollaborator?: (taskIds: string[], memberId: string) => void;
   bulkUndoTaskIds?: string[] | null;
   bulkUndoLabelKey?: string;
+  bulkUndoAnchorColumnIds?: string[] | null;
   onBulkUndo?: () => void;
   onClearBulkUndo?: () => void;
   selectedBoardId?: string | null;
@@ -221,6 +222,7 @@ export default function KanbanColumn({
   onBulkRemoveCollaborator,
   bulkUndoTaskIds = null,
   bulkUndoLabelKey,
+  bulkUndoAnchorColumnIds = null,
   onBulkUndo,
   onClearBulkUndo,
   selectedBoardId = null,
@@ -1627,7 +1629,13 @@ export default function KanbanColumn({
 
       {checkedTaskIds &&
         onBulkUndo &&
-        shouldShowColumnBulkUndo(bulkUndoTaskIds, filteredTasks, checkedTaskIds.size) && (
+        shouldShowColumnBulkUndo(
+          bulkUndoTaskIds,
+          filteredTasks,
+          checkedTaskIds.size,
+          bulkUndoAnchorColumnIds,
+          column.id
+        ) && (
           <ColumnBulkUndoFab
             columnId={column.id}
             anchorRef={columnHeaderRef}

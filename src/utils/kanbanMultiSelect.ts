@@ -54,15 +54,19 @@ export function shouldShowColumnBulkFab(
   return checkedIdsInColumn(checkedTaskIds, columnTasks).length > 0;
 }
 
-/** Undo FAB when selection is empty and this column still holds one of the last bulk-changed tasks. */
+/** Undo FAB when selection is empty and this column still holds (or anchored) last bulk-changed tasks. */
 export function shouldShowColumnBulkUndo(
   undoTaskIds: string[] | null | undefined,
   columnTasks: Task[],
-  checkedCount: number
+  checkedCount: number,
+  anchorColumnIds?: string[] | null,
+  columnId?: string
 ): boolean {
   if (!undoTaskIds || undoTaskIds.length === 0 || checkedCount > 0) return false;
   const idSet = new Set(undoTaskIds);
-  return columnTasks.some((t) => idSet.has(t.id));
+  if (columnTasks.some((t) => idSet.has(t.id))) return true;
+  if (columnId && anchorColumnIds?.includes(columnId)) return true;
+  return false;
 }
 
 /** Checked tasks in a column, sorted by position. */

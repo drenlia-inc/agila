@@ -24,6 +24,7 @@ const NOTIFICATION_PREF_KEYS: NotificationPreferenceKey[] = [
   'myTaskUpdated',
   'watchedTaskUpdated',
   'addedAsCollaborator',
+  'addedAsWatcher',
   'collaboratingTaskUpdated',
   'commentAdded',
   'requesterTaskCreated',

@@ -312,12 +312,11 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     onDraggedTaskChange?.(null);
   }, []);
 
-  // Configure drag sensors - MUST be at component top level, not in JSX
-  // Use distance 0 to activate immediately - this ensures drag works even with re-renders
+  // Small distance so a click/Cmd+click does not start a drag (avoids opacity-50 “disabled” flash).
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 0, // Activate immediately on pointer down
+        distance: 8,
       },
     }),
     useSensor(KeyboardSensor, {

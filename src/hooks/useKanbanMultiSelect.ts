@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   addCollaboratorToTask,
+  addTagToTask,
   addWatcherToTask,
   logBulkTaskFieldActivity,
   removeCollaboratorFromTask,
@@ -12,6 +13,7 @@ import { toast } from '../utils/toast';
 import { getWipStatus, hasWipLimit } from '../utils/kanbanFlowUtils';
 import {
   getCheckedColumnIds,
+  getTaskColumnId,
   pruneCheckedTaskIds,
   selectionSpansMultipleColumns as spansMultipleColumns,
 } from '../utils/kanbanMultiSelect';
@@ -19,11 +21,39 @@ import { hasEscapeConsumingOverlay, isEditableEscapeTarget } from '../utils/esca
 
 type EditTaskOptions = { skipActivity?: boolean };
 
-/** One-shot undo after a bulk field change — restore prior values and reselect. */
+export type BulkUndoRelation = {
+  type: 'watcher' | 'collaborator' | 'tag';
+  /** The forward action that was performed (undo applies the inverse). */
+  op: 'add' | 'remove';
+  memberId?: string;
+  tagId?: string;
+};
+
+/** Enough context to post one reverse bulk activity line after undo. */
+export type BulkUndoActivity =
+  | {
+      type: 'field';
+      field: 'memberId' | 'requesterId' | 'priorityId' | 'sprintId';
+      /** Value applied by the forward bulk action */
+      forwardNewValue: string | null;
+      forwardNewLabel?: string | null;
+    }
+  | {
+      type: 'column';
+      reason: 'archive' | 'move';
+    };
+
+/** One-shot undo after a bulk change — restore prior state and reselect. */
 export type BulkUndoSnapshot = {
   taskIds: string[];
   previousByTaskId: Record<string, Partial<Task>>;
   labelKey: string;
+  kind?: 'fields' | 'relation' | 'restore' | 'moveBoard';
+  relation?: BulkUndoRelation;
+  /** Columns that should show the Undo FAB even if tasks left the board. */
+  anchorColumnIds?: string[];
+  /** Optional feed / email digest for the reverse operation */
+  activity?: BulkUndoActivity;
 };
 
 type UseKanbanMultiSelectArgs = {
@@ -34,15 +64,23 @@ type UseKanbanMultiSelectArgs = {
   detailsOpen?: boolean;
   findTask: (taskId: string) => Task | null;
   onEditTask: (task: Task, options?: EditTaskOptions) => Promise<void>;
-  onCopyTask: (task: Task) => Promise<void>;
+  onCopyTask: (task: Task, options?: { skipEmail?: boolean }) => Promise<Task | void | null>;
   onTagAdd: (taskId: string) => (tagId: string) => Promise<void>;
-  onSoftDelete: (taskId: string) => Promise<void>;
+  onTagRemove: (taskId: string) => (tagId: string) => Promise<void>;
+  onSoftDelete: (taskId: string, options?: { skipEmail?: boolean }) => Promise<void>;
+  /** Soft-delete undo: restore tasks then refresh board. */
+  onRestoreTasks: (taskIds: string[]) => Promise<void>;
   /** Admin hard-delete (Shift+click on bulk delete). */
   onPermanentDelete?: (taskId: string) => Promise<void>;
-  onMoveToBoard: (taskId: string, boardId: string) => Promise<void>;
+  onMoveToBoard: (
+    taskId: string,
+    boardId: string,
+    options?: { skipEmail?: boolean }
+  ) => Promise<void>;
   getArchiveColumnId: () => string | null;
   availablePriorities: Array<{ id: number; priority: string; color: string }>;
   availableSprints?: Array<{ id: string; name: string }>;
+  availableTags?: Array<{ id: number; tag: string }>;
 };
 
 const BULK_UNDO_TTL_MS = 60_000;
@@ -56,12 +94,15 @@ export function useKanbanMultiSelect({
   onEditTask,
   onCopyTask,
   onTagAdd,
+  onTagRemove,
   onSoftDelete,
+  onRestoreTasks,
   onPermanentDelete,
   onMoveToBoard,
   getArchiveColumnId,
   availablePriorities,
   availableSprints = [],
+  availableTags = [],
 }: UseKanbanMultiSelectArgs) {
   const { t } = useTranslation('tasks');
   const [checkedTaskIds, setCheckedTaskIds] = useState<Set<string>>(() => new Set());
@@ -118,8 +159,8 @@ export function useKanbanMultiSelect({
       e.preventDefault();
       setCheckedTaskIds(new Set());
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [checkedTaskIds.size, detailsOpen]);
 
   const selectionSpansMultipleColumns = useMemo(
@@ -201,30 +242,62 @@ export function useKanbanMultiSelect({
 
   const onBulkAddTag = useCallback(
     async (taskIds: string[], tagId: string) => {
-      await runBulk(
-        taskIds,
-        async (id) => {
-          await onTagAdd(id)(tagId);
-        },
-        'kanbanSelect.taggedCount'
-      );
-    },
-    [onTagAdd, runBulk]
-  );
-
-  const onBulkCopy = useCallback(
-    async (taskIds: string[]) => {
+      const changedIds: string[] = [];
+      const tagLabel =
+        availableTags.find((tg) => String(tg.id) === String(tagId))?.tag || tagId;
       await runBulk(
         taskIds,
         async (id) => {
           const task = findTask(id);
           if (!task) throw new Error('missing');
-          await onCopyTask(task);
+          if (task.tags?.some((tg) => tg && String(tg.id) === String(tagId))) return false;
+          await addTagToTask(id, parseInt(tagId, 10), { skipEmail: true });
+          changedIds.push(id);
+        },
+        'kanbanSelect.taggedCount'
+      );
+      if (changedIds.length > 0) {
+        logBulkTaskFieldActivity({
+          field: 'tag',
+          taskIds: changedIds,
+          newValue: tagId,
+          newLabel: tagLabel,
+          boardId: selectedBoard,
+        }).catch((err) => console.error('Bulk tag activity failed:', err));
+        offerBulkUndo({
+          taskIds: changedIds,
+          previousByTaskId: {},
+          labelKey: 'kanbanSelect.undoTag',
+          kind: 'relation',
+          relation: { type: 'tag', op: 'add', tagId },
+        });
+      }
+    },
+    [availableTags, findTask, offerBulkUndo, runBulk, selectedBoard]
+  );
+
+  const onBulkCopy = useCallback(
+    async (taskIds: string[]) => {
+      const newIds: string[] = [];
+      await runBulk(
+        taskIds,
+        async (id) => {
+          const task = findTask(id);
+          if (!task) throw new Error('missing');
+          const copied = await onCopyTask(task, { skipEmail: true });
+          if (copied?.id) newIds.push(copied.id);
         },
         'kanbanSelect.copiedCount'
       );
+      if (newIds.length > 0) {
+        logBulkTaskFieldActivity({
+          field: 'copy',
+          taskIds: newIds,
+          boardId: selectedBoard,
+        }).catch((err) => console.error('Bulk copy activity failed:', err));
+      }
     },
-    [findTask, onCopyTask, runBulk]
+    [findTask, onCopyTask, runBulk, selectedBoard]
   );
 
   const onBulkArchive = useCallback(
@@ -239,28 +312,67 @@ export function useKanbanMultiSelect({
           const task = findTask(id);
           if (!task) throw new Error('missing');
           if (task.columnId === archiveId) return false;
-          previousByTaskId[id] = { columnId: task.columnId };
-          await onEditTask({ ...task, columnId: archiveId });
+          previousByTaskId[id] = { columnId: task.columnId, position: task.position };
+          await onEditTask({ ...task, columnId: archiveId }, { skipActivity: true });
           changedIds.push(id);
         },
         'kanbanSelect.archivedCount'
       );
       if (changedIds.length > 0) {
+        logBulkTaskFieldActivity({
+          field: 'columnId',
+          taskIds: changedIds,
+          boardId: selectedBoard,
+          reason: 'archive',
+        }).catch((err) => console.error('Bulk archive activity failed:', err));
         offerBulkUndo({
           taskIds: changedIds,
           previousByTaskId,
           labelKey: 'kanbanSelect.undoArchive',
+          kind: 'fields',
+          activity: { type: 'column', reason: 'archive' },
         });
       }
     },
-    [findTask, getArchiveColumnId, offerBulkUndo, onEditTask, runBulk]
+    [findTask, getArchiveColumnId, offerBulkUndo, onEditTask, runBulk, selectedBoard]
   );
 
   const onBulkDelete = useCallback(
     async (taskIds: string[]) => {
-      await runBulk(taskIds, onSoftDelete, 'kanbanSelect.deletedCount');
+      const previousByTaskId: Record<string, Partial<Task>> = {};
+      const anchorColumnIds = new Set<string>();
+      const changedIds: string[] = [];
+      for (const id of taskIds) {
+        const task = findTask(id);
+        if (!task) continue;
+        previousByTaskId[id] = {
+          columnId: task.columnId,
+          position: task.position,
+          boardId: task.boardId,
+        };
+        const colId = getTaskColumnId(id, columns) || task.columnId;
+        if (colId) anchorColumnIds.add(colId);
+      }
+      await runBulk(taskIds, async (id) => {
+        await onSoftDelete(id, { skipEmail: true });
+        changedIds.push(id);
+      }, 'kanbanSelect.deletedCount');
+      if (changedIds.length > 0) {
+        logBulkTaskFieldActivity({
+          field: 'delete',
+          taskIds: changedIds,
+          boardId: selectedBoard,
+        }).catch((err) => console.error('Bulk delete activity failed:', err));
+        offerBulkUndo({
+          taskIds: changedIds,
+          previousByTaskId,
+          labelKey: 'kanbanSelect.undoDelete',
+          kind: 'restore',
+          anchorColumnIds: Array.from(anchorColumnIds),
+        });
+      }
     },
-    [onSoftDelete, runBulk]
+    [columns, findTask, offerBulkUndo, onSoftDelete, runBulk, selectedBoard]
   );
 
   const onBulkPermanentDelete = useCallback(
@@ -308,6 +420,13 @@ export function useKanbanMultiSelect({
           taskIds: changedIds,
           previousByTaskId,
           labelKey: 'kanbanSelect.undoSprint',
+          kind: 'fields',
+          activity: {
+            type: 'field',
+            field: 'sprintId',
+            forwardNewValue: sprintId,
+            forwardNewLabel: sprintName,
+          },
         });
       }
     },
@@ -317,48 +436,46 @@ export function useKanbanMultiSelect({
   const onBulkPriority = useCallback(
     async (taskIds: string[], priorityId: string) => {
       const numericId = parseInt(priorityId, 10);
-      const option = availablePriorities.find((p) => p.id === numericId);
       const changedIds: string[] = [];
-      const oldValues = new Set<number | null>();
+      const oldValues = new Set<string | null>();
       const previousByTaskId: Record<string, Partial<Task>> = {};
       await runBulk(
         taskIds,
         async (id) => {
           const task = findTask(id);
           if (!task) throw new Error('missing');
-          const prev = task.priorityId ?? null;
+          const prev = task.priorityId;
           if (prev === numericId) return false;
-          oldValues.add(prev);
-          previousByTaskId[id] = {
-            priorityId: prev ?? undefined,
-            priority: task.priority,
-          };
-          await onEditTask(
-            {
-              ...task,
-              priorityId: numericId,
-              priority: option?.priority || task.priority,
-            },
-            { skipActivity: true }
-          );
+          oldValues.add(prev == null ? null : String(prev));
+          previousByTaskId[id] = { priorityId: prev };
+          await onEditTask({ ...task, priorityId: numericId }, { skipActivity: true });
           changedIds.push(id);
         },
         'kanbanSelect.priorityUpdatedCount'
       );
       if (changedIds.length > 0) {
         const olds = Array.from(oldValues);
+        const priorityName =
+          availablePriorities.find((p) => p.id === numericId)?.priority || priorityId;
         logBulkTaskFieldActivity({
           field: 'priorityId',
           taskIds: changedIds,
           newValue: String(numericId),
-          oldValue: olds.length === 1 && olds[0] != null ? String(olds[0]) : null,
-          newLabel: option?.priority || String(numericId),
+          oldValue: olds.length === 1 ? olds[0] : null,
+          newLabel: priorityName,
           boardId: selectedBoard,
         }).catch((err) => console.error('Bulk priority activity failed:', err));
         offerBulkUndo({
           taskIds: changedIds,
           previousByTaskId,
           labelKey: 'kanbanSelect.undoPriority',
+          kind: 'fields',
+          activity: {
+            type: 'field',
+            field: 'priorityId',
+            forwardNewValue: String(numericId),
+            forwardNewLabel: priorityName,
+          },
         });
       }
     },
@@ -367,13 +484,45 @@ export function useKanbanMultiSelect({
 
   const onBulkMoveToBoard = useCallback(
     async (taskIds: string[], boardId: string) => {
+      const previousByTaskId: Record<string, Partial<Task>> = {};
+      const anchorColumnIds = new Set<string>();
+      const changedIds: string[] = [];
+      for (const id of taskIds) {
+        const task = findTask(id);
+        if (!task) continue;
+        previousByTaskId[id] = {
+          boardId: task.boardId || selectedBoard || undefined,
+          columnId: task.columnId,
+          position: task.position,
+        };
+        const colId = getTaskColumnId(id, columns) || task.columnId;
+        if (colId) anchorColumnIds.add(colId);
+      }
       await runBulk(
         taskIds,
-        async (id) => onMoveToBoard(id, boardId),
+        async (id) => {
+          await onMoveToBoard(id, boardId, { skipEmail: true });
+          changedIds.push(id);
+        },
         'kanbanSelect.movedToBoardCount'
       );
+      if (changedIds.length > 0) {
+        logBulkTaskFieldActivity({
+          field: 'moveBoard',
+          taskIds: changedIds,
+          newValue: boardId,
+          boardId: selectedBoard,
+        }).catch((err) => console.error('Bulk move-board activity failed:', err));
+        offerBulkUndo({
+          taskIds: changedIds,
+          previousByTaskId,
+          labelKey: 'kanbanSelect.undoMoveBoard',
+          kind: 'moveBoard',
+          anchorColumnIds: Array.from(anchorColumnIds),
+        });
+      }
     },
-    [onMoveToBoard, runBulk]
+    [columns, findTask, offerBulkUndo, onMoveToBoard, runBulk, selectedBoard]
   );
 
   const onBulkAssignee = useCallback(
@@ -407,6 +556,12 @@ export function useKanbanMultiSelect({
           taskIds: changedIds,
           previousByTaskId,
           labelKey: 'kanbanSelect.undoAssignee',
+          kind: 'fields',
+          activity: {
+            type: 'field',
+            field: 'memberId',
+            forwardNewValue: memberId,
+          },
         });
       }
     },
@@ -444,6 +599,12 @@ export function useKanbanMultiSelect({
           taskIds: changedIds,
           previousByTaskId,
           labelKey: 'kanbanSelect.undoRequester',
+          kind: 'fields',
+          activity: {
+            type: 'field',
+            field: 'requesterId',
+            forwardNewValue: memberId,
+          },
         });
       }
     },
@@ -452,23 +613,40 @@ export function useKanbanMultiSelect({
 
   const onBulkAddWatcher = useCallback(
     async (taskIds: string[], memberId: string) => {
+      const changedIds: string[] = [];
       await runBulk(
         taskIds,
         async (id) => {
           const task = findTask(id);
           if (!task) throw new Error('missing');
           if (task.watchers?.some((w) => w && w.id === memberId)) return false;
-          await addWatcherToTask(id, memberId);
+          await addWatcherToTask(id, memberId, { skipEmail: true });
+          changedIds.push(id);
         },
-        'kanbanSelect.watcherAddedCount',
-        { clearSelection: false }
+        'kanbanSelect.watcherAddedCount'
       );
+      if (changedIds.length > 0) {
+        logBulkTaskFieldActivity({
+          field: 'watcher',
+          taskIds: changedIds,
+          newValue: memberId,
+          boardId: selectedBoard,
+        }).catch((err) => console.error('Bulk watcher activity failed:', err));
+        offerBulkUndo({
+          taskIds: changedIds,
+          previousByTaskId: {},
+          labelKey: 'kanbanSelect.undoWatcher',
+          kind: 'relation',
+          relation: { type: 'watcher', op: 'add', memberId },
+        });
+      }
     },
-    [findTask, runBulk]
+    [findTask, offerBulkUndo, runBulk, selectedBoard]
   );
 
   const onBulkRemoveWatcher = useCallback(
     async (taskIds: string[], memberId: string) => {
+      const changedIds: string[] = [];
       await runBulk(
         taskIds,
         async (id) => {
@@ -476,33 +654,59 @@ export function useKanbanMultiSelect({
           if (!task) throw new Error('missing');
           if (!task.watchers?.some((w) => w && w.id === memberId)) return false;
           await removeWatcherFromTask(id, memberId);
+          changedIds.push(id);
         },
-        'kanbanSelect.watcherRemovedCount',
-        { clearSelection: false }
+        'kanbanSelect.watcherRemovedCount'
       );
+      if (changedIds.length > 0) {
+        offerBulkUndo({
+          taskIds: changedIds,
+          previousByTaskId: {},
+          labelKey: 'kanbanSelect.undoWatcher',
+          kind: 'relation',
+          relation: { type: 'watcher', op: 'remove', memberId },
+        });
+      }
     },
-    [findTask, runBulk]
+    [findTask, offerBulkUndo, runBulk]
   );
 
   const onBulkAddCollaborator = useCallback(
     async (taskIds: string[], memberId: string) => {
+      const changedIds: string[] = [];
       await runBulk(
         taskIds,
         async (id) => {
           const task = findTask(id);
           if (!task) throw new Error('missing');
           if (task.collaborators?.some((c) => c && c.id === memberId)) return false;
-          await addCollaboratorToTask(id, memberId);
+          await addCollaboratorToTask(id, memberId, { skipEmail: true });
+          changedIds.push(id);
         },
-        'kanbanSelect.collaboratorAddedCount',
-        { clearSelection: false }
+        'kanbanSelect.collaboratorAddedCount'
       );
+      if (changedIds.length > 0) {
+        logBulkTaskFieldActivity({
+          field: 'collaborator',
+          taskIds: changedIds,
+          newValue: memberId,
+          boardId: selectedBoard,
+        }).catch((err) => console.error('Bulk collaborator activity failed:', err));
+        offerBulkUndo({
+          taskIds: changedIds,
+          previousByTaskId: {},
+          labelKey: 'kanbanSelect.undoCollaborator',
+          kind: 'relation',
+          relation: { type: 'collaborator', op: 'add', memberId },
+        });
+      }
     },
-    [findTask, runBulk]
+    [findTask, offerBulkUndo, runBulk, selectedBoard]
   );
 
   const onBulkRemoveCollaborator = useCallback(
     async (taskIds: string[], memberId: string) => {
+      const changedIds: string[] = [];
       await runBulk(
         taskIds,
         async (id) => {
@@ -510,12 +714,98 @@ export function useKanbanMultiSelect({
           if (!task) throw new Error('missing');
           if (!task.collaborators?.some((c) => c && c.id === memberId)) return false;
           await removeCollaboratorFromTask(id, memberId);
+          changedIds.push(id);
         },
-        'kanbanSelect.collaboratorRemovedCount',
-        { clearSelection: false }
+        'kanbanSelect.collaboratorRemovedCount'
       );
+      if (changedIds.length > 0) {
+        offerBulkUndo({
+          taskIds: changedIds,
+          previousByTaskId: {},
+          labelKey: 'kanbanSelect.undoCollaborator',
+          kind: 'relation',
+          relation: { type: 'collaborator', op: 'remove', memberId },
+        });
+      }
     },
-    [findTask, runBulk]
+    [findTask, offerBulkUndo, runBulk]
+  );
+
+  /** Record undo after a multi-select drag between columns (called from App). */
+  const recordColumnMoveUndo = useCallback(
+    (taskIds: string[], previousByTaskId: Record<string, Partial<Task>>) => {
+      if (taskIds.length < 2) return;
+      offerBulkUndo({
+        taskIds,
+        previousByTaskId,
+        labelKey: 'kanbanSelect.undoMove',
+        kind: 'fields',
+        activity: { type: 'column', reason: 'move' },
+      });
+    },
+    [offerBulkUndo]
+  );
+
+  const logReverseBulkActivity = useCallback(
+    (snapshot: BulkUndoSnapshot, succeededIds: string[]) => {
+      if (succeededIds.length === 0 || !snapshot.activity) return;
+      const act = snapshot.activity;
+
+      if (act.type === 'column') {
+        logBulkTaskFieldActivity({
+          field: 'columnId',
+          taskIds: succeededIds,
+          boardId: selectedBoard,
+          reason: act.reason === 'archive' ? 'undidArchive' : 'undidMove',
+        }).catch((err) => console.error('Bulk undo column activity failed:', err));
+        return;
+      }
+
+      const field = act.field;
+      const prevValues = succeededIds.map((id) => {
+        const prev = snapshot.previousByTaskId[id];
+        if (!prev) return null;
+        if (field === 'priorityId') {
+          const v = prev.priorityId;
+          return v == null ? null : String(v);
+        }
+        if (field === 'sprintId') {
+          return prev.sprintId ?? null;
+        }
+        if (field === 'memberId') {
+          return prev.memberId ?? null;
+        }
+        return prev.requesterId ?? null;
+      });
+      const unique = new Set(prevValues);
+      const uniform = unique.size === 1;
+      const restoreValue = uniform ? prevValues[0] : null;
+
+      let newLabel: string | null = null;
+      if (uniform) {
+        if (field === 'priorityId' && restoreValue != null) {
+          const idNum = parseInt(restoreValue, 10);
+          newLabel =
+            availablePriorities.find((p) => p.id === idNum)?.priority || restoreValue;
+        } else if (field === 'sprintId') {
+          newLabel =
+            restoreValue == null
+              ? null
+              : availableSprints.find((s) => s.id === restoreValue)?.name || restoreValue;
+        }
+      }
+
+      logBulkTaskFieldActivity({
+        field,
+        taskIds: succeededIds,
+        newValue: uniform ? restoreValue : null,
+        oldValue: act.forwardNewValue,
+        newLabel,
+        boardId: selectedBoard,
+        restoredPrevious: !uniform,
+      }).catch((err) => console.error('Bulk undo field activity failed:', err));
+    },
+    [availablePriorities, availableSprints, selectedBoard]
   );
 
   const onBulkUndo = useCallback(async () => {
@@ -525,31 +815,101 @@ export function useKanbanMultiSelect({
     setBulkBusy(true);
     let ok = 0;
     let failed = 0;
+    const succeededIds: string[] = [];
     try {
-      for (const id of snapshot.taskIds) {
+      const kind = snapshot.kind || 'fields';
+
+      if (kind === 'restore') {
         try {
-          const task = findTask(id);
-          const prev = snapshot.previousByTaskId[id];
-          if (!task || !prev) {
-            failed += 1;
-            continue;
-          }
-          await onEditTask({ ...task, ...prev }, { skipActivity: true });
-          ok += 1;
+          await onRestoreTasks(snapshot.taskIds);
+          ok = snapshot.taskIds.length;
+          succeededIds.push(...snapshot.taskIds);
         } catch {
-          failed += 1;
+          failed = snapshot.taskIds.length;
+        }
+      } else if (kind === 'moveBoard') {
+        for (const id of snapshot.taskIds) {
+          try {
+            const prevBoard = snapshot.previousByTaskId[id]?.boardId;
+            if (!prevBoard) {
+              failed += 1;
+              continue;
+            }
+            await onMoveToBoard(id, prevBoard);
+            ok += 1;
+            succeededIds.push(id);
+          } catch {
+            failed += 1;
+          }
+        }
+      } else if (kind === 'relation' && snapshot.relation) {
+        const { type, op, memberId, tagId } = snapshot.relation;
+        for (const id of snapshot.taskIds) {
+          try {
+            if (type === 'tag' && tagId) {
+              if (op === 'add') await onTagRemove(id)(tagId);
+              else await onTagAdd(id)(tagId);
+            } else if (type === 'watcher' && memberId) {
+              if (op === 'add') await removeWatcherFromTask(id, memberId);
+              else await addWatcherToTask(id, memberId);
+            } else if (type === 'collaborator' && memberId) {
+              if (op === 'add') await removeCollaboratorFromTask(id, memberId);
+              else await addCollaboratorToTask(id, memberId);
+            } else {
+              failed += 1;
+              continue;
+            }
+            ok += 1;
+            succeededIds.push(id);
+          } catch {
+            failed += 1;
+          }
+        }
+      } else {
+        for (const id of snapshot.taskIds) {
+          try {
+            const task = findTask(id);
+            const prev = snapshot.previousByTaskId[id];
+            if (!task || !prev) {
+              failed += 1;
+              continue;
+            }
+            await onEditTask({ ...task, ...prev }, { skipActivity: true });
+            ok += 1;
+            succeededIds.push(id);
+          } catch {
+            failed += 1;
+          }
         }
       }
+
+      if (succeededIds.length > 0) {
+        logReverseBulkActivity(snapshot, succeededIds);
+      }
+
       if (failed === 0) {
         toast.success(t('kanbanSelect.undoRestoredCount', { count: ok }), '');
       } else {
         toast.warning(t('kanbanSelect.partialFailed', { ok, failed }), '');
       }
-      setCheckedTaskIds(new Set(snapshot.taskIds));
+      if (kind !== 'moveBoard' || ok > 0) {
+        setCheckedTaskIds(new Set(snapshot.taskIds));
+      }
     } finally {
       setBulkBusy(false);
     }
-  }, [bulkBusy, bulkUndo, findTask, onEditTask, t]);
+  }, [
+    bulkBusy,
+    bulkUndo,
+    findTask,
+    logReverseBulkActivity,
+    onEditTask,
+    onMoveToBoard,
+    onRestoreTasks,
+    onTagAdd,
+    onTagRemove,
+    t,
+  ]);
 
   const warnWipOnce = useCallback(
     (sourceColumnId: string, targetColumnId: string, moveCount: number) => {
@@ -584,6 +944,7 @@ export function useKanbanMultiSelect({
     bulkUndo,
     clearBulkUndo,
     onBulkUndo,
+    recordColumnMoveUndo,
     checkedColumnIds: getCheckedColumnIds(checkedTaskIds, columns),
     onBulkAddTag,
     onBulkCopy,

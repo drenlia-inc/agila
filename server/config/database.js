@@ -953,6 +953,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
         myTaskUpdated: true,
         watchedTaskUpdated: true,
         addedAsCollaborator: true,
+        addedAsWatcher: true,
         collaboratingTaskUpdated: true,
         commentAdded: true,
         requesterTaskCreated: true,

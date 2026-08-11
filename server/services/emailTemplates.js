@@ -38,6 +38,8 @@ const ACTION_MESSAGE_KEY_MAP = {
   copy_task: 'created',
   update_task: 'updated',
   delete_task: 'deleted',
+  restore_task: 'restored',
+  copy_task: 'copied',
   move_task: 'status_changed',
   associate_tag: 'updated',
   disassociate_tag: 'updated',
@@ -66,6 +68,7 @@ const ACTION_MESSAGE_KEY_MAP = {
 function resolveActionMessageKey(actionType, changedField, notificationType) {
   if (notificationType === 'newTaskAssigned') return 'assigned';
   if (notificationType === 'addedAsCollaborator') return 'added_as_collaborator';
+  if (notificationType === 'addedAsWatcher') return 'added_as_watcher';
   if (changedField === 'memberId') return 'assignee_changed';
   if (changedField === 'requesterId') return 'requester_changed';
   if (changedField === 'columnId') return 'status_changed';
@@ -442,20 +445,30 @@ ${t('emails.userInvite.body6', { siteName: brand })}`,
     const ticketPrefix = taskTicket ? `[ ${taskTicket} ] ` : '';
     const actionMessage = getActionMessage();
     const typeSpecificSubject =
-      notificationType === 'addedAsCollaborator'
-        ? t('emails.taskNotification.addedAsCollaborator.subject', { taskTitle })
-        : notificationType === 'newTaskAssigned'
-          ? t('emails.taskNotification.newTaskAssigned.subject', { taskTitle })
-          : null;
+      notificationType === 'addedAsCollaborator' ||
+      notificationType === 'addedAsWatcher' ||
+      notificationType === 'newTaskAssigned' ||
+      notificationType === 'myTaskUpdated' ||
+      notificationType === 'watchedTaskUpdated' ||
+      notificationType === 'collaboratingTaskUpdated' ||
+      notificationType === 'requesterTaskCreated' ||
+      notificationType === 'requesterTaskUpdated'
+        ? t(`emails.taskNotification.${notificationType}.subject`, { taskTitle })
+        : null;
     const emailSubject = typeSpecificSubject
       ? `${ticketPrefix}${typeSpecificSubject}`
       : `${ticketPrefix}${actionMessage} - ${taskTitle}`;
     const receivingReason =
-      notificationType === 'addedAsCollaborator'
-        ? t('emails.taskNotification.addedAsCollaborator.receivingReason')
-        : notificationType === 'newTaskAssigned'
-          ? t('emails.taskNotification.newTaskAssigned.receivingReason')
-          : t('emails.taskNotification.common.receivingReason');
+      notificationType === 'addedAsCollaborator' ||
+      notificationType === 'addedAsWatcher' ||
+      notificationType === 'newTaskAssigned' ||
+      notificationType === 'myTaskUpdated' ||
+      notificationType === 'watchedTaskUpdated' ||
+      notificationType === 'collaboratingTaskUpdated' ||
+      notificationType === 'requesterTaskCreated' ||
+      notificationType === 'requesterTaskUpdated'
+        ? t(`emails.taskNotification.${notificationType}.receivingReason`)
+        : t('emails.taskNotification.common.receivingReason');
     const beforeTextRaw = stripHtmlForEmail(oldValue);
     const afterTextRaw = stripHtmlForEmail(newValue);
     let beforeText = beforeTextRaw;
@@ -749,6 +762,7 @@ ${t('emails.passwordReset.body6', { siteName: brand })}`,
       actorName,
       boardTitle,
       field,
+      reason = null,
       tasks = [],
       changeBefore = '',
       changeAfter = '',
@@ -784,8 +798,20 @@ ${t('emails.passwordReset.body6', { siteName: brand })}`,
             : field === 'sprintId'
               ? 'summarySprint'
               : field === 'columnId'
-                ? 'summaryColumnMove'
-                : 'summaryDefault';
+                ? (reason === 'archive' ? 'summaryArchive' : 'summaryColumnMove')
+                : field === 'delete'
+                  ? 'summaryDeleted'
+                  : field === 'moveBoard'
+                    ? 'summaryMoveBoard'
+                    : field === 'collaborator'
+                      ? 'summaryCollaborator'
+                      : field === 'watcher'
+                        ? 'summaryWatcher'
+                        : field === 'tag'
+                          ? 'summaryTag'
+                          : field === 'copy'
+                            ? 'summaryCopy'
+                            : 'summaryDefault';
     const summary = t(`emails.bulkTaskNotification.${summaryKey}`);
 
     const fieldLabel =
@@ -799,7 +825,9 @@ ${t('emails.passwordReset.body6', { siteName: brand })}`,
               ? t('emails.taskNotification.common.fieldSprint')
               : field === 'columnId'
                 ? t('emails.bulkTaskNotification.fieldColumn')
-                : t('emails.bulkTaskNotification.whatChanged');
+                : field === 'tag'
+                  ? t('emails.bulkTaskNotification.fieldTag')
+                  : t('emails.bulkTaskNotification.whatChanged');
 
     const before =
       changeBefore || t('emails.taskNotification.common.unassigned');

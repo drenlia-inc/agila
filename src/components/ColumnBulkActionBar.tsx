@@ -23,6 +23,7 @@ import { truncateMemberName } from '../utils/memberUtils';
 import AddTagModal from './AddTagModal';
 import MemberAvatar from './ui/MemberAvatar';
 import MemberSearchList from './ui/MemberSearchList';
+import { useFixedColumnFabPosition } from '../hooks/useFixedColumnFabPosition';
 
 export type ColumnBulkActionBarProps = {
   columnId: string;
@@ -152,11 +153,7 @@ export default function ColumnBulkActionBar({
   const [permanentDeleteConfirm, setPermanentDeleteConfirm] = useState(false);
   const [boardConfirm, setBoardConfirm] = useState<{ id: string; name: string } | null>(null);
   const confirmRef = useRef<HTMLDivElement>(null);
-  const [rootPos, setRootPos] = useState<{ top: number; left: number; visible: boolean }>({
-    top: 0,
-    left: 0,
-    visible: false,
-  });
+  const rootPos = useFixedColumnFabPosition(anchorRef);
 
   const watcherChips = useMemo(
     () => unionMembersFromTasks(selectedTasks, members, 'watchers'),
@@ -166,43 +163,6 @@ export default function ColumnBulkActionBar({
     () => unionMembersFromTasks(selectedTasks, members, 'collaborators'),
     [selectedTasks, members]
   );
-
-  useEffect(() => {
-    const update = () => {
-      const anchor = anchorRef.current;
-      const column = anchor?.closest('.column-container') as HTMLElement | null;
-      if (!anchor || !column) {
-        setRootPos((prev) => ({ ...prev, visible: false }));
-        return;
-      }
-
-      const columnRect = column.getBoundingClientRect();
-      const headerRect = anchor.getBoundingClientRect();
-      const visible =
-        columnRect.right > 0 &&
-        columnRect.left < window.innerWidth &&
-        columnRect.bottom > 0 &&
-        columnRect.top < window.innerHeight;
-
-      setRootPos({
-        top: Math.max(96, headerRect.bottom + 4),
-        left: Math.max(16, columnRect.left + 2),
-        visible,
-      });
-    };
-
-    update();
-    const observer =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
-    if (anchorRef.current) observer?.observe(anchorRef.current);
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
-    };
-  }, [anchorRef]);
 
   const isMemberMenu = (kind: MenuKind) =>
     kind === 'assignee' ||

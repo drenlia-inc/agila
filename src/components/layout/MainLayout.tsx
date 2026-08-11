@@ -192,6 +192,7 @@ interface MainLayoutProps {
   onBulkRemoveCollaborator?: (taskIds: string[], memberId: string) => void;
   bulkUndoTaskIds?: string[] | null;
   bulkUndoLabelKey?: string;
+  bulkUndoAnchorColumnIds?: string[] | null;
   onBulkUndo?: () => void;
   onClearBulkUndo?: () => void;
   draggedTaskIds?: string[];

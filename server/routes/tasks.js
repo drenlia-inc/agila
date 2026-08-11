@@ -17,7 +17,7 @@ import { AUTOMATION_CONFIG_KEYS } from '../constants/automation.js';
 import {
   purgeTaskCompletelyAndUpdateStorage,
 } from '../services/taskPurgeService.js';
-import { notifyCollaboratorAdded, notifyBulkColumnMove } from '../services/taskEmailNotificationService.js';
+import { notifyCollaboratorAdded, notifyBulkColumnMove, notifyWatcherAdded } from '../services/taskEmailNotificationService.js';
 import {
   parseBody,
   createTaskBodySchema,
@@ -872,6 +872,7 @@ router.post('/copy', authenticateToken, checkTaskLimit, async (req, res) => {
   }
   const { taskId } = parsed.data;
   const userId = req.user?.id || 'system';
+  const skipEmail = parsed.data.skipEmail === true;
   
   try {
     const db = getRequestDatabase(req);
@@ -1010,7 +1011,7 @@ router.post('/copy', authenticateToken, checkTaskLimit, async (req, res) => {
     });
     logTaskActivity(
       userId,
-      TASK_ACTIONS.CREATE,
+      TASK_ACTIONS.COPY,
       newTaskId,
       copyDetails,
       { 
@@ -1018,7 +1019,8 @@ router.post('/copy', authenticateToken, checkTaskLimit, async (req, res) => {
         boardId: boardId,
         tenantId: getTenantId(req),
         authType: req.user?.authType,
-        db: db
+        db: db,
+        skipEmail: skipEmail === true,
       }
     ).catch(error => {
       console.error('Background activity logging failed:', error);
@@ -1655,12 +1657,22 @@ router.post('/bulk-field-activity', authenticateToken, async (req, res) => {
       oldValue = null,
       newLabel = null,
       boardId = null,
+      restoredPrevious = false,
+      reason = null,
     } = parsed.data;
 
     await logBulkTaskFieldActivity(
       userId,
       field,
-      { taskIds, newValue, oldValue, newLabel, boardId },
+      {
+        taskIds,
+        newValue,
+        oldValue,
+        newLabel,
+        boardId,
+        restoredPrevious: restoredPrevious === true,
+        reason: reason || null,
+      },
       {
         db,
         tenantId: getTenantId(req),
@@ -1820,6 +1832,10 @@ router.post('/batch-update', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id || 'system';
+  const skipEmail =
+    req.query.skipEmail === 'true' ||
+    req.query.skipEmail === '1' ||
+    req.body?.skipEmail === true;
   
   try {
     const db = getRequestDatabase(req);
@@ -1861,9 +1877,10 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       }, getTenantId(req));
     }
 
+    const taskRef = taskTicket ? ` (${taskTicket})` : '';
     const deleteDetails = JSON.stringify({
-      en: t('activity.deletedTask', { taskTitle: task.title, taskRef: '', boardTitle }, 'en'),
-      fr: t('activity.deletedTask', { taskTitle: task.title, taskRef: '', boardTitle }, 'fr'),
+      en: t('activity.deletedTask', { taskTitle: task.title, taskRef, boardTitle }, 'en'),
+      fr: t('activity.deletedTask', { taskTitle: task.title, taskRef, boardTitle }, 'fr'),
     });
     logTaskActivity(userId, TASK_ACTIONS.DELETE, id, deleteDetails, {
       columnId,
@@ -1873,6 +1890,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       db,
       taskTicket,
       projectIdentifier,
+      skipEmail: skipEmail === true,
     }).catch((error) => {
       console.error('Background activity logging failed:', error);
     });
@@ -1980,6 +1998,35 @@ router.post('/:id/restore', authenticateToken, async (req, res) => {
         tenantId
       );
     }
+
+    const boardTitle = board.title || 'Unknown Board';
+    const projectIdentifier = board?.project || null;
+    const taskTicket = task.ticket || restored.ticket || null;
+    const taskRef = taskTicket ? ` (${taskTicket})` : '';
+    const userId = req.user?.id || 'system';
+    const restoreDetails = JSON.stringify({
+      en: t('activity.restoredTask', {
+        taskTitle: task.title || restored.title,
+        taskRef,
+        boardTitle,
+      }, 'en'),
+      fr: t('activity.restoredTask', {
+        taskTitle: task.title || restored.title,
+        taskRef,
+        boardTitle,
+      }, 'fr'),
+    });
+    logTaskActivity(userId, TASK_ACTIONS.RESTORE, id, restoreDetails, {
+      columnId,
+      boardId,
+      tenantId,
+      authType: req.user?.authType,
+      db,
+      taskTicket,
+      projectIdentifier,
+    }).catch((error) => {
+      console.error('Background activity logging failed:', error);
+    });
 
     await notificationService.publish(
       'task-restored',
@@ -2502,7 +2549,9 @@ router.post('/reorder', authenticateToken, async (req, res) => {
         boardId: currentTask.boardId,
         tenantId: getTenantId(req),
         authType: req.user?.authType,
-        db: db
+        db: db,
+        // Position-only reorder is noisy for participants — keep feed, skip email
+        skipEmail: true,
       }
     ).catch(error => {
       console.error('Background activity logging failed:', error);
@@ -2671,6 +2720,7 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
     });
     
     // Fire-and-forget: Don't await activity logging to avoid blocking API response
+    const skipEmail = parsed.data.skipEmail === true;
     logTaskActivity(
       userId,
       TASK_ACTIONS.MOVE,
@@ -2681,7 +2731,8 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
         boardId: targetBoardId,
         tenantId: getTenantId(req),
         authType: req.user?.authType,
-        db: db
+        db: db,
+        skipEmail,
       }
     ).catch(error => {
       console.error('Background activity logging failed:', error);
@@ -2764,6 +2815,10 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
     const db = getRequestDatabase(req);
     const { taskId, memberId } = req.params;
     const userId = req.user?.id || 'system';
+    const skipEmail =
+      req.query.skipEmail === 'true' ||
+      req.query.skipEmail === '1' ||
+      req.body?.skipEmail === true;
     
     const tTranslator = await getTranslator(db);
     // MIGRATED: Get task's board ID for Redis publishing
@@ -2774,6 +2829,16 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
     
     // MIGRATED: Add watcher using sqlManager
     await helpers.addWatcher(db, taskId, memberId);
+
+    if (!skipEmail) {
+      notifyWatcherAdded(
+        db,
+        { actorUserId: userId, taskId, memberId },
+        getTenantId(req)
+      ).catch((err) => {
+        console.error('Failed to send watcher-added email:', err);
+      });
+    }
     
     // Log to reporting system (fire-and-forget: Don't await to avoid blocking API response)
     logReportingActivity(db, 'watcher_added', userId, taskId).catch(error => {
@@ -2853,6 +2918,10 @@ router.post('/:taskId/collaborators/:memberId', authenticateToken, async (req, r
     const tTranslator = await getTranslator(db);
     const { taskId, memberId } = req.params;
     const userId = req.user?.id || 'system';
+    const skipEmail =
+      req.query.skipEmail === 'true' ||
+      req.query.skipEmail === '1' ||
+      req.body?.skipEmail === true;
     
     // MIGRATED: Get task's board ID for Redis publishing
     const boardId = await taskQueries.getTaskBoardId(db, taskId);
@@ -2863,13 +2932,15 @@ router.post('/:taskId/collaborators/:memberId', authenticateToken, async (req, r
     // MIGRATED: Add collaborator using sqlManager
     await helpers.addCollaborator(db, taskId, memberId);
 
-    notifyCollaboratorAdded(
-      db,
-      { actorUserId: userId, taskId, memberId },
-      getTenantId(req)
-    ).catch((err) => {
-      console.error('Failed to send collaborator-added email:', err);
-    });
+    if (!skipEmail) {
+      notifyCollaboratorAdded(
+        db,
+        { actorUserId: userId, taskId, memberId },
+        getTenantId(req)
+      ).catch((err) => {
+        console.error('Failed to send collaborator-added email:', err);
+      });
+    }
     
     // Log to reporting system (fire-and-forget: Don't await to avoid blocking API response)
     logReportingActivity(db, 'collaborator_added', userId, taskId).catch(error => {

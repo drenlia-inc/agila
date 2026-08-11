@@ -398,8 +398,16 @@ export const renumberColumns = async (boardId: string) => {
 };
 
 // Move task to different board
-export const moveTaskToBoard = async (taskId: string, targetBoardId: string) => {
-  const { data } = await api.post('/tasks/move-to-board', { taskId, targetBoardId });
+export const moveTaskToBoard = async (
+  taskId: string,
+  targetBoardId: string,
+  options?: { skipEmail?: boolean }
+) => {
+  const { data } = await api.post('/tasks/move-to-board', {
+    taskId,
+    targetBoardId,
+    ...(options?.skipEmail ? { skipEmail: true } : {}),
+  });
   return data;
 };
 
@@ -413,8 +421,16 @@ export const createTaskAtTop = async (task: Task) => {
   return data;
 };
 
-export const copyTask = async (taskId: string, boardId: string) => {
-  const { data } = await api.post<Task>('/tasks/copy', { taskId, boardId });
+export const copyTask = async (
+  taskId: string,
+  boardId: string,
+  options?: { skipEmail?: boolean }
+) => {
+  const { data } = await api.post<Task>('/tasks/copy', {
+    taskId,
+    boardId,
+    ...(options?.skipEmail ? { skipEmail: true } : {}),
+  });
   return data;
 };
 
@@ -437,12 +453,27 @@ export const updateTask = async (task: Task, options?: { skipActivity?: boolean 
 
 /** One activity-feed line for kanban multi-select field updates */
 export const logBulkTaskFieldActivity = async (payload: {
-  field: 'memberId' | 'requesterId' | 'priorityId' | 'sprintId';
+  field:
+    | 'memberId'
+    | 'requesterId'
+    | 'priorityId'
+    | 'sprintId'
+    | 'columnId'
+    | 'delete'
+    | 'moveBoard'
+    | 'collaborator'
+    | 'watcher'
+    | 'tag'
+    | 'copy';
   taskIds: string[];
   newValue?: string | null;
   oldValue?: string | null;
   newLabel?: string | null;
   boardId?: string | null;
+  /** Undo restored mixed prior values */
+  restoredPrevious?: boolean;
+  /** columnId: forward archive/move vs undo */
+  reason?: 'archive' | 'move' | 'undidArchive' | 'undidMove';
 }) => {
   const { data } = await api.post('/tasks/bulk-field-activity', payload);
   return data;
@@ -453,8 +484,10 @@ export const batchUpdateTasks = async (tasks: Task[]) => {
   return data.tasks;
 };
 
-export const deleteTask = async (id: string) => {
-  const { data } = await api.delete(`/tasks/${id}`);
+export const deleteTask = async (id: string, options?: { skipEmail?: boolean }) => {
+  const { data } = await api.delete(`/tasks/${id}`, {
+    params: options?.skipEmail ? { skipEmail: true } : undefined,
+  });
   return data;
 };
 
@@ -994,8 +1027,16 @@ export const getTaskTags = async (taskId: string) => {
   return data;
 };
 
-export const addTagToTask = async (taskId: string, tagId: number) => {
-  const { data } = await api.post(`/tasks/${taskId}/tags/${tagId}`);
+export const addTagToTask = async (
+  taskId: string,
+  tagId: number,
+  options?: { skipEmail?: boolean }
+) => {
+  const { data } = await api.post(
+    `/tasks/${taskId}/tags/${tagId}`,
+    options?.skipEmail ? { skipEmail: true } : undefined,
+    options?.skipEmail ? { params: { skipEmail: true } } : undefined
+  );
   return data;
 };
 
@@ -1010,8 +1051,16 @@ export const getTaskWatchers = async (taskId: string) => {
   return data;
 };
 
-export const addWatcherToTask = async (taskId: string, memberId: string) => {
-  const { data } = await api.post(`/tasks/${taskId}/watchers/${memberId}`);
+export const addWatcherToTask = async (
+  taskId: string,
+  memberId: string,
+  options?: { skipEmail?: boolean }
+) => {
+  const { data } = await api.post(
+    `/tasks/${taskId}/watchers/${memberId}`,
+    options?.skipEmail ? { skipEmail: true } : undefined,
+    options?.skipEmail ? { params: { skipEmail: true } } : undefined
+  );
   return data;
 };
 
@@ -1026,8 +1075,16 @@ export const getTaskCollaborators = async (taskId: string) => {
   return data;
 };
 
-export const addCollaboratorToTask = async (taskId: string, memberId: string) => {
-  const { data } = await api.post(`/tasks/${taskId}/collaborators/${memberId}`);
+export const addCollaboratorToTask = async (
+  taskId: string,
+  memberId: string,
+  options?: { skipEmail?: boolean }
+) => {
+  const { data } = await api.post(
+    `/tasks/${taskId}/collaborators/${memberId}`,
+    {},
+    options?.skipEmail ? { params: { skipEmail: true } } : undefined
+  );
   return data;
 };
 
