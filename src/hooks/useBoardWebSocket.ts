@@ -95,12 +95,26 @@ export const useBoardWebSocket = ({
   }, [setBoards, refreshBoardDataRef]);
 
   const handleBoardUpdated = useCallback((data: any) => {
-    console.log('🔄 Refreshing board data due to board update...');
-    // Refresh boards list
+    const board = data?.board;
+    if (board?.id) {
+      setBoards((prev) =>
+        prev.map((b) =>
+          b.id === board.id
+            ? {
+                ...b,
+                title: board.title ?? b.title,
+                wip_limit:
+                  board.wip_limit !== undefined ? board.wip_limit : b.wip_limit,
+              }
+            : b
+        )
+      );
+    }
+    // Refresh boards list (columns/tasks remain authoritative via full refresh)
     if (refreshBoardDataRef.current) {
       refreshBoardDataRef.current();
     }
-  }, [refreshBoardDataRef]);
+  }, [refreshBoardDataRef, setBoards]);
 
   const handleBoardDeleted = useCallback((data: any) => {
     const boardId = data?.boardId;

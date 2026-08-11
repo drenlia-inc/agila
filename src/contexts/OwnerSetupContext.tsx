@@ -47,6 +47,10 @@ interface OwnerSetupContextType {
   goToStep: (stepId: OwnerSetupStepId) => void;
   guideCurrentStep: () => void;
   closeGuide: () => void;
+  /** Clear checklist progress and return to Welcome. */
+  startOver: () => void;
+  /** Mark Welcome done and open the first incomplete step (resets if core was already complete). */
+  beginGuide: () => void;
   setPositionX: (x: number) => void;
   coreComplete: boolean;
 }
@@ -337,6 +341,42 @@ export const OwnerSetupProvider: React.FC<OwnerSetupProviderProps> = ({
     setGuidingStepId(null);
   }, []);
 
+  const startOver = useCallback(() => {
+    clearOwnerSetupFieldHighlights();
+    setGuidingStepId(null);
+    updateProgress((prev) => ({
+      version: 1,
+      visible: true,
+      minimized: false,
+      activeStepId: 'welcome',
+      steps: {},
+      positionX: prev.positionX,
+    }));
+  }, [updateProgress]);
+
+  const beginGuide = useCallback(() => {
+    clearOwnerSetupFieldHighlights();
+    setGuidingStepId(null);
+    let nextStepId: OwnerSetupStepId = 'welcome';
+    updateProgress((prev) => {
+      const reset = coreStepsComplete(prev);
+      const steps: OwnerSetupProgress['steps'] = reset
+        ? { welcome: 'done' }
+        : { ...prev.steps, welcome: 'done' };
+      const draft: OwnerSetupProgress = {
+        ...prev,
+        visible: true,
+        minimized: false,
+        steps,
+      };
+      nextStepId = firstIncompleteStepId(draft);
+      return { ...draft, activeStepId: nextStepId };
+    });
+    window.setTimeout(() => {
+      navigateForStep(nextStepId);
+    }, 0);
+  }, [updateProgress, navigateForStep]);
+
   // Highlight related fields at once while Guide me is open (no Joyride)
   useEffect(() => {
     if (!guidingStepId) {
@@ -377,6 +417,8 @@ export const OwnerSetupProvider: React.FC<OwnerSetupProviderProps> = ({
       goToStep,
       guideCurrentStep,
       closeGuide,
+      startOver,
+      beginGuide,
       setPositionX,
       coreComplete,
     }),
@@ -395,6 +437,8 @@ export const OwnerSetupProvider: React.FC<OwnerSetupProviderProps> = ({
       goToStep,
       guideCurrentStep,
       closeGuide,
+      startOver,
+      beginGuide,
       setPositionX,
       coreComplete,
     ]

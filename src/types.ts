@@ -124,6 +124,8 @@ export interface Board {
   project?: string;
   columns: Columns;
   position?: number;
+  /** Soft WIP limit for active work (excludes finished/archived). null = unlimited. */
+  wip_limit?: number | null;
   /** Soft-delete timestamp (ISO). Soft-deleted boards are hidden from tabs. */
   deletedAt?: string | null;
   deletedBy?: string | null;

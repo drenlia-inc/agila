@@ -67,7 +67,7 @@ interface TaskPageProps {
   isPolling: boolean;
   lastPollTime: Date | null;
   onLogout: () => void;
-  onPageChange: (page: 'kanban' | 'admin') => void;
+  onPageChange: (page: 'kanban' | 'admin' | 'reports' | 'test', options?: { hash?: string }) => void;
   onRefresh: () => Promise<void>;
   onInviteUser?: (email: string) => Promise<void>;
   // Auto-refresh toggle
@@ -107,6 +107,7 @@ export default function TaskPage({
   
   // Modal states
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [helpExpandToken, setHelpExpandToken] = useState(0);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isProfileBeingEdited, setIsProfileBeingEdited] = useState(false);
 
@@ -980,7 +981,10 @@ export default function TaskPage({
         onLogout={onLogout}
         onPageChange={onPageChange}
         onRefresh={onRefresh}
-        onHelpClick={() => setShowHelpModal(true)}
+        onHelpClick={() => {
+          setShowHelpModal(true);
+          setHelpExpandToken((n) => n + 1);
+        }}
         onInviteUser={onInviteUser}
         hideSprintSelector={true} // Hide sprint selector on TaskPage
         // isAutoRefreshEnabled={isAutoRefreshEnabled} // Disabled - using real-time updates
@@ -2050,7 +2054,9 @@ export default function TaskPage({
         onTaskClose={() => {}} // Not applicable for TaskPage
         onTaskUpdate={async () => {}} // Not applicable for TaskPage
         showHelpModal={showHelpModal}
+        helpExpandToken={helpExpandToken}
         onHelpClose={() => setShowHelpModal(false)}
+        onPageChange={onPageChange}
         showProfileModal={showProfileModal}
         currentUser={currentUser}
         onProfileClose={() => {

@@ -32,6 +32,13 @@ import {
   adminInputClass,
 } from './AdminSection';
 import { AdminToggle, adminSettingIsEnabled } from './AdminToggle';
+import {
+  TROUBLESHOOTING_UNLOCK_KEY,
+  TROUBLESHOOTING_UNLOCK_SEQUENCE,
+  isTroubleshootingGatedDeployment,
+  notifyTroubleshootingVisibilityChanged,
+  readTroubleshootingUnlocked,
+} from '../../utils/troubleshootingAccess';
 
 interface AdminAppSettingsTabProps {
   settings: { [key: string]: string | undefined };
@@ -46,37 +53,17 @@ interface AdminAppSettingsTabProps {
 
 type AppSettingsSubTab = 'ui' | 'troubleshooting';
 
-/** sessionStorage key: troubleshooting tab visible after secret sequence on gated deployments */
-const TROUBLESHOOTING_UNLOCK_KEY = 'adminTroubleshootingUnlocked';
-
-/** Type this in ALL CAPS while Admin → App Settings is focused (not in an input). */
-const TROUBLESHOOTING_UNLOCK_SEQUENCE = 'TROUBLE';
-
 /**
  * Hidden unlock for Troubleshooting when MULTI_TENANT or DEMO_ENABLED:
  * Type TROUBLE (all caps) while on Admin → App Settings. Works on any OS/keyboard.
  * Ignored while focus is in an input/textarea. Session-only (sessionStorage).
  */
-function isTroubleshootingGatedDeployment(): boolean {
-  return (
-    process.env.MULTI_TENANT === 'true' || process.env.DEMO_ENABLED === 'true'
-  );
-}
-
 function isEditableKeyTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   if (target.isContentEditable) return true;
   return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
-}
-
-function readTroubleshootingUnlocked(): boolean {
-  try {
-    return sessionStorage.getItem(TROUBLESHOOTING_UNLOCK_KEY) === 'true';
-  } catch {
-    return false;
-  }
 }
 
 function subTabFromHash(hash: string): AppSettingsSubTab {
@@ -165,6 +152,7 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
         /* ignore */
       }
       setTroubleshootingUnlocked(next);
+      notifyTroubleshootingVisibilityChanged();
       if (next) {
         toast.success(t('appSettings.troubleshootingUnlocked'), '');
       } else {
@@ -536,7 +524,10 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
                   </select>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start">
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start"
+                  data-setting-key="TASK_DELETE_CONFIRM"
+                >
                   <div className="min-w-0">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block">
                       {t('appSettings.taskDeleteConfirmation')}
@@ -591,7 +582,10 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
               dense
             >
               <div className="space-y-2.5">
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start">
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start"
+                  data-setting-key="DEFAULT_VIEW_MODE"
+                >
                   <div className="min-w-0">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block">
                       {t('appSettings.defaultViewMode')}
@@ -610,7 +604,10 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
                   </select>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start">
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start"
+                  data-setting-key="DEFAULT_TASK_VIEW_MODE"
+                >
                   <div className="min-w-0">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block">
                       {t('appSettings.defaultTaskViewMode')}
@@ -640,7 +637,10 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start">
+                  <div
+                    className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start"
+                    data-setting-key="SHOW_ACTIVITY_FEED"
+                  >
                     <div className="min-w-0">
                       <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block">
                         {t('appSettings.defaultVisibility')}

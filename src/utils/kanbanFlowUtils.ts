@@ -33,3 +33,49 @@ export function getWipStatus(
   if (taskCount === limit) return 'at';
   return 'under';
 }
+
+/**
+ * Board soft WIP counts only “active” work: live tasks in columns that are
+ * neither finished (done) nor archived. Soft-deleted tasks are never in column.tasks.
+ */
+export function isBoardWipActiveColumn(column: {
+  is_finished?: boolean | null;
+  is_archived?: boolean | null;
+} | null | undefined): boolean {
+  if (!column) return false;
+  return !Boolean(column.is_finished) && !Boolean(column.is_archived);
+}
+
+export function getBoardWipTaskCount(
+  columns: Record<string, { tasks?: unknown[]; is_finished?: boolean | null; is_archived?: boolean | null } | undefined> | null | undefined
+): number {
+  if (!columns) return 0;
+  let total = 0;
+  for (const column of Object.values(columns)) {
+    if (!isBoardWipActiveColumn(column)) continue;
+    total += Array.isArray(column?.tasks) ? column.tasks.length : 0;
+  }
+  return total;
+}
+
+/** Tasks in active (non-finished, non-archived) columns — for board WIP effort pills. */
+export function getBoardWipTasks(
+  columns: Record<
+    string,
+    {
+      tasks?: Array<{ effort?: number | null }>;
+      is_finished?: boolean | null;
+      is_archived?: boolean | null;
+    } | undefined
+  > | null | undefined
+): Array<{ effort?: number | null }> {
+  if (!columns) return [];
+  const tasks: Array<{ effort?: number | null }> = [];
+  for (const column of Object.values(columns)) {
+    if (!isBoardWipActiveColumn(column) || !Array.isArray(column?.tasks)) continue;
+    for (const task of column.tasks) {
+      if (task) tasks.push(task);
+    }
+  }
+  return tasks;
+}

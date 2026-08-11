@@ -114,88 +114,42 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
   const content = (
     <>
       <AdminSection title={t('finishedColumnNames')} description={t('finishedColumnNamesDescription')} dense>
-        <div className="flex gap-2 mb-2">
-          <input
-            type="text"
-            value={newColumnName}
-            onChange={(e) => setNewColumnName(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder={t('enterColumnName')}
-            className={`flex-1 ${adminInputClass}`}
-          />
-          <button
-            onClick={addFinishedColumnName}
-            disabled={!newColumnName.trim() || finishedColumnNames.includes(newColumnName.trim())}
-            className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
-          >
-            {t('add')}
-          </button>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {finishedColumnNames.map((name) => (
-            <div
-              key={name}
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-100 text-blue-800 text-sm rounded-full dark:bg-blue-900/40 dark:text-blue-200"
-            >
-              <span>{name}</span>
-              <button
-                onClick={() => removeFinishedColumnName(name)}
-                className="ml-0.5 text-blue-600 hover:text-blue-800 focus:outline-none dark:text-blue-300"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      </AdminSection>
-
-      <AdminSection dense>
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block">
-              {t('highlightOverdueTasks')}
-            </label>
-            <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
-              {t('highlightOverdueTasksDescription')}
-            </p>
-          </div>
-          <button
-            onClick={async () => {
-              const newValue = editingSettings.HIGHLIGHT_OVERDUE_TASKS === 'true' ? 'false' : 'true';
-              handleInputChange('HIGHLIGHT_OVERDUE_TASKS', newValue);
-              if (onAutoSave) {
-                await onAutoSave('HIGHLIGHT_OVERDUE_TASKS', newValue);
-              }
-            }}
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-              editingSettings.HIGHLIGHT_OVERDUE_TASKS === 'true' ? 'bg-blue-600' : 'bg-gray-200'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                editingSettings.HIGHLIGHT_OVERDUE_TASKS === 'true' ? 'translate-x-6' : 'translate-x-1'
-              }`}
+        <div data-setting-key="DEFAULT_FINISHED_COLUMN_NAMES">
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              value={newColumnName}
+              onChange={(e) => setNewColumnName(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder={t('enterColumnName')}
+              className={`flex-1 ${adminInputClass}`}
             />
-          </button>
-        </div>
-      </AdminSection>
+            <button
+              onClick={addFinishedColumnName}
+              disabled={!newColumnName.trim() || finishedColumnNames.includes(newColumnName.trim())}
+              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {t('add')}
+            </button>
+          </div>
 
-      <AdminSection title={t('effortUnit')} description={t('effortUnitDescription')} dense>
-        <select
-          value={editingSettings.EFFORT_UNIT === 'points' ? 'points' : 'hours'}
-          onChange={async (e) => {
-            const newValue = e.target.value === 'points' ? 'points' : 'hours';
-            handleInputChange('EFFORT_UNIT', newValue);
-            if (onAutoSave) {
-              await onAutoSave('EFFORT_UNIT', newValue);
-            }
-          }}
-          className={`max-w-xs ${adminInputClass}`}
-        >
-          <option value="hours">{t('effortUnitHours')}</option>
-          <option value="points">{t('effortUnitPoints')}</option>
-        </select>
+          <div className="flex flex-wrap gap-2">
+            {finishedColumnNames.map((name) => (
+              <div
+                key={name}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-blue-100 text-blue-800 text-sm rounded-full dark:bg-blue-900/40 dark:text-blue-200"
+              >
+                <span>{name}</span>
+                <button
+                  onClick={() => removeFinishedColumnName(name)}
+                  className="ml-0.5 text-blue-600 hover:text-blue-800 focus:outline-none dark:text-blue-300"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       </AdminSection>
 
       <AdminSection dense>

@@ -31,6 +31,7 @@ export async function getBoardById(db, boardId) {
       title,
       project,
       position,
+      wip_limit,
       created_at as "createdAt",
       updated_at as "updatedAt",
       deleted_at as "deletedAt",
@@ -128,23 +129,34 @@ export async function createBoard(db, id, title, project, position) {
 }
 
 /**
- * Update board title
+ * Update board title and optional soft WIP limit
  * 
  * @param {Database} db - Database connection
  * @param {string} id - Board ID
  * @param {string} title - New board title
+ * @param {number|null|undefined} wipLimit - null clears; undefined leaves unchanged
  * @returns {Promise<Object>} Updated board object
  */
-export async function updateBoard(db, id, title) {
+export async function updateBoard(db, id, title, wipLimit = undefined) {
+  if (wipLimit === undefined) {
+    const query = `
+      UPDATE boards 
+      SET title = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING *
+    `;
+    const stmt = wrapQuery(db.prepare(query), 'UPDATE');
+    return await stmt.run(title, id);
+  }
+
   const query = `
     UPDATE boards 
-    SET title = $1 
-    WHERE id = $2
+    SET title = $1, wip_limit = $2, updated_at = CURRENT_TIMESTAMP
+    WHERE id = $3
     RETURNING *
   `;
-  
   const stmt = wrapQuery(db.prepare(query), 'UPDATE');
-  return await stmt.run(title, id);
+  return await stmt.run(title, wipLimit, id);
 }
 
 /**

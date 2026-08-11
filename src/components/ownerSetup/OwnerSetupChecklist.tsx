@@ -47,6 +47,8 @@ const OwnerSetupChecklist: React.FC = () => {
     goToStep,
     guideCurrentStep,
     closeGuide,
+    startOver,
+    beginGuide,
     guidingStepId,
     setPositionX,
     coreComplete,
@@ -337,8 +339,9 @@ const OwnerSetupChecklist: React.FC = () => {
   };
 
   const handleGetStarted = () => {
+    setPreferStepList(false);
     setStepFocused(true);
-    markStep('welcome', 'done');
+    beginGuide();
   };
 
   const handleDoItLater = () => {
@@ -356,6 +359,12 @@ const OwnerSetupChecklist: React.FC = () => {
     closeGuide();
   };
 
+  const handleStartOver = () => {
+    setPreferStepList(false);
+    setStepFocused(false);
+    startOver();
+  };
+
   const handleReopenStep = (stepId: OwnerSetupStepId) => {
     setStepFocused(false);
     closeGuide();
@@ -364,7 +373,9 @@ const OwnerSetupChecklist: React.FC = () => {
   };
 
   const handleSelectStep = (stepId: OwnerSetupStepId) => {
-    setPreferStepList(true);
+    const kind = getOwnerSetupStepKind(stepId);
+    // Bookends open as their own screen; tasks stay on the step list.
+    setPreferStepList(kind === 'task');
     setStepFocused(false);
     closeGuide();
     setActiveStep(stepId);
@@ -646,6 +657,7 @@ const OwnerSetupChecklist: React.FC = () => {
             onDoItLater={handleDoItLater}
             onCloseGuide={handleCloseGuide}
             onReviewSteps={handleReviewSteps}
+            onStartOver={handleStartOver}
             display={activeDisplay}
           />
         </div>
@@ -717,6 +729,7 @@ function ActiveStepActions({
   onDoItLater,
   onCloseGuide,
   onReviewSteps,
+  onStartOver,
   display,
 }: {
   stepId: OwnerSetupStepId;
@@ -732,12 +745,45 @@ function ActiveStepActions({
   onDoItLater: () => void;
   onCloseGuide: () => void;
   onReviewSteps: () => void;
+  onStartOver: () => void;
   display: 'todo' | 'done' | 'skipped' | 'suggested';
 }) {
   const { t } = useTranslation('common');
   const def = OWNER_SETUP_STEPS.find((s) => s.id === stepId);
   const canNavigate = Boolean(def?.tourTarget || def?.adminTab || def?.goKanban || def?.guideFields?.length);
   const canGuide = Boolean(def?.guideFields?.length || def?.tourTarget || def?.adminTab || def?.goKanban);
+  const [confirmStartOver, setConfirmStartOver] = useState(false);
+  const confirmPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!confirmStartOver) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setConfirmStartOver(false);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [confirmStartOver]);
+
+  useEffect(() => {
+    if (!confirmStartOver) return;
+    let remove: (() => void) | undefined;
+    const timer = window.setTimeout(() => {
+      const onPointer = (e: MouseEvent) => {
+        if (confirmPanelRef.current && !confirmPanelRef.current.contains(e.target as Node)) {
+          setConfirmStartOver(false);
+        }
+      };
+      document.addEventListener('mousedown', onPointer);
+      remove = () => document.removeEventListener('mousedown', onPointer);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      remove?.();
+    };
+  }, [confirmStartOver]);
 
   if (stepKind === 'intro') {
     return (
@@ -766,22 +812,64 @@ function ActiveStepActions({
   if (stepKind === 'outro') {
     return (
       <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-3 space-y-2">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onCloseGuide}
-            className="px-2.5 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700"
+        {confirmStartOver ? (
+          <div
+            ref={confirmPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('ownerSetup.startOverConfirm')}
+            className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-900/20 px-3 py-2.5 space-y-2"
           >
-            {t('ownerSetup.closeGuide')}
-          </button>
-          <button
-            type="button"
-            onClick={onReviewSteps}
-            className="px-2.5 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            {t('ownerSetup.reviewSteps')}
-          </button>
-        </div>
+            <p className="text-xs text-amber-900 dark:text-amber-100">
+              {t('ownerSetup.startOverConfirm')}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmStartOver(false);
+                  onStartOver();
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700"
+              >
+                <RotateCcw size={12} aria-hidden />
+                {t('ownerSetup.startOverConfirmAction')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmStartOver(false)}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {t('ownerSetup.startOverCancel')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onCloseGuide}
+              className="px-2.5 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700"
+            >
+              {t('ownerSetup.closeGuide')}
+            </button>
+            <button
+              type="button"
+              onClick={onReviewSteps}
+              className="px-2.5 py-1.5 text-xs font-medium rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              {t('ownerSetup.reviewSteps')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmStartOver(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-900/40"
+            >
+              <RotateCcw size={12} aria-hidden />
+              {t('ownerSetup.startOver')}
+            </button>
+          </div>
+        )}
       </div>
     );
   }

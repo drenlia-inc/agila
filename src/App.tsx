@@ -62,7 +62,7 @@ import VersionUpdateBanner from './components/VersionUpdateBanner';
 import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
 import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask } from './api';
 import { toast, ToastContainer } from './utils/toast';
-import { getWipStatus, hasWipLimit } from './utils/kanbanFlowUtils';
+import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { isAgentMemberId } from './utils/agentMemberUi';
 import { taskMatchesSelectedSprint } from './utils/columnFilters';
 import { userCanMutate } from './utils/permissions';
@@ -123,6 +123,7 @@ import {
   hasConfiguredSearchFilters,
   wouldTaskBeFilteredOut,
   clearTaskSoftDelete,
+  sumTaskEffort,
 } from './utils/taskUtils';
 import { dedupeTasksInColumns } from './utils/taskReorderingUtils';
 import { moveTaskToBoard } from './api';
@@ -182,7 +183,6 @@ function AppContent() {
   
   // Initialize extracted hooks
   const versionStatus = useVersionStatus();
-  const modalState = useModalState();
   const taskLinking = useTaskLinking();
   
   // Log when boardRelationships changes
@@ -584,6 +584,7 @@ function AppContent() {
       setMembers(loadedMembers);
     },
   });
+  const modalState = useModalState(currentUser?.id ?? null);
   const { loading, withLoading } = useLoadingState();
 
   // Per-admin Performance Test Overlay preference (user_settings.FE_PERF_TESTS)
@@ -2881,11 +2882,26 @@ function AppContent() {
     }
   };
 
-  const handleEditBoard = async (boardId: string, title: string) => {
+  const handleEditBoard = async (
+    boardId: string,
+    title: string,
+    wipLimit?: number | null
+  ) => {
     try {
-      await updateBoard(boardId, title);
-      setBoards(prev => prev.map(b => 
-        b.id === boardId ? { ...b, title } : b
+      const updated = await updateBoard(boardId, title, wipLimit);
+      setBoards(prev => prev.map(b =>
+        b.id === boardId
+          ? {
+              ...b,
+              title: updated?.title ?? title,
+              wip_limit:
+                updated?.wip_limit !== undefined
+                  ? updated.wip_limit
+                  : wipLimit !== undefined
+                    ? wipLimit
+                    : b.wip_limit,
+            }
+          : b
       ));
       await fetchQueryLogs();
     } catch (error) {
@@ -2958,6 +2974,15 @@ function AppContent() {
     if (!isOnline) {
       console.warn('⚠️ Task creation blocked - network is offline');
       return false;
+    }
+
+    const targetColumnForWip = columns[columnId];
+    if (targetColumnForWip && isBoardWipActiveColumn(targetColumnForWip)) {
+      const currentBoard = boards.find((b) => b.id === selectedBoard);
+      warnIfBoardWipSoftLimit(
+        currentBoard,
+        getBoardWipTaskCountForBoard(currentBoard || ({ id: selectedBoard, columns } as Board)) + 1
+      );
     }
     
     // Always assign new tasks to the logged-in user, not the filtered selection
@@ -3831,11 +3856,28 @@ function AppContent() {
   };
 
   const performCrossBoardMove = useCallback(async (taskId: string, targetBoardId: string) => {
+    const targetBoard = boards.find((b) => b.id === targetBoardId);
+    if (targetBoard && hasWipLimit(targetBoard.wip_limit)) {
+      const nextCount =
+        getBoardWipTaskCount(dedupeTasksInColumns(targetBoard.columns || {})) + 1;
+      const status = getWipStatus(nextCount, targetBoard.wip_limit);
+      if (status === 'at' || status === 'over') {
+        toast.warning(
+          t('board.wipSoftWarningTitle', { ns: 'tasks' }),
+          t('board.wipSoftWarningBody', {
+            ns: 'tasks',
+            count: nextCount,
+            limit: targetBoard.wip_limit,
+            board: targetBoard.title,
+          })
+        );
+      }
+    }
     await moveTaskToBoard(taskId, targetBoardId);
     // Force refresh: cross-board move often coincides with justUpdatedFromWebSocket; a skipped
     // refresh leaves boards[] stale for the target board until the user switches tabs again.
     await refreshBoardData({ force: true });
-  }, [refreshBoardData]);
+  }, [refreshBoardData, boards, t]);
 
   // Handle cross-board task drop (confirms when task has parent/child/related links — server removes them on move)
   const handleTaskDropOnBoard = useCallback(
@@ -4540,10 +4582,39 @@ function AppContent() {
     );
   };
 
+  /** Active-work WIP count: excludes finished/archived columns (and thus done/archive tasks). */
+  const getBoardWipTaskCountForBoard = (board: Board) => {
+    const boardColumnsRaw: Columns =
+      board.id === selectedBoard ? columns : (board.columns || {});
+    return getBoardWipTaskCount(dedupeTasksInColumns(boardColumnsRaw));
+  };
+
+  /** Active-work effort: same column scope as board WIP (excludes finished/archived). */
+  const getBoardWipEffortForBoard = (board: Board) => {
+    const boardColumnsRaw: Columns =
+      board.id === selectedBoard ? columns : (board.columns || {});
+    return sumTaskEffort(getBoardWipTasks(dedupeTasksInColumns(boardColumnsRaw)) as Task[]);
+  };
+
+  const warnIfBoardWipSoftLimit = (board: Board | undefined, nextActiveCount: number) => {
+    if (!board || !hasWipLimit(board.wip_limit)) return;
+    const status = getWipStatus(nextActiveCount, board.wip_limit);
+    if (status !== 'at' && status !== 'over') return;
+    toast.warning(
+      t('board.wipSoftWarningTitle', { ns: 'tasks' }),
+      t('board.wipSoftWarningBody', {
+        ns: 'tasks',
+        count: nextActiveCount,
+        limit: board.wip_limit,
+        board: board.title,
+      })
+    );
+  };
+
 
   // Keep shortcut handlers current without reordering hooks past early returns below.
   keyboardShortcutApiRef.current = {
-    openHelp: () => modalState.setShowHelpModal(true),
+    openHelp: () => modalState.openHelpModal(),
     focusSearch: () => {
       focusHeaderTaskSearch();
     },
@@ -4743,7 +4814,7 @@ function AppContent() {
           onRefresh={handleRefreshData}
           // isAutoRefreshEnabled={isAutoRefreshEnabled} // Disabled - using real-time updates
           // onToggleAutoRefresh={handleToggleAutoRefresh} // Disabled - using real-time updates
-        onHelpClick={() => modalState.setShowHelpModal(true)}
+        onHelpClick={() => modalState.openHelpModal()}
         onInviteUser={handleInviteUser}
         selectedSprintId={taskFilters.selectedSprintId}
         onSprintChange={taskFilters.handleSprintChange}
@@ -4837,6 +4908,8 @@ function AppContent() {
                     onRemoveBoard={handleRemoveBoard}
                     onReorderBoards={handleBoardReorder}
         getTaskCountForBoard={getTaskCountForBoard}
+        getBoardWipTaskCountForBoard={getBoardWipTaskCountForBoard}
+        getBoardWipEffortForBoard={getBoardWipEffortForBoard}
         getTotalTaskCountForBoard={getTotalTaskCountForBoard}
                         // NOTE: onDragStart and onDragEnd are handled by SimpleDragDropManager
                         // Pass no-op functions to satisfy interface - SimpleDragDropManager handles all drags
@@ -4943,7 +5016,10 @@ function AppContent() {
           onRestoreTask={handleRestoreSelectedTask}
           onPurgeTask={handlePurgeSelectedTask}
           showHelpModal={modalState.showHelpModal}
-          onHelpClose={() => modalState.setShowHelpModal(false)}
+          helpExpandToken={modalState.helpExpandToken}
+          onHelpClose={() => modalState.closeHelpModal()}
+          onPageChange={handlePageChange}
+          onViewModeChange={handleViewModeChange}
           showProfileModal={modalState.showProfileModal}
           currentUser={currentUser}
           onProfileClose={() => {

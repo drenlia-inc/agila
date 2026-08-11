@@ -180,13 +180,33 @@ export function scrollOwnerSetupTargetIntoView(el: HTMLElement): void {
  */
 export function applyOwnerSetupFieldHighlights(
   selectors: string[],
-  options?: { attempts?: number; intervalMs?: number; scrollToTop?: boolean }
+  options?: {
+    attempts?: number;
+    intervalMs?: number;
+    scrollToTop?: boolean;
+    /** Auto-remove highlights after this many ms (e.g. Help → Go there). */
+    clearAfterMs?: number;
+  }
 ): () => void {
   const attempts = options?.attempts ?? 20;
   const intervalMs = options?.intervalMs ?? 75;
   const scrollToTop = Boolean(options?.scrollToTop);
+  const clearAfterMs =
+    typeof options?.clearAfterMs === 'number' && options.clearAfterMs > 0
+      ? options.clearAfterMs
+      : 0;
   let cancelled = false;
   let tries = 0;
+  let clearTimer: number | null = null;
+
+  const scheduleAutoClear = () => {
+    if (!clearAfterMs || cancelled) return;
+    if (clearTimer != null) window.clearTimeout(clearTimer);
+    clearTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      clearOwnerSetupFieldHighlights();
+    }, clearAfterMs);
+  };
 
   const run = () => {
     if (cancelled) return;
@@ -218,6 +238,7 @@ export function applyOwnerSetupFieldHighlights(
       } else {
         scrollOwnerSetupTargetIntoView(found[0]);
       }
+      scheduleAutoClear();
       return;
     }
 
@@ -230,6 +251,10 @@ export function applyOwnerSetupFieldHighlights(
   requestAnimationFrame(run);
   return () => {
     cancelled = true;
+    if (clearTimer != null) {
+      window.clearTimeout(clearTimer);
+      clearTimer = null;
+    }
   };
 }
 

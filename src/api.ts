@@ -324,8 +324,16 @@ export const createBoard = async (board: Board) => {
   return data;
 };
 
-export const updateBoard = async (id: string, title: string) => {
-  const { data } = await api.put<Board>(`/boards/${id}`, { title });
+export const updateBoard = async (
+  id: string,
+  title: string,
+  wipLimit?: number | null
+) => {
+  const body: { title: string; wip_limit?: number | null } = { title };
+  if (wipLimit !== undefined) {
+    body.wip_limit = wipLimit;
+  }
+  const { data } = await api.put<Board>(`/boards/${id}`, body);
   return data;
 };
 

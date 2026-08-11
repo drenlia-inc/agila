@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import AdminProjectSettingsTab from './AdminProjectSettingsTab';
+import AdminFeaturesSettingsTab from './AdminFeaturesSettingsTab';
 import AdminSprintSettingsTab from './AdminSprintSettingsTab';
 import AdminReportingTab from './AdminReportingTab';
 import AdminLifecycleTab from './AdminLifecycleTab';
@@ -30,6 +31,7 @@ interface AdminProjectHubTabProps {
 
 function subTabFromHash(hash: string): ProjectHubSubTab {
   const bare = hash.replace(/^#/, '');
+  if (bare.endsWith('#features')) return 'features';
   if (bare.endsWith('#sprint-settings')) return 'sprint-settings';
   if (bare.endsWith('#reporting')) return 'reporting';
   if (bare.endsWith('#lifecycle')) return 'lifecycle';
@@ -38,6 +40,7 @@ function subTabFromHash(hash: string): ProjectHubSubTab {
 
 const HASH_BY_TAB: Record<ProjectHubSubTab, string> = {
   project: '#admin#project-settings#project',
+  features: '#admin#project-settings#features',
   'sprint-settings': '#admin#project-settings#sprint-settings',
   reporting: '#admin#project-settings#reporting',
   lifecycle: '#admin#project-settings#lifecycle',
@@ -46,6 +49,7 @@ const HASH_BY_TAB: Record<ProjectHubSubTab, string> = {
 const TOUR_ID_BY_TAB: Record<ProjectHubSubTab, string> = {
   // Distinct from main nav `admin-project-settings` (hub tab button)
   project: 'admin-project-general',
+  features: 'admin-features',
   'sprint-settings': 'admin-sprint-settings',
   reporting: 'admin-reporting',
   lifecycle: 'admin-lifecycle',
@@ -176,6 +180,7 @@ const AdminProjectHubTab: React.FC<AdminProjectHubTabProps> = ({
       <div className="mb-4 overflow-x-auto">
         <nav className="flex space-x-6 min-w-max" aria-label="Project settings tabs">
           {subNavBtn('project', t('projectHub.projectSubtab'))}
+          {subNavBtn('features', t('projectHub.featuresSubtab'))}
           {subNavBtn('sprint-settings', t('tabs.sprintSettings'))}
           {subNavBtn('reporting', t('tabs.reporting'))}
           {subNavBtn('lifecycle', t('tabs.lifecycle'))}
@@ -195,6 +200,20 @@ const AdminProjectHubTab: React.FC<AdminProjectHubTabProps> = ({
             onCancel={onCancel}
             onAutoSave={onAutoSave}
             embedded
+          />
+        </div>
+      )}
+
+      {visitedSubTabs.has('features') && (
+        <div
+          className={activeSubTab === 'features' ? undefined : 'hidden'}
+          aria-hidden={activeSubTab !== 'features'}
+        >
+          <AdminFeaturesSettingsTab
+            settings={settings}
+            editingSettings={editingSettings}
+            onSettingsChange={onSettingsChange}
+            onAutoSave={onAutoSave}
           />
         </div>
       )}

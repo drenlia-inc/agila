@@ -166,8 +166,41 @@ export function KanbanChromeTooltip({
     scheduleHide();
   };
 
+  const hasBody = Boolean(content) || Boolean(label);
+
+  // Board/column chrome often swaps label on select; leave tips open and they stick on the wrong tab.
+  useEffect(() => {
+    hide();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: reset only when tip copy changes
+  }, [label, content]);
+
+  useEffect(() => {
+    if (!hasBody) hide();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasBody]);
+
+  // Clicking another control (e.g. a different board tab) can skip mouseout when React re-renders.
+  useEffect(() => {
+    if (!visible) return;
+    const dismiss = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        hide();
+        return;
+      }
+      // Keep interactive tips open when pressing inside the bubble (email copy, etc.)
+      if (interactive && tooltipRef.current?.contains(target)) return;
+      // Ignore presses still inside this tip's anchor
+      if (anchorRef.current?.contains(target)) return;
+      hide();
+    };
+    document.addEventListener('pointerdown', dismiss, true);
+    return () => document.removeEventListener('pointerdown', dismiss, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, interactive]);
+
   useLayoutEffect(() => {
-    if (!visible) {
+    if (!visible || !hasBody) {
       setPortalStyle(null);
       return;
     }
@@ -224,7 +257,7 @@ export function KanbanChromeTooltip({
       window.removeEventListener('scroll', update, true);
       window.removeEventListener('resize', update);
     };
-  }, [visible, placement, portalZIndex, label, content, maxWidth, widthAnchorRef]);
+  }, [visible, hasBody, placement, portalZIndex, label, content, maxWidth, widthAnchorRef]);
 
   useEffect(
     () => () => {
@@ -234,7 +267,6 @@ export function KanbanChromeTooltip({
     []
   );
 
-  const hasBody = Boolean(content) || Boolean(label);
   if (!hasBody) {
     return <>{children}</>;
   }

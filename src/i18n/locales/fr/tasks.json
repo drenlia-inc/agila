@@ -215,6 +215,10 @@
     },
     "and": "et"
   },
+  "board": {
+    "wipSoftWarningTitle": "Limite WIP du tableau atteinte",
+    "wipSoftWarningBody": "{{board}} aura {{count}} / {{limit}} tâches actives. Limite souple — action autorisée."
+  },
   "deleteConfirmation": {
     "areYouSure": "Déplacer cette tâche vers la corbeille ?",
     "areYouSurePermanent": "Supprimer définitivement cette tâche ? Cette action est irréversible.",

@@ -757,6 +757,45 @@ const migrations = [
         console.log(`✅ Migration 35: removed spurious bootstrap admin ${userId}`);
       }
     }
+  },
+  {
+    version: 36,
+    name: 'add_board_wip_limit',
+    description: 'Soft WIP limit on boards (active work; excludes finished/archived columns)',
+    up: async (db) => {
+      const cols = await dbAll(
+        db.prepare(`
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'boards'
+        `)
+      );
+      const colNames = new Set(cols.map((c) => c.column_name));
+      if (!colNames.has('wip_limit')) {
+        await dbExec(db, 'ALTER TABLE boards ADD COLUMN wip_limit INTEGER');
+      }
+      console.log('✅ Migration 36: boards.wip_limit ready');
+    }
+  },
+  {
+    version: 37,
+    name: 'add_kanban_chrome_visibility_settings',
+    description:
+      'Board tab / column header task-count and effort visibility toggles (counts on, effort off by default)',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const { KANBAN_FEATURE_SETTING_DEFAULTS } = await import(
+        '../constants/kanbanFeatureSettings.js'
+      );
+      for (const [key, value] of KANBAN_FEATURE_SETTING_DEFAULTS) {
+        const existing = await settingsQueries.getSettingByKey(db, key);
+        if (!existing) {
+          await settingsQueries.createSetting(db, key, value);
+        }
+      }
+      console.log('✅ Migration 37: kanban chrome visibility settings ready');
+    }
   }
 ];
 

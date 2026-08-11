@@ -731,7 +731,7 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
 
   return (
     <>
-      <div>
+      <div data-setting-key="STORAGE_SECTION">
         <div className="mb-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">{t('storage.description')}</p>
 

@@ -172,6 +172,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
 
   return (
     <>
+      <div data-setting-key="MAIL_SECTION">
       <AdminPageShell description={t('mail.description')}>
         {/* Demo Mode Warning */}
         {isDemoMode && (
@@ -554,6 +555,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
             </div>
         </AdminActionsBar>
       </AdminPageShell>
+      </div>
 
       {/* Test Email Success Modal */}
       {showTestEmailModal && testEmailResult && (

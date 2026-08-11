@@ -27,6 +27,7 @@ export type SystemSettingsSubTabId =
 
 export type ProjectHubSubTabId =
   | 'project'
+  | 'features'
   | 'sprint-settings'
   | 'reporting'
   | 'lifecycle';
@@ -35,7 +36,16 @@ function isProjectGeneralKey(key: string): boolean {
   return (
     key === 'DEFAULT_PROJ_PREFIX' ||
     key === 'DEFAULT_TASK_PREFIX' ||
-    key === 'DEFAULT_FINISHED_COLUMN_NAMES' ||
+    key === 'DEFAULT_FINISHED_COLUMN_NAMES'
+  );
+}
+
+function isFeaturesKey(key: string): boolean {
+  return (
+    key === 'SHOW_BOARD_TAB_TASK_COUNTS' ||
+    key === 'SHOW_BOARD_TAB_EFFORT' ||
+    key === 'SHOW_COLUMN_TASK_COUNTS' ||
+    key === 'SHOW_COLUMN_EFFORT' ||
     key === 'EFFORT_UNIT' ||
     key === 'HIGHLIGHT_OVERDUE_TASKS'
   );
@@ -104,7 +114,7 @@ function isSystemSettingsKey(key: string): boolean {
 }
 
 function isProjectSettingsKey(key: string): boolean {
-  return isProjectGeneralKey(key) || isLifecycleKey(key);
+  return isProjectGeneralKey(key) || isFeaturesKey(key) || isLifecycleKey(key);
 }
 
 function isAppSettingsKey(key: string): boolean {
@@ -301,6 +311,7 @@ export function getDirtyProjectHubSubTabs(
     if (SKIP_KEYS.has(key) || key.endsWith('_SET') || !isValidAdminSettingKey(key)) continue;
     if (!valuesDiffer(key, saved, draft)) continue;
     if (isProjectGeneralKey(key)) dirty.add('project');
+    if (isFeaturesKey(key)) dirty.add('features');
     if (isLifecycleKey(key)) dirty.add('lifecycle');
   }
 

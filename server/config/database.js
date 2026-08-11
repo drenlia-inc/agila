@@ -7,6 +7,7 @@ import bcrypt from 'bcrypt';
 import { runMigrations } from '../migrations/index.js';
 import { DEBUG_SETTING_DEFAULTS } from '../constants/debugSettings.js';
 import { AI_SETTING_DEFAULTS } from '../constants/aiSettings.js';
+import { KANBAN_FEATURE_SETTING_DEFAULTS } from '../constants/kanbanFeatureSettings.js';
 import {
   AGENT_USER_ID,
   AGENT_MEMBER_ID,
@@ -213,6 +214,7 @@ const CREATE_SCHEMA_SQL = `
       title TEXT NOT NULL,
       project TEXT,
       position NUMERIC(10,2) DEFAULT 0,
+      wip_limit INTEGER,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       deleted_at TIMESTAMPTZ,
@@ -907,6 +909,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
       ['GOOGLE_SSO_DEBUG', 'false'],
       ...DEBUG_SETTING_DEFAULTS,
       ...AI_SETTING_DEFAULTS,
+      ...KANBAN_FEATURE_SETTING_DEFAULTS,
       // Admin-configurable user preference defaults
       ['DEFAULT_VIEW_MODE', 'kanban'], // Default view mode for new users
       ['DEFAULT_TASK_VIEW_MODE', 'expand'], // Default task view mode for new users

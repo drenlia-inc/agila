@@ -95,6 +95,8 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 
 ## Getting Started
 
+**Product Owners / Scrum Masters:** after the instance is up, follow the **[Delivery Playbook](docs/DELIVERY_PLAYBOOK.md)** (first-hour setup, board & WIP conventions, rituals, anti-patterns).
+
 **Default Admin Account:**
 - Email: `admin@kanban.local`
 - Password: `generated` at initialization - look for it in the backend console log (or on the login page when demo mode is enabled)
@@ -103,7 +105,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 2. Go to the admin panel and setup:
    1. The site name and URL in Site Settings
    2. In the App Settings, choose the default language (FR/EN)
-   3. Review the Project Settings
+   3. Review the Project Settings (and **Features** for board indicators / effort / overdue)
    4. Add sprints in the Sprint Settings
    5. Review Reports Settings
 3. Create team members in the Users Tab

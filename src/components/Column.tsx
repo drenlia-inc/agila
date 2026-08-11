@@ -13,6 +13,7 @@ import { parseFinishedColumnNames } from '../utils/columnUtils';
 import { getWipStatus, hasWipLimit } from '../utils/kanbanFlowUtils';
 import { TASK_COUNT_PILL_BASE, taskCountPillToneClass, taskCountPillWeightClass } from '../utils/taskCountPill';
 import { sumTaskEffort, formatEffortDisplay, parseEffortUnit } from '../utils/taskUtils';
+import { showColumnEffort, showColumnTaskCounts } from '../utils/kanbanChromeVisibility';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { resolveTaskMember } from '../utils/agentMemberUi';
 import {
@@ -843,7 +844,9 @@ export default function KanbanColumn({
   const displayedTaskCount = filteredTasks.length;
   const columnWipStatus = getWipStatus(unfilteredTaskCount, column.wip_limit);
   const showWipMeter = hasWipLimit(column.wip_limit);
-  const showTaskCount = displayedTaskCount > 0 || showWipMeter;
+  const showTaskCountChrome = showColumnTaskCounts(siteSettings);
+  const showEffortChrome = showColumnEffort(siteSettings);
+  const showTaskCount = showTaskCountChrome && (displayedTaskCount > 0 || showWipMeter);
   const taskCountPillClass = `${taskCountPillToneClass(columnWipStatus)} ${taskCountPillWeightClass(hasActiveFilters)}`;
   const taskCountLabel = showWipMeter
     ? t('column.wipMeterTooltip', {
@@ -1268,7 +1271,7 @@ export default function KanbanColumn({
                   </span>
                 </KanbanChromeTooltip>
               )}
-              {columnEffort > 0 && (
+              {showEffortChrome && columnEffort > 0 && (
                 <KanbanChromeTooltip
                   label={t('column.totalEffortTooltip', { display: effortDisplay })}
                   wrapperClassName="relative inline-flex shrink-0 items-center"

@@ -2,6 +2,8 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Columns } from '../types';
 import { formatEffortDisplay, parseEffortUnit, sumTaskEffort } from '../utils/taskUtils';
+import { isBoardWipActiveColumn } from '../utils/kanbanFlowUtils';
+import { showBoardTabEffort } from '../utils/kanbanChromeVisibility';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 
 interface BoardMetricsProps {
@@ -13,10 +15,13 @@ interface BoardMetricsProps {
 const BoardMetrics: React.FC<BoardMetricsProps> = ({ columns, filteredColumns = columns, siteSettings }) => {
   const { t } = useTranslation('common');
   const effortUnit = parseEffortUnit(siteSettings);
-  // Calculate metrics from all tasks across all columns
+  // Progress uses all visible tasks; effort pill matches board WIP (active columns only).
   const allTasks = Object.values(filteredColumns).flatMap(column => column.tasks || []);
+  const activeEffortTasks = Object.values(filteredColumns)
+    .filter((column) => isBoardWipActiveColumn(column))
+    .flatMap((column) => column.tasks || []);
   const totalTasks = allTasks.length;
-  const totalEffort = sumTaskEffort(allTasks);
+  const totalEffort = sumTaskEffort(activeEffortTasks);
   const effortDisplay = formatEffortDisplay(totalEffort, effortUnit);
   
   // Count completed tasks (tasks in finished or archived columns)
@@ -27,6 +32,7 @@ const BoardMetrics: React.FC<BoardMetricsProps> = ({ columns, filteredColumns = 
   
   const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const effortTooltip = t('boardMetrics.totalEffortTooltip', { display: effortDisplay });
+  const showEffortPill = showBoardTabEffort(siteSettings) && totalEffort > 0;
 
   return (
         <div className="p-3 bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-100 dark:border-gray-700 w-full flex-1 flex flex-col box-border">
@@ -55,7 +61,7 @@ const BoardMetrics: React.FC<BoardMetricsProps> = ({ columns, filteredColumns = 
               />
             </div>
           </div>
-          {totalEffort > 0 && (
+          {showEffortPill && (
             <KanbanChromeTooltip label={effortTooltip} wrapperClassName="relative inline-flex shrink-0 items-center">
               <span
                 className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-violet-100 px-1.5 py-0.5 text-center text-[0.65rem] font-medium leading-none tabular-nums text-violet-700 dark:bg-violet-900/50 dark:text-violet-200"

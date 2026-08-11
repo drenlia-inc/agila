@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { Task, TeamMember, CurrentUser, TaskUpdateOptions } from '../../types';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 import { isTaskSoftDeleted } from '../../utils/taskUtils';
+import type { ViewMode } from '../../utils/userPreferences';
 
 // Lazy load modal components to reduce initial bundle size with retry logic
 const TaskDetails = lazyWithRetry(() => import('../TaskDetails'));
@@ -20,7 +21,10 @@ interface ModalManagerProps {
   
   // Help Modal
   showHelpModal: boolean;
+  helpExpandToken?: number;
   onHelpClose: () => void;
+  onPageChange?: (page: 'kanban' | 'admin' | 'reports' | 'test', options?: { hash?: string }) => void;
+  onViewModeChange?: (mode: ViewMode) => void;
   
   // Profile Modal
   showProfileModal: boolean;
@@ -47,7 +51,10 @@ const ModalManager: React.FC<ModalManagerProps> = ({
   onRestoreTask,
   onPurgeTask,
   showHelpModal,
+  helpExpandToken = 0,
   onHelpClose,
+  onPageChange,
+  onViewModeChange,
   showProfileModal,
   currentUser,
   onProfileClose,
@@ -92,8 +99,11 @@ const ModalManager: React.FC<ModalManagerProps> = ({
         <Suspense fallback={null}>
           <HelpModal
             isOpen={showHelpModal}
+            expandToken={helpExpandToken}
             onClose={onHelpClose}
             currentUser={currentUser}
+            onPageChange={onPageChange}
+            onViewModeChange={onViewModeChange}
           />
         </Suspense>
       )}

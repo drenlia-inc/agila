@@ -7,6 +7,7 @@ import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js'
 import { settings as settingsQueries, users as userQueries, members as memberQueries } from '../utils/sqlManager/index.js';
 import { FE_PUBLIC_DEBUG_FLAG_KEYS, BULK_DEBUG_SETTING_KEYS } from '../constants/debugSettings.js';
 import { AI_PUBLIC_SETTING_KEYS } from '../constants/aiSettings.js';
+import { KANBAN_FEATURE_PUBLIC_KEYS } from '../constants/kanbanFeatureSettings.js';
 import { isSecretSettingKey, SECRET_SETTING_PLACEHOLDER } from '../constants/secretSettings.js';
 import { AGENT_MEMBER_ID } from '../constants/agentIdentity.js';
 import { clearSqlDebugSettingsCache } from '../utils/sqlDebugSettingsCache.js';
@@ -134,7 +135,8 @@ router.get('/', async (req, res, next) => {
       'SHOW_ACTIVITY_FEED',
       'APP_LANGUAGE',
       ...FE_PUBLIC_DEBUG_FLAG_KEYS,
-      ...AI_PUBLIC_SETTING_KEYS
+      ...AI_PUBLIC_SETTING_KEYS,
+      ...KANBAN_FEATURE_PUBLIC_KEYS
     ];
     const settings = await settingsQueries.getSettingsByKeys(db, publicKeys);
     const settingsObj = {};

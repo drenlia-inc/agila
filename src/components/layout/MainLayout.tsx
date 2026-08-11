@@ -99,10 +99,12 @@ interface MainLayoutProps {
   onFilterViewChange?: (view: any) => void; // (view: SavedFilterView | null) => void
   onSelectBoard: (boardId: string) => void;
   onAddBoard: () => Promise<void>;
-  onEditBoard: (boardId: string, title: string) => Promise<void>;
+  onEditBoard: (boardId: string, title: string, wipLimit?: number | null) => Promise<void>;
   onRemoveBoard: (boardId: string) => Promise<void>;
   onReorderBoards: (boardId: string, newPosition: number) => Promise<void>;
   getTaskCountForBoard: (board: Board) => number;
+  getBoardWipTaskCountForBoard?: (board: Board) => number;
+  getBoardWipEffortForBoard?: (board: Board) => number;
   /** Unfiltered board task total, used for destructive confirmations. */
   getTotalTaskCountForBoard?: (board: Board) => number;
   onDragStart: (event: any) => void;

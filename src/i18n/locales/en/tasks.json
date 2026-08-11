@@ -215,6 +215,10 @@
     },
     "and": "and"
   },
+  "board": {
+    "wipSoftWarningTitle": "Board WIP limit reached",
+    "wipSoftWarningBody": "{{board}} will have {{count}} / {{limit}} active tasks. Soft limit — action allowed."
+  },
   "deleteConfirmation": {
     "areYouSure": "Move this task to trash?",
     "areYouSurePermanent": "Permanently delete this task? This cannot be undone.",

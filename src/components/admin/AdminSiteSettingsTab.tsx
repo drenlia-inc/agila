@@ -372,6 +372,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
       : t('siteSettings.logoCropTitle');
 
   return (
+    <div data-setting-key="SITE_SETTINGS_SECTION">
     <AdminPageShell description={t('siteSettings.description')} className="p-6">
       <AdminSection dense>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -564,6 +565,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
         />
       )}
     </AdminPageShell>
+    </div>
   );
 };
 

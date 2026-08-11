@@ -133,6 +133,14 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
     aliases: ['projet', 'project'],
   },
   {
+    id: 'tab-features',
+    kind: 'tab',
+    tab: 'project-settings',
+    hash: '#admin#project-settings#features',
+    labelKey: 'projectHub.featuresSubtab',
+    aliases: ['features', 'fonctions', 'wip', 'effort', 'counts', 'visibilité', 'visibility', 'overdue', 'retard', 'hours', 'points'],
+  },
+  {
     id: 'tab-sprint-settings',
     kind: 'tab',
     tab: 'project-settings',

@@ -29,6 +29,7 @@ export const CommentSchema = z.object({
 export const BoardSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1, "Board title is required").max(100, "Title must be less than 100 characters"),
+  wip_limit: z.number().int().positive().nullable().optional(),
 });
 
 export const ColumnSchema = z.object({

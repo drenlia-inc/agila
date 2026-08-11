@@ -6,6 +6,7 @@ import { clearAllUserPreferenceCookies, clearOtherUserPreferenceCookies } from '
 import { registerLogoutCallback, unregisterLogoutCallback, markAsAuthenticated } from '../utils/authErrorHandler';
 import { feDebug } from '../utils/clientDebug';
 import { clearMediaSession, establishMediaSession, startMediaSessionRefresh } from '../utils/mediaSession';
+import { clearHelpSession } from '../utils/helpSessionPersistence';
 
 // Get intended destination from HTML capture
 const getInitialIntendedDestination = (): string | null => {
@@ -201,6 +202,9 @@ export const useAuth = (callbacks: UseAuthCallbacks): UseAuthReturn => {
     
     // Clear ALL user preference cookies to prevent cookie bloat
     clearAllUserPreferenceCookies();
+
+    // Help open/minimized is session-only — do not carry into the next login
+    clearHelpSession();
     
     callbacks.onPageChange('kanban'); // Reset to kanban page
     callbacks.onDataClear(); // Clear all app data

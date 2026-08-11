@@ -43,8 +43,9 @@
     "description": "SSO, mail, storage, uploads, AI, and notification delivery for this instance."
   },
   "projectHub": {
-    "description": "Project defaults, sprints, reporting, and work lifecycle (retention / trash).",
-    "projectSubtab": "Project"
+    "description": "Project defaults, board features, sprints, reporting, and work lifecycle (retention / trash).",
+    "projectSubtab": "Project",
+    "featuresSubtab": "Features"
   },
   "search": {
     "placeholder": "Search settings & content…",
@@ -816,6 +817,29 @@
       "requesterTaskUpdatedDescription": "Get notified when tasks you requested are modified"
     }
   },
+  "featuresSettings": {
+    "description": "Board indicators, effort display, and visual cues. Task counts help with search and filters; effort is optional.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "boardTabsSection": "Board tabs",
+    "boardTabsSectionDescription": "Indicators on each board tab. Board task counts use active work only (exclude Done, archived, and trash).",
+    "columnsSection": "Column headers",
+    "columnsSectionDescription": "Indicators on each column header (WIP meters when a soft limit is set).",
+    "boardTabTaskCounts": "Task counts",
+    "boardTabTaskCountsDescription": "Show task count / soft WIP meter on board tabs. Recommended for search and filters.",
+    "boardTabEffort": "Effort totals",
+    "boardTabEffortDescription": "Show summed effort on board tabs.",
+    "columnTaskCounts": "Task counts",
+    "columnTaskCountsDescription": "Show task count / soft WIP meter on column headers.",
+    "columnEffort": "Effort totals",
+    "columnEffortDescription": "Show summed effort on column headers.",
+    "effortUnit": "Effort unit",
+    "effortUnitDescription": "How task effort is labeled on boards and forms. Stored values are not converted when you switch — only display changes (e.g. 8h vs 8).",
+    "effortUnitHours": "Hours (show as 10h)",
+    "effortUnitPoints": "Points (show as 10)",
+    "highlightOverdueTasks": "Highlight overdue tasks",
+    "highlightOverdueTasksDescription": "When enabled, overdue tasks show a LATE badge on the board."
+  },
   "projectSettings": {
     "title": "Project Settings",
     "description": "Configure project and task identifier prefixes and finished column detection.",
@@ -823,12 +847,6 @@
     "finishedColumnNamesDescription": "Define column names that should be automatically marked as \"finished\" (case-insensitive). Tasks in these columns won't be considered overdue regardless of their due date.",
     "enterColumnName": "Enter column name (e.g., 'Done')",
     "add": "Add",
-    "highlightOverdueTasks": "Highlight Overdue Tasks",
-    "highlightOverdueTasksDescription": "When enabled, overdue tasks will be highlighted with a \"LATE\" badge.",
-    "effortUnit": "Effort unit",
-    "effortUnitDescription": "How task effort is labeled on boards and forms. Stored values are not converted when you switch — only display changes (e.g. 8h vs 8).",
-    "effortUnitHours": "Hours (show as 10h)",
-    "effortUnitPoints": "Points (show as 10)",
     "defaultProjectPrefix": "Default Project Prefix",
     "defaultProjectPrefixDescription": "Prefix used for new board project identifiers (e.g., \"PROJ-\" → \"PROJ-00001\")",
     "defaultProjectPrefixFutureNote": "Reserved for future enhancements: this will support portfolio/program management (PPM), project managers (PMs), and product owners (POs) when working across multiple portfolios and projects.",

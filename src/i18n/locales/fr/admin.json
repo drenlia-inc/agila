@@ -43,8 +43,9 @@
     "description": "SSO, messagerie, stockage, téléversements, IA et notifications pour cette instance."
   },
   "projectHub": {
-    "description": "Paramètres par défaut du projet, sprints, rapports et cycle de vie (rétention / corbeille).",
-    "projectSubtab": "Projet"
+    "description": "Paramètres par défaut du projet, fonctions du tableau, sprints, rapports et cycle de vie (rétention / corbeille).",
+    "projectSubtab": "Projet",
+    "featuresSubtab": "Fonctions"
   },
   "search": {
     "placeholder": "Rechercher paramètres et contenu…",
@@ -819,6 +820,29 @@
       "requesterTaskUpdatedDescription": "Être notifié lorsque les tâches que vous avez demandées sont modifiées"
     }
   },
+  "featuresSettings": {
+    "description": "Indicateurs du tableau, affichage de l'effort et repères visuels. Les compteurs aident pour la recherche et les filtres ; l'effort est optionnel.",
+    "enabled": "Activé",
+    "disabled": "Désactivé",
+    "boardTabsSection": "Onglets de tableau",
+    "boardTabsSectionDescription": "Indicateurs sur chaque onglet. Les compteurs de tâches du tableau ne comptent que le travail actif (excluent Terminé, archivé et corbeille).",
+    "columnsSection": "En-têtes de colonne",
+    "columnsSectionDescription": "Indicateurs sur chaque en-tête de colonne (compteurs WIP si une limite souple est définie).",
+    "boardTabTaskCounts": "Compteurs de tâches",
+    "boardTabTaskCountsDescription": "Afficher le compteur / limiteur WIP souple sur les onglets. Recommandé pour la recherche et les filtres.",
+    "boardTabEffort": "Totaux d'effort",
+    "boardTabEffortDescription": "Afficher l'effort cumulé sur les onglets de tableau.",
+    "columnTaskCounts": "Compteurs de tâches",
+    "columnTaskCountsDescription": "Afficher le compteur / limiteur WIP souple sur les en-têtes de colonne.",
+    "columnEffort": "Totaux d'effort",
+    "columnEffortDescription": "Afficher l'effort cumulé sur les en-têtes de colonne.",
+    "effortUnit": "Unité d'effort",
+    "effortUnitDescription": "Comment l'effort des tâches est affiché sur les tableaux et formulaires. Les valeurs stockées ne sont pas converties — seul l'affichage change (ex. : 8h vs 8).",
+    "effortUnitHours": "Heures (afficher 10h)",
+    "effortUnitPoints": "Points (afficher 10)",
+    "highlightOverdueTasks": "Mettre en évidence les tâches en retard",
+    "highlightOverdueTasksDescription": "Lorsqu'elle est activée, les tâches en retard affichent un badge RETARD sur le tableau."
+  },
   "projectSettings": {
     "title": "Paramètres du projet",
     "description": "Configurez les préfixes d'identifiants de projet et de tâche et la détection des colonnes terminées.",
@@ -826,12 +850,6 @@
     "finishedColumnNamesDescription": "Définissez les noms de colonnes qui doivent être automatiquement marqués comme \"terminées\" (insensible à la casse). Les tâches dans ces colonnes ne seront pas considérées comme en retard, quelle que soit leur date d'échéance.",
     "enterColumnName": "Entrer le nom de la colonne (ex. : 'Terminé')",
     "add": "Ajouter",
-    "highlightOverdueTasks": "Mettre en évidence les tâches en retard",
-    "highlightOverdueTasksDescription": "Lorsqu'elle est activée, les tâches en retard seront mises en évidence avec un badge \"RETARD\".",
-    "effortUnit": "Unité d'effort",
-    "effortUnitDescription": "Comment l'effort des tâches est affiché sur les tableaux et formulaires. Les valeurs stockées ne sont pas converties — seul l'affichage change (ex. : 8h vs 8).",
-    "effortUnitHours": "Heures (afficher 10h)",
-    "effortUnitPoints": "Points (afficher 10)",
     "defaultProjectPrefix": "Préfixe de projet par défaut",
     "defaultProjectPrefixDescription": "Préfixe utilisé pour les identifiants de projet de nouveaux tableaux (ex. : \"PROJ-\" → \"PROJ-00001\")",
     "defaultProjectPrefixFutureNote": "Réservé à de futures évolutions : ce champ pourra servir à la gestion de portefeuilles et de programmes (PPM), aux chefs de projet (PM) et aux product owners (PO) travaillant sur plusieurs portefeuilles et projets.",

@@ -163,10 +163,14 @@ interface KanbanPageProps {
   onFilterViewChange?: (view: any) => void; // (view: SavedFilterView | null) => void
   onSelectBoard: (boardId: string) => void;
   onAddBoard: () => Promise<void>;
-  onEditBoard: (boardId: string, title: string) => Promise<void>;
+  onEditBoard: (boardId: string, title: string, wipLimit?: number | null) => Promise<void>;
   onRemoveBoard: (boardId: string) => Promise<void>;
   onReorderBoards: (boardId: string, newPosition: number) => Promise<void>;
   getTaskCountForBoard: (board: Board) => number;
+  /** Active-work WIP count (excludes finished/archived columns). */
+  getBoardWipTaskCountForBoard?: (board: Board) => number;
+  /** Active-work effort sum for board tab effort pills. */
+  getBoardWipEffortForBoard?: (board: Board) => number;
   /** Unfiltered board task total, used for destructive confirmations. */
   getTotalTaskCountForBoard?: (board: Board) => number;
   onDragStart: (event: any) => void;
@@ -325,6 +329,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   onRemoveBoard,
   onReorderBoards,
   getTaskCountForBoard,
+  getBoardWipTaskCountForBoard,
+  getBoardWipEffortForBoard,
   getTotalTaskCountForBoard,
   onDragStart,
   onDragOver,
@@ -1326,6 +1332,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           onReorderBoards={onReorderBoards}
           isAdmin={isAdmin && canMutate}
           getFilteredTaskCount={getTaskCountForBoard}
+          getBoardWipTaskCount={getBoardWipTaskCountForBoard}
+          getBoardWipEffort={getBoardWipEffortForBoard}
           getTotalTaskCount={getTotalTaskCountForBoard}
           hasActiveFilters={activeFilters}
           draggedTask={canMutate ? draggedTask : null}

@@ -210,7 +210,8 @@ export const createBoardBodySchema = z.object({
 }).passthrough();
 
 export const updateBoardBodySchema = z.object({
-  title: z.string().min(1, 'Board title is required').max(200)
+  title: z.string().min(1, 'Board title is required').max(200),
+  wip_limit: z.union([z.number(), z.string().max(32), z.null()]).optional()
 }).passthrough();
 
 export const reorderBoardBodySchema = z.object({

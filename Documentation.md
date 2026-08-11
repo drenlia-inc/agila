@@ -31,7 +31,7 @@ Agila is a comprehensive agile project management platform that combines Kanban 
 
 ### Key Features
 - **Multi-board Kanban system** with drag-and-drop (including cross-board drops)
-- **Soft WIP limits**, card aging, blocked flags, and column policy notes
+- **Soft WIP limits** (column and board), card aging, blocked flags, and column policy notes
 - **Multiple views**: Kanban, List, and Gantt
 - **Real-time collaboration** - see changes instantly as team members work
 - **User authentication** with local accounts and Google OAuth support
@@ -53,6 +53,8 @@ Agila is a comprehensive agile project management platform that combines Kanban 
 ---
 
 ## Getting Started
+
+**New team leads (PO / Scrum Master):** after install, use the [Delivery Playbook](docs/DELIVERY_PLAYBOOK.md) for a first-hour setup, board/WIP conventions, rituals, and anti-patterns. This section remains the product reference for auth and initial admin setup.
 
 ### Authentication & Demo Mode
 
@@ -165,6 +167,13 @@ The Kanban view displays tasks as cards in columns, representing different stage
   - Mark as "Finished" (completed tasks)
   - Mark as "Archived" (archived tasks)
   - Delete column
+
+#### Board tabs & board WIP
+- **Soft board WIP**: Admin double-click a board tab to rename and set a soft WIP limit (dropdown; tab bar height unchanged)
+- **Active-work count**: Board WIP counts exclude Done (finished), archived, and trash; amber chrome matches column WIP meters
+- **Features** (Admin → Project Settings → Features): board/column indicator visibility (counts on, effort off by default), effort unit (hours vs points), and highlight overdue tasks
+- **Trash**: Admins still get the board trash control in the actions column
+- **Soft warnings**: Creating a task or dropping onto a board at/over board WIP shows a warning; the action is still allowed
 
 #### Task Cards
 - **Task Title**: Click to open task details

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, ChevronLeft, ChevronRight, Trash2, GripVertical } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, HelpCircle } from 'lucide-react';
 import { Board, Task } from '../types';
 import { useSortable, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,28 +15,108 @@ import {
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import {
-  TASK_COUNT_PILL_DEFAULT,
+  TASK_COUNT_PILL_BASE,
   formatTaskCountPill,
+  taskCountPillToneClass,
   taskCountPillWeightClass,
 } from '../utils/taskCountPill';
+import { getWipStatus, hasWipLimit } from '../utils/kanbanFlowUtils';
+import { formatEffortDisplay, parseEffortUnit } from '../utils/taskUtils';
+import {
+  showBoardTabEffort,
+  showBoardTabTaskCounts,
+} from '../utils/kanbanChromeVisibility';
+
+function parseBoardWipLimitValue(raw: string): number | null {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.floor(n);
+}
+
+function renderBoardTaskCountPill({
+  displayCount,
+  wipCount,
+  wipLimit,
+  hasActiveFilters,
+  compact = false,
+}: {
+  displayCount: number;
+  wipCount: number;
+  wipLimit?: number | null;
+  hasActiveFilters: boolean;
+  compact?: boolean;
+}) {
+  const showMeter = hasWipLimit(wipLimit);
+  if (!showMeter && displayCount <= 0) return null;
+  const status = getWipStatus(wipCount, wipLimit);
+  const meterCount = hasActiveFilters ? displayCount : wipCount;
+  const label = showMeter
+    ? `${formatTaskCountPill(meterCount)} / ${wipLimit}`
+    : formatTaskCountPill(displayCount);
+  const sizerLabel = showMeter
+    ? `${formatTaskCountPill(Math.max(displayCount, wipCount, 99))} / ${wipLimit}`
+    : formatTaskCountPill(displayCount);
+  const pillClass = `${
+    compact
+      ? 'rounded-full px-1 py-0.5 text-center text-[0.65rem] leading-none tabular-nums whitespace-nowrap'
+      : `${TASK_COUNT_PILL_BASE}`
+  } ${taskCountPillToneClass(status)} ${taskCountPillWeightClass(hasActiveFilters)}`;
+  return { label, sizerLabel, pillClass, showMeter, meterCount };
+}
+
+function boardTaskCountTooltip(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  pill: { showMeter: boolean; meterCount: number },
+  wipLimit?: number | null
+): string {
+  if (pill.showMeter) {
+    return t('boardTabs.wipMeterTooltip', {
+      count: pill.meterCount,
+      limit: wipLimit,
+    });
+  }
+  return t('boardTabs.taskCount');
+}
+
+function renderBoardEffortPill(effort: number, siteSettings?: { [key: string]: string }, tooltipLabel?: string) {
+  if (!(effort > 0)) return null;
+  const display = formatEffortDisplay(effort, parseEffortUnit(siteSettings));
+  const label = tooltipLabel || display;
+  return (
+    <KanbanChromeTooltip label={label} wrapperClassName="relative inline-flex shrink-0 items-center">
+      <span
+        className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-violet-100 px-1.5 py-0.5 text-center text-[0.65rem] font-medium leading-none tabular-nums text-violet-700 dark:bg-violet-900/50 dark:text-violet-200"
+        aria-label={label}
+      >
+        {display}
+      </span>
+    </KanbanChromeTooltip>
+  );
+}
 
 /** Inactive tab — sits on the track */
 const tabTrackInactive =
-  'rounded-lg px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 transition-colors duration-150 hover:bg-white/70 dark:hover:bg-gray-700/60 hover:text-gray-900 dark:hover:text-gray-100';
+  'rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 transition-colors duration-150 hover:bg-white/70 dark:hover:bg-gray-700/60 hover:text-gray-900 dark:hover:text-gray-100';
 /** Selected tab — raised chip */
 const tabTrackActive =
-  'rounded-lg px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-200/90 dark:ring-gray-600/90 transition-shadow duration-150';
+  'rounded-lg px-2 py-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-200/90 dark:ring-gray-600/90 transition-shadow duration-150';
 
 interface BoardTabsProps {
   boards: Board[];
   selectedBoard: string | null;
   onSelectBoard: (boardId: string) => void;
   onAddBoard: () => void;
-  onEditBoard: (boardId: string, newName: string) => void;
+  onEditBoard: (boardId: string, newName: string, wipLimit?: number | null) => void | Promise<void>;
   onRemoveBoard: (boardId: string) => void;
   onReorderBoards: (boardId: string, newPosition: number) => void;
   isAdmin?: boolean;
   getFilteredTaskCount?: (board: Board) => number;
+  /** Active-work count for board WIP (excludes finished/archived). */
+  getBoardWipTaskCount?: (board: Board) => number;
+  /** Active-work effort sum (excludes finished/archived), same scope as board WIP. */
+  getBoardWipEffort?: (board: Board) => number;
   /** Unfiltered board total; delete confirmations must not report only visible tasks. */
   getTotalTaskCount?: (board: Board) => number;
   hasActiveFilters?: boolean;
@@ -57,6 +137,10 @@ const DroppableBoardTab: React.FC<{
   isSelected: boolean;
   onSelect: () => void;
   taskCount?: number;
+  wipCount?: number;
+  effort?: number;
+  effortTooltip?: string;
+  siteSettings?: { [key: string]: string };
   hasActiveFilters: boolean;
   draggedTask: Task | null;
   selectedBoardId: string | null;
@@ -68,6 +152,10 @@ const DroppableBoardTab: React.FC<{
   isSelected, 
   onSelect, 
   taskCount, 
+  wipCount,
+  effort = 0,
+  effortTooltip,
+  siteSettings,
   hasActiveFilters, 
   draggedTask,
   selectedBoardId,
@@ -188,7 +276,7 @@ const DroppableBoardTab: React.FC<{
           userSelect: isDragActive && canDrop ? 'none' : 'auto'
         }}
         className={`
-          cursor-pointer flex items-center gap-2 whitespace-nowrap min-w-[5.5rem] justify-center
+          cursor-pointer flex items-center gap-1 whitespace-nowrap min-w-[5.5rem] justify-center
           ${isSelected ? tabTrackActive : tabTrackInactive}
           ${isDragActive && canDrop && (isHovering || isDropReady) ? 'ring-2 ring-blue-500 dark:ring-blue-400 bg-blue-50 dark:bg-blue-950/45 scale-[1.02] shadow-md' : ''}
           ${tabClasses}
@@ -204,17 +292,23 @@ const DroppableBoardTab: React.FC<{
         />
 
         {/* Always show normal tab content - visual feedback comes from border/glow effects */}
-        <div className={`flex items-center gap-2 ${isDragActive && canDrop ? 'pointer-events-none' : ''}`}>
-          {taskCount !== undefined && taskCount > 0 && (
-            <span
-              className={`
-              px-1.5 py-0.5 text-[0.65rem] leading-none rounded-full min-w-[1.25rem] text-center pointer-events-none tabular-nums
-              ${TASK_COUNT_PILL_DEFAULT} ${taskCountPillWeightClass(hasActiveFilters)}
-            `}
-            >
-              {formatTaskCountPill(taskCount)}
-            </span>
-          )}
+        <div className={`flex items-center gap-1 ${isDragActive && canDrop ? 'pointer-events-none' : ''}`}>
+          {(() => {
+            const pill = renderBoardTaskCountPill({
+              displayCount: taskCount ?? 0,
+              wipCount: wipCount ?? taskCount ?? 0,
+              wipLimit: board.wip_limit,
+              hasActiveFilters,
+            });
+            if (!pill) return null;
+            const tip = boardTaskCountTooltip(t, pill, board.wip_limit);
+            return (
+              <KanbanChromeTooltip label={tip} wrapperClassName="relative inline-flex shrink-0">
+                <span className={pill.pillClass} aria-label={tip}>{pill.label}</span>
+              </KanbanChromeTooltip>
+            );
+          })()}
+          {renderBoardEffortPill(effort, siteSettings, effortTooltip)}
           <span className="truncate max-w-[150px] pointer-events-none">{board.title}</span>
         </div>
       </div>
@@ -234,11 +328,19 @@ const SortableBoardTab: React.FC<{
   onConfirmDelete: (boardId: string) => void;
   onCancelDelete: () => void;
   taskCount?: number;
+  /** Unfiltered active-work count for WIP coloring (excludes finished/archived). */
+  wipCount?: number;
+  /** Active-work effort (excludes finished/archived), same scope as board WIP. */
+  effort?: number;
+  effortTooltip?: string;
+  siteSettings?: { [key: string]: string };
   /** Unfiltered total shown in the delete confirmation. */
   totalTaskCount?: number;
   showTaskCount?: boolean;
   hasActiveFilters?: boolean;
-}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete, taskCount, totalTaskCount, showTaskCount, hasActiveFilters = false }) => {
+  /** Visual cue while the edit dropdown is open for this tab. */
+  isEditing?: boolean;
+}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete, taskCount, wipCount, effort = 0, effortTooltip, siteSettings, totalTaskCount, showTaskCount, hasActiveFilters = false, isEditing = false }) => {
   const [deleteButtonRef, setDeleteButtonRef] = useState<HTMLButtonElement | null>(null);
   const {
     attributes,
@@ -260,78 +362,104 @@ const SortableBoardTab: React.FC<{
 
   return (
     <>
-      <KanbanChromeTooltip
-        label={t('boardTabs.clickToSelectDoubleClickToRename')}
-        wrapperClassName="relative group inline-flex shrink-0"
+      <div
+        ref={setNodeRef}
+        style={style}
+        role="button"
+        tabIndex={0}
+        data-board-tab-id={board.id}
+        onClick={onSelect}
+        onDoubleClick={onEdit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
+        className={`
+          group relative inline-flex shrink-0 cursor-pointer items-center gap-1 !px-1.5
+          ${isSelected ? tabTrackActive : tabTrackInactive}
+          ${isEditing ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}
+          ${isDragging ? 'opacity-60 shadow-lg ring-2 ring-gray-300/50 dark:ring-gray-500/40' : ''}
+        `}
       >
-        <div
-          ref={setNodeRef}
-          style={style}
-          role="button"
-          tabIndex={0}
-          onClick={onSelect}
-          onDoubleClick={onEdit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onSelect();
-            }
-          }}
-          className={`
-            relative inline-flex shrink-0 cursor-pointer items-center gap-1.5 !px-2
-            ${isSelected ? tabTrackActive : tabTrackInactive}
-            ${isDragging ? 'opacity-60 shadow-lg ring-2 ring-gray-300/50 dark:ring-gray-500/40' : ''}
-          `}
-        >
         {/* Task count covers the drag handle until hover reveals it. */}
         <KanbanChromeTooltip
-          label={t('boardTabs.dragToReorder')}
+          label={
+            showTaskCount && hasWipLimit(board.wip_limit)
+              ? t('boardTabs.wipMeterTooltip', {
+                  count: hasActiveFilters ? (taskCount ?? 0) : (wipCount ?? taskCount ?? 0),
+                  limit: board.wip_limit,
+                })
+              : t('boardTabs.dragToReorder')
+          }
           wrapperClassName="relative z-[2] shrink-0"
         >
           <div
-            className="group/board-handle relative flex h-7 min-w-7 cursor-grab touch-none items-center justify-center rounded-md px-0.5 text-gray-400 transition-colors hover:bg-gray-200/80 hover:text-gray-600 active:cursor-grabbing dark:hover:bg-gray-600/50 dark:hover:text-gray-300"
+            className="group/board-handle relative flex h-6 min-w-6 cursor-grab touch-none items-center justify-center rounded-md px-0 text-gray-400 transition-colors hover:bg-gray-200/80 hover:text-gray-600 active:cursor-grabbing dark:hover:bg-gray-600/50 dark:hover:text-gray-300"
             {...attributes}
             {...listeners}
             onClick={(e) => e.stopPropagation()}
           >
-            {showTaskCount && taskCount !== undefined && taskCount > 0 ? (
+            {showTaskCount && (() => {
+              const pill = renderBoardTaskCountPill({
+                displayCount: taskCount ?? 0,
+                wipCount: wipCount ?? taskCount ?? 0,
+                wipLimit: board.wip_limit,
+                hasActiveFilters,
+                compact: true,
+              });
+              if (!pill) {
+                return <GripVertical className="h-3.5 w-3.5 opacity-60" aria-hidden />;
+              }
+              return (
               <>
-                {/* Invisible sizer so 3–4 character counts set width without extra tab padding */}
+                {/* Invisible sizer so meter / multi-digit counts set width without extra tab padding */}
                 <span
-                  className="invisible px-1 py-0.5 text-[0.65rem] leading-none tabular-nums font-bold"
+                  className="invisible px-1 py-0.5 text-[0.65rem] leading-none tabular-nums font-bold whitespace-nowrap"
                   aria-hidden
                 >
-                  {formatTaskCountPill(taskCount)}
+                  {pill.sizerLabel}
                 </span>
                 <span
                   className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity group-hover/board-handle:opacity-0`}
                 >
-                  <span
-                    className={`rounded-full px-1 py-0.5 text-center text-[0.65rem] leading-none tabular-nums ${TASK_COUNT_PILL_DEFAULT} ${taskCountPillWeightClass(hasActiveFilters)}`}
-                  >
-                    {formatTaskCountPill(taskCount)}
+                  <span className={pill.pillClass} aria-label={boardTaskCountTooltip(t, pill, board.wip_limit)}>
+                    {pill.label}
                   </span>
                 </span>
                 <GripVertical
-                  className="pointer-events-none absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/board-handle:opacity-100"
+                  className="pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/board-handle:opacity-100"
                   aria-hidden
                 />
               </>
-            ) : (
-              <GripVertical className="h-4 w-4 opacity-60" aria-hidden />
+              );
+            })()}
+            {!showTaskCount && (
+              <GripVertical className="h-3.5 w-3.5 opacity-60" aria-hidden />
             )}
           </div>
         </KanbanChromeTooltip>
 
-        <div className="flex min-w-0 items-center">
+        {/* Title-only select/edit tip — avoids showing it over pills, drag handle, or when already selected */}
+        <KanbanChromeTooltip
+          label={
+            isSelected
+              ? t('boardTabs.doubleClickToEdit')
+              : t('boardTabs.clickToSelectDoubleClickToEdit')
+          }
+          wrapperClassName="min-w-0"
+        >
           <span className="truncate max-w-[10rem]">{board.title}</span>
-        </div>
+        </KanbanChromeTooltip>
 
-          {/* Space is always reserved: revealing the trash on hover must not resize the tab,
-              or neighbouring tabs shift under the cursor and the wrong board gets deleted. */}
+        {/* Effort + trash share a tight cluster (column-style density) */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {renderBoardEffortPill(effort, siteSettings, effortTooltip)}
+          {/* Space reserved so revealing trash on hover does not shift neighbouring tabs */}
           {canDelete && (
             <div
-              className="flex w-7 shrink-0 items-center justify-center opacity-0 transition-opacity duration-200 ease-out pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+              className="flex w-5 shrink-0 items-center justify-center opacity-0 transition-opacity duration-200 ease-out pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
             >
               <KanbanChromeTooltip label={t('boardTabs.deleteBoard')}>
                 <button
@@ -341,15 +469,15 @@ const SortableBoardTab: React.FC<{
                     e.stopPropagation();
                     onRemove();
                   }}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md p-0 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md p-0 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
                 >
-                  <Trash2 size={14} strokeWidth={2} />
+                  <Trash2 size={13} strokeWidth={2} />
                 </button>
               </KanbanChromeTooltip>
             </div>
           )}
         </div>
-      </KanbanChromeTooltip>
+      </div>
 
       {/* Delete Confirmation Menu - Using portal to escape stacking context */}
       {canDelete && showDeleteConfirm === board.id && deleteButtonRef && createPortal(
@@ -406,30 +534,46 @@ const RegularBoardTab: React.FC<{
   onRemove: () => void;
   canDelete: boolean;
   taskCount?: number;
+  wipCount?: number;
+  effort?: number;
+  effortTooltip?: string;
+  siteSettings?: { [key: string]: string };
   showTaskCount?: boolean;
   hasActiveFilters?: boolean;
-}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, taskCount, showTaskCount, hasActiveFilters = false }) => {
+}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, taskCount, wipCount, effort = 0, effortTooltip, siteSettings, showTaskCount, hasActiveFilters = false }) => {
   const { t } = useTranslation('common');
   return (
     <div className="relative group">
-      <KanbanChromeTooltip label={t('boardTabs.clickToSelectBoard')}>
-        <button
-          type="button"
-          onClick={onSelect}
-          className={`${isSelected ? tabTrackActive : tabTrackInactive} w-full text-left`}
-        >
-          <div className="flex items-center gap-2">
-            {showTaskCount && taskCount !== undefined && taskCount > 0 && (
-              <span
-                className={`shrink-0 px-1.5 py-0.5 text-[0.65rem] leading-none rounded-full tabular-nums ${TASK_COUNT_PILL_DEFAULT} ${taskCountPillWeightClass(hasActiveFilters)}`}
-              >
-                {formatTaskCountPill(taskCount)}
-              </span>
-            )}
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`${isSelected ? tabTrackActive : tabTrackInactive} w-full text-left`}
+      >
+        <div className="flex items-center gap-1">
+          {showTaskCount && (() => {
+            const pill = renderBoardTaskCountPill({
+              displayCount: taskCount ?? 0,
+              wipCount: wipCount ?? taskCount ?? 0,
+              wipLimit: board.wip_limit,
+              hasActiveFilters,
+            });
+            if (!pill) return null;
+            const tip = boardTaskCountTooltip(t, pill, board.wip_limit);
+            return (
+              <KanbanChromeTooltip label={tip} wrapperClassName="relative inline-flex shrink-0">
+                <span className={`shrink-0 ${pill.pillClass}`} aria-label={tip}>{pill.label}</span>
+              </KanbanChromeTooltip>
+            );
+          })()}
+          <KanbanChromeTooltip
+            label={isSelected ? '' : t('boardTabs.clickToSelectBoard')}
+            wrapperClassName="min-w-0"
+          >
             <span className="truncate max-w-[11rem]">{board.title}</span>
-          </div>
-        </button>
-      </KanbanChromeTooltip>
+          </KanbanChromeTooltip>
+          {renderBoardEffortPill(effort, siteSettings, effortTooltip)}
+        </div>
+      </button>
       
       {/* Delete Button - Admin Only */}
       {/* Regular users cannot delete boards */}
@@ -447,6 +591,8 @@ export default function BoardTabs({
   onReorderBoards,
   isAdmin = false,
   getFilteredTaskCount,
+  getBoardWipTaskCount,
+  getBoardWipEffort,
   getTotalTaskCount,
   hasActiveFilters = false,
   draggedTask,
@@ -457,9 +603,17 @@ export default function BoardTabs({
   onToggleTrash,
 }: BoardTabsProps) {
   const { t } = useTranslation('common');
+  const { t: tTasks } = useTranslation('tasks');
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string>('');
+  const [editingWipLimit, setEditingWipLimit] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const editFormRef = useRef<HTMLFormElement>(null);
+  const editingBoardIdRef = useRef<string | null>(null);
+  const editingTitleRef = useRef('');
+  const editingWipLimitRef = useRef('');
+  const isSubmittingRef = useRef(false);
+  const [editMenuPosition, setEditMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -593,31 +747,116 @@ export default function BoardTabs({
   }
 
   const handleEditClick = (boardId: string) => {
-    // Only admins can edit board titles
+    // Only admins can edit board title / WIP
     if (!isAdmin) return;
     
     const board = boards.find(b => b.id === boardId);
     if (board) {
+      if (selectedBoard !== boardId) {
+        onSelectBoard(boardId);
+      }
+      const nextTitle = board.title;
+      const nextWip =
+        board.wip_limit != null && Number(board.wip_limit) > 0
+          ? String(board.wip_limit)
+          : '';
       setEditingBoardId(boardId);
-      setEditingTitle(board.title);
+      setEditingTitle(nextTitle);
+      setEditingWipLimit(nextWip);
+      editingBoardIdRef.current = boardId;
+      editingTitleRef.current = nextTitle;
+      editingWipLimitRef.current = nextWip;
     }
   };
 
-  const handleTitleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingTitle.trim() || isSubmitting || !editingBoardId) return;
+  const cancelBoardEdit = () => {
+    setEditingBoardId(null);
+    setEditingTitle('');
+    setEditingWipLimit('');
+    setEditMenuPosition(null);
+    editingBoardIdRef.current = null;
+    editingTitleRef.current = '';
+    editingWipLimitRef.current = '';
+  };
 
+  const saveBoardEdit = async () => {
+    const boardId = editingBoardIdRef.current;
+    const title = editingTitleRef.current.trim();
+    if (!boardId || !title || isSubmittingRef.current) return;
+
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
-      await onEditBoard(editingBoardId, editingTitle.trim());
-      setEditingBoardId(null);
-      setEditingTitle('');
+      await onEditBoard(boardId, title, parseBoardWipLimitValue(editingWipLimitRef.current));
+      cancelBoardEdit();
     } catch (error) {
       console.error('Failed to edit board:', error);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
+
+  const handleTitleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void saveBoardEdit();
+  };
+
+  // Keep edit dropdown under the tab without growing the tab bar
+  useLayoutEffect(() => {
+    if (!editingBoardId) {
+      setEditMenuPosition(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const anchor = document.querySelector(
+        `[data-board-tab-id="${editingBoardId}"]`
+      ) as HTMLElement | null;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const menuWidth = 220;
+      const left = Math.max(
+        8,
+        Math.min(rect.left, window.innerWidth - menuWidth - 8)
+      );
+      setEditMenuPosition({ top: rect.bottom + 4, left });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [editingBoardId, boards, selectedBoard]);
+
+  // Enter accepts; click outside saves (same as column edit).
+  useEffect(() => {
+    if (!editingBoardId) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (editFormRef.current?.contains(target)) return;
+      const anchor = document.querySelector(
+        `[data-board-tab-id="${editingBoardId}"]`
+      );
+      // Double-click that opened the menu, or interacting with the same tab, should not auto-save yet
+      if (anchor?.contains(target)) return;
+      void saveBoardEdit();
+    };
+
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [editingBoardId, onEditBoard]);
 
   const handleRemoveClick = (boardId: string) => {
     if (boards.length > 1) {
@@ -684,6 +923,120 @@ export default function BoardTabs({
 
   useEscapeDismiss(cancelDeleteBoard, { enabled: showDeleteConfirm != null });
 
+  useEscapeDismiss(cancelBoardEdit, { enabled: editingBoardId != null });
+
+  const boardEffortTooltip = (effort: number) =>
+    t('boardTabs.totalEffortTooltip', {
+      display: formatEffortDisplay(effort, parseEffortUnit(siteSettings)),
+    });
+
+  const allowBoardTabTaskCounts = showBoardTabTaskCounts(siteSettings);
+  const allowBoardTabEffort = showBoardTabEffort(siteSettings);
+
+  const effortPropsFor = (board: Board) => {
+    if (!allowBoardTabEffort) {
+      return { effort: 0, effortTooltip: undefined, siteSettings };
+    }
+    const effort = getBoardWipEffort ? getBoardWipEffort(board) : 0;
+    return {
+      effort,
+      effortTooltip: boardEffortTooltip(effort),
+      siteSettings,
+    };
+  };
+
+  const renderBoardEditDropdown = () => {
+    if (!editingBoardId || !editMenuPosition) return null;
+    return createPortal(
+      <form
+        ref={editFormRef}
+        onSubmit={handleTitleSubmit}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('boardTabs.editBoard')}
+        className="fixed z-[9999] w-[13.75rem] space-y-2 rounded-lg border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-600 dark:bg-gray-800"
+        style={{ top: editMenuPosition.top, left: editMenuPosition.left }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            cancelBoardEdit();
+          }
+        }}
+      >
+        <button type="submit" className="sr-only" tabIndex={-1} aria-hidden>
+          {t('buttons.save')}
+        </button>
+        <input
+          type="text"
+          value={editingTitle}
+          onChange={(e) => {
+            setEditingTitle(e.target.value);
+            editingTitleRef.current = e.target.value;
+          }}
+          className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+          autoFocus
+          disabled={isSubmitting}
+          aria-label={t('boardTabs.boardTitle')}
+        />
+        <div className="flex items-center gap-1.5">
+          <label
+            htmlFor={`board-wip-${editingBoardId}`}
+            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300"
+          >
+            {tTasks('column.wipLimit')}
+            <KanbanChromeTooltip label={t('boardTabs.wipLimitHint')}>
+              <span
+                className="inline-flex cursor-help text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                aria-label={t('boardTabs.wipLimitHint')}
+              >
+                <HelpCircle size={12} />
+              </span>
+            </KanbanChromeTooltip>
+          </label>
+          <input
+            id={`board-wip-${editingBoardId}`}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={editingWipLimit}
+            onChange={(e) => {
+              setEditingWipLimit(e.target.value);
+              editingWipLimitRef.current = e.target.value;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void saveBoardEdit();
+              }
+            }}
+            className="w-[2.75rem] shrink-0 rounded-md border border-gray-300 bg-white px-1.5 py-1 text-center text-xs text-gray-900 [appearance:textfield] dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            disabled={isSubmitting}
+          />
+          {!!String(editingWipLimit).trim() && (
+            <KanbanChromeTooltip label={tTasks('column.clearWipLimit')}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingWipLimit('');
+                  editingWipLimitRef.current = '';
+                }}
+                disabled={isSubmitting}
+                className="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-red-600 disabled:opacity-50 dark:hover:bg-gray-700 dark:hover:text-red-400"
+                aria-label={tTasks('column.clearWipLimit')}
+              >
+                <Trash2 size={12} />
+              </button>
+            </KanbanChromeTooltip>
+          )}
+        </div>
+      </form>,
+      document.body
+    );
+  };
+
   // Get the current board's project identifier
   const currentBoard = boards.find(board => board.id === selectedBoard);
   const currentProject = currentBoard?.project;
@@ -727,27 +1080,13 @@ export default function BoardTabs({
                 <div className="flex w-max flex-shrink-0 items-center gap-1">
                   {boards.map(board => (
                     <div key={board.id} className="shrink-0">
-                      {editingBoardId === board.id ? (
-                        <form
-                          onSubmit={handleTitleSubmit}
-                          className="min-w-[10rem] rounded-lg border border-gray-200 bg-white px-2 py-1.5 dark:border-gray-600 dark:bg-gray-900"
-                        >
-                          <input
-                            type="text"
-                            value={editingTitle}
-                            onChange={(e) => setEditingTitle(e.target.value)}
-                            className="w-full rounded-md border-0 bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                            autoFocus
-                            onBlur={handleTitleSubmit}
-                            disabled={isSubmitting}
-                          />
-                        </form>
-                      ) : (
-                        <DroppableBoardTab
+                      <DroppableBoardTab
                           board={board}
                           isSelected={selectedBoard === board.id}
                           onSelect={() => onSelectBoard(board.id)}
-                          taskCount={getFilteredTaskCount ? getFilteredTaskCount(board) : 0}
+                          taskCount={allowBoardTabTaskCounts && getFilteredTaskCount ? getFilteredTaskCount(board) : 0}
+                          wipCount={allowBoardTabTaskCounts && getBoardWipTaskCount ? getBoardWipTaskCount(board) : 0}
+                          {...effortPropsFor(board)}
                           hasActiveFilters={hasActiveFilters}
                           draggedTask={draggedTask}
                           selectedBoardId={selectedBoard}
@@ -755,7 +1094,6 @@ export default function BoardTabs({
                           onHoverStart={handleBoardHoverStart}
                           onHoverEnd={handleBoardHoverEnd}
                         />
-                      )}
                     </div>
                   ))}
                 </div>
@@ -766,28 +1104,15 @@ export default function BoardTabs({
                     <div className="flex w-max flex-shrink-0 items-center gap-1">
                   {boards.map(board => (
                   <div key={board.id} className="shrink-0">
-                    {editingBoardId === board.id ? (
-                      <form
-                        onSubmit={handleTitleSubmit}
-                        className="min-w-[10rem] rounded-lg border border-gray-200 bg-white px-2 py-1.5 dark:border-gray-600 dark:bg-gray-900"
-                      >
-                        <input
-                          type="text"
-                          value={editingTitle}
-                          onChange={(e) => setEditingTitle(e.target.value)}
-                          className="w-full rounded-md border-0 bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                          autoFocus
-                          onBlur={handleTitleSubmit}
-                          disabled={isSubmitting}
-                        />
-                      </form>
-                    ) : draggedTask ? (
+                    {draggedTask ? (
                       // When dragging a task, use droppable tab for cross-board drops
                       <DroppableBoardTab
                         board={board}
                         isSelected={selectedBoard === board.id}
                         onSelect={() => onSelectBoard(board.id)}
-                        taskCount={getFilteredTaskCount ? getFilteredTaskCount(board) : 0}
+                        taskCount={allowBoardTabTaskCounts && getFilteredTaskCount ? getFilteredTaskCount(board) : 0}
+                        wipCount={allowBoardTabTaskCounts && getBoardWipTaskCount ? getBoardWipTaskCount(board) : 0}
+                        {...effortPropsFor(board)}
                         hasActiveFilters={hasActiveFilters}
                         draggedTask={draggedTask}
                         selectedBoardId={selectedBoard}
@@ -807,10 +1132,13 @@ export default function BoardTabs({
                         showDeleteConfirm={showDeleteConfirm}
                         onConfirmDelete={confirmDeleteBoard}
                         onCancelDelete={cancelDeleteBoard}
-                        taskCount={getFilteredTaskCount ? getFilteredTaskCount(board) : undefined}
+                        taskCount={allowBoardTabTaskCounts && getFilteredTaskCount ? getFilteredTaskCount(board) : undefined}
+                        wipCount={allowBoardTabTaskCounts && getBoardWipTaskCount ? getBoardWipTaskCount(board) : undefined}
+                        {...effortPropsFor(board)}
                         totalTaskCount={getTotalTaskCount ? getTotalTaskCount(board) : undefined}
-                        showTaskCount={true}
+                        showTaskCount={allowBoardTabTaskCounts}
                         hasActiveFilters={hasActiveFilters}
+                        isEditing={editingBoardId === board.id}
                       />
                     )}
                   </div>
@@ -822,26 +1150,12 @@ export default function BoardTabs({
                 <div className="flex w-max flex-shrink-0 items-center gap-1">
                   {boards.map(board => (
                     <div key={board.id} className="shrink-0">
-                      {editingBoardId === board.id ? (
-                        <form
-                          onSubmit={handleTitleSubmit}
-                          className="min-w-[10rem] rounded-lg border border-gray-200 bg-white px-2 py-1.5 dark:border-gray-600 dark:bg-gray-900"
-                        >
-                          <input
-                            type="text"
-                            value={editingTitle}
-                            onChange={(e) => setEditingTitle(e.target.value)}
-                            className="w-full rounded-md border-0 bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                            autoFocus
-                            onBlur={handleTitleSubmit}
-                            disabled={isSubmitting}
-                          />
-                        </form>
-                      ) : (
-                        <DroppableBoardTab
+                      <DroppableBoardTab
                           board={board}
                           isSelected={selectedBoard === board.id}
-                          taskCount={getFilteredTaskCount ? getFilteredTaskCount(board) : 0}
+                          taskCount={allowBoardTabTaskCounts && getFilteredTaskCount ? getFilteredTaskCount(board) : 0}
+                          wipCount={allowBoardTabTaskCounts && getBoardWipTaskCount ? getBoardWipTaskCount(board) : 0}
+                          {...effortPropsFor(board)}
                           hasActiveFilters={hasActiveFilters}
                           draggedTask={draggedTask}
                           selectedBoardId={selectedBoard}
@@ -850,7 +1164,6 @@ export default function BoardTabs({
                           onHoverStart={handleBoardHoverStart}
                           onHoverEnd={handleBoardHoverEnd}
                         />
-                      )}
                     </div>
                   ))}
                 </div>
@@ -859,28 +1172,15 @@ export default function BoardTabs({
               <div className="flex w-max flex-shrink-0 items-center gap-1">
                 {boards.map(board => (
                   <div key={board.id} className="shrink-0">
-                    {editingBoardId === board.id ? (
-                      <form
-                        onSubmit={handleTitleSubmit}
-                        className="min-w-[10rem] rounded-lg border border-gray-200 bg-white px-2 py-1.5 dark:border-gray-600 dark:bg-gray-900"
-                      >
-                        <input
-                          type="text"
-                          value={editingTitle}
-                          onChange={(e) => setEditingTitle(e.target.value)}
-                          className="w-full rounded-md border-0 bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-100"
-                          autoFocus
-                          onBlur={handleTitleSubmit}
-                          disabled={isSubmitting}
-                        />
-                      </form>
-                    ) : draggedTask ? (
+                    {draggedTask ? (
                       // When dragging a task, use droppable tab for cross-board drops
                       <DroppableBoardTab
                         board={board}
                         isSelected={selectedBoard === board.id}
                         onSelect={() => onSelectBoard(board.id)}
-                        taskCount={getFilteredTaskCount ? getFilteredTaskCount(board) : 0}
+                        taskCount={allowBoardTabTaskCounts && getFilteredTaskCount ? getFilteredTaskCount(board) : 0}
+                        wipCount={allowBoardTabTaskCounts && getBoardWipTaskCount ? getBoardWipTaskCount(board) : 0}
+                        {...effortPropsFor(board)}
                         hasActiveFilters={hasActiveFilters}
                         draggedTask={draggedTask}
                         selectedBoardId={selectedBoard}
@@ -897,8 +1197,10 @@ export default function BoardTabs({
                         onEdit={() => handleEditClick(board.id)}
                         onRemove={() => handleRemoveClick(board.id)}
                         canDelete={boards.length > 1}
-                        taskCount={getFilteredTaskCount ? getFilteredTaskCount(board) : undefined}
-                        showTaskCount={true}
+                        taskCount={allowBoardTabTaskCounts && getFilteredTaskCount ? getFilteredTaskCount(board) : undefined}
+                        wipCount={allowBoardTabTaskCounts && getBoardWipTaskCount ? getBoardWipTaskCount(board) : undefined}
+                        {...effortPropsFor(board)}
+                        showTaskCount={allowBoardTabTaskCounts}
                         hasActiveFilters={hasActiveFilters}
                       />
                     )}
@@ -969,6 +1271,7 @@ export default function BoardTabs({
           </div>
         )}
       </div>
+      {renderBoardEditDropdown()}
     </div>
   );
 };

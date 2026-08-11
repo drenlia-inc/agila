@@ -315,7 +315,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error });
   }
-  const { title } = parsed.data;
+  const { title, wip_limit } = parsed.data;
   try {
     const db = getRequestDatabase(req);
     const t = await getTranslator(db);
@@ -326,19 +326,36 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (existingBoard) {
       return res.status(400).json({ error: t('errors.boardNameExists') });
     }
+
+    // Soft WIP: null/empty = unlimited
+    let finalWipLimit = wip_limit;
+    if (finalWipLimit === undefined) {
+      finalWipLimit = undefined;
+    } else if (finalWipLimit === '' || finalWipLimit === null) {
+      finalWipLimit = null;
+    } else {
+      const n = Number(finalWipLimit);
+      finalWipLimit = Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+    }
     
     // MIGRATED: Update board using sqlManager
-    await boardQueries.updateBoard(db, id, title);
+    await boardQueries.updateBoard(db, id, title, finalWipLimit);
+    const updated = await boardQueries.getBoardById(db, id);
     
     // Publish to Redis for real-time updates
     const tenantId = getTenantId(req);
+    const boardPayload = {
+      id,
+      title,
+      wip_limit: updated?.wip_limit ?? null,
+    };
     await notificationService.publish('board-updated', {
       boardId: id,
-      board: { id, title },
+      board: boardPayload,
       timestamp: new Date().toISOString()
     }, tenantId);
     
-    res.json({ id, title });
+    res.json(boardPayload);
   } catch (error) {
     console.error('Error updating board:', error);
     const db = getRequestDatabase(req);
