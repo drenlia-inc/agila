@@ -131,6 +131,7 @@
     "emailAlreadyTakenByAnotherUser": "L'email est déjà utilisé par un autre utilisateur",
     "emailRequired": "L'email est requis",
     "userAlreadyActive": "L'utilisateur est déjà actif",
+    "cannotInviteLocalAccount": "Impossible d'envoyer une invitation aux comptes System/Agent (@local)",
     "failedToSendInvitation": "Échec de l'envoi de l'invitation"
   },
   "boardColumns": {
