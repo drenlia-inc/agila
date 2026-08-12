@@ -2628,52 +2628,62 @@ const TaskCard = React.memo(function TaskCard({
               }}
               onMouseLeave={handleCommentTooltipHide}
             >
-              <KanbanChromeTooltip
-                label={
-                  validComments.length > 0
-                    ? t('taskCard.hoverToViewComments')
-                    : t('taskCard.addComment')
-                }
-                wrapperClassName="inline-flex"
-              >
-                <button
-                  type="button"
-                  className={`flex items-center gap-0.5 rounded px-1 py-1 transition-colors ${
-                    validComments.length > 0
-                      ? 'text-blue-600'
-                      : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    isInteractingWithDropdownRef.current = true;
-                    if (clickTimerRef.current) {
-                      clearTimeout(clickTimerRef.current);
-                      clickTimerRef.current = null;
+              {(() => {
+                const commentButton = (
+                  <button
+                    type="button"
+                    className={`flex items-center gap-0.5 rounded px-1 py-1 transition-colors ${
+                      validComments.length > 0
+                        ? 'text-blue-600'
+                        : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      isInteractingWithDropdownRef.current = true;
+                      if (clickTimerRef.current) {
+                        clearTimeout(clickTimerRef.current);
+                        clickTimerRef.current = null;
+                      }
+                      if (validComments.length === 0) {
+                        handleAddComment();
+                      }
+                      setTimeout(() => {
+                        isInteractingWithDropdownRef.current = false;
+                      }, 500);
+                    }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      isInteractingWithDropdownRef.current = true;
+                      if (clickTimerRef.current) {
+                        clearTimeout(clickTimerRef.current);
+                        clickTimerRef.current = null;
+                      }
+                    }}
+                    data-tour-id="task-card-comments"
+                    aria-label={
+                      validComments.length > 0
+                        ? t('taskCard.hoverToViewComments')
+                        : t('taskCard.addComment')
                     }
-                    if (validComments.length === 0) {
-                      handleAddComment();
-                    }
-                    setTimeout(() => {
-                      isInteractingWithDropdownRef.current = false;
-                    }, 500);
-                  }}
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    isInteractingWithDropdownRef.current = true;
-                    if (clickTimerRef.current) {
-                      clearTimeout(clickTimerRef.current);
-                      clickTimerRef.current = null;
-                    }
-                  }}
-                  data-tour-id="task-card-comments"
-                >
-                  <MessageCircle size={12} />
-                  {validComments.length > 0 && (
-                    <span className="font-medium text-xs">{validComments.length}</span>
-                  )}
-                </button>
-              </KanbanChromeTooltip>
+                  >
+                    <MessageCircle size={12} />
+                    {validComments.length > 0 && (
+                      <span className="font-medium text-xs">{validComments.length}</span>
+                    )}
+                  </button>
+                );
+                // Preview panel already opens on hover when comments exist — skip chrome tip.
+                if (validComments.length > 0) return commentButton;
+                return (
+                  <KanbanChromeTooltip
+                    label={t('taskCard.addComment')}
+                    wrapperClassName="inline-flex"
+                  >
+                    {commentButton}
+                  </KanbanChromeTooltip>
+                );
+              })()}
             </div>
           </div>
 

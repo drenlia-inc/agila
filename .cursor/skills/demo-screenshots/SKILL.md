@@ -25,8 +25,9 @@ Capture product screenshots from the live demo for `screenshots/` (README + `SCR
 2. Wait for board (`Project Board` / `To Do`).
 3. Confirm English UI; dismiss joyride/tours (`Escape`, Skip).
 4. Hide non-product chrome before shot when present (e.g. fixed `kanban.local` badge, joyride overlays) via CSS/`display:none` on fixed floats — do not leave env badges in docs images.
-5. Screenshot viewport (`fullPage: false`) to the target path under `screenshots/` (same filename so README / `SCREENSHOTS.md` links keep working).
-6. Have the user review before refreshing the rest of the set.
+5. For `task_details_view_and_comment_tooltip.png`: open details on one card, hover another card’s comment control until `.comment-tooltip` appears, then **hide** the small chrome tip whose text is exactly `Hover to view comments` (keep `.comment-tooltip`).
+6. Screenshot viewport (`fullPage: false`) to the target path under `screenshots/` (same filename so README / `SCREENSHOTS.md` links keep working).
+7. Have the user review before refreshing the rest of the set.
 
 ## Known shots (`screenshots/`)
 
@@ -37,8 +38,8 @@ Capture product screenshots from the live demo for `screenshots/` (README + `SCR
 | `task_details_view_and_comment_tooltip.png` | Task details panel + comment preview |
 | `user-profile.png` | Profile settings modal |
 | `admin-users.png` | Admin → Users |
-| `admin-SSO.png` | Admin → SSO / Google OAuth |
-| `admin-mail-server.png` | Admin → Mail server |
+| `admin-SSO.png` | Admin → System Settings → SSO / Google OAuth (`#admin#system-settings#sso`) |
+| `admin-mail-server.png` | Admin → System Settings → Mail server (`#admin#system-settings#mail-server`) |
 
 Document captions live in `screenshots/SCREENSHOTS.md`.
 
