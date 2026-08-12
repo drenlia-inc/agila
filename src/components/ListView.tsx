@@ -2439,39 +2439,44 @@ export default function ListView({
                             }}
                             onMouseLeave={handleCommentTooltipHide}
                           >
-                            <KanbanChromeTooltip
-                              label={
-                                commentCount > 0
-                                  ? t('listView.hoverToViewComments')
-                                  : t('listView.addComment')
-                              }
-                              wrapperClassName="inline-flex"
-                            >
-                              <button
-                                type="button"
-                                className={`flex items-center gap-0.5 rounded px-1 py-1 transition-colors ${
-                                  commentCount > 0
-                                    ? 'text-blue-600'
-                                    : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (commentCount === 0) {
-                                    openAddCommentForTask(task.id);
+                            {(() => {
+                              const commentButton = (
+                                <button
+                                  type="button"
+                                  className={`flex items-center gap-0.5 rounded px-1 py-1 transition-colors ${
+                                    commentCount > 0
+                                      ? 'text-blue-600'
+                                      : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (commentCount === 0) {
+                                      openAddCommentForTask(task.id);
+                                    }
+                                  }}
+                                  aria-label={
+                                    commentCount > 0
+                                      ? t('listView.hoverToViewComments')
+                                      : t('listView.addComment')
                                   }
-                                }}
-                                aria-label={
-                                  commentCount > 0
-                                    ? t('listView.hoverToViewComments')
-                                    : t('listView.addComment')
-                                }
-                              >
-                                <MessageCircle size={12} />
-                                {commentCount > 0 && (
-                                  <span className="font-medium text-xs">{commentCount}</span>
-                                )}
-                              </button>
-                            </KanbanChromeTooltip>
+                                >
+                                  <MessageCircle size={12} />
+                                  {commentCount > 0 && (
+                                    <span className="font-medium text-xs">{commentCount}</span>
+                                  )}
+                                </button>
+                              );
+                              // Preview panel already opens on hover when comments exist — skip chrome tip.
+                              if (commentCount > 0) return commentButton;
+                              return (
+                                <KanbanChromeTooltip
+                                  label={t('listView.addComment')}
+                                  wrapperClassName="inline-flex"
+                                >
+                                  {commentButton}
+                                </KanbanChromeTooltip>
+                              );
+                            })()}
                           </div>
                         );
                       })()}
