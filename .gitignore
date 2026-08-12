@@ -12,6 +12,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Demo deploy marker (web01)
+.deploy-sha
+
 # Environment variables
 .env
 .env.local

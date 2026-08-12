@@ -94,7 +94,15 @@ Still operator-owned before calling kanban “fully done”:
 - Confirm Google OAuth authorized redirect includes `https://kanban.agila.dev/api/auth/google/callback`
 - Optional smoke: password login, Google SSO, WebSocket, media cookie on new host
 - SMTP rows were **not** rewritten (still may show legacy From addresses) — Admin → Mail if you care
-- `admin.agila.dev` / marketing `agila.dev` — **code rebrand applied** in `ezkan-admin` / `ezkan-web`; **web03 vhosts + certs done** (`120-agila.dev.conf`, mirrors Docru)
+- `admin.agila.dev` / marketing `agila.dev` — **code rebrand applied** in `ezkan-admin` / `agila-web`; **web03 vhosts + certs done** (`120-agila.dev.conf`, mirrors Docru)
+
+### Demo gitflow + CD (web01)
+
+Repo: **`Drenlia-Inc/agila`**. Develop on **`dev`**, PR/merge to **`main`**. Push to `main` runs **Deploy demo** (`drenlia-runner` → `/home/demo/projects/demo/easy-kanban`).
+
+- Compose file on the server is `docker-compose.yml` → `docker-compose-demo.yml` (`DEMO_ENABLED=true`). Project name is pinned to **`easy-kanban`** so a later folder rename to `agila` does not orphan Postgres/Redis volumes.
+- Hourly `/home/demo/projects/demo/reset.sh kanban` still uses the `easy-kanban` path — update that script (and crontab / `start_kanban.sh`) in the same change if/when the directory is renamed.
+- `.env` on the server is not in git; deploy is `git fetch` + `reset --hard origin/main` + `docker compose up -d --build` (volumes kept).
 
 ---
 

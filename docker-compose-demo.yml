@@ -1,3 +1,6 @@
+# Pin project name so renaming the host folder (easy-kanban → agila) does not orphan volumes.
+name: easy-kanban
+
 services:
   agila-app:
     build: .
