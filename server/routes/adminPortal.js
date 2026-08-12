@@ -1336,6 +1336,14 @@ router.post('/send-invitation', authenticateAdminPortal, async (req, res) => {
         error: t('errors.emailRequired') 
       });
     }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    if (normalizedEmail.endsWith('@local')) {
+      return res.status(400).json({
+        success: false,
+        error: t('errors.cannotInviteLocalAccount')
+      });
+    }
     
     // Find user by email
     // MIGRATED: Get user by email using sqlManager
