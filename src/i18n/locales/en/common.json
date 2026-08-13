@@ -1522,7 +1522,7 @@
       },
       "siteIdentity": {
         "title": "Site name & URL",
-        "description": "Set your site name, logo, and public URL under Admin → Site Settings so emails and the header look correct. Using \"/\" for the URL is usually fine.",
+        "description": "Set your site name, logo, and public URL so emails and the header look correct. Using \"/\" for the URL is usually fine.",
         "guide": "Update these Site Settings fields.",
         "fields": {
           "SITE_NAME": "Enter your site name — it appears in the header and emails.",
@@ -1532,7 +1532,7 @@
       },
       "language": {
         "title": "Default language",
-        "description": "Choose the default language (EN/FR) in Admin → App Settings for new boards and system messages.",
+        "description": "Choose the default language (EN/FR) for new boards and system messages.",
         "guide": "Choose the default application language.",
         "fields": {
           "APP_LANGUAGE": "Default language for this instance (guest screens, invites, and emails when a user has no preferred language)."
@@ -1540,11 +1540,11 @@
       },
       "mail": {
         "title": "Mail server",
-        "description": "Under Admin → System Settings → Mail Server, configure SMTP and send a test email so invitations and password resets work. Skip if you only create users locally.",
-        "descriptionMultiTenant": "Email is managed by the platform. Under Admin → System Settings → Mail Server, switch to Custom SMTP first if you want your own mail server, then configure SMTP and send a test email so invitations and password resets work. Skip if you only create users locally.",
+        "description": "Configure SMTP and send a test email so invitations and password resets work. Skip this step if you don't need outbound email.",
+        "descriptionMultiTenant": "Email is managed <platform>by the platform</platform>. Click <smtpButton/> if you want to use your own mail server. Skip this step if you don't need to use your own mail server.",
         "guide": "Fill SMTP settings, test, then enable mail.",
         "fields": {
-          "switchToCustomSmtp": "First click Switch to Custom SMTP (confirm twice) so you can edit your own mail server settings.",
+          "switchToCustomSmtp": "Click Switch to Custom SMTP (confirm twice) to unlock your own SMTP settings.",
           "SMTP_HOST": "Enter your SMTP host (e.g. smtp.gmail.com).",
           "SMTP_PORT": "Enter the SMTP port (often 587 for TLS).",
           "SMTP_USERNAME": "Enter the SMTP username / account.",
@@ -1556,7 +1556,7 @@
       },
       "users": {
         "title": "Invite your team",
-        "description": "Create or invite teammates in Admin → Users. Promote another admin if you want backup.",
+        "description": "Create or invite teammates. Promote another admin if you want backup.",
         "guide": "Add or invite users here — either path works.",
         "fields": {
           "addUser": "Click Add User to create or invite a teammate.",
@@ -1580,16 +1580,16 @@
       },
       "tagsPriorities": {
         "title": "Tags & priorities",
-        "description": "Add tags your team will use on cards. Optionally review priority levels under Admin → Priorities.",
+        "description": "Add tags your team will use on cards. Optionally review priority levels.",
         "guide": "Set up tags on this screen.",
         "fields": {
           "addTag": "Add tags your team will use on cards.",
-          "prioritiesHint": "Optional: open Admin → Priorities anytime to review priority levels and colors."
+          "prioritiesHint": "Optional: open Priorities anytime to review priority levels and colors."
         }
       },
       "sprints": {
         "title": "Sprints",
-        "description": "Optional: under Admin → Project Settings → Sprint Settings, create planning periods if you want sprint filters and burndown.",
+        "description": "Optional: create planning periods if you want sprint filters and burndown.",
         "guide": "Create a sprint when you are ready.",
         "fields": {
           "createSprint": "Click Create Sprint to add a planning period."
@@ -1597,7 +1597,7 @@
       },
       "sso": {
         "title": "Google SSO",
-        "description": "Optional: under Admin → System Settings → SSO, enable Google OAuth so the team can sign in with Google.",
+        "description": "Optional: enable Google OAuth so the team can sign in with Google.",
         "guide": "Enter Google OAuth credentials.",
         "fields": {
           "GOOGLE_CLIENT_ID": "Paste your Google OAuth Client ID.",
@@ -1607,8 +1607,8 @@
       },
       "storage": {
         "title": "File storage (S3)",
-        "description": "Optional: under Admin → System Settings → Storage, use Disk or configure your own S3-compatible bucket for uploads and attachments. Test the connection before activating S3.",
-        "descriptionMultiTenant": "File storage is managed by the platform. Under Admin → System Settings → Storage, choose Use your own S3 bucket first if you want your own bucket, then enter credentials, test the connection, and finish the migration. Skip if platform storage is fine.",
+        "description": "Optional: use Disk or configure your own S3-compatible bucket for uploads and attachments. Test the connection before activating S3.",
+        "descriptionMultiTenant": "File storage is managed by the platform. Choose Use your own S3 bucket first if you want your own bucket, then enter credentials, test the connection, and finish the migration. Skip if platform storage is fine.",
         "guide": "Configure storage or move to your own S3 bucket.",
         "fields": {
           "switchToCustomStorage": "First click Use your own S3 bucket (confirm) so you can enter your own bucket settings.",
@@ -1630,7 +1630,7 @@
       },
       "reporting": {
         "title": "Reports",
-        "description": "Optional: under Admin → Project Settings → Reporting, enable reports and gamification if you want analytics for the team.",
+        "description": "Optional: enable reports and gamification if you want analytics for the team.",
         "guide": "Enable reporting if you want it.",
         "fields": {
           "REPORTS_ENABLED": "Toggle Reports on to give the team analytics and burndown."

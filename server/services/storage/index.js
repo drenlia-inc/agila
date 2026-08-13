@@ -19,6 +19,7 @@ export {
   putObject,
   getObject,
   deleteObject,
+  purgeManagedTenantObjects,
   testS3Connection,
   migrateStorageObjects,
   startStorageMigration,

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import {
   Check,
   ChevronDown,
@@ -32,6 +32,32 @@ const EXPANDED_WIDTH = 384; // ~24rem
 const MINIMIZED_WIDTH = 320; // ~max-w-sm
 const MARGIN = 16;
 
+/** Same chip look as Admin → Mail Server “Switch to Custom SMTP” (non-interactive in the guide). */
+const SwitchToCustomSmtpChip: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const { t } = useTranslation('admin');
+  return (
+    <span
+      className={`inline-flex align-middle text-xs bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2.5 py-1 rounded-md select-none whitespace-nowrap ${className}`}
+      role="note"
+    >
+      {t('mail.switchToCustomSMTP')}
+    </span>
+  );
+};
+
+const MailMultiTenantDescription: React.FC<{ textClassName: string }> = ({ textClassName }) => (
+  <p className={textClassName}>
+    <Trans
+      i18nKey="ownerSetup.steps.mail.descriptionMultiTenant"
+      ns="common"
+      components={{
+        platform: <strong className="font-semibold text-gray-800 dark:text-gray-100" />,
+        smtpButton: <SwitchToCustomSmtpChip className="mx-0.5 relative -top-px" />,
+      }}
+    />
+  </p>
+);
+
 const OwnerSetupChecklist: React.FC = () => {
   const { t } = useTranslation('common');
   const {
@@ -42,7 +68,6 @@ const OwnerSetupChecklist: React.FC = () => {
     dismissChecklist,
     minimizeChecklist,
     expandChecklist,
-    setActiveStep,
     markStep,
     goToStep,
     guideCurrentStep,
@@ -368,8 +393,8 @@ const OwnerSetupChecklist: React.FC = () => {
   const handleReopenStep = (stepId: OwnerSetupStepId) => {
     setStepFocused(false);
     closeGuide();
-    setActiveStep(stepId);
     markStep(stepId, 'todo');
+    goToStep(stepId);
   };
 
   const handleSelectStep = (stepId: OwnerSetupStepId) => {
@@ -378,7 +403,8 @@ const OwnerSetupChecklist: React.FC = () => {
     setPreferStepList(kind === 'task');
     setStepFocused(false);
     closeGuide();
-    setActiveStep(stepId);
+    // Navigate to the step's Admin / Kanban target by default (same as Go there).
+    goToStep(stepId);
   };
 
   const isGuiding = guidingStepId === activeId;
@@ -478,9 +504,13 @@ const OwnerSetupChecklist: React.FC = () => {
                     {t('ownerSetup.optional')}
                   </span>
                 )}
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  {t(stepDescriptionKey)}
-                </p>
+                {activeId === 'mail' && guideFieldContext.multiTenant ? (
+                  <MailMultiTenantDescription textClassName="text-sm text-gray-600 dark:text-gray-300" />
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {t(stepDescriptionKey)}
+                  </p>
+                )}
                 {isGuiding && (
                   <div className="rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-3 py-2 space-y-2">
                     <p className="text-xs font-medium text-blue-800 dark:text-blue-200">
@@ -607,16 +637,21 @@ const OwnerSetupChecklist: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      {isActive && (
-                        <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
-                          {t(
-                            (step.id === 'mail' || step.id === 'storage') &&
-                              guideFieldContext.multiTenant
-                              ? `ownerSetup.steps.${step.id}.descriptionMultiTenant`
-                              : `ownerSetup.steps.${step.id}.description`
-                          )}
-                        </p>
-                      )}
+                      {isActive &&
+                        (step.id === 'mail' && guideFieldContext.multiTenant ? (
+                          <div className="mt-0.5">
+                            <MailMultiTenantDescription textClassName="text-xs text-gray-600 dark:text-gray-300 leading-relaxed" />
+                          </div>
+                        ) : (
+                          <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
+                            {t(
+                              (step.id === 'mail' || step.id === 'storage') &&
+                                guideFieldContext.multiTenant
+                                ? `ownerSetup.steps.${step.id}.descriptionMultiTenant`
+                                : `ownerSetup.steps.${step.id}.description`
+                            )}
+                          </p>
+                        ))}
                     </div>
                     {isActive ? (
                       <ChevronDown size={14} className="text-gray-400 mt-1 flex-shrink-0" />

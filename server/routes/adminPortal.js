@@ -21,7 +21,7 @@ import {
 } from '../utils/settingsSecrets.js';
 import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
 import { getRequestStoragePaths } from '../services/storage/index.js';
-import { getObject, filenameFromPublicUrl } from '../services/storage/objectStorage.js';
+import { getObject, filenameFromPublicUrl, purgeManagedTenantObjects } from '../services/storage/objectStorage.js';
 import path from 'path';
 
 const router = express.Router();
@@ -163,6 +163,29 @@ router.put('/owner', authenticateAdminPortal, async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: t('errors.failedToSetInstanceOwner') 
+    });
+  }
+});
+
+/**
+ * Permanently delete all objects under this tenant's managed S3 prefix.
+ * Used by the admin portal before DROP SCHEMA on instance destroy.
+ * Skips when STORAGE_MANAGED is not true (custom buckets are left alone).
+ */
+router.post('/storage/purge-managed', authenticateAdminPortal, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const tenantId = getTenantId(req) || req.tenantId || null;
+    const result = await purgeManagedTenantObjects(db, { tenantId });
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('Error purging managed tenant storage:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to purge managed storage'
     });
   }
 });
