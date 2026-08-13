@@ -44,6 +44,12 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
     () => adminSettingsHaveChanges(settings, editingSettings),
     [settings, editingSettings]
   );
+  const googleCallbackExample = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return '/api/auth/google/callback';
+    }
+    return `${window.location.origin}/api/auth/google/callback`;
+  }, []);
   const handleInputChange = (key: string, value: string) => {
     onSettingsChange({ ...editingSettings, [key]: value });
   };
@@ -134,10 +140,14 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
               value={editingSettings.GOOGLE_CALLBACK_URL || ''}
               onChange={(e) => handleInputChange('GOOGLE_CALLBACK_URL', e.target.value)}
               className={adminInputFullClass}
-              placeholder={t('sso.googleCallbackUrlPlaceholder')}
+              placeholder={t('sso.googleCallbackUrlPlaceholder', {
+                callbackUrl: googleCallbackExample,
+              })}
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {t('sso.googleCallbackUrlDescription')}
+              {t('sso.googleCallbackUrlDescription', {
+                callbackUrl: googleCallbackExample,
+              })}
             </p>
           </div>
 
