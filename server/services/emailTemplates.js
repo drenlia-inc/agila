@@ -135,7 +135,7 @@ function wrapTransactionalEmail({ siteName, headline, bodyHtml, footerNote, logo
   const headlineSafe = escapeHtml(headline);
   const headerRow = logoHtml
     ? `<tr>
-            <td style="background-color:#ffffff;padding:24px 28px 12px 28px;border-bottom:1px solid #e5e7eb;">
+            <td style="padding:28px 32px 20px;text-align:center;border-bottom:3px solid #0d9488;background:linear-gradient(180deg,#ecfdf8 0%,#ffffff 100%);">
               ${logoHtml}
             </td>
           </tr>`
@@ -229,6 +229,7 @@ export const EmailTemplates = {
       logoPath,
       hideSiteLogo,
       alt: brand,
+      embedDefaultBrandLogo: true,
     });
 
     const bodyHtml = `
@@ -705,6 +706,7 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
       logoPath,
       hideSiteLogo,
       alt: brand,
+      embedDefaultBrandLogo: true,
     });
 
     const bodyHtml = `
@@ -750,6 +752,7 @@ ${t('emails.passwordReset.body6', { siteName: brand })}`,
         footerNote: '',
         logoHtml: siteLogoEmbed.html,
       }),
+      attachments: siteLogoEmbed.attachments,
     };
   },
 

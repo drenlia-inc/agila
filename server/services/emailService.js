@@ -285,7 +285,8 @@ class EmailService {
       to: user.email,
       subject: emailTemplate.subject,
       text: emailTemplate.text,
-      html: emailTemplate.html
+      html: emailTemplate.html,
+      attachments: emailTemplate.attachments || [],
     };
 
     console.log('📧 Sending password reset email to:', user.email);
@@ -383,6 +384,7 @@ class EmailService {
         subject: emailTemplate.subject,
         text: emailTemplate.text,
         html: emailTemplate.html,
+        attachments: emailTemplate.attachments || [],
       };
 
       console.log('📧 Sending invitation email to:', user.email);

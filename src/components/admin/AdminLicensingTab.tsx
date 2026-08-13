@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle, Users, ClipboardList, Layout, HardDrive, Shield, ExternalLink } from 'lucide-react';
 import api from '../../api';
+import { buildCustomerPortalUrl } from '../../utils/customerPortalUrl';
 
 interface BoardTaskCount {
   id: string;
@@ -591,10 +592,11 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
                 onClick={() => {
                   // Check SITE_OPENS_NEW_TAB setting (default to true if not set)
                   const opensInNewTab = settings?.SITE_OPENS_NEW_TAB === undefined || settings?.SITE_OPENS_NEW_TAB === 'true';
+                  const target = buildCustomerPortalUrl(websiteUrl, currentUser?.email);
                   if (opensInNewTab) {
-                    window.open(websiteUrl, '_blank', 'noopener,noreferrer');
+                    window.open(target, '_blank', 'noopener,noreferrer');
                   } else {
-                    window.location.href = websiteUrl;
+                    window.location.href = target;
                   }
                 }}
                 className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"

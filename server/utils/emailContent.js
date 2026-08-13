@@ -278,8 +278,9 @@ export async function buildEmailAuthorAvatar({
 }
 
 /**
- * Build an <img> for the site logo in transactional emails using a public URL
- * (not CID). Uploaded logos are served at /api/settings/site-logo.
+ * Build an <img> for the site logo in transactional emails (public URLs only — no CID).
+ * Custom uploads → `${baseUrl}/api/settings/site-logo`.
+ * Built-in / empty SITE_LOGO with embedDefaultBrandLogo → `${baseUrl}/agila-logo.png`.
  *
  * @returns {{ html: string, attachments: object[] }}
  */
@@ -288,39 +289,45 @@ export function buildEmailSiteLogo({
   logoPath,
   hideSiteLogo = false,
   alt = 'Logo',
+  embedDefaultBrandLogo = false,
 } = {}) {
   if (hideSiteLogo) {
     return { html: '', attachments: [] };
   }
 
   const raw = String(logoPath || '').trim();
-  if (!raw) {
-    return { html: '', attachments: [] };
-  }
-
+  const origin = String(baseUrl || '').replace(/\/$/, '');
   const imgStyle =
-    'max-height:40px;max-width:220px;width:auto;height:auto;display:block;border:0;outline:none;text-decoration:none;';
+    'max-height:48px;max-width:200px;width:auto;height:auto;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;';
 
-  let src = '';
-  if (/^https?:\/\//i.test(raw)) {
-    src = raw;
-  } else if (
+  const isBuiltinPath =
+    !raw ||
     raw.startsWith('/agila') ||
     raw.startsWith('/kanban') ||
-    raw.startsWith('/assets/')
-  ) {
-    // Built-in defaults — not a custom site logo
-    return { html: '', attachments: [] };
-  } else {
-    const origin = String(baseUrl || '').replace(/\/$/, '');
-    if (!origin) {
-      return { html: '', attachments: [] };
+    raw.startsWith('/assets/');
+
+  let src = '';
+
+  if (raw && !isBuiltinPath) {
+    if (/^https?:\/\//i.test(raw)) {
+      src = raw;
+    } else if (origin) {
+      const cacheKey = raw.includes('/avatars/')
+        ? raw.split('/avatars/').pop()?.split('?')[0] || ''
+        : '';
+      src = `${origin}/api/settings/site-logo${cacheKey ? `?v=${encodeURIComponent(cacheKey)}` : ''}`;
     }
-    // Public branding endpoint (only the configured SITE_LOGO file)
-    const cacheKey = raw.includes('/avatars/')
-      ? raw.split('/avatars/').pop()?.split('?')[0] || ''
-      : '';
-    src = `${origin}/api/settings/site-logo${cacheKey ? `?v=${encodeURIComponent(cacheKey)}` : ''}`;
+  } else if (embedDefaultBrandLogo && origin) {
+    // Shipping brand asset from public/ (also copied to dist/ in production)
+    const builtin =
+      raw.startsWith('/agila') || raw.startsWith('/kanban') || raw.startsWith('/assets/')
+        ? raw
+        : '/agila-logo.png';
+    src = `${origin}${builtin}`;
+  }
+
+  if (!src) {
+    return { html: '', attachments: [] };
   }
 
   return {

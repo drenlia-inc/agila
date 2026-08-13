@@ -265,6 +265,13 @@ router.delete("/account", authenticateToken, async (req, res) => {
       });
     }
 
+    if (process.env.DEMO_ENABLED === 'true') {
+      return res.status(403).json({
+        error: 'Account deletion is disabled in demo mode.',
+        code: 'demo_self_delete_disabled',
+      });
+    }
+
     const user = await userQueries.getUserBasicInfo(db, userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found or already inactive' });

@@ -95,7 +95,7 @@ The sticky header contains branding, sprint context, app navigation, and utiliti
 
 ### Left Side
 - **Site brand**: Logo and/or site name (from Admin → Site Settings). Click to follow the configured site URL.
-  - Default logo is `/kanban.ico` when no custom logo is set
+  - Default logo is `/agila-logo.png` when no custom logo is set
   - Empty site name hides the text (no fallback to a default product name)
   - **Hide Site Logo** (admin setting) removes the logo entirely
 - **Sprint selector** (Kanban page): Filter by sprint or backlog
@@ -389,7 +389,7 @@ The Admin section provides comprehensive system management capabilities.
 - **Open Links in New Tab**: Global link behavior in rich text
 
 #### Branding
-- **Site Logo**: Upload an image or paste a URL (light mode). Empty → default `/kanban.ico`
+- **Site Logo**: Upload an image or paste a URL (light mode). Empty → default `/agila-logo.png`
 - **Site Logo (Dark Mode)**: Optional; falls back to light logo, then default
 - **Hide Site Logo**: When enabled, no logo is shown (including the default). Missing setting = logo visible
 - **Hide GitHub Link**: When enabled, hides the header GitHub icon. Missing setting = link visible
