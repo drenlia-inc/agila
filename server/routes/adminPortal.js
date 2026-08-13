@@ -13,7 +13,7 @@ import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js'
 import { getTenantDomain } from '../utils/tenantDomain.js';
 import { clearSqlDebugSettingsCache } from '../utils/sqlDebugSettingsCache.js';
 // MIGRATED: Import sqlManager modules
-import { users as userQueries, settings as settingsQueries, licenseSettings as licenseSettingsQueries, auth as authQueries, adminUsers as adminUserQueries, helpers } from '../utils/sqlManager/index.js';
+import { users as userQueries, settings as settingsQueries, licenseSettings as licenseSettingsQueries, auth as authQueries, adminUsers as adminUserQueries, helpers, health as healthQueries } from '../utils/sqlManager/index.js';
 import { isSecretSettingKey, SECRET_SETTING_PLACEHOLDER } from '../constants/secretSettings.js';
 import {
   projectSecretForAdminApi,
@@ -163,6 +163,72 @@ router.put('/owner', authenticateAdminPortal, async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: t('errors.failedToSetInstanceOwner') 
+    });
+  }
+});
+
+/**
+ * Ensure EN/FR welcome tasks exist and assign them to the owner member.
+ * Body: { email?: string } — defaults to OWNER setting.
+ */
+router.post('/onboarding/welcome-tasks', authenticateAdminPortal, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const { seedWelcomeTasks, reassignWelcomeTasksToMember } = await import('../config/welcomeTasks.js');
+
+    let ownerEmail = (req.body?.email || '').trim().toLowerCase();
+    if (!ownerEmail) {
+      ownerEmail = String((await helpers.getSetting(db, 'OWNER')) || '').trim().toLowerCase();
+    }
+
+    let assigneeMemberId = null;
+    if (ownerEmail) {
+      const ownerUser = await userQueries.getUserByEmail(db, ownerEmail);
+      if (ownerUser) {
+        const ownerMember = await userQueries.getMemberByUserId(db, ownerUser.id);
+        assigneeMemberId = ownerMember?.id || null;
+      }
+    }
+
+    const board = await wrapQuery(
+      db.prepare('SELECT id FROM boards ORDER BY position ASC, created_at ASC LIMIT 1'),
+      'SELECT'
+    ).get();
+    if (!board) {
+      return res.status(404).json({
+        success: false,
+        error: 'No board found'
+      });
+    }
+
+    const columns = await wrapQuery(
+      db.prepare('SELECT id, title, position FROM columns WHERE boardid = ? ORDER BY position ASC'),
+      'SELECT'
+    ).all(board.id);
+
+    const seedResult = await seedWelcomeTasks(db, board.id, columns, {
+      assigneeMemberId: assigneeMemberId || undefined
+    });
+
+    let reassigned = 0;
+    if (assigneeMemberId) {
+      reassigned = await reassignWelcomeTasksToMember(db, assigneeMemberId);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...seedResult,
+        reassigned,
+        assigneeMemberId,
+        ownerEmail: ownerEmail || null
+      }
+    });
+  } catch (error) {
+    console.error('Error seeding welcome tasks:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to seed welcome tasks'
     });
   }
 });
@@ -690,11 +756,13 @@ router.put('/users/:userId', authenticateAdminPortal, async (req, res) => {
   }
 });
 
-// Delete user
+// Delete user (reassign tasks to System first — same as /api/users delete)
 router.delete('/users/:userId', authenticateAdminPortal, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const { userId } = req.params;
+    const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+    const SYSTEM_MEMBER_ID = '00000000-0000-0000-0000-000000000001';
 
     const t = await getTranslator(db);
 
@@ -707,6 +775,21 @@ router.delete('/users/:userId', authenticateAdminPortal, async (req, res) => {
     }
 
     const userMember = await userQueries.getMemberByUserId(db, userId);
+
+    const existingSystemMember = await userQueries.getMemberById(db, SYSTEM_MEMBER_ID);
+    if (!existingSystemMember) {
+      await adminUserQueries.createSystemMember(db, SYSTEM_MEMBER_ID, SYSTEM_USER_ID);
+    }
+
+    await adminUserQueries.deleteUserActivity(db, userId);
+    await userQueries.deleteUserRoles(db, userId);
+    await adminUserQueries.deleteUserInvitations(db, userId);
+
+    if (userMember) {
+      await adminUserQueries.reassignTasksToSystemMember(db, SYSTEM_MEMBER_ID, userMember.id);
+      await adminUserQueries.reassignTaskRequestersToSystemMember(db, SYSTEM_MEMBER_ID, userMember.id);
+      await adminUserQueries.deleteMemberByUserId(db, userId);
+    }
 
     await adminUserQueries.deleteUser(db, userId);
 
@@ -768,11 +851,9 @@ router.delete('/users/:userId', authenticateAdminPortal, async (req, res) => {
 router.get('/health', authenticateAdminPortal, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    // Check database connection
-    // MIGRATED: Simple health check - use a simple query
-    // For health check, we can just try to get a setting or use a simple query
-    const dbCheck = await helpers.getSetting(db, 'APP_URL');
-    
+    // Real connectivity check — do not infer from APP_URL (often unset on new tenants)
+    const dbCheck = await healthQueries.checkDatabaseConnection(db);
+
     res.json({
       success: true,
       status: 'healthy',

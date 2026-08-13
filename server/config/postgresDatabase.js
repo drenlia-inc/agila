@@ -135,7 +135,23 @@ class PostgresDatabase {
 
     if (this.schema !== 'public') {
       const quotedSchema = `"${this.schema}"`;
-      await client.query(`SET search_path TO ${quotedSchema}, public`);
+      // Tenant-only search_path (no public fallback). If the schema is missing,
+      // Postgres would otherwise silently use public and pollute shared tables.
+      try {
+        await client.query(`SET search_path TO ${quotedSchema}`);
+        const check = await client.query(
+          `SELECT 1 FROM information_schema.schemata WHERE schema_name = $1`,
+          [this.schema]
+        );
+        if (!check.rows.length) {
+          throw new Error(
+            `Tenant schema "${this.schema}" does not exist (refusing public fallback)`
+          );
+        }
+      } catch (error) {
+        client.release();
+        throw error;
+      }
     }
 
     return client;
@@ -230,7 +246,7 @@ class PostgresDatabase {
 
         if (this.schema !== 'public') {
           const quotedSchema = `"${this.schema}"`;
-          await client.query(`SET LOCAL search_path TO ${quotedSchema}, public`);
+          await client.query(`SET LOCAL search_path TO ${quotedSchema}`);
         }
         const result = await callback(...args);
         await client.query('COMMIT');
@@ -273,7 +289,7 @@ class PostgresDatabase {
 
       if (this.schema !== 'public') {
         const quotedSchema = `"${this.schema}"`;
-        await client.query(`SET LOCAL search_path TO ${quotedSchema}, public`);
+        await client.query(`SET LOCAL search_path TO ${quotedSchema}`);
       }
 
       const results = [];
@@ -333,6 +349,13 @@ class PostgresDatabase {
     try {
       const quotedSchema = `"${this.schema}"`;
       await adminClient.query(`CREATE SCHEMA IF NOT EXISTS ${quotedSchema}`);
+      const check = await adminClient.query(
+        `SELECT 1 FROM information_schema.schemata WHERE schema_name = $1`,
+        [this.schema]
+      );
+      if (!check.rows.length) {
+        throw new Error(`Failed to create tenant schema "${this.schema}"`);
+      }
       console.log(`✅ Schema '${this.schema}' ready for tenant: ${this.tenantId}`);
     } catch (error) {
       if (error.code !== '42P06') {
@@ -340,6 +363,29 @@ class PostgresDatabase {
       }
     } finally {
       adminClient.release();
+    }
+  }
+
+  /**
+   * True when this adapter's tenant schema (and settings table) exist.
+   * Used to invalidate stale dbCache entries after DROP SCHEMA / destroy.
+   */
+  async tenantSchemaIsReady() {
+    if (this.schema === 'public') {
+      return true;
+    }
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        `SELECT 1
+         FROM information_schema.tables
+         WHERE table_schema = $1 AND table_name = 'settings'
+         LIMIT 1`,
+        [this.schema]
+      );
+      return result.rows.length > 0;
+    } finally {
+      client.release();
     }
   }
 }

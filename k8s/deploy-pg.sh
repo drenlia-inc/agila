@@ -453,10 +453,12 @@ generate_manifests() {
     # Prefer local configmap-pg.yaml (gitignored secrets); fall back to example template
     # NOTE: INSTANCE_TOKEN_PLACEHOLDER will be replaced later after checking existing ConfigMap
     CONFIGMAP_SRC="$(resolve_manifest configmap-pg.yaml)"
+    # Leave STARTUP_TENANT_ID empty in the generated ConfigMap. Pre-init of one
+    # tenant on a shared multi-tenant Deployment races across replicas and can
+    # pollute public after DROP SCHEMA. Tenants are created on first request.
     sed -e "s/easy-kanban-pg/${NAMESPACE}/g" \
         -e "s/JWT_SECRET_PLACEHOLDER/${JWT_SECRET}/g" \
         -e "s/APP_VERSION_PLACEHOLDER//g" \
-        -e "s/STARTUP_TENANT_ID: \"\"/STARTUP_TENANT_ID: \"${TENANT_ID}\"/g" \
         "${CONFIGMAP_SRC}" > "${TEMP_DIR}/configmap.yaml"
     
     # Generate app deployment (shared for all tenants)
@@ -562,16 +564,19 @@ PY
         fi
     fi
     
-    if [ -z "$CURRENT_STARTUP_TENANT" ]; then
-        echo "   📝 Setting STARTUP_TENANT_ID to '${TENANT_ID}' (first tenant)"
-        kubectl apply -f "${TEMP_DIR}/configmap.yaml"
+    # STARTUP_TENANT_ID: keep empty (or preserve existing empty). Never point the
+    # shared Deployment at the tenant being deployed — that races 3 replicas and
+    # leaves stale dbCache after destroy.
+    if [ -n "$CURRENT_STARTUP_TENANT" ]; then
+        echo "   ℹ️  Clearing STARTUP_TENANT_ID (was '${CURRENT_STARTUP_TENANT}') — tenants init on first request"
+    else
+        echo "   ℹ️  STARTUP_TENANT_ID left empty (tenants init on first request)"
+    fi
+    # Generated manifest already has STARTUP_TENANT_ID: ""
+    kubectl apply -f "${TEMP_DIR}/configmap.yaml"
+    if [ -n "$CURRENT_STARTUP_TENANT" ]; then
         CONFIGMAP_UPDATED=true
     else
-        echo "   ℹ️  STARTUP_TENANT_ID already set to '${CURRENT_STARTUP_TENANT}' (preserving to avoid pod restart)"
-        if [ -n "$CURRENT_STARTUP_TENANT" ]; then
-            sed -i "s/STARTUP_TENANT_ID: \"${TENANT_ID}\"/STARTUP_TENANT_ID: \"${CURRENT_STARTUP_TENANT}\"/g" "${TEMP_DIR}/configmap.yaml"
-        fi
-        kubectl apply -f "${TEMP_DIR}/configmap.yaml"
         CONFIGMAP_UPDATED=false
     fi
 else
@@ -617,7 +622,7 @@ kubectl apply -f "${TEMP_DIR}/app-deployment.yaml"
 if kubectl get deployment easy-kanban -n "${NAMESPACE}" &>/dev/null; then
     echo "   🎯 Application deployment applied (shared for all tenants)"
     if [ "$CONFIGMAP_UPDATED" = "true" ]; then
-        echo "   🔄 ConfigMap updated with STARTUP_TENANT_ID='${TENANT_ID}', waiting for rollout..."
+        echo "   🔄 ConfigMap updated (cleared STARTUP_TENANT_ID), waiting for rollout..."
         kubectl rollout status deployment/easy-kanban -n "${NAMESPACE}" --timeout=120s || echo "   ⚠️  Rollout may still be in progress"
     else
         echo "   ℹ️  Waiting for rollout if spec changed (e.g. new env refs)..."
