@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Upload, Trash2 } from 'lucide-react';
+import { X, Upload, Trash2, ExternalLink } from 'lucide-react';
 import { uploadAvatar, deleteAccount, getUserSettings } from '../api';
 import {
   loadUserPreferences,
@@ -64,11 +64,29 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Account deletion state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isInstanceOwner, setIsInstanceOwner] = useState(false);
+
+  const websiteUrl = String(
+    siteSettings?.WEBSITE_URL || contextSystemSettings?.WEBSITE_URL || ''
+  ).trim();
+  const opensPortalInNewTab = (() => {
+    const flag = siteSettings?.SITE_OPENS_NEW_TAB ?? contextSystemSettings?.SITE_OPENS_NEW_TAB;
+    return flag === undefined || flag === 'true';
+  })();
+
+  const handleOpenCustomerPortal = () => {
+    if (!websiteUrl) return;
+    if (opensPortalInNewTab) {
+      window.open(websiteUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      window.location.href = websiteUrl;
+    }
+  };
   
   // Refs for focus management
   const displayNameRef = useRef<HTMLInputElement>(null);
@@ -87,6 +105,27 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
       setSystemSettings(contextSystemSettings);
     }
   }, [isOpen, contextSystemSettings]);
+
+  // Instance owner cannot self-delete — show customer portal instead of Danger Zone
+  useEffect(() => {
+    if (!isOpen) {
+      setIsInstanceOwner(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get('/auth/is-owner');
+        if (!cancelled) setIsInstanceOwner(Boolean(data?.isOwner));
+      } catch (err) {
+        console.error('Failed to check instance owner status:', err);
+        if (!cancelled) setIsInstanceOwner(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, currentUser?.email]);
 
   // Load user settings when system settings are available
   useEffect(() => {
@@ -657,8 +696,33 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                 </div>
               </form>
 
-              {/* Danger Zone - Account Deletion */}
-              {systemSettings.ALLOW_USER_SELF_DELETE !== 'false' ? (
+              {/* Owner: customer portal. Everyone else: Danger Zone / self-delete. */}
+              {isInstanceOwner ? (
+              <div className="mt-8 pt-6 border-t border-blue-200 dark:border-blue-800">
+                <div className="rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 p-4">
+                  <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    {t('profile.customerPortal')}
+                  </h3>
+                  <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
+                    {t('profile.customerPortalDescription')}
+                  </p>
+                  {websiteUrl ? (
+                    <button
+                      type="button"
+                      onClick={handleOpenCustomerPortal}
+                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm font-medium"
+                    >
+                      {t('profile.openCustomerPortal')}
+                      <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                    </button>
+                  ) : (
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      {t('profile.websiteUrlNotConfigured')}
+                    </p>
+                  )}
+                </div>
+              </div>
+              ) : systemSettings.ALLOW_USER_SELF_DELETE !== 'false' ? (
               <div className="mt-8 pt-6 border-t border-red-200">
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <h3 className="text-lg font-semibold text-red-800 mb-2 flex items-center">

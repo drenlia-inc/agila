@@ -118,6 +118,7 @@ router.get('/', async (req, res, next) => {
       'HIDE_GITHUB_LINK',
       'HIDE_SITE_LOGO',
       'SITE_OPENS_NEW_TAB',
+      'WEBSITE_URL',
       'MAIL_ENABLED',
       'GOOGLE_CLIENT_ID',
       'HIGHLIGHT_OVERDUE_TASKS',
