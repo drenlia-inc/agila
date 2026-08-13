@@ -15,6 +15,7 @@ import {
   AGENT_DEFAULT_COLOR
 } from '../constants/agentIdentity.js';
 import { initializeDemoData, installDemoSeedAvatar } from './demoData.js';
+import { seedWelcomeTasks } from './welcomeTasks.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { dbExec, dbGet, dbAll, dbRun } from '../utils/dbAsync.js';
 import { getTenantDomain, getManagedSmtpSeedDefaults } from '../utils/tenantDomain.js';
@@ -857,9 +858,16 @@ const initializeDefaultData = async (db, tenantId = null) => {
     const adminId = crypto.randomUUID();
     const adminPasswordHash = bcrypt.hashSync(adminPassword, 10);
     
+    // Demo uses a human persona; licensed/empty tenants keep a generic bootstrap name
+    // (removed after owner invite during admin-portal post-deploy).
+    const isDemo = process.env.DEMO_ENABLED === 'true';
+    const adminFirstName = isDemo ? 'Alex' : 'Admin';
+    const adminLastName = isDemo ? 'Morgan' : 'User';
+    const adminDisplayName = isDemo ? 'Alex Morgan' : 'Admin User';
+
     // Create admin avatar (optional demo photo, else letter SVG)
     let adminAvatarPath = null;
-    if (process.env.DEMO_ENABLED === 'true') {
+    if (isDemo) {
       adminAvatarPath = installDemoSeedAvatar('admin', adminId, tenantId);
     }
     if (!adminAvatarPath) {
@@ -869,7 +877,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
     await wrapQuery(db.prepare(`
       INSERT INTO users (id, email, password_hash, first_name, last_name, avatar_path) 
       VALUES (?, ?, ?, ?, ?, ?)
-    `), 'INSERT').run(adminId, 'admin@kanban.local', adminPasswordHash, 'Alex', 'Morgan', adminAvatarPath);
+    `), 'INSERT').run(adminId, 'admin@kanban.local', adminPasswordHash, adminFirstName, adminLastName, adminAvatarPath);
 
     // Assign admin role to default user
     const adminRoleResult = await wrapQuery(db.prepare('SELECT id FROM roles WHERE name = ?'), 'SELECT').get('admin');
@@ -1119,7 +1127,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
     const adminMemberId = crypto.randomUUID();
     await wrapQuery(db.prepare('INSERT INTO members (id, name, color, user_id) VALUES (?, ?, ?, ?)'), 'INSERT').run(
       adminMemberId, 
-      'Alex Morgan', 
+      adminDisplayName, 
       '#FF6B6B', 
       adminId
     );
@@ -1271,6 +1279,13 @@ const initializeDefaultData = async (db, tenantId = null) => {
         'INSERT'
       ).run('DEMO_RESET_AT', demoResetAt);
       console.log(`✅ DEMO_RESET_AT=${demoResetAt}`);
+    } else {
+      // Licensed / empty tenants: EN + FR welcome cards (demo board already has content)
+      try {
+        await seedWelcomeTasks(db, boardId, defaultColumns);
+      } catch (error) {
+        console.error('❌ Welcome task seed failed (continuing startup):', error);
+      }
     }
   }
 

@@ -113,10 +113,20 @@ const getTenantDatabase = async (tenantId) => {
   // Check cache first
   if (dbCache.has(cacheKey)) {
     const cached = dbCache.get(cacheKey);
-    // Verify database is still open
+    // Verify database is still open AND tenant schema still exists.
+    // SELECT 1 alone is not enough: after destroy (DROP SCHEMA), search_path
+    // used to fall through to public and the cache looked healthy forever.
     try {
       const { wrapQuery } = await import('../utils/queryLogger.js');
       await wrapQuery(cached.db.prepare('SELECT 1'), 'SELECT').get();
+      if (
+        tenantId &&
+        cached.db &&
+        typeof cached.db.tenantSchemaIsReady === 'function' &&
+        !(await cached.db.tenantSchemaIsReady())
+      ) {
+        throw new Error(`tenant schema missing or incomplete for ${tenantId}`);
+      }
       return cached;
     } catch (error) {
       const msg = error?.message || String(error);
@@ -128,7 +138,7 @@ const getTenantDatabase = async (tenantId) => {
         );
         return cached;
       }
-      // Database closed / broken, remove from cache (close old pool to avoid leaks)
+      // Database closed / broken / schema dropped — remove from cache and re-init
       console.warn(`⚠️ Database cache verification failed for tenant ${tenantId}, reinitializing:`, msg);
       try {
         if (cached.db && typeof cached.db.close === 'function') {
