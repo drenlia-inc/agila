@@ -16,6 +16,8 @@ import ProfileDevTab from './profile/ProfileDevTab';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { setExplicitGuestLanguage } from '../utils/guestLanguage';
 import { userIsViewer } from '../utils/permissions';
+import { isDemoModeClient } from '../utils/demoReset';
+import { buildCustomerPortalUrl } from '../utils/customerPortalUrl';
 
 type NotificationPreferenceKey = keyof UserPreferences['notifications'];
 
@@ -81,10 +83,11 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
 
   const handleOpenCustomerPortal = () => {
     if (!websiteUrl) return;
+    const target = buildCustomerPortalUrl(websiteUrl, currentUser?.email);
     if (opensPortalInNewTab) {
-      window.open(websiteUrl, '_blank', 'noopener,noreferrer');
+      window.open(target, '_blank', 'noopener,noreferrer');
     } else {
-      window.location.href = websiteUrl;
+      window.location.href = target;
     }
   };
   
@@ -337,6 +340,11 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   };
 
   const handleDeleteAccount = async () => {
+    if (isDemoModeClient()) {
+      setError(t('profile.selfDeleteDisabledDemo'));
+      return;
+    }
+
     if (deleteConfirmation !== 'DELETE') {
       setError(t('profile.pleaseTypeDelete'));
       return;
@@ -354,9 +362,12 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
       }
       
     } catch (err: any) {
+      const code = err.response?.data?.code;
       setError(
         err.response?.data?.error ||
-          (err.response?.data?.code === 'self_delete_disabled'
+          (code === 'demo_self_delete_disabled'
+            ? t('profile.selfDeleteDisabledDemo')
+            : code === 'self_delete_disabled'
             ? t('profile.selfDeleteDisabled')
             : t('profile.failedToDeleteAccount'))
       );
@@ -697,7 +708,8 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                 </div>
               </form>
 
-              {/* Owner: customer portal. Everyone else: Danger Zone / self-delete.
+              {/* Owner: customer portal. Demo: no self-delete (shared sandbox).
+                  Everyone else: Danger Zone / self-delete when allowed.
                   Wait for is-owner check to avoid flashing Danger Zone for owners. */}
               {isInstanceOwner === null ? null : isInstanceOwner ? (
               <div className="mt-8 pt-6 border-t border-blue-200 dark:border-blue-800">
@@ -724,7 +736,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                   )}
                 </div>
               </div>
-              ) : systemSettings.ALLOW_USER_SELF_DELETE !== 'false' ? (
+              ) : !isDemoModeClient() && systemSettings.ALLOW_USER_SELF_DELETE !== 'false' ? (
               <div className="mt-8 pt-6 border-t border-red-200 dark:border-red-900">
                 <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
                   <h3 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-2 flex items-center">

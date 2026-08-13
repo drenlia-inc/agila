@@ -223,6 +223,7 @@
     "deleteAccountList3": "Les tâches qui vous sont assignées ou que vous avez demandées sont réassignées au compte Système",
     "deleteAccountList4": "Votre historique de création et de modification de tâches",
     "selfDeleteDisabled": "La suppression de compte en libre-service est désactivée pour cet espace. Demandez à un administrateur si vous devez supprimer votre compte.",
+    "selfDeleteDisabledDemo": "La suppression de compte est désactivée en mode démo.",
     "typeDeleteToConfirm": "Tapez \"DELETE\" pour confirmer :",
     "typeDeletePlaceholder": "Tapez DELETE ici",
     "pleaseTypeDelete": "Veuillez taper \"DELETE\" pour confirmer la suppression du compte",

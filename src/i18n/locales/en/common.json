@@ -223,6 +223,7 @@
     "deleteAccountList3": "Tasks assigned to you or requested by you are reassigned to the System account",
     "deleteAccountList4": "Your task creation and modification history",
     "selfDeleteDisabled": "Self-service account deletion is disabled for this workspace. Ask an administrator if you need your account removed.",
+    "selfDeleteDisabledDemo": "Account deletion is disabled in demo mode.",
     "typeDeleteToConfirm": "Type \"DELETE\" to confirm:",
     "typeDeletePlaceholder": "Type DELETE here",
     "pleaseTypeDelete": "Please type \"DELETE\" to confirm account deletion",
