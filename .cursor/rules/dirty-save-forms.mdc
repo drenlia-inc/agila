@@ -1,0 +1,23 @@
+---
+description: Dirty-save forms via JSON snapshot (Save disabled until changes)
+globs: "**/*{Settings,Form,Profile,Modal}*.{tsx,ts,jsx,js}"
+alwaysApply: false
+---
+
+# Dirty-save forms
+
+When building editable forms with an explicit Save action, use the JSON snapshot pattern (see also personal skill `dirty-save-forms`):
+
+1. Keep live form state in `settings` (or equivalent).
+2. After load (and after a successful save), store a JSON snapshot: `savedSnapshot = JSON.stringify(mapped)`.
+3. Dirty check:
+
+```ts
+const isDirty = savedSnapshot !== '' && snapshotOf(settings) !== savedSnapshot;
+```
+
+4. Save button: `disabled={saving || !isDirty}`.
+5. Save handler no-ops if `!isDirty || saving`.
+6. On success, refresh the snapshot so the form is clean again.
+
+Any field change via `setField` / `handleToggle` updates `settings` → snapshot differs → Save enables.

@@ -54,12 +54,15 @@ const generateRandomPassword = (length = 12) => {
 
 // Function to create default letter-based avatars
 // tenantId: optional tenant identifier (for multi-tenant mode)
-function createLetterAvatar(letter, userId, role = 'user', tenantId = null) {
+// db: when provided, respects STORAGE_BACKEND (uploads to S3 when configured)
+async function createLetterAvatar(letter, userId, role = 'user', tenantId = null, db = null) {
   try {
     const colors = {
       admin: '#FF6B6B',
       demo: '#4ECDC4',
-      user: '#6366F1'
+      user: '#6366F1',
+      system: '#1E40AF',
+      agent: '#6366F1'
     };
     
     const backgroundColor = colors[role] || colors.user;
@@ -83,6 +86,24 @@ function createLetterAvatar(letter, userId, role = 'user', tenantId = null) {
     } else {
       // Single-tenant: backward compatible path
       avatarsDir = join(dirname(__dirname), 'avatars');
+    }
+
+    if (db) {
+      try {
+        const { putObject } = await import('../services/storage/index.js');
+        await putObject(
+          db,
+          { avatars: avatarsDir, attachments: null },
+          'avatars',
+          filename,
+          svg,
+          'image/svg+xml'
+        );
+        console.log(`✅ Created default ${role} avatar: ${filename}${tenantId ? ` (tenant: ${tenantId})` : ''} [storage backend]`);
+        return `/avatars/${filename}`;
+      } catch (storageErr) {
+        console.warn(`⚠️ Storage putObject failed for ${role} avatar, falling back to disk:`, storageErr.message);
+      }
     }
     
     // Ensure avatars directory exists
@@ -871,7 +892,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
       adminAvatarPath = installDemoSeedAvatar('admin', adminId, tenantId);
     }
     if (!adminAvatarPath) {
-      adminAvatarPath = createLetterAvatar('A', adminId, 'admin', tenantId);
+      adminAvatarPath = await createLetterAvatar('A', adminId, 'admin', tenantId, db);
     }
     
     await wrapQuery(db.prepare(`
@@ -1138,7 +1159,8 @@ const initializeDefaultData = async (db, tenantId = null) => {
     const systemPasswordHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10); // Random unguessable password
     
     // Create system avatar (with tenant-specific path if in multi-tenant mode)
-    const systemAvatarPath = createLetterAvatar('S', systemUserId, 'system', tenantId);
+    // After managed S3 settings above when MANAGED_S3_BUCKET is set — putObject uses STORAGE_BACKEND.
+    const systemAvatarPath = await createLetterAvatar('S', systemUserId, 'system', tenantId, db);
     
     // Check if system user already exists
     const existingSystemUser = await wrapQuery(db.prepare('SELECT id FROM users WHERE id = ?'), 'SELECT').get(systemUserId);
@@ -1171,7 +1193,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
       console.warn('Agent bot avatar install skipped:', e?.message || e);
     }
     if (!agentAvatarPath) {
-      agentAvatarPath = createLetterAvatar('A', AGENT_USER_ID, 'agent', tenantId);
+      agentAvatarPath = await createLetterAvatar('A', AGENT_USER_ID, 'agent', tenantId, db);
     }
     const existingAgentUser = await wrapQuery(db.prepare('SELECT id FROM users WHERE id = ?'), 'SELECT').get(AGENT_USER_ID);
     if (!existingAgentUser) {

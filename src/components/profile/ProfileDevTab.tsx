@@ -440,14 +440,14 @@ const ProfileDevTab: React.FC = () => {
 
         <ul className="mt-2 divide-y divide-gray-200 dark:divide-gray-700">
           {tokens.length === 0 && (
-            <li className="py-1.5 text-xs text-gray-500">{t('profile.devNoTokens')}</li>
+            <li className="py-1.5 text-xs text-gray-500 dark:text-gray-400">{t('profile.devNoTokens')}</li>
           )}
           {tokens.map((tok) => (
             <li key={tok.id} className="py-2 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{tok.name}</div>
-                <div className="text-xs text-gray-500 font-mono">{tok.tokenPrefix}…</div>
-                <div className="text-xs text-gray-400">
+                <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">{tok.tokenPrefix}…</div>
+                <div className="text-xs text-gray-400 dark:text-gray-500">
                   {t('profile.devCreated')}: {new Date(tok.createdAt).toLocaleString()}
                   {tok.lastUsedAt
                     ? ` · ${t('profile.devLastUsed')}: ${new Date(tok.lastUsedAt).toLocaleString()}`

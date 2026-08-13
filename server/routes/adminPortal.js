@@ -191,6 +191,30 @@ router.post('/storage/purge-managed', authenticateAdminPortal, async (req, res) 
 });
 
 /**
+ * Migrate local/NFS staged objects into S3 after managed storage is configured.
+ * Used by agila-admin post-deploy so seed avatars (disk-only at DB init) land in the bucket.
+ */
+router.post('/storage/migrate-disk-to-s3', authenticateAdminPortal, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const { startStorageMigration, getRequestStoragePaths } = await import('../services/storage/index.js');
+    const storagePaths = getRequestStoragePaths(req);
+    const deleteSource = req.body?.deleteSource === true;
+    const result = await startStorageMigration(db, storagePaths, 'disk-to-s3', { deleteSource });
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('Error starting disk-to-s3 migration:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to start storage migration'
+    });
+  }
+});
+
+/**
  * Ensure EN/FR welcome tasks exist and assign them to the owner member.
  * Body: { email?: string } — defaults to OWNER setting.
  */
