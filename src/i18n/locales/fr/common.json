@@ -1522,7 +1522,7 @@
       },
       "siteIdentity": {
         "title": "Nom du site et URL",
-        "description": "Définissez le nom du site, le logo et l'URL publique dans Admin → Paramètres du site pour les e-mails et l'en-tête. Utiliser « / » pour l'URL convient généralement.",
+        "description": "Définissez le nom du site, le logo et l'URL publique pour les e-mails et l'en-tête. Utiliser « / » pour l'URL convient généralement.",
         "guide": "Mettez à jour ces champs des Paramètres du site.",
         "fields": {
           "SITE_NAME": "Saisissez le nom du site — il apparaît dans l'en-tête et les e-mails.",
@@ -1532,7 +1532,7 @@
       },
       "language": {
         "title": "Langue par défaut",
-        "description": "Choisissez la langue par défaut (EN/FR) dans Admin → Paramètres de l'application pour les nouveaux tableaux et messages système.",
+        "description": "Choisissez la langue par défaut (EN/FR) pour les nouveaux tableaux et messages système.",
         "guide": "Choisissez la langue par défaut de l'application.",
         "fields": {
           "APP_LANGUAGE": "Langue par défaut de l'instance (écrans invités, invitations et emails lorsqu'un utilisateur n'a pas de langue préférée)."
@@ -1540,11 +1540,11 @@
       },
       "mail": {
         "title": "Serveur de messagerie",
-        "description": "Sous Admin → Paramètres système → Serveur de messagerie, configurez SMTP et envoyez un e-mail de test pour les invitations et réinitialisations. Passez si vous créez les utilisateurs uniquement en local.",
-        "descriptionMultiTenant": "L'e-mail est géré par la plateforme. Sous Admin → Paramètres système → Serveur de messagerie, passez d'abord à SMTP personnalisé si vous voulez votre propre serveur, puis configurez SMTP et envoyez un e-mail de test pour les invitations et réinitialisations. Passez si vous créez les utilisateurs uniquement en local.",
+        "description": "Configurez SMTP et envoyez un e-mail de test pour les invitations et réinitialisations. Passez cette étape si vous n'avez pas besoin d'e-mails sortants.",
+        "descriptionMultiTenant": "L'e-mail est géré <platform>par la plateforme</platform>. Cliquez sur <smtpButton/> si vous voulez utiliser votre propre serveur de messagerie. Passez cette étape si vous n'avez pas besoin de votre propre serveur.",
         "guide": "Remplissez SMTP, testez, puis activez le courrier.",
         "fields": {
-          "switchToCustomSmtp": "Cliquez d'abord sur Passer à SMTP personnalisé (confirmer deux fois) pour modifier vos propres paramètres de messagerie.",
+          "switchToCustomSmtp": "Cliquez sur Passer à SMTP personnalisé (confirmer deux fois) pour déverrouiller vos paramètres SMTP.",
           "SMTP_HOST": "Saisissez l'hôte SMTP (ex. smtp.gmail.com).",
           "SMTP_PORT": "Saisissez le port SMTP (souvent 587 pour TLS).",
           "SMTP_USERNAME": "Saisissez le nom d'utilisateur / compte SMTP.",
@@ -1556,7 +1556,7 @@
       },
       "users": {
         "title": "Inviter l'équipe",
-        "description": "Créez ou invitez des coéquipiers dans Admin → Utilisateurs. Promouvez un autre admin si vous voulez un relais.",
+        "description": "Créez ou invitez des coéquipiers. Promouvez un autre admin si vous voulez un relais.",
         "guide": "Ajoutez ou invitez des utilisateurs ici — les deux chemins fonctionnent.",
         "fields": {
           "addUser": "Cliquez sur Ajouter un utilisateur pour créer ou inviter un coéquipier.",
@@ -1580,16 +1580,16 @@
       },
       "tagsPriorities": {
         "title": "Étiquettes et priorités",
-        "description": "Ajoutez les étiquettes utilisées sur les cartes. Vous pouvez aussi revoir les priorités sous Admin → Priorités.",
+        "description": "Ajoutez les étiquettes utilisées sur les cartes. Vous pouvez aussi revoir les priorités.",
         "guide": "Configurez les étiquettes sur cet écran.",
         "fields": {
           "addTag": "Ajoutez les étiquettes que l'équipe utilisera sur les cartes.",
-          "prioritiesHint": "Facultatif : ouvrez Admin → Priorités à tout moment pour revoir les niveaux et couleurs."
+          "prioritiesHint": "Facultatif : ouvrez Priorités à tout moment pour revoir les niveaux et couleurs."
         }
       },
       "sprints": {
         "title": "Sprints",
-        "description": "Facultatif : sous Admin → Paramètres du projet → Paramètres du sprint, créez des périodes de planification pour les filtres de sprint et le burndown.",
+        "description": "Facultatif : créez des périodes de planification pour les filtres de sprint et le burndown.",
         "guide": "Créez un sprint quand vous êtes prêt.",
         "fields": {
           "createSprint": "Cliquez sur Créer un sprint pour ajouter une période de planification."
@@ -1597,7 +1597,7 @@
       },
       "sso": {
         "title": "SSO Google",
-        "description": "Facultatif : sous Admin → Paramètres système → Auth. unique, activez Google OAuth pour que l'équipe se connecte avec Google.",
+        "description": "Facultatif : activez Google OAuth pour que l'équipe se connecte avec Google.",
         "guide": "Saisissez les identifiants Google OAuth.",
         "fields": {
           "GOOGLE_CLIENT_ID": "Collez votre Client ID Google OAuth.",
@@ -1607,8 +1607,8 @@
       },
       "storage": {
         "title": "Stockage des fichiers (S3)",
-        "description": "Facultatif : sous Admin → Paramètres système → Stockage, utilisez le disque ou configurez votre propre bucket S3 compatible pour les téléversements. Testez la connexion avant d'activer S3.",
-        "descriptionMultiTenant": "Le stockage des fichiers est géré par la plateforme. Sous Admin → Paramètres système → Stockage, choisissez Utiliser votre propre bucket S3 d'abord si vous voulez votre propre bucket, puis saisissez les identifiants, testez la connexion et terminez la migration. Passez si le stockage de la plateforme convient.",
+        "description": "Facultatif : utilisez le disque ou configurez votre propre bucket S3 compatible pour les téléversements. Testez la connexion avant d'activer S3.",
+        "descriptionMultiTenant": "Le stockage des fichiers est géré par la plateforme. Choisissez Utiliser votre propre bucket S3 d'abord si vous voulez votre propre bucket, puis saisissez les identifiants, testez la connexion et terminez la migration. Passez si le stockage de la plateforme convient.",
         "guide": "Configurez le stockage ou passez à votre propre bucket S3.",
         "fields": {
           "switchToCustomStorage": "Cliquez d'abord sur Utiliser votre propre bucket S3 (confirmer) pour saisir les paramètres de votre bucket.",
@@ -1630,7 +1630,7 @@
       },
       "reporting": {
         "title": "Rapports",
-        "description": "Facultatif : sous Admin → Paramètres du projet → Rapports, activez les rapports et la gamification si vous voulez des analyses d'équipe.",
+        "description": "Facultatif : activez les rapports et la gamification si vous voulez des analyses d'équipe.",
         "guide": "Activez les rapports si vous le souhaitez.",
         "fields": {
           "REPORTS_ENABLED": "Activez Rapports pour offrir analyses et burndown à l'équipe."
