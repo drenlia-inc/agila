@@ -9,7 +9,8 @@ import {
   buildObjectKey,
   validateS3Config,
   storageConfigFromOverrides,
-  filenameFromPublicUrl
+  filenameFromPublicUrl,
+  normalizeKeyPrefix
 } from './storageConfig.js';
 import { explainS3TestError } from './s3ErrorExplain.js';
 import { settings as settingsQueries } from '../../utils/sqlManager/index.js';
@@ -199,6 +200,73 @@ export async function deleteObject(db, storagePaths, category, filename) {
       console.warn('S3 delete failed:', err.message);
     }
   }
+}
+
+/**
+ * True when a key prefix is scoped to a specific tenant (safety guard for bulk delete).
+ * @param {string} prefix
+ * @param {string} tenantId
+ */
+function prefixBelongsToTenant(prefix, tenantId) {
+  const id = String(tenantId || '').trim();
+  if (!id) return false;
+  const p = normalizeKeyPrefix(prefix);
+  if (!p) return false;
+  return (
+    p === normalizeKeyPrefix(`tenants/${id}`) ||
+    p.includes(`/${id}/`) ||
+    p.startsWith(`${id}/`)
+  );
+}
+
+/**
+ * Permanently delete all objects under the tenant's S3_KEY_PREFIX when STORAGE_MANAGED=true.
+ * No-op (skipped) for custom / unmanaged storage so we never touch a customer bucket from destroy.
+ *
+ * @param {*} db
+ * @param {{ tenantId?: string | null }} [options]
+ * @returns {Promise<{
+ *   skipped?: boolean,
+ *   reason?: string,
+ *   deleted?: number,
+ *   prefix?: string,
+ *   bucket?: string
+ * }>}
+ */
+export async function purgeManagedTenantObjects(db, options = {}) {
+  const config = await loadStorageConfig(db);
+  if (!config.managed) {
+    return { skipped: true, reason: 'STORAGE_MANAGED is not true' };
+  }
+
+  const validation = validateS3Config(config);
+  if (!validation.ok) {
+    return { skipped: true, reason: validation.error || 'Invalid S3 configuration' };
+  }
+
+  const prefix = normalizeKeyPrefix(config.keyPrefix);
+  if (!prefix) {
+    throw new Error('Refusing managed S3 purge: empty S3_KEY_PREFIX');
+  }
+
+  const tenantId = options.tenantId != null ? String(options.tenantId).trim() : '';
+  if (tenantId && !prefixBelongsToTenant(prefix, tenantId)) {
+    throw new Error(
+      `Refusing managed S3 purge: prefix "${prefix}" is not scoped to tenant "${tenantId}"`
+    );
+  }
+
+  const { createS3Client, s3DeleteByPrefix } = await s3();
+  const client = await createS3Client(config);
+  const result = await s3DeleteByPrefix(client, config, prefix);
+  console.log(
+    `🗑️ Purged ${result.deleted} managed S3 object(s) under s3://${config.bucket}/${result.prefix}`
+  );
+  return {
+    deleted: result.deleted,
+    prefix: result.prefix,
+    bucket: config.bucket
+  };
 }
 
 const EMPTY_S3_BASE = Object.freeze({

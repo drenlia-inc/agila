@@ -12,6 +12,10 @@
 #   - Its own ingress rule (easy-kanban-ingress-${INSTANCE_NAME})
 #   - Its own PostgreSQL schema (tenant_${INSTANCE_NAME})
 #   - Its own tenant data in NFS subdirectories (attachments, avatars)
+#
+# Managed S3 objects (STORAGE_MANAGED=true, prefix tenants/{name}/) are purged by the
+# admin portal BEFORE this script runs (POST /api/admin-portal/storage/purge-managed).
+# This script does not talk to S3.
 
 set -e
 

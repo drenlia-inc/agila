@@ -129,6 +129,62 @@ export async function s3Delete(client, config, key) {
 }
 
 /**
+ * Delete every object under a key prefix (paginated ListObjectsV2 + DeleteObjects).
+ * Refuses an empty prefix so we never wipe an entire bucket by accident.
+ *
+ * @param {any} client
+ * @param {import('./storageConfig.js').StorageConfig} config
+ * @param {string} prefix
+ * @returns {Promise<{ deleted: number, prefix: string }>}
+ */
+export async function s3DeleteByPrefix(client, config, prefix) {
+  const { ListObjectsV2Command, DeleteObjectsCommand } = await loadAwsS3();
+  let normalized = String(prefix || '').trim().replace(/^\/+/, '');
+  if (normalized && !normalized.endsWith('/')) normalized += '/';
+  if (!normalized) {
+    throw new Error('Refusing S3 prefix delete: empty key prefix');
+  }
+
+  let deleted = 0;
+  let continuationToken;
+  do {
+    const listed = await client.send(
+      new ListObjectsV2Command({
+        Bucket: config.bucket,
+        Prefix: normalized,
+        ContinuationToken: continuationToken
+      })
+    );
+    const contents = listed.Contents || [];
+    for (let i = 0; i < contents.length; i += 1000) {
+      const chunk = contents.slice(i, i + 1000).filter((o) => o?.Key);
+      if (chunk.length === 0) continue;
+      const out = await client.send(
+        new DeleteObjectsCommand({
+          Bucket: config.bucket,
+          Delete: {
+            Objects: chunk.map((o) => ({ Key: o.Key })),
+            Quiet: true
+          }
+        })
+      );
+      const errors = out.Errors || [];
+      if (errors.length > 0) {
+        const sample = errors
+          .slice(0, 3)
+          .map((e) => `${e.Key}: ${e.Code || e.Message}`)
+          .join('; ');
+        throw new Error(`S3 prefix delete failed for ${errors.length} object(s): ${sample}`);
+      }
+      deleted += chunk.length;
+    }
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return { deleted, prefix: normalized };
+}
+
+/**
  * @param {any} client
  * @param {import('./storageConfig.js').StorageConfig} config
  * @param {string} key
