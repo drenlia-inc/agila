@@ -2087,13 +2087,14 @@ export default function HelpModal({
         <div
           role="button"
           tabIndex={0}
+          onClick={() => setMinimized(false)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               setMinimized(false);
             }
           }}
-          className="w-full flex items-center justify-between gap-3 px-4 pb-2 text-left"
+          className="w-full flex items-center justify-between gap-3 px-4 pb-2 text-left cursor-pointer"
           aria-label={t('help.expand')}
         >
           <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
