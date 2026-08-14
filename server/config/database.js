@@ -19,6 +19,7 @@ import { seedWelcomeTasks } from './welcomeTasks.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { dbExec, dbGet, dbAll, dbRun } from '../utils/dbAsync.js';
 import { getTenantDomain, getManagedSmtpSeedDefaults } from '../utils/tenantDomain.js';
+import { getDefaultBoardColumns, DEFAULT_BOARD_COLUMNS_JSON } from '../utils/defaultBoardColumns.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -949,6 +950,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
       ['DEFAULT_PROJ_PREFIX', 'PROJ-'], // Default project prefix
       ['DEFAULT_TASK_PREFIX', 'TASK-'], // Default task prefix
       ['DEFAULT_FINISHED_COLUMN_NAMES', '["Done","Terminé","Completed","Complété", "Finished","Fini"]'], // Default finished column names
+      ['DEFAULT_BOARD_COLUMNS', DEFAULT_BOARD_COLUMNS_JSON],
       ['APP_LANGUAGE', 'EN'], // Default application language (EN or FR)
       ['TASK_DELETE_CONFIRM', 'true'], // Confirm before deleting tasks (system default)
       ['ALLOW_USER_SELF_DELETE', 'true'], // Users may delete their own account (tasks reassigned to SYSTEM)
@@ -1267,21 +1269,20 @@ const initializeDefaultData = async (db, tenantId = null) => {
       0
     );
 
-    // Create default columns
-    const defaultColumns = [
-      { id: `todo-${boardId}`, title: 'To Do', position: 0, is_finished: false, is_archived: false },
-      { id: `progress-${boardId}`, title: 'In Progress', position: 1, is_finished: false, is_archived: false },
-      { id: `testing-${boardId}`, title: 'Testing', position: 2, is_finished: false, is_archived: false },
-      { id: `completed-${boardId}`, title: 'Completed', position: 3, is_finished: true, is_archived: false },
-      { id: `archive-${boardId}`, title: 'Archive', position: 4, is_finished: false, is_archived: true }
-    ];
-
+    const templateColumns = await getDefaultBoardColumns(db);
     const columnStmt = db.prepare('INSERT INTO columns (id, boardid, title, position, is_finished, is_archived) VALUES (?, ?, ?, ?, ?, ?)');
-    for (const col of defaultColumns) {
-      await wrapQuery(columnStmt, 'INSERT').run(col.id, boardId, col.title, col.position, col.is_finished, col.is_archived);
+    for (const [index, col] of templateColumns.entries()) {
+      await wrapQuery(columnStmt, 'INSERT').run(
+        `${col.id}-${boardId}`,
+        boardId,
+        col.title,
+        index,
+        !!col.isFinished,
+        !!col.isArchived
+      );
     }
 
-    console.log(`✅ Created default board: ${projectIdentifier} with ${defaultColumns.length} columns`);
+    console.log(`✅ Created default board: ${projectIdentifier} with ${templateColumns.length} columns`);
 
     // Initialize demo data if DEMO_ENABLED=true
     // This will create demo users and tasks for the board

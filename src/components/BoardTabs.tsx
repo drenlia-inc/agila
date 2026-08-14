@@ -26,6 +26,7 @@ import {
   showBoardTabEffort,
   showBoardTabTaskCounts,
 } from '../utils/kanbanChromeVisibility';
+import { getBoardTrashCount } from '../api';
 
 function parseBoardWipLimitValue(raw: string): number | null {
   const trimmed = String(raw ?? '').trim();
@@ -102,6 +103,25 @@ const tabTrackInactive =
 /** Selected tab — raised chip */
 const tabTrackActive =
   'rounded-lg px-2 py-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-200/90 dark:ring-gray-600/90 transition-shadow duration-150';
+
+function AddBoardInTrackButton({ onAddBoard }: { onAddBoard: () => void }) {
+  const { t } = useTranslation('common');
+  return (
+    <div className="flex shrink-0 items-stretch border-l border-gray-200/90 py-1 pl-0.5 pr-1 dark:border-gray-700/90">
+      <KanbanChromeTooltip label={t('boardTabs.addNewBoard')}>
+        <button
+          type="button"
+          onClick={onAddBoard}
+          aria-label={t('boardTabs.addNewBoard')}
+          data-tour-id="add-board-button"
+          className="flex min-h-[2.125rem] w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white hover:text-blue-600 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-blue-300"
+        >
+          <Plus size={16} strokeWidth={2.25} />
+        </button>
+      </KanbanChromeTooltip>
+    </div>
+  );
+}
 
 interface BoardTabsProps {
   boards: Board[];
@@ -334,13 +354,15 @@ const SortableBoardTab: React.FC<{
   effort?: number;
   effortTooltip?: string;
   siteSettings?: { [key: string]: string };
-  /** Unfiltered total shown in the delete confirmation. */
+  /** Unfiltered live total shown on the tab (filters can hide cards). */
   totalTaskCount?: number;
+  /** Live + trash tasks that board delete will take with it. */
+  deleteConfirmTaskCount?: number;
   showTaskCount?: boolean;
   hasActiveFilters?: boolean;
   /** Visual cue while the edit dropdown is open for this tab. */
   isEditing?: boolean;
-}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete, taskCount, wipCount, effort = 0, effortTooltip, siteSettings, totalTaskCount, showTaskCount, hasActiveFilters = false, isEditing = false }) => {
+}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete, taskCount, wipCount, effort = 0, effortTooltip, siteSettings, totalTaskCount, deleteConfirmTaskCount, showTaskCount, hasActiveFilters = false, isEditing = false }) => {
   const [deleteButtonRef, setDeleteButtonRef] = useState<HTMLButtonElement | null>(null);
   const {
     attributes,
@@ -495,8 +517,7 @@ const SortableBoardTab: React.FC<{
               {board.title}
             </div>
             {(() => {
-              // Filters hide tasks that deletion still removes, so always report the board total.
-              const deletedTaskCount = totalTaskCount ?? taskCount ?? 0;
+              const deletedTaskCount = deleteConfirmTaskCount ?? totalTaskCount ?? taskCount ?? 0;
               return deletedTaskCount > 0
                 ? t('boardTabs.moveBoardToTrashAndTasks', { count: deletedTaskCount })
                 : t('boardTabs.moveBoardToTrash');
@@ -615,6 +636,7 @@ export default function BoardTabs({
   const isSubmittingRef = useRef(false);
   const [editMenuPosition, setEditMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [deleteConfirmTaskCount, setDeleteConfirmTaskCount] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   /** When true, both chevron slots stay mounted so show/hide never resizes the track. */
@@ -859,26 +881,32 @@ export default function BoardTabs({
   }, [editingBoardId, onEditBoard]);
 
   const handleRemoveClick = (boardId: string) => {
-    if (boards.length > 1) {
-      // Check if board has any tasks. Use the unfiltered total when available so an active
-      // filter can never make a populated board look empty and skip the confirmation.
-      const board = boards.find(b => b.id === boardId);
-      const hasAnyTasks = board
-        ? (getTotalTaskCount
-            ? getTotalTaskCount(board) > 0
-            : Object.values(board.columns || {}).some(
-                column => column.tasks && column.tasks.length > 0
-              ))
-        : false;
-      
-      if (hasAnyTasks) {
-        // Board has tasks, show confirmation
-        setShowDeleteConfirm(boardId);
-      } else {
-        // Board is empty, delete immediately
-        confirmDeleteBoard(boardId);
+    if (boards.length <= 1) return;
+    const board = boards.find(b => b.id === boardId);
+    const liveCount = board
+      ? (getTotalTaskCount
+          ? getTotalTaskCount(board)
+          : Object.values(board.columns || {}).reduce(
+              (sum, column) => sum + (column.tasks?.length || 0),
+              0
+            ))
+      : 0;
+
+    void (async () => {
+      let trashCountForBoard = 0;
+      try {
+        trashCountForBoard = await getBoardTrashCount(boardId);
+      } catch {
+        trashCountForBoard = 0;
       }
-    }
+      const total = liveCount + trashCountForBoard;
+      if (total === 0) {
+        confirmDeleteBoard(boardId);
+        return;
+      }
+      setDeleteConfirmTaskCount(total);
+      setShowDeleteConfirm(boardId);
+    })();
   };
 
   const confirmDeleteBoard = async (boardId: string) => {
@@ -1040,10 +1068,9 @@ export default function BoardTabs({
   // Get the current board's project identifier
   const currentBoard = boards.find(board => board.id === selectedBoard);
   const currentProject = currentBoard?.project;
-  // Always reserve the Progression-aligned slot when trash can appear; only inner
-  // buttons toggle. Otherwise non-admins jump ~168px when trashCount resolves
-  // after a board switch (admins already keep this column via the + button).
-  const showActionColumn = isAdmin || Boolean(onToggleTrash);
+  // Always keep the Progression-width slot so the tab strip does not grow/shrink
+  // when the trash icon appears or disappears.
+  const showActionColumn = Boolean(onToggleTrash);
 
   return (
     <div className="mb-6">
@@ -1068,10 +1095,11 @@ export default function BoardTabs({
             </KanbanChromeTooltip>
           )}
 
+          <div className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-xl border border-gray-200/90 bg-gray-100/55 dark:border-gray-700/90 dark:bg-gray-800/45">
           <div
             ref={tabsContainerRef}
             data-board-tabs-scroll
-            className="board-tabs-scroll min-w-0 flex-1 overflow-x-auto scroll-smooth rounded-xl border border-gray-200/90 bg-gray-100/55 px-1 py-1 dark:border-gray-700/90 dark:bg-gray-800/45 hide-scrollbar"
+            className="board-tabs-scroll min-w-0 flex-1 overflow-x-auto scroll-smooth px-1 py-1 hide-scrollbar"
           >
             {isAdmin ? (
               // Admin view with drag and drop (only when not dragging tasks)
@@ -1136,6 +1164,7 @@ export default function BoardTabs({
                         wipCount={allowBoardTabTaskCounts && getBoardWipTaskCount ? getBoardWipTaskCount(board) : undefined}
                         {...effortPropsFor(board)}
                         totalTaskCount={getTotalTaskCount ? getTotalTaskCount(board) : undefined}
+                        deleteConfirmTaskCount={deleteConfirmTaskCount}
                         showTaskCount={allowBoardTabTaskCounts}
                         hasActiveFilters={hasActiveFilters}
                         isEditing={editingBoardId === board.id}
@@ -1209,6 +1238,8 @@ export default function BoardTabs({
               </div>
             )}
           </div>
+          {isAdmin && <AddBoardInTrackButton onAddBoard={onAddBoard} />}
+          </div>
 
           {tabsOverflow && (
             <KanbanChromeTooltip label={t('boardTabs.scrollRight')}>
@@ -1228,22 +1259,9 @@ export default function BoardTabs({
           )}
         </div>
 
-        {/* Same width as BoardMetrics (Progression) so + / trash sit under that column */}
+        {/* Same width as BoardMetrics (Progression) so trash sits under that column */}
         {showActionColumn && (
           <div className="flex w-[168px] shrink-0 items-center justify-end gap-2">
-            {isAdmin && (
-              <KanbanChromeTooltip label={t('boardTabs.addNewBoard')}>
-                <button
-                  type="button"
-                  onClick={onAddBoard}
-                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-300 text-gray-500 transition-colors hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-gray-600 dark:text-gray-400 dark:hover:border-blue-400 dark:hover:bg-blue-950/50 dark:hover:text-blue-300"
-                  data-tour-id="add-board-button"
-                >
-                  <Plus size={18} strokeWidth={2} />
-                </button>
-              </KanbanChromeTooltip>
-            )}
-
             {trashCount > 0 && onToggleTrash && (
               <KanbanChromeTooltip label={trashOpen ? t('boardTabs.hideTrash') : t('boardTabs.showTrash')}>
                 <button

@@ -3,7 +3,8 @@ import { wrapQuery } from '../utils/queryLogger.js';
 import notificationService from '../services/notificationService.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { checkBoardLimit } from '../middleware/licenseCheck.js';
-import { getDefaultBoardColumns, getTranslator } from '../utils/i18n.js';
+import { getTranslator } from '../utils/i18n.js';
+import { getDefaultBoardColumns } from '../utils/defaultBoardColumns.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 // MIGRATED: Import sqlManager
 import { boards as boardQueries, tasks as taskQueries, helpers } from '../utils/sqlManager/index.js';
@@ -207,7 +208,7 @@ router.get('/:boardId/columns', authenticateToken, async (req, res) => {
 router.get('/default-columns', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    const defaultColumns = getDefaultBoardColumns(db);
+    const defaultColumns = await getDefaultBoardColumns(db);
     res.json(defaultColumns);
   } catch (error) {
     console.error('Error fetching default columns:', error);
@@ -249,8 +250,8 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
     
     for (const [index, col] of defaultColumns.entries()) {
       const columnId = `${col.id}-${id}`;
-      const isFinished = col.id === 'completed';
-      const isArchived = col.id === 'archive';
+      const isFinished = !!col.isFinished;
+      const isArchived = !!col.isArchived;
       
       // Check if column already exists (in case of partial board creation from previous attempt)
       const existingColumn = await helpers.getColumnById(db, columnId);
@@ -380,10 +381,27 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
       return res.status(404).json({ error: t('errors.boardNotFound') });
     }
 
+    const taskCount = Number(await boardQueries.countAllTasksForBoard(db, id)) || 0;
+    const tenantId = getTenantId(req);
+
+    // Empty boards have nothing to restore; skip trash and delete immediately.
+    if (taskCount === 0) {
+      const storagePaths =
+        req.locals?.tenantStoragePaths || req.app.locals?.tenantStoragePaths || null;
+      await purgeBoardCompletely(db, id, storagePaths);
+      await notificationService.publish('board-deleted', {
+        boardId: id,
+        boardTitle: board.title,
+        permanent: true,
+        softDeleted: false,
+        timestamp: new Date().toISOString(),
+      }, tenantId);
+      return res.json({ message: 'Board permanently deleted', permanent: true });
+    }
+
     await boardQueries.softDeleteBoard(db, id, userId);
     await taskQueries.softDeleteTasksForBoard(db, id, userId);
 
-    const tenantId = getTenantId(req);
     await notificationService.publish('board-deleted', {
       boardId: id,
       boardTitle: board.title,

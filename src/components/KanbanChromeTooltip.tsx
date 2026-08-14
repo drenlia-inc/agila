@@ -84,6 +84,11 @@ type KanbanChromeTooltipProps = {
   maxWidth?: number;
   /** Measure this element’s width and use it as the tip max-width (e.g. column root). */
   widthAnchorRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * When false, keep an open tip if only `label`/`content` changes (live countdown).
+   * Default true: board/column chrome swaps copy on select and must not stick.
+   */
+  dismissOnLabelChange?: boolean;
 };
 
 /** Wrapped label surface without a fixed rem max-width (width comes from style). */
@@ -105,6 +110,7 @@ export function KanbanChromeTooltip({
   portalZIndex = CHROME_TOOLTIP_PORTAL_Z,
   maxWidth,
   widthAnchorRef,
+  dismissOnLabelChange = true,
 }: KanbanChromeTooltipProps) {
   const [visible, setVisible] = useState(false);
   /** Positioned + ready to show (avoids off-screen → clamp jump). */
@@ -169,10 +175,12 @@ export function KanbanChromeTooltip({
   const hasBody = Boolean(content) || Boolean(label);
 
   // Board/column chrome often swaps label on select; leave tips open and they stick on the wrong tab.
+  // Live labels (demo countdown) pass dismissOnLabelChange={false} so the bubble stays while hovering.
   useEffect(() => {
+    if (!dismissOnLabelChange) return;
     hide();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: reset only when tip copy changes
-  }, [label, content]);
+  }, [label, content, dismissOnLabelChange]);
 
   useEffect(() => {
     if (!hasBody) hide();

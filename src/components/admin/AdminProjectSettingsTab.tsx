@@ -12,6 +12,16 @@ import {
   AdminSection,
   adminInputClass, adminInputFullClass,
 } from './AdminSection';
+import AdminDefaultBoardColumnsTable from './AdminDefaultBoardColumnsTable';
+import { toast } from '../../utils/toast';
+import {
+  parseDefaultBoardColumns,
+  parseFinishedKeywordList,
+  serializeDefaultBoardColumns,
+  isArchiveColumnTitle,
+  uniqueNewFinishedKeywords,
+  type DefaultBoardColumnRow,
+} from '../../utils/defaultBoardColumns';
 
 interface AdminProjectSettingsTabProps {
   settings: { [key: string]: string | undefined };
@@ -19,7 +29,7 @@ interface AdminProjectSettingsTabProps {
   onSettingsChange: (settings: { [key: string]: string | undefined }) => void;
   onSave: (settings?: { [key: string]: string | undefined }) => Promise<void>;
   onCancel: () => void;
-  onAutoSave?: (key: string, value: string) => Promise<void>; // For immediate saving of specific settings
+  onAutoSave?: (key: string, value: string, options?: { silent?: boolean }) => Promise<void>;
   /** When nested under Project Settings hub, hide duplicate page chrome. */
   embedded?: boolean;
 }
@@ -37,6 +47,9 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
   const { t: tAdmin } = useTranslation('admin');
   const [finishedColumnNames, setFinishedColumnNames] = useState<string[]>([]);
   const [newColumnName, setNewColumnName] = useState('');
+  const [defaultBoardColumns, setDefaultBoardColumns] = useState<DefaultBoardColumnRow[]>(() =>
+    parseDefaultBoardColumns(editingSettings.DEFAULT_BOARD_COLUMNS)
+  );
   const hasChanges = useMemo(
     () => adminSettingsHaveChanges(settings, editingSettings),
     [settings, editingSettings]
@@ -44,16 +57,12 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
 
   // Initialize finished column names from settings
   useEffect(() => {
-    try {
-      const savedNames = editingSettings.DEFAULT_FINISHED_COLUMN_NAMES 
-        ? JSON.parse(editingSettings.DEFAULT_FINISHED_COLUMN_NAMES)
-        : ['Done', 'Completed', 'Finished'];
-      setFinishedColumnNames(savedNames);
-    } catch (error) {
-      console.error('Error parsing finished column names:', error);
-      setFinishedColumnNames(['Done', 'Completed', 'Finished']);
-    }
+    setFinishedColumnNames(parseFinishedKeywordList(editingSettings.DEFAULT_FINISHED_COLUMN_NAMES));
   }, [editingSettings.DEFAULT_FINISHED_COLUMN_NAMES]);
+
+  useEffect(() => {
+    setDefaultBoardColumns(parseDefaultBoardColumns(editingSettings.DEFAULT_BOARD_COLUMNS));
+  }, [editingSettings.DEFAULT_BOARD_COLUMNS]);
 
   const handleInputChange = (key: string, value: string) => {
     onSettingsChange({
@@ -70,6 +79,10 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
 
   const addFinishedColumnName = async () => {
     const trimmedName = newColumnName.trim();
+    if (isArchiveColumnTitle(trimmedName)) {
+      toast.error(t('defaultColumnsArchiveReserved'), '');
+      return;
+    }
     if (trimmedName && !finishedColumnNames.includes(trimmedName)) {
       const updatedNames = [...finishedColumnNames, trimmedName];
       setFinishedColumnNames(updatedNames);
@@ -104,15 +117,121 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const persistDefaultBoardColumns = (
+    rows: DefaultBoardColumnRow[],
+    extraKeywords: string[] = [],
+    options?: { autoSave?: boolean }
+  ) => {
+    const complete = rows.filter((r) => r.titleEn.trim() && r.titleFr.trim());
+    if (complete.length < 2) {
+      toast.error(t('defaultColumnsMinTwo'), '');
+      return;
+    }
+    if (complete.filter((r) => r.isFinished).length !== 1) {
+      toast.error(t('defaultColumnsNeedFinished'), '');
+      return;
+    }
+    if (complete.some((r) => isArchiveColumnTitle(r.titleEn) || isArchiveColumnTitle(r.titleFr))) {
+      toast.error(t('defaultColumnsArchiveReserved'), '');
+      return;
+    }
+    const json = serializeDefaultBoardColumns(complete);
+    setDefaultBoardColumns(complete);
+    const extras = uniqueNewFinishedKeywords(extraKeywords, finishedColumnNames);
+    const names = extras.length ? [...finishedColumnNames, ...extras] : finishedColumnNames;
+    if (extras.length) {
+      setFinishedColumnNames(names);
+    }
+    const namesJson = JSON.stringify(names);
+    onSettingsChange({
+      ...editingSettings,
+      DEFAULT_BOARD_COLUMNS: json,
+      ...(extras.length ? { DEFAULT_FINISHED_COLUMN_NAMES: namesJson } : {}),
+    });
+    if (options?.autoSave && onAutoSave) {
+      const saves = [onAutoSave('DEFAULT_BOARD_COLUMNS', json, { silent: true })];
+      if (extras.length) {
+        saves.push(onAutoSave('DEFAULT_FINISHED_COLUMN_NAMES', namesJson, { silent: true }));
+      }
+      void Promise.all(saves)
+        .then(() => {
+          toast.success(tAdmin('settingsSavedSuccessfully'), '', 3000);
+        })
+        .catch(() => {
+          /* errors already toasted by onAutoSave */
+        });
+    }
+  };
+
+  const handleFinishedNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       addFinishedColumnName();
+      return;
     }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setNewColumnName('');
+      e.currentTarget.blur();
+    }
+  };
+
+  const handlePrefixKeyDown = (key: 'DEFAULT_PROJ_PREFIX' | 'DEFAULT_TASK_PREFIX') =>
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      revertField(key);
+      e.currentTarget.blur();
+    };
+
+  const handleSave = async () => {
+    if (defaultBoardColumns.length < 2) {
+      toast.error(t('defaultColumnsMinTwo'), '');
+      return;
+    }
+    if (defaultBoardColumns.filter((r) => r.isFinished).length !== 1) {
+      toast.error(t('defaultColumnsNeedFinished'), '');
+      return;
+    }
+    if (defaultBoardColumns.some((r) => !r.isFinished) === false) {
+      toast.error(t('defaultColumnsMinTwo'), '');
+      return;
+    }
+    if (defaultBoardColumns.some((r) => !r.titleEn.trim() || !r.titleFr.trim())) {
+      toast.error(t('defaultColumnsTitlesRequired'), '');
+      return;
+    }
+    if (
+      defaultBoardColumns.some(
+        (r) => isArchiveColumnTitle(r.titleEn) || isArchiveColumnTitle(r.titleFr)
+      )
+    ) {
+      toast.error(t('defaultColumnsArchiveReserved'), '');
+      return;
+    }
+    await onSave();
   };
 
   const content = (
     <>
+      <AdminSection
+        title={t('defaultColumnsTitle')}
+        description={t('defaultColumnsDescription', {
+          languageSetting: tAdmin('appSettings.defaultApplicationLanguage'),
+        })}
+        dense
+      >
+        <div data-setting-key="DEFAULT_BOARD_COLUMNS">
+          <AdminDefaultBoardColumnsTable
+            rows={defaultBoardColumns}
+            finishedKeywords={finishedColumnNames}
+            onRowsChange={persistDefaultBoardColumns}
+          />
+        </div>
+      </AdminSection>
+
       <AdminSection title={t('finishedColumnNames')} description={t('finishedColumnNamesDescription')} dense>
         <div data-setting-key="DEFAULT_FINISHED_COLUMN_NAMES">
           <div className="flex gap-2 mb-2">
@@ -120,7 +239,7 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
               type="text"
               value={newColumnName}
               onChange={(e) => setNewColumnName(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleFinishedNameKeyDown}
               placeholder={t('enterColumnName')}
               className={`flex-1 ${adminInputClass}`}
             />
@@ -168,6 +287,7 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
               type="text"
               value={editingSettings.DEFAULT_PROJ_PREFIX || ''}
               onChange={(e) => handleInputChange('DEFAULT_PROJ_PREFIX', e.target.value)}
+              onKeyDown={handlePrefixKeyDown('DEFAULT_PROJ_PREFIX')}
               className={adminInputFullClass}
               placeholder="PROJ-"
             />
@@ -193,6 +313,7 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
               type="text"
               value={editingSettings.DEFAULT_TASK_PREFIX || ''}
               onChange={(e) => handleInputChange('DEFAULT_TASK_PREFIX', e.target.value)}
+              onKeyDown={handlePrefixKeyDown('DEFAULT_TASK_PREFIX')}
               className={adminInputFullClass}
               placeholder="TASK-"
             />
@@ -210,7 +331,7 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
           <li>• {t('howItWorks2', { prefix: editingSettings.DEFAULT_TASK_PREFIX || 'TASK-' })}</li>
           <li>• {t('howItWorks3')}</li>
           <li>• {t('howItWorks4')}</li>
-          <li>• {t('howItWorks5')}</li>
+          <li>• {t('howItWorks6')}</li>
         </ul>
       </AdminSection>
 
@@ -227,7 +348,7 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => onSave()}
+            onClick={() => handleSave()}
             disabled={!hasChanges}
             className={`px-4 py-1.5 text-sm font-medium text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
               hasChanges

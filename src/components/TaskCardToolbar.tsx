@@ -20,6 +20,7 @@ import {
 } from '../utils/agentMemberUi';
 import type { TaskRelationshipSummary } from '../utils/taskRelationshipSummary';
 import { getTaskRelationshipSummary } from '../utils/taskRelationshipSummary';
+import { getArchivedColumnId, isArchivedColumnFlag } from '../utils/columnUtils';
 
 interface TaskCardToolbarProps {
   task: Task;
@@ -640,16 +641,11 @@ export default function TaskCardToolbar({
           )}
 
           {(() => {
-            const archiveColumn = columns && Object.values(columns).find(col =>
-              col.is_archived === true || (col.is_archived as any) === 1
-            );
-
+            const archiveColumnId = getArchivedColumnId(columns);
             const currentColumn = columns && columns[task.columnId];
-            const isCurrentColumnArchived = currentColumn && (
-              currentColumn.is_archived === true || (currentColumn.is_archived as any) === 1
-            );
+            const isCurrentColumnArchived = isArchivedColumnFlag(currentColumn);
 
-            return archiveColumn && !isCurrentColumnArchived ? (
+            return archiveColumnId && !isCurrentColumnArchived ? (
               <div className={`flex h-[22px] items-center transition-opacity duration-200 ${toolbarHoverVisibility}`}>
                 <KanbanChromeTooltip label={agentBlocking ? agentLockedLabel : t('toolbar.archiveTask')}>
                   <button
@@ -657,7 +653,7 @@ export default function TaskCardToolbar({
                     onClick={(e) => {
                       if (agentBlocking) return;
                       e.stopPropagation();
-                      onEdit({ ...task, columnId: archiveColumn.id });
+                      onEdit({ ...task, columnId: archiveColumnId });
                     }}
                     className={`p-1 rounded-full inline-flex h-[22px] w-[22px] items-center justify-center ${toolbarReachClass} ${
                       agentBlocking

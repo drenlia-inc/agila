@@ -796,6 +796,22 @@ const migrations = [
       }
       console.log('✅ Migration 37: kanban chrome visibility settings ready');
     }
+  },
+  {
+    version: 38,
+    name: 'add_default_board_columns_setting',
+    description: 'Bilingual default column titles for new boards (Archive always appended)',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const { DEFAULT_BOARD_COLUMNS_JSON, DEFAULT_BOARD_COLUMNS_SETTING_KEY } = await import(
+        '../utils/defaultBoardColumns.js'
+      );
+      const existing = await settingsQueries.getSettingByKey(db, DEFAULT_BOARD_COLUMNS_SETTING_KEY);
+      if (!existing) {
+        await settingsQueries.createSetting(db, DEFAULT_BOARD_COLUMNS_SETTING_KEY, DEFAULT_BOARD_COLUMNS_JSON);
+      }
+      console.log('✅ Migration 38: DEFAULT_BOARD_COLUMNS ready');
+    }
   }
 ];
 

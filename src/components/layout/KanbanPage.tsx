@@ -421,7 +421,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   onClearBulkUndo,
   draggedTaskIds,
 }: KanbanPageProps) => {
-  const { t } = useTranslation(['tasks', 'common']);
+  const { t, i18n } = useTranslation(['tasks', 'common']);
   const [showBoardToolbar, setShowBoardToolbar] = useState(() => {
     const prefs = loadUserPreferences(currentUser?.id ?? null);
     return prefs.appSettings.showBoardToolbar !== false;
@@ -516,12 +516,12 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         }
       } catch (error) {
         console.error('Failed to load trash:', error);
-        toast.error(t('trash.loadFailed'));
+        toast.error(i18n.t('trash.loadFailed', { ns: 'tasks' }));
       } finally {
         if (!options?.silent) setTrashLoading(false);
       }
     },
-    [t, normalizeTrashTasks, countTrashForSprint]
+    [i18n, normalizeTrashTasks, countTrashForSprint]
   );
 
   useEffect(() => {
@@ -547,7 +547,9 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     if (trashOpen && selectedBoard) {
       void loadTrashTasks(selectedBoard);
     }
-  }, [trashOpen, selectedBoard, loadTrashTasks]);
+    // Intentionally omit loadTrashTasks: it used to change with `t` on EN↔FR
+    // and flashed the trash loading placeholder.
+  }, [trashOpen, selectedBoard]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep trash count/list in sync with soft-delete / restore / purge events
   useEffect(() => {

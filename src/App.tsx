@@ -60,7 +60,7 @@ import TaskLinkingOverlay from './components/TaskLinkingOverlay';
 import NetworkStatusIndicator from './components/NetworkStatusIndicator';
 import VersionUpdateBanner from './components/VersionUpdateBanner';
 import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
-import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask } from './api';
+import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask } from './api';
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { isAgentMemberId } from './utils/agentMemberUi';
@@ -130,7 +130,7 @@ import { moveTaskToBoard } from './api';
 import { customCollisionDetection, calculateGridStyle } from './utils/dragDropUtils';
 import { clearCustomCursor } from './utils/cursorUtils';
 import { generateUniqueBoardName } from './utils/boardUtils';
-import { renumberColumns } from './utils/columnUtils';
+import { renumberColumns, isArchivedColumnFlag } from './utils/columnUtils';
 import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveDropIndex, TaskDropPlacement } from './utils/taskReorderingUtils';
 import { getTaskColumnId, orderedCheckedTasksInColumn } from './utils/kanbanMultiSelect';
 import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
@@ -2819,7 +2819,10 @@ function AppContent() {
       const boardId = generateUUID();
       const newBoard: Board = {
         id: boardId,
-        title: generateUniqueBoardName(boards),
+        title: generateUniqueBoardName(
+          boards,
+          siteSettings?.APP_LANGUAGE || systemSettings?.APP_LANGUAGE
+        ),
         columns: {}
       };
 
@@ -2957,7 +2960,19 @@ function AppContent() {
     }
 
     try {
-      await deleteBoard(boardId);
+      const board = boards.find((b) => b.id === boardId);
+      const liveCount = board ? getTotalTaskCountForBoard(board) : 0;
+      let trashCount = 0;
+      try {
+        trashCount = await getBoardTrashCount(boardId);
+      } catch {
+        trashCount = 0;
+      }
+      if (liveCount === 0 && trashCount === 0) {
+        await purgeBoard(boardId);
+      } else {
+        await deleteBoard(boardId);
+      }
       const newBoards = boards.filter(b => b.id !== boardId);
       setBoards(newBoards);
       
@@ -3838,8 +3853,17 @@ function AppContent() {
   const handleConfirmColumnDelete = async (columnId: string) => {
     try {
       await deleteColumn(columnId);
-      const { [columnId]: removed, ...remainingColumns } = columns;
-      setColumns(remainingColumns);
+      setColumns((prev) => {
+        const { [columnId]: _removed, ...remainingColumns } = prev;
+        return remainingColumns;
+      });
+      setBoards((prev) =>
+        prev.map((board) => {
+          if (!board.columns?.[columnId]) return board;
+          const { [columnId]: _removed, ...remainingColumns } = board.columns;
+          return { ...board, columns: remainingColumns };
+        })
+      );
       setShowColumnDeleteConfirm(null);
       await fetchQueryLogs();
     } catch (error: any) {
@@ -3975,9 +3999,7 @@ function AppContent() {
       : undefined,
     onMoveToBoard: performCrossBoardMove,
     getArchiveColumnId: () => {
-      const archive = Object.values(columns).find(
-        (col) => col.is_archived === true || (col.is_archived as any) === 1
-      );
+      const archive = Object.values(columns).find((col) => isArchivedColumnFlag(col));
       return archive?.id || null;
     },
     availablePriorities,

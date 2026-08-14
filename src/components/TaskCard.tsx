@@ -11,6 +11,7 @@ import AddCommentModal from './AddCommentModal';
 import DateRangePicker from './DateRangePicker';
 import { formatToYYYYMMDD, formatToYYYYMMDDHHmmss, parseLocalDate } from '../utils/dateUtils';
 import { getColumnAgeDays } from '../utils/kanbanFlowUtils';
+import { getArchivedColumnId } from '../utils/columnUtils';
 import { formatEffortDisplay, parseEffortUnit } from '../utils/taskUtils';
 import type { TaskRelationshipSummary } from '../utils/taskRelationshipSummary';
 import { getTaskRelationshipSummary } from '../utils/taskRelationshipSummary';
@@ -3459,6 +3460,10 @@ const TaskCard = React.memo(function TaskCard({
   }
   
   // Re-render if column state changes
+  if (getArchivedColumnId(prevProps.columns) !== getArchivedColumnId(nextProps.columns)) {
+    return false;
+  }
+
   if (prevProps.columnIsFinished !== nextProps.columnIsFinished ||
       prevProps.columnIsArchived !== nextProps.columnIsArchived) {
     return false;

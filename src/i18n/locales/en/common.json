@@ -964,6 +964,8 @@
     "deleteBoardAndTasks": "Delete board and {{count}} task",
     "deleteBoardAndTasks_plural": "Delete board and {{count}} tasks",
     "moveBoardToTrash": "Move this board to trash?",
+    "moveBoardToTrashAndTasks_one": "Move board and {{count}} task to trash?",
+    "moveBoardToTrashAndTasks_other": "Move board and {{count}} tasks to trash?",
     "moveBoardToTrashAndTasks": "Move board and {{count}} task to trash?",
     "moveBoardToTrashAndTasks_plural": "Move board and {{count}} tasks to trash?",
     "deleteEmptyBoard": "Delete empty board?",

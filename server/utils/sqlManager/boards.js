@@ -382,6 +382,20 @@ export async function getExpiredSoftDeletedBoards(db, retentionDays) {
 }
 
 /**
+ * All tasks on a board (live + trash). Empty boards can be hard-deleted.
+ */
+export async function countAllTasksForBoard(db, boardId) {
+  const query = `
+    SELECT COUNT(*)::int AS count
+    FROM tasks
+    WHERE boardid = $1
+  `;
+  const stmt = wrapQuery(db.prepare(query), 'SELECT');
+  const row = await stmt.get(boardId);
+  return Number(row?.count) || 0;
+}
+
+/**
  * Task IDs on a board (including soft-deleted) for permanent board purge
  */
 export async function getAllTaskIdsForBoard(db, boardId) {
