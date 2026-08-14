@@ -1,8 +1,19 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
+/** Swap the tab icon on the Vite dev server so local tabs are obvious vs production. */
+function agilaDevFavicon(): Plugin {
+  return {
+    name: 'agila-dev-favicon',
+    transformIndexHtml(html, ctx) {
+      if (!ctx.server) return html;
+      return html.replaceAll('/agila-favicon.png', '/agila-favicon-dev.png');
+    }
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), agilaDevFavicon()],
   envPrefix: ['VITE_', 'DEMO_', 'MULTI_'] as string[],
   optimizeDeps: {
     include: ['lucide-react'],

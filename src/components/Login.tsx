@@ -550,9 +550,9 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
                     {credentialsReady && (
                       <div className="mt-3">
                         <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
-                          {i18n.t('login.demoPickLanguage', { lng: 'en' })}
+                          {(i18n.t('login.demoPickLanguage', { lng: 'en' }))}
                           {' / '}
-                          {i18n.t('login.demoPickLanguage', { lng: 'fr' })}
+                          {(i18n.t('login.demoPickLanguage', { lng: 'fr' }))}
                         </p>
                         <div className="mt-2 flex gap-2">
                           {(['en', 'fr'] as const).map((lang) => (
@@ -567,8 +567,8 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
                               }`}
                             >
                               {lang === 'en'
-                                ? i18n.t('login.demoLanguageEnglish', { lng: 'en' })
-                                : i18n.t('login.demoLanguageFrench', { lng: 'fr' })}
+                                ? (i18n.t('login.demoLanguageEnglish', { lng: 'en' }))
+                                : (i18n.t('login.demoLanguageFrench', { lng: 'fr' }))}
                             </button>
                           ))}
                         </div>

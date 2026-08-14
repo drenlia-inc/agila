@@ -54,8 +54,10 @@ export const DEFAULT_SITE_SETTINGS = {
 export const DEFAULT_SITE_LOGO = '/agila-logo.png';
 /** Built-in brand mark for dark UI when SITE_LOGO_DARK is empty / cleared */
 export const DEFAULT_SITE_LOGO_DARK = '/agila-logo-dark.png';
-/** Browser tab icon (index.html + any runtime favicon updates) */
-export const DEFAULT_FAVICON = '/agila-favicon.png';
+/** Browser tab icon (index.html + any runtime favicon updates). Dev server uses a teal DEV badge. */
+export const DEFAULT_FAVICON = import.meta.env.DEV
+  ? '/agila-favicon-dev.png'
+  : '/agila-favicon.png';
 
 /** Public static brand paths — do not rewrite through avatar media auth */
 export function isPublicBrandAssetPath(value: string): boolean {
