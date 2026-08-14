@@ -1259,43 +1259,12 @@ const initializeDefaultData = async (db, tenantId = null) => {
   const boardsCountResult = await dbGet(boardsCountStmt);
   const boardsCount = asCount(boardsCountResult.count);
   if (boardsCount === 0) {
-    // Always create a default board with columns
-    const boardId = crypto.randomUUID();
-    const projectIdentifier = await generateProjectIdentifier(db);
-    await wrapQuery(db.prepare('INSERT INTO boards (id, title, project, position) VALUES (?, ?, ?, ?)'), 'INSERT').run(
-      boardId, 
-      'Project Board', 
-      projectIdentifier,
-      0
-    );
-
-    const templateColumns = await getDefaultBoardColumns(db);
-    const columnStmt = db.prepare('INSERT INTO columns (id, boardid, title, position, is_finished, is_archived) VALUES (?, ?, ?, ?, ?, ?)');
-    for (const [index, col] of templateColumns.entries()) {
-      await wrapQuery(columnStmt, 'INSERT').run(
-        `${col.id}-${boardId}`,
-        boardId,
-        col.title,
-        index,
-        !!col.isFinished,
-        !!col.isArchived
-      );
-    }
-
-    console.log(`✅ Created default board: ${projectIdentifier} with ${templateColumns.length} columns`);
-
-    // Initialize demo data if DEMO_ENABLED=true
-    // This will create demo users and tasks for the board
-    try {
-      await initializeDemoData(db, boardId, defaultColumns);
-    } catch (error) {
-      // Demo seed must not prevent the server from starting (admin/board already created)
-      console.error('❌ Demo data initialization failed (continuing startup):', error);
-    }
-
-    // Stamp each fresh demo DB so browsers can detect wipe vs stale cookies/localStorage.
-    // No migration needed — settings is a key/value table.
     if (process.env.DEMO_ENABLED === 'true') {
+      try {
+        await initializeDemoData(db);
+      } catch (error) {
+        console.error('❌ Demo data initialization failed (continuing startup):', error);
+      }
       const demoResetAt = new Date().toISOString();
       await wrapQuery(
         db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value'),
@@ -1303,9 +1272,35 @@ const initializeDefaultData = async (db, tenantId = null) => {
       ).run('DEMO_RESET_AT', demoResetAt);
       console.log(`✅ DEMO_RESET_AT=${demoResetAt}`);
     } else {
-      // Licensed / empty tenants: EN + FR welcome cards (demo board already has content)
+      const boardId = crypto.randomUUID();
+      const projectIdentifier = await generateProjectIdentifier(db);
+      await wrapQuery(db.prepare('INSERT INTO boards (id, title, project, position) VALUES (?, ?, ?, ?)'), 'INSERT').run(
+        boardId,
+        'Project Board',
+        projectIdentifier,
+        0
+      );
+
+      const templateColumns = await getDefaultBoardColumns(db);
+      const columnStmt = db.prepare('INSERT INTO columns (id, boardid, title, position, is_finished, is_archived) VALUES (?, ?, ?, ?, ?, ?)');
+      const seededColumns = [];
+      for (const [index, col] of templateColumns.entries()) {
+        const columnId = `${col.id}-${boardId}`;
+        await wrapQuery(columnStmt, 'INSERT').run(
+          columnId,
+          boardId,
+          col.title,
+          index,
+          !!col.isFinished,
+          !!col.isArchived
+        );
+        seededColumns.push({ ...col, id: columnId });
+      }
+
+      console.log(`✅ Created default board: ${projectIdentifier} with ${templateColumns.length} columns`);
+
       try {
-        await seedWelcomeTasks(db, boardId, defaultColumns);
+        await seedWelcomeTasks(db, boardId, seededColumns);
       } catch (error) {
         console.error('❌ Welcome task seed failed (continuing startup):', error);
       }

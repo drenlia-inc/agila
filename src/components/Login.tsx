@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { login } from '../api';
 import { Github, MousePointerClick, RefreshCw, Sparkles } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
-import { setExplicitGuestLanguage } from '../utils/guestLanguage';
+import { setExplicitGuestLanguage, normalizeAppLanguage } from '../utils/guestLanguage';
+import { updateUserPreference } from '../utils/userPreferences';
 import { AGILA_GITHUB_URL } from '../constants';
 import { resolvePublicBrandLogoSrc } from '../utils/brandLogo';
 
@@ -66,13 +67,23 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   // Get current language for toggle
   const currentLanguage = (i18n.language || 'en').toLowerCase().startsWith('fr') ? 'fr' : 'en';
   
-  // For non-authenticated users: persist explicit choice so APP_LANGUAGE does not override it
-  const handleLanguageToggle = async () => {
-    const newLanguage = currentLanguage === 'en' ? 'fr' : 'en';
-    setExplicitGuestLanguage(newLanguage);
-    await i18n.changeLanguage(newLanguage);
+  const handleDemoLanguagePick = async (lang: 'en' | 'fr') => {
+    setDemoLang(lang);
+    try {
+      sessionStorage.setItem('ekDemoSessionLang', lang);
+    } catch {
+      /* ignore */
+    }
+    setExplicitGuestLanguage(lang);
+    await i18n.changeLanguage(lang);
   };
-  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
+  const [demoLang, setDemoLang] = useState<'en' | 'fr' | null>(() => {
+    try {
+      return normalizeAppLanguage(sessionStorage.getItem('ekDemoSessionLang'));
+    } catch {
+      return null;
+    }
+  });
   const [credentialsReady, setCredentialsReady] = useState(false);
   const [waitingForCredentials, setWaitingForCredentials] = useState(false);
   const [refreshingCredentials, setRefreshingCredentials] = useState(false);
@@ -293,9 +304,21 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
           setI18nError('login.demoSignInFailedRefresh');
           return;
         }
+        if (!demoLang) {
+          setI18nError('login.demoSignInNeedsLanguage');
+          return;
+        }
         setCredentialsReady(true);
         setWaitingForCredentials(false);
         const response = await login(creds.email, creds.password);
+        const boardId =
+          demoLang === 'fr'
+            ? brandSettings?.DEMO_BOARD_FR
+            : brandSettings?.DEMO_BOARD_EN;
+        if (boardId && response.user?.id) {
+          await updateUserPreference('lastSelectedBoard', String(boardId), response.user.id);
+          window.location.hash = `#kanban#${boardId}`;
+        }
         await onLogin(response.user, response.token);
         return;
       }
@@ -372,16 +395,21 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
             <Github size={20} />
           </a>
         )}
-        <button
-          onClick={handleLanguageToggle}
-          className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-colors border border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500"
-          title={currentLanguage === 'en' ? 'Switch to French' : 'Passer en anglais'}
-        >
-          {currentLanguage === 'en' ? 'FR' : 'EN'}
-        </button>
+        {!isDemoMode && (
+          <button
+            type="button"
+            onClick={async () => {
+              const newLanguage = currentLanguage === 'en' ? 'fr' : 'en';
+              setExplicitGuestLanguage(newLanguage);
+              await i18n.changeLanguage(newLanguage);
+            }}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md transition-colors border border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500"
+            title={currentLanguage === 'en' ? 'Switch to French' : 'Passer en anglais'}
+          >
+            {currentLanguage === 'en' ? 'FR' : 'EN'}
+          </button>
+        )}
       </div>
-      
-      <div className="max-w-md w-full space-y-8">
         <div>
           {logoSrc ? (
             <img
@@ -516,9 +544,36 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
                     </p>
                     <p className="mt-0.5 text-xs text-blue-800/80 dark:text-blue-200/80">
                       {credentialsReady
-                        ? t('login.demoGuideHint')
+                        ? t('login.demoPickLanguageHint')
                         : t('login.demoCredentialsWaitingHint')}
                     </p>
+                    {credentialsReady && (
+                      <div className="mt-3">
+                        <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                          {i18n.t('login.demoPickLanguage', { lng: 'en' })}
+                          {' / '}
+                          {i18n.t('login.demoPickLanguage', { lng: 'fr' })}
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                          {(['en', 'fr'] as const).map((lang) => (
+                            <button
+                              key={lang}
+                              type="button"
+                              onClick={() => void handleDemoLanguagePick(lang)}
+                              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                                demoLang === lang
+                                  ? 'border-blue-600 bg-blue-600 text-white'
+                                  : 'border-blue-200 bg-white text-blue-800 hover:bg-blue-50 dark:border-blue-700 dark:bg-gray-900 dark:text-blue-200 dark:hover:bg-blue-950/40'
+                              }`}
+                            >
+                              {lang === 'en'
+                                ? i18n.t('login.demoLanguageEnglish', { lng: 'en' })
+                                : i18n.t('login.demoLanguageFrench', { lng: 'fr' })}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -575,7 +630,7 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
 
           <div className="space-y-3">
             <div className="relative">
-              {isDemoMode && credentialsReady && !isLoading && (
+              {isDemoMode && credentialsReady && !!demoLang && !isLoading && (
                 <div
                   className="demo-guide-cue absolute -top-1 left-1/2 z-10 flex -translate-x-1/2 -translate-y-full flex-col items-center text-blue-600 dark:text-blue-300"
                   aria-hidden
@@ -585,13 +640,13 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
               )}
               <button
                 type="submit"
-                disabled={isLoading || (isDemoMode && !credentialsReady)}
+                disabled={isLoading || (isDemoMode && (!credentialsReady || !demoLang))}
                 className={`group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-semibold rounded-lg text-white ${
-                  isLoading || (isDemoMode && !credentialsReady)
+                  isLoading || (isDemoMode && (!credentialsReady || !demoLang))
                     ? 'bg-blue-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
                 } ${
-                  isDemoMode && credentialsReady && !isLoading ? 'demo-guide-target' : ''
+                  isDemoMode && credentialsReady && !!demoLang && !isLoading ? 'demo-guide-target' : ''
                 }`}
               >
                 {isLoading ? (

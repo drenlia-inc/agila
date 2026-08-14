@@ -132,6 +132,8 @@ router.get('/', async (req, res, next) => {
       'DEFAULT_ACTIVITY_FEED_WIDTH',
       'DEFAULT_ACTIVITY_FEED_HEIGHT',
       'DEMO_RESET_AT',
+      'DEMO_BOARD_EN',
+      'DEMO_BOARD_FR',
       'TASK_DELETE_CONFIRM',
       'ALLOW_USER_SELF_DELETE',
       'SHOW_ACTIVITY_FEED',
