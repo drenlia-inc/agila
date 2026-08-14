@@ -60,6 +60,20 @@ export async function isAiEnabled(db) {
 }
 
 /**
+ * Present AI_ENABLED as off when the plan does not include AI, even if a leftover
+ * settings row is still "true" from before plan gating existed.
+ * @param {object} db
+ * @param {Record<string, string>} settingsObj
+ */
+export async function applyEffectiveAiEnabledToSettings(db, settingsObj) {
+  if (!settingsObj || typeof settingsObj !== 'object') return settingsObj;
+  if (!(await isAiAllowedByPlan(db))) {
+    settingsObj.AI_ENABLED = 'false';
+  }
+  return settingsObj;
+}
+
+/**
  * Factory that loads tenant DB and gates on plan + AI_ENABLED.
  * @param {Function} getRequestDatabase
  */
