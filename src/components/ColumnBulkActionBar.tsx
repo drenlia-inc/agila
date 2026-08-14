@@ -492,8 +492,14 @@ export default function ColumnBulkActionBar({
         )
       : null;
 
-  const confirmPortal =
-    (deleteConfirm || permanentDeleteConfirm || boardConfirm) && typeof document !== 'undefined'
+  const dismissConfirms = () => {
+    setDeleteConfirm(false);
+    setPermanentDeleteConfirm(false);
+    setBoardConfirm(null);
+  };
+
+  const boardConfirmPortal =
+    boardConfirm && typeof document !== 'undefined'
       ? createPortal(
           <div
             ref={confirmRef}
@@ -506,24 +512,16 @@ export default function ColumnBulkActionBar({
             }}
           >
             <p className="mb-2 text-xs text-gray-700 dark:text-gray-200">
-              {permanentDeleteConfirm
-                ? t('kanbanSelect.deleteConfirmPermanent', { count: selectedCount })
-                : deleteConfirm
-                  ? t('kanbanSelect.deleteConfirm', { count: selectedCount })
-                  : t('kanbanSelect.moveToBoardConfirm', {
-                      count: selectedCount,
-                      board: boardConfirm?.name,
-                    })}
+              {t('kanbanSelect.moveToBoardConfirm', {
+                count: selectedCount,
+                board: boardConfirm?.name,
+              })}
             </p>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-                onClick={() => {
-                  setDeleteConfirm(false);
-                  setPermanentDeleteConfirm(false);
-                  setBoardConfirm(null);
-                }}
+                onClick={dismissConfirms}
               >
                 {t('buttons.cancel', { ns: 'common' })}
               </button>
@@ -531,20 +529,77 @@ export default function ColumnBulkActionBar({
                 type="button"
                 className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
                 onClick={() => {
-                  if (permanentDeleteConfirm) onPermanentDelete?.();
-                  else if (deleteConfirm) onDelete();
-                  else if (boardConfirm) onMoveToBoard(boardConfirm.id);
-                  setDeleteConfirm(false);
-                  setPermanentDeleteConfirm(false);
-                  setBoardConfirm(null);
+                  onMoveToBoard(boardConfirm.id);
+                  dismissConfirms();
                 }}
               >
-                {permanentDeleteConfirm
-                  ? t('kanbanSelect.deleteForever')
-                  : deleteConfirm
-                    ? t('kanbanSelect.delete')
-                    : t('kanbanSelect.moveToBoard')}
+                {t('kanbanSelect.moveToBoard')}
               </button>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
+
+  const deleteConfirmPortal =
+    (deleteConfirm || permanentDeleteConfirm) && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[9991] flex items-center justify-center bg-black/45 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) dismissConfirms();
+            }}
+          >
+            <div
+              ref={confirmRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`column-bulk-delete-title-${columnId}`}
+              className="w-full max-w-sm rounded-xl border-2 border-red-300 bg-white p-5 shadow-2xl dark:border-red-700 dark:bg-gray-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-3 flex items-start gap-3">
+                <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400">
+                  <Trash2 size={18} aria-hidden="true" />
+                </span>
+                <div>
+                  <h2
+                    id={`column-bulk-delete-title-${columnId}`}
+                    className="text-base font-semibold text-gray-900 dark:text-gray-100"
+                  >
+                    {permanentDeleteConfirm
+                      ? t('kanbanSelect.deleteConfirmPermanentTitle')
+                      : t('kanbanSelect.deleteConfirmTitle')}
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                    {permanentDeleteConfirm
+                      ? t('kanbanSelect.deleteConfirmPermanent', { count: selectedCount })
+                      : t('kanbanSelect.deleteConfirm', { count: selectedCount })}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                  onClick={dismissConfirms}
+                >
+                  {t('buttons.cancel', { ns: 'common' })}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                  onClick={() => {
+                    if (permanentDeleteConfirm) onPermanentDelete?.();
+                    else onDelete();
+                    dismissConfirms();
+                  }}
+                >
+                  {permanentDeleteConfirm
+                    ? t('kanbanSelect.deleteForever')
+                    : t('kanbanSelect.delete')}
+                </button>
+              </div>
             </div>
           </div>,
           document.body
@@ -768,7 +823,11 @@ export default function ColumnBulkActionBar({
                 <button
                   type="button"
                   disabled={busy}
-                  className={`${btnClass} text-red-600 hover:text-red-700`}
+                  className={`${btnClass} text-red-600 hover:text-red-700 ${
+                    deleteConfirm || permanentDeleteConfirm
+                      ? 'ring-2 ring-red-500 ring-offset-2 dark:ring-offset-gray-900'
+                      : ''
+                  }`}
                   onClick={(e) => {
                     if (deleteConfirm || permanentDeleteConfirm) {
                       setDeleteConfirm(false);
@@ -811,7 +870,8 @@ export default function ColumnBulkActionBar({
       {actionBarPortal}
       {menuPortal}
       {addTagModalPortal}
-      {confirmPortal}
+      {boardConfirmPortal}
+      {deleteConfirmPortal}
     </>
   );
 }

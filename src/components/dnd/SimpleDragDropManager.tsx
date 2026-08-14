@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   DndContext, 
   DragEndEvent, 
@@ -274,7 +275,9 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   onBoardTabHover,
   onDragPreviewChange
 }) => {
+  const { t } = useTranslation('tasks');
   const activeBulkTaskIdsRef = useRef<string[]>([]);
+  const [keyboardMoveLabel, setKeyboardMoveLabel] = useState<string | null>(null);
   
   // Y-coordinate based tab area detection
   const [isHoveringBoardTabDelayed, setIsHoveringBoardTabDelayed] = useState(false);
@@ -396,6 +399,14 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     
     if (activeData?.type === 'task') {
       const task = activeData.task as Task;
+      const isKeyboard =
+        typeof KeyboardEvent !== 'undefined' &&
+        event.activatorEvent instanceof KeyboardEvent;
+      if (isKeyboard) {
+        setKeyboardMoveLabel(task.ticket || task.title || '');
+      } else {
+        setKeyboardMoveLabel(null);
+      }
       const checked = checkedTaskIds;
       const isChecked = !!checked?.has(task.id);
 
@@ -613,6 +624,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       onBoardTabHover?.(false);
       onDragPreviewChange?.(null);
       clearBulkDrag();
+      setKeyboardMoveLabel(null);
       return;
     }
     
@@ -882,6 +894,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       onDragPreviewChange?.(null);
       setIsHoveringBoardTabDelayed(false);
       clearBulkDrag();
+      setKeyboardMoveLabel(null);
     }
   };
 
@@ -895,6 +908,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     setIsHoveringBoardTabDelayed(false);
     activeBulkTaskIdsRef.current = [];
     onDraggedTaskIdsChange?.([]);
+    setKeyboardMoveLabel(null);
   };
 
   return (
@@ -907,6 +921,19 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       sensors={sensors}
     >
       {children}
+      {keyboardMoveLabel != null && (
+        <div
+          className="pointer-events-none fixed top-4 left-1/2 z-[10000] -translate-x-1/2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg"
+          role="status"
+        >
+          <div className="flex items-center space-x-2">
+            <span aria-hidden="true">↕️</span>
+            <span>
+              {t('dnd.keyboardMoveHint', { label: keyboardMoveLabel })}
+            </span>
+          </div>
+        </div>
+      )}
     </DndContext>
   );
 }, (prevProps, nextProps) => {

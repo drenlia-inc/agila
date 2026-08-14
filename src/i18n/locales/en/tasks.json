@@ -129,6 +129,9 @@
     "relationshipChild": "child",
     "relationshipRelated": "related"
   },
+  "dnd": {
+    "keyboardMoveHint": "Moving {{label}} — arrow keys to reposition, Enter to drop, Esc to cancel"
+  },
   "toolbar": {
     "dragToMove": "Drag to move task",
     "addComment": "Add comment",
@@ -295,7 +298,9 @@
     "moveToBoard": "Move to board",
     "noSprint": "None (Backlog)",
     "deleteConfirm": "Move {{count}} selected task(s) to trash?",
+    "deleteConfirmTitle": "Move to trash?",
     "deleteConfirmPermanent": "Permanently delete {{count}} selected task(s)? This cannot be undone.",
+    "deleteConfirmPermanentTitle": "Delete forever?",
     "moveToBoardConfirm": "Move {{count}} task(s) to “{{board}}”? Relationships may be removed.",
     "copiedCount": "{{count}} task(s) duplicated",
     "archivedCount": "{{count}} task(s) archived",
