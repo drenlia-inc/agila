@@ -54,8 +54,12 @@ export function parseDefaultBoardColumns(json) {
  * Columns to insert for a new board, including a trailing Archive column.
  * @returns {Promise<Array<{ id: string, title: string, isFinished: boolean, isArchived: boolean }>>}
  */
-export async function getDefaultBoardColumns(db) {
-  const lang = await getAppLanguage(db);
+export async function getDefaultBoardColumns(db, langOverride = null) {
+  const lang = langOverride
+    ? String(langOverride).toLowerCase().startsWith('fr')
+      ? 'fr'
+      : 'en'
+    : await getAppLanguage(db);
   let raw = '';
   try {
     const setting = await wrapQuery(
@@ -78,7 +82,7 @@ export async function getDefaultBoardColumns(db) {
 
   workflow.push({
     id: 'archive',
-    title: 'Archive',
+    title: useFr ? 'Archives' : 'Archive',
     isFinished: false,
     isArchived: true,
   });

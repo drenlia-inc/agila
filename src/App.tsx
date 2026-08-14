@@ -1051,10 +1051,23 @@ function AppContent() {
       
       restorePreferences();
     } else {
-      // Wait for public settings so APP_LANGUAGE (same as emails) can apply before first paint settles
       if (settingsLoading) return;
 
-      // Unauthenticated: explicit guest toggle → APP_LANGUAGE (emails) → browser
+      if (isDemoModeClient()) {
+        let sessionLang: string | null = null;
+        try {
+          sessionLang = sessionStorage.getItem('ekDemoSessionLang');
+        } catch {
+          sessionLang = null;
+        }
+        const demoLang = normalizeAppLanguage(sessionLang);
+        if (demoLang && i18n.language !== demoLang) {
+          void i18n.changeLanguage(demoLang);
+        }
+        setLanguageLoaded(true);
+        return;
+      }
+
       const guestLang = resolveGuestLanguage({
         appLanguage: siteSettings?.APP_LANGUAGE || systemSettings?.APP_LANGUAGE,
         browserLanguage: navigator.language || (navigator as any).userLanguage,
@@ -2821,7 +2834,9 @@ function AppContent() {
         id: boardId,
         title: generateUniqueBoardName(
           boards,
-          siteSettings?.APP_LANGUAGE || systemSettings?.APP_LANGUAGE
+          isDemoModeClient()
+            ? i18n.language
+            : siteSettings?.APP_LANGUAGE || systemSettings?.APP_LANGUAGE
         ),
         columns: {}
       };
