@@ -976,31 +976,41 @@ const Admin: React.FC<AdminProps> = ({
   };
 
   // Auto-save function for immediate saving of individual settings
-  const handleAutoSaveSetting = async (key: string, value: string) => {
+  const handleAutoSaveSetting = async (
+    key: string,
+    value: string,
+    options?: { silent?: boolean }
+  ) => {
+    let previousSaved: string | undefined;
+    let previousDraft: string | undefined;
+    setSettings((prev) => {
+      previousSaved = prev[key];
+      return { ...prev, [key]: value };
+    });
+    setEditingSettings((prev) => {
+      previousDraft = prev[key];
+      return { ...prev, [key]: value };
+    });
+    updateSiteSetting(key, value);
+
     try {
-      
-      // Save the setting immediately
       await api.put('/admin/settings', { key, value });
-      
-      // Update the settings state
-      setSettings(prev => ({ ...prev, [key]: value }));
-      // Keep header/branding in sync immediately (empty logo → default Agila logo without full reload)
-      updateSiteSetting(key, value);
-      
-      // Update the parent component's site settings immediately
+
       if (onSettingsChanged) {
         await onSettingsChanged();
       } else {
         await refreshSettings();
       }
-      
-      // Show brief success message for auto-save
-      toast.success(t('settingsSavedSuccessfully'), '', 3000);
-      
+
+      if (!options?.silent) {
+        toast.success(t('settingsSavedSuccessfully'), '', 3000);
+      }
     } catch (err) {
+      setSettings((prev) => ({ ...prev, [key]: previousSaved }));
+      setEditingSettings((prev) => ({ ...prev, [key]: previousDraft }));
       toast.error(t('failedToSaveSetting', { key }), '');
       console.error(err);
-      throw err; // Re-throw so the component can handle the error
+      throw err;
     }
   };
 

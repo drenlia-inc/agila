@@ -65,7 +65,12 @@ const ResetCountdown: React.FC<ResetCountdownProps> = ({ onReset, inline = false
   });
 
   const countdownContent = (
-    <KanbanChromeTooltip label={tooltipLabel} wrapperClassName="shrink-0 inline-flex" delayMs={0}>
+    <KanbanChromeTooltip
+      label={tooltipLabel}
+      wrapperClassName="shrink-0 inline-flex"
+      delayMs={0}
+      dismissOnLabelChange={false}
+    >
       <div
         className={`
           shrink-0

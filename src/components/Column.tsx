@@ -9,7 +9,7 @@ import ColumnBulkActionBar from './ColumnBulkActionBar';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
-import { parseFinishedColumnNames } from '../utils/columnUtils';
+import { parseFinishedColumnNames, isArchivedColumnFlag } from '../utils/columnUtils';
 import { getWipStatus, hasWipLimit } from '../utils/kanbanFlowUtils';
 import { TASK_COUNT_PILL_BASE, taskCountPillToneClass, taskCountPillWeightClass } from '../utils/taskCountPill';
 import { sumTaskEffort, formatEffortDisplay, parseEffortUnit } from '../utils/taskUtils';
@@ -1561,10 +1561,8 @@ export default function KanbanColumn({
             isAdmin={isAdmin}
             hasArchiveColumn={
               !!columns &&
-              Object.values(columns).some(
-                (col) => col.is_archived === true || (col.is_archived as any) === 1
-              ) &&
-              !(column.is_archived === true || (column.is_archived as any) === 1)
+              Object.values(columns).some((col) => isArchivedColumnFlag(col)) &&
+              !isArchivedColumnFlag(column)
             }
             availableTags={availableTags}
             availablePriorities={availablePriorities}

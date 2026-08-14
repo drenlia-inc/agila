@@ -204,25 +204,6 @@ export function getBilingualTranslation(key, params = {}) {
 }
 
 /**
- * Get default board column names based on APP_LANGUAGE
- * @param {Object} db - Database instance
- * @returns {Array} Array of column objects with id and title
- */
-export async function getDefaultBoardColumns(db) {
-  const lang = await getAppLanguage(db);
-  const translations = loadTranslations(lang);
-  const columns = translations.boardColumns;
-  
-  return [
-    { id: 'todo', title: columns.toDo },
-    { id: 'progress', title: columns.inProgress },
-    { id: 'testing', title: columns.testing },
-    { id: 'completed', title: columns.completed },
-    { id: 'archive', title: columns.archive }
-  ];
-}
-
-/**
  * Clear translation cache (useful for testing or hot-reloading)
  */
 export function clearTranslationCache() {

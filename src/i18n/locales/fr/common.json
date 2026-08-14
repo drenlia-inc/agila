@@ -964,6 +964,8 @@
     "deleteBoardAndTasks": "Supprimer le tableau et {{count}} tâche",
     "deleteBoardAndTasks_plural": "Supprimer le tableau et {{count}} tâches",
     "moveBoardToTrash": "Déplacer ce tableau vers la corbeille ?",
+    "moveBoardToTrashAndTasks_one": "Déplacer le tableau et {{count}} tâche vers la corbeille ?",
+    "moveBoardToTrashAndTasks_other": "Déplacer le tableau et {{count}} tâches vers la corbeille ?",
     "moveBoardToTrashAndTasks": "Déplacer le tableau et {{count}} tâche vers la corbeille ?",
     "moveBoardToTrashAndTasks_plural": "Déplacer le tableau et {{count}} tâches vers la corbeille ?",
     "deleteEmptyBoard": "Supprimer le tableau vide ?",

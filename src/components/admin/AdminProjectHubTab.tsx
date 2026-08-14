@@ -19,7 +19,7 @@ interface AdminProjectHubTabProps {
   onSettingsChange: (settings: { [key: string]: string | undefined }) => void;
   onSave: (settings?: { [key: string]: string | undefined }) => Promise<void>;
   onCancel: () => void;
-  onAutoSave?: (key: string, value: string) => Promise<void>;
+  onAutoSave?: (key: string, value: string, options?: { silent?: boolean }) => Promise<void>;
   onLocalDirtyChange?: (dirty: boolean) => void;
   onRegisterLocalSave?: (save: (() => Promise<void>) | null) => void;
   discardNonce?: number;

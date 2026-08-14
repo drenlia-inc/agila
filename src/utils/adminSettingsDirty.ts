@@ -36,7 +36,8 @@ function isProjectGeneralKey(key: string): boolean {
   return (
     key === 'DEFAULT_PROJ_PREFIX' ||
     key === 'DEFAULT_TASK_PREFIX' ||
-    key === 'DEFAULT_FINISHED_COLUMN_NAMES'
+    key === 'DEFAULT_FINISHED_COLUMN_NAMES' ||
+    key === 'DEFAULT_BOARD_COLUMNS'
   );
 }
 

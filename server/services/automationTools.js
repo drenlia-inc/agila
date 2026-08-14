@@ -27,6 +27,7 @@ import {
 } from '../constants/automation.js';
 import { AGENT_MEMBER_ID } from '../constants/agentIdentity.js';
 import notificationService from './notificationService.js';
+import { getDefaultBoardColumns } from '../utils/defaultBoardColumns.js';
 import { updateStorageUsage } from '../utils/storageUtils.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 
@@ -957,17 +958,18 @@ async function toolCreateBoard(ctx, args, { dryRun }) {
   const maxPosition = await boardQueries.getMaxBoardPosition(ctx.db);
   await boardQueries.createBoard(ctx.db, boardId, title, project, maxPosition + 1);
 
-  const defaultTitles = ['To Do', 'In Progress', 'Done'];
-  for (let i = 0; i < defaultTitles.length; i += 1) {
-    const colId = `${boardId}-col-${i}`;
+  const defaultColumns = await getDefaultBoardColumns(ctx.db);
+  for (let i = 0; i < defaultColumns.length; i += 1) {
+    const col = defaultColumns[i];
+    const colId = `${col.id}-${boardId}`;
     await helpers.createColumn(
       ctx.db,
       colId,
-      defaultTitles[i],
+      col.title,
       boardId,
       i,
-      defaultTitles[i] === 'Done',
-      false
+      !!col.isFinished,
+      !!col.isArchived
     );
   }
 

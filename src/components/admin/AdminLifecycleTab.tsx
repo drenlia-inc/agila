@@ -507,19 +507,39 @@ const AdminLifecycleTab: React.FC<AdminLifecycleTabProps> = ({
     }
   };
 
+  const runPurgeSelectedBoards = async (ids: string[]) => {
+    const result = await purgeLifecycleBoardsBatch(ids);
+    toast.success(t('boardsPurgedCount', { count: result?.purged?.length || 0 }));
+    setSelectedDeletedBoardIds(new Set());
+    await loadData();
+  };
+
   const handlePurgeSelectedBoards = () => {
     const ids = Array.from(selectedDeletedBoardIds);
     if (ids.length === 0) return;
+    const associatedTasks = boards
+      .filter((b) => ids.includes(b.id))
+      .reduce((sum, b) => sum + (b.taskCount ?? b.trashTaskCount ?? 0), 0);
+    if (associatedTasks === 0) {
+      void (async () => {
+        setBusy(true);
+        try {
+          await runPurgeSelectedBoards(ids);
+        } catch (error: any) {
+          toast.error(error?.response?.data?.error || t('purgeFailed'));
+        } finally {
+          setBusy(false);
+        }
+      })();
+      return;
+    }
     setConfirmDialog({
       title: t('purgeSelectedBoardsTitle'),
       message: t('purgeSelectedBoardsConfirm', { count: ids.length }),
       confirmLabel: t('purge'),
       danger: true,
       onConfirm: async () => {
-        const result = await purgeLifecycleBoardsBatch(ids);
-        toast.success(t('boardsPurgedCount', { count: result?.purged?.length || 0 }));
-        setSelectedDeletedBoardIds(new Set());
-        await loadData();
+        await runPurgeSelectedBoards(ids);
       },
     });
   };
@@ -542,9 +562,33 @@ const AdminLifecycleTab: React.FC<AdminLifecycleTabProps> = ({
     }
   };
 
+  const runPurgeBoard = async (boardId: string) => {
+    await purgeBoard(boardId);
+    toast.success(t('boardPurged'));
+    setSelectedDeletedBoardIds((prev) => {
+      const next = new Set(prev);
+      next.delete(boardId);
+      return next;
+    });
+    await loadData();
+  };
+
   const handlePurgeBoard = (boardId: string) => {
     const board = boards.find((b) => b.id === boardId);
     const taskCount = board?.taskCount ?? board?.trashTaskCount ?? 0;
+    if (taskCount === 0) {
+      void (async () => {
+        setBusy(true);
+        try {
+          await runPurgeBoard(boardId);
+        } catch (error: any) {
+          toast.error(error?.response?.data?.error || t('purgeFailed'));
+        } finally {
+          setBusy(false);
+        }
+      })();
+      return;
+    }
     setConfirmDialog({
       title: t('purgeBoardTitle'),
       message: t('purgeBoardConfirm', {
@@ -554,14 +598,7 @@ const AdminLifecycleTab: React.FC<AdminLifecycleTabProps> = ({
       confirmLabel: t('purge'),
       danger: true,
       onConfirm: async () => {
-        await purgeBoard(boardId);
-        toast.success(t('boardPurged'));
-        setSelectedDeletedBoardIds((prev) => {
-          const next = new Set(prev);
-          next.delete(boardId);
-          return next;
-        });
-        await loadData();
+        await runPurgeBoard(boardId);
       },
     });
   };

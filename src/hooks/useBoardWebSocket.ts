@@ -121,7 +121,7 @@ export const useBoardWebSocket = ({
     if (!boardId) return;
 
     const wasViewing = selectedBoardRef.current === boardId;
-    const permanent = Boolean(data.permanent);
+    const permanent = Boolean(data.permanent) || data.softDeleted === false;
     let boardTitle =
       (typeof data.boardTitle === 'string' && data.boardTitle.trim()) ||
       (typeof data.title === 'string' && data.title.trim()) ||

@@ -4,12 +4,22 @@
 
 import api from '../api';
 
-/**
- * Checks if a column name matches any of the finished column names (case-insensitive)
- * @param columnName - The column name to check
- * @param finishedColumnNames - Array of finished column names from settings
- * @returns true if the column should be marked as finished
- */
+/** True when a column is the Archive lane (`is_archived`). */
+export function isArchivedColumnFlag(
+  column?: { is_archived?: boolean | number } | null
+): boolean {
+  return column?.is_archived === true || column?.is_archived === 1;
+}
+
+/** Id of the Archive column on a board, or null when none exists. */
+export function getArchivedColumnId(
+  columns?: Record<string, { id: string; is_archived?: boolean | number }> | null
+): string | null {
+  if (!columns) return null;
+  const archive = Object.values(columns).find((col) => isArchivedColumnFlag(col));
+  return archive?.id ?? null;
+}
+
 export const isColumnFinished = (columnName: string, finishedColumnNames: string[]): boolean => {
   if (!columnName || !finishedColumnNames || finishedColumnNames.length === 0) {
     return false;
@@ -27,15 +37,15 @@ export const isColumnFinished = (columnName: string, finishedColumnNames: string
  */
 export const parseFinishedColumnNames = (finishedColumnNamesJson?: string): string[] => {
   if (!finishedColumnNamesJson) {
-    return ['Done', 'Completed', 'Finished'];
+    return ['Done', 'Terminé', 'Completed', 'Complété', 'Finished', 'Fini'];
   }
   
   try {
     const parsed = JSON.parse(finishedColumnNamesJson);
-    return Array.isArray(parsed) ? parsed : ['Done', 'Completed', 'Finished'];
+    return Array.isArray(parsed) ? parsed : ['Done', 'Terminé', 'Completed', 'Complété', 'Finished', 'Fini'];
   } catch (error) {
     console.error('Error parsing finished column names:', error);
-    return ['Done', 'Completed', 'Finished'];
+    return ['Done', 'Terminé', 'Completed', 'Complété', 'Finished', 'Fini'];
   }
 };
 

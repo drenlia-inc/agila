@@ -71,7 +71,7 @@ const HELP_HL = {
     '[data-setting-key="SHOW_ACTIVITY_FEED"]',
   ],
   troubleshooting: ['[data-setting-key="TROUBLESHOOTING_SECTION"]'],
-  project: ['[data-setting-key="DEFAULT_FINISHED_COLUMN_NAMES"]'],
+  project: ['[data-setting-key="DEFAULT_BOARD_COLUMNS"]', '[data-setting-key="DEFAULT_FINISHED_COLUMN_NAMES"]'],
   features: [
     '[data-tour-id="admin-features-panel"]',
     '[data-setting-key="SHOW_BOARD_TAB_TASK_COUNTS"]',
