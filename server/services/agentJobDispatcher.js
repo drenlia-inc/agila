@@ -30,6 +30,7 @@ import {
   AUTOMATION_SCOPE
 } from '../constants/automation.js';
 import { wrapQuery } from '../utils/queryLogger.js';
+import { resolveCorrespondenceLanguage } from '../utils/i18n.js';
 
 async function getSetting(db, key) {
   const { getDecryptedSetting } = await import('../utils/settingsSecrets.js');
@@ -158,6 +159,7 @@ export async function launchSingleTask(db, tenantId, taskId, ctx = {}) {
     ? task.comments.slice(-20).map((c) => ({
         text: c.text || c.content || '',
         author: c.author_name || c.authorName || c.name || '',
+        authorId: c.author_id || c.authorId || '',
         createdAt: c.created_at || c.createdAt
       }))
     : [];
@@ -171,6 +173,7 @@ export async function launchSingleTask(db, tenantId, taskId, ctx = {}) {
         commentList = rows.slice(-20).map((c) => ({
           text: c.text || '',
           author: c.authorName || c.author_name || c.name || '',
+          authorId: c.authorId || c.author_id || '',
           createdAt: c.createdAt || c.created_at
         }));
       }
@@ -293,6 +296,7 @@ export async function launchSingleTask(db, tenantId, taskId, ctx = {}) {
     repoBranch: mode === AUTOMATION_MODE ? '' : work.repo_branch || '',
     mode,
     ownerUserId,
+    replyLanguage: await resolveCorrespondenceLanguage(db, ownerUserId || null),
     githubToken: mode === AUTOMATION_MODE ? '' : githubToken,
     sshPrivateKey: mode === AUTOMATION_MODE ? '' : sshPrivateKey,
     llm: {

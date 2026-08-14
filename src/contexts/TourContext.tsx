@@ -150,7 +150,10 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
         color: '#ffffff',
         fontSize: 14,
         fontWeight: 500,
-        padding: '8px 16px',
+        padding: '8px 12px',
+        whiteSpace: 'pre-line',
+        textAlign: 'center' as const,
+        lineHeight: 1.25,
       },
       buttonBack: {
         color: isDark ? '#9ca3af' : '#6b7280',

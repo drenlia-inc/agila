@@ -20,6 +20,7 @@ import {
 } from './git.js';
 import { updateJob, removeJob } from './jobQueue.js';
 import { runAutomationJob } from './automationLoop.js';
+import { replyLanguageInstruction } from './replyLanguage.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_STEPS = 40;
@@ -178,6 +179,7 @@ function buildSystemPrompt(payload, agentsMd) {
     'You are the Easy Kanban coding agent. Implement the assigned task in this git repository.',
     'Use tools to explore and edit files. Prefer small, focused changes.',
     'When done, call the finish tool with a short summary for stakeholders (outcome only; no chain-of-thought or step-by-step diary).',
+    replyLanguageInstruction(payload),
     'Never include <think> or reasoning blocks in tool arguments or summaries.',
     'Do not print secrets. Do not access paths outside the repo.',
     agentsMd ? `Repository AGENTS.md:\n${agentsMd.slice(0, 12000)}` : '',
@@ -206,7 +208,8 @@ async function runAssistJob(job, payload) {
       content:
         'You are a helpful engineering assistant for Easy Kanban. ' +
         'Answer based on the task title, description, and comments. Use Markdown. ' +
-        'Do not invent repo file contents you have not seen. ' +
+        replyLanguageInstruction(payload) +
+        ' Do not invent repo file contents you have not seen. ' +
         'Reply with the final answer only — no chain-of-thought, <think> blocks, or hidden reasoning. ' +
         'Match the user\'s requested brevity: if they ask for a short or literal reply (e.g. "say hello"), ' +
         'output only that. Do not add Summary, Guidance, Questions, Next steps, or similar meta sections unless asked.'

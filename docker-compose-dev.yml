@@ -72,6 +72,10 @@ services:
       - PORT=8080
       - MAX_CONCURRENT=1
       - RUNNER_TOKEN=${RUNNER_TOKEN:-kanban-runner-dev-token-change-me}
+    volumes:
+      # Live prompt/tool schemas in local Docker
+      - ./runner/src:/app/src
+    command: ["node", "--watch", "src/index.js"]
     # Internal only — no host ports
     restart: unless-stopped
 

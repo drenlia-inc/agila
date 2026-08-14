@@ -1437,7 +1437,7 @@
     "close": "Close",
     "last": "Finish Tour",
     "next": "Next ↵",
-    "nextWithProgress": "Next ↵ (Step {step} of {steps})",
+    "nextWithProgress": "Next ↵\n(Step {step}/{steps})",
     "skip": "Skip Tour",
     "nudgeTitle": "Take a quick tour?",
     "nudgeDescription": "Learn the basics of boards, tasks, and views in a few steps. You can start the tutorial anytime from Help.",
