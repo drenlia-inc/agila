@@ -376,6 +376,13 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   const hideGithubLink =
     (contextSiteSettings?.HIDE_GITHUB_LINK ?? siteSettings?.HIDE_GITHUB_LINK) === 'true';
 
+  const tEn = i18n.getFixedT('en');
+  const tFr = i18n.getFixedT('fr');
+  const demoPickLanguageEn = tEn('login.demoPickLanguage');
+  const demoPickLanguageFr = tFr('login.demoPickLanguage');
+  const demoLanguageEnglishLabel = tEn('login.demoLanguageEnglish');
+  const demoLanguageFrenchLabel = tFr('login.demoLanguageFrench');
+
   // iPad/iOS: avoid min-h-screen + items-center — when the keyboard opens the visual
   // viewport shrinks, flex re-centers the form, Safari blurs the field, and the keyboard
   // dismisses. Top-align with padding keeps the focused input stable.
@@ -550,9 +557,9 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
                     {credentialsReady && (
                       <div className="mt-3">
                         <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
-                          {(i18n.t('login.demoPickLanguage', { lng: 'en' }))}
-                          {' / '}
-                          {(i18n.t('login.demoPickLanguage', { lng: 'fr' }))}
+                          {demoPickLanguageEn}
+                          {' \u00b7 '}
+                          {demoPickLanguageFr}
                         </p>
                         <div className="mt-2 flex gap-2">
                           {(['en', 'fr'] as const).map((lang) => (
@@ -567,8 +574,8 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
                               }`}
                             >
                               {lang === 'en'
-                                ? (i18n.t('login.demoLanguageEnglish', { lng: 'en' }))
-                                : (i18n.t('login.demoLanguageFrench', { lng: 'fr' }))}
+                                ? demoLanguageEnglishLabel
+                                : demoLanguageFrenchLabel}
                             </button>
                           ))}
                         </div>
