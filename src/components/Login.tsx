@@ -13,6 +13,8 @@ function readDocumentTheme(): 'light' | 'dark' {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
 
+type DemoSessionLang = 'en' | 'fr';
+
 interface LoginProps {
   onLogin: (userData: any, token: string) => Promise<void>;
   siteSettings?: any;
@@ -67,23 +69,14 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   // Get current language for toggle
   const currentLanguage = (i18n.language || 'en').toLowerCase().startsWith('fr') ? 'fr' : 'en';
   
-  const handleDemoLanguagePick = async (lang: 'en' | 'fr') => {
-    setDemoLang(lang);
-    try {
-      sessionStorage.setItem('ekDemoSessionLang', lang);
-    } catch {
-      /* ignore */
-    }
-    setExplicitGuestLanguage(lang);
-    await i18n.changeLanguage(lang);
-  };
-  const [demoLang, setDemoLang] = useState<'en' | 'fr' | null>(() => {
+  const [demoLang, setDemoLang] = useState<DemoSessionLang | null>(() => {
     try {
       return normalizeAppLanguage(sessionStorage.getItem('ekDemoSessionLang'));
     } catch {
       return null;
     }
   });
+  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
   const [credentialsReady, setCredentialsReady] = useState(false);
   const [waitingForCredentials, setWaitingForCredentials] = useState(false);
   const [refreshingCredentials, setRefreshingCredentials] = useState(false);
@@ -93,6 +86,17 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   // Check if demo mode is enabled
   const isDemoMode =
     import.meta.env.DEMO_ENABLED === 'true' || process.env.DEMO_ENABLED === 'true';
+
+  const handleDemoLanguagePick = async (lang: DemoSessionLang) => {
+    setDemoLang(lang);
+    try {
+      sessionStorage.setItem('ekDemoSessionLang', lang);
+    } catch {
+      /* ignore */
+    }
+    setExplicitGuestLanguage(lang);
+    await i18n.changeLanguage(lang);
+  };
 
   /** Fetch once. Returns credentials only when the real seeded password is available. */
   const fetchAdminCredentials = useCallback(async (): Promise<{
@@ -417,6 +421,8 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
           </button>
         )}
       </div>
+
+      <div className="max-w-md w-full space-y-8">
         <div>
           {logoSrc ? (
             <img
