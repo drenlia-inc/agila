@@ -71,10 +71,12 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   
   const [demoLang, setDemoLang] = useState<DemoSessionLang | null>(() => {
     try {
-      return normalizeAppLanguage(sessionStorage.getItem('ekDemoSessionLang'));
+      const stored = normalizeAppLanguage(sessionStorage.getItem('ekDemoSessionLang'));
+      if (stored) return stored;
     } catch {
-      return null;
+      /* ignore */
     }
+    return normalizeAppLanguage(i18n.language);
   });
   const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
   const [credentialsReady, setCredentialsReady] = useState(false);
@@ -380,8 +382,6 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   const hideGithubLink =
     (contextSiteSettings?.HIDE_GITHUB_LINK ?? siteSettings?.HIDE_GITHUB_LINK) === 'true';
 
-  const demoPickLanguageEn = t('login.demoPickLanguage', { lng: 'en' });
-  const demoPickLanguageFr = t('login.demoPickLanguage', { lng: 'fr' });
   const demoLanguageEnglishLabel = t('login.demoLanguageEnglish', { lng: 'en' });
   const demoLanguageFrenchLabel = t('login.demoLanguageFrench', { lng: 'fr' });
 
@@ -553,17 +553,15 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
                     <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {t('login.demoCredentials')}
                     </p>
-                    <p className="mt-0.5 text-xs text-blue-800/80 dark:text-blue-200/80">
-                      {credentialsReady
-                        ? t('login.demoPickLanguageHint')
-                        : t('login.demoCredentialsWaitingHint')}
-                    </p>
+                    {!credentialsReady && (
+                      <p className="mt-0.5 text-xs text-blue-800/80 dark:text-blue-200/80">
+                        {t('login.demoCredentialsWaitingHint')}
+                      </p>
+                    )}
                     {credentialsReady && (
                       <div className="mt-3">
                         <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
-                          {demoPickLanguageEn}
-                          {' \u00b7 '}
-                          {demoPickLanguageFr}
+                          {t('login.demoPickLanguage')}
                         </p>
                         <div className="mt-2 flex gap-2">
                           {(['en', 'fr'] as const).map((lang) => (
