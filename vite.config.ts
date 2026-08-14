@@ -15,8 +15,34 @@ function agilaDevFavicon(): Plugin {
 export default defineConfig({
   plugins: [react(), agilaDevFavicon()],
   envPrefix: ['VITE_', 'DEMO_', 'MULTI_'] as string[],
+  // Pre-bundle lazy-route deps. On the demo Vite server, discovering these on first
+  // task/profile click invalidates the dep cache and full-reloads mid-render
+  // (Firefox: "dispatcher is null" / Invalid hook call).
   optimizeDeps: {
-    include: ['lucide-react'],
+    include: [
+      'lucide-react',
+      'react-image-crop',
+      '@dnd-kit/utilities',
+      'marked',
+      'exceljs',
+      '@tiptap/react',
+      '@tiptap/starter-kit',
+      '@tiptap/extension-link',
+      '@tiptap/extension-underline',
+      '@tiptap/extension-text-align',
+      '@tiptap/extension-bullet-list',
+      '@tiptap/extension-ordered-list',
+      '@tiptap/extension-list-item',
+      '@tiptap/extension-image',
+      '@tiptap/extension-heading',
+      '@tiptap/extension-strike',
+      '@tiptap/extension-code',
+      '@tiptap/extension-code-block',
+      '@tiptap/extension-table',
+      '@tiptap/extension-table-row',
+      '@tiptap/extension-table-header',
+      '@tiptap/extension-table-cell',
+    ],
   },
   define: {
     // Always emit string literals (undefined would skip replacement and break demo UI)
