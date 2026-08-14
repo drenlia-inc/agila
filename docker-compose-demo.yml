@@ -3,13 +3,20 @@ name: easy-kanban
 
 services:
   agila-app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        DEMO_ENABLED: "true"
+        MULTI_TENANT: "false"
     container_name: agila
+    # Named volumes were created by the old root/dev image; stay root so writes keep working.
+    user: "0:0"
     ports:
       - "3221:3010"
       - "3222:3222"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - DOCKER_ENV=true
       - PORT=3222
       - VITE_API_URL=http://localhost:3222
@@ -37,8 +44,6 @@ services:
       # Application version (optional, will override database value if set)
       - APP_VERSION=0.9-beta
     volumes:
-      - .:/app
-      - /app/node_modules
       - kanban-data:/app/server/data
       - kanban-attachments:/app/server/attachments
       - kanban-avatars:/app/server/avatars
