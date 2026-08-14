@@ -13,6 +13,7 @@ import { AGENT_MEMBER_ID } from '../constants/agentIdentity.js';
 import { clearSqlDebugSettingsCache } from '../utils/sqlDebugSettingsCache.js';
 import { serverDebug } from '../utils/serverDebug.js';
 import { validateAiConnectivity, listAiModels } from '../utils/aiConnectivity.js';
+import { applyEffectiveAiEnabledToSettings, isAiAllowedByPlan } from '../utils/aiEnabled.js';
 import { AI_PROVIDER_PRESETS } from '../constants/aiProviders.js';
 import { isMaskedOrEmptyApiKey } from '../utils/maskSecret.js';
 import {
@@ -147,6 +148,7 @@ router.get('/', async (req, res, next) => {
     settings.forEach(setting => {
       settingsObj[setting.key] = setting.value;
     });
+    await applyEffectiveAiEnabledToSettings(db, settingsObj);
     // Per-tenant OAuth and site metadata must not be cached by browsers or intermediaries
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json(settingsObj);
@@ -285,6 +287,8 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
         settingsObj.AI_RUNNER_TOKEN_SET = 'false';
       }
     }
+
+    await applyEffectiveAiEnabledToSettings(db, settingsObj);
     
     res.json(settingsObj);
   } catch (error) {
@@ -627,6 +631,9 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
 
     // Enabling AI requires a reachable configured provider (+ runner when configured)
     if (key === 'AI_ENABLED' && String(safeValue) === 'true') {
+      if (!(await isAiAllowedByPlan(db))) {
+        return res.status(403).json({ error: 'AI features are not available on this plan' });
+      }
       const creds = await resolveAiCredentials(db, {});
       const probe = await validateAiConnectivity(creds);
       if (!probe.ok) {
