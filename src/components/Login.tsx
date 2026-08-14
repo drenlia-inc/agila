@@ -380,12 +380,10 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   const hideGithubLink =
     (contextSiteSettings?.HIDE_GITHUB_LINK ?? siteSettings?.HIDE_GITHUB_LINK) === 'true';
 
-  const tEn = i18n.getFixedT('en');
-  const tFr = i18n.getFixedT('fr');
-  const demoPickLanguageEn = tEn('login.demoPickLanguage');
-  const demoPickLanguageFr = tFr('login.demoPickLanguage');
-  const demoLanguageEnglishLabel = tEn('login.demoLanguageEnglish');
-  const demoLanguageFrenchLabel = tFr('login.demoLanguageFrench');
+  const demoPickLanguageEn = t('login.demoPickLanguage', { lng: 'en' });
+  const demoPickLanguageFr = t('login.demoPickLanguage', { lng: 'fr' });
+  const demoLanguageEnglishLabel = t('login.demoLanguageEnglish', { lng: 'en' });
+  const demoLanguageFrenchLabel = t('login.demoLanguageFrench', { lng: 'fr' });
 
   // iPad/iOS: avoid min-h-screen + items-center — when the keyboard opens the visual
   // viewport shrinks, flex re-centers the form, Safari blurs the field, and the keyboard
