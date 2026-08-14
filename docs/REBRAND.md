@@ -23,7 +23,7 @@ Hard cutover: after DNS flip, `*.docru.app` should stop serving the app. There i
 | `SITE_NAME` | Rows exactly equal to `Docru` → `Agila`. Also maps leftover exact `Easy Kanban` → `Agila`. Custom site names left alone. |
 | Existing `SMTP_*` | **Not** rewritten by the cutover script — fix in Admin → Mail. |
 | New managed SMTP seeds | Env: `MANAGED_SMTP_HOST`, `MANAGED_SMTP_USERNAME`, `MANAGED_SMTP_FROM_EMAIL`, `MANAGED_SMTP_FROM_NAME`, `MANAGED_SMTP_PASSWORD` (fallbacks derived from `TENANT_DOMAIN`). |
-| Favicon | `public/agila-favicon.png` (default). Legacy `/kanban.ico` paths are treated as “no custom logo”. |
+| Favicon | `public/agila-favicon.png` (default). Vite dev/preview uses `public/agila-favicon-dev.png` (teal DEV badge). Legacy `/kanban.ico` paths are treated as “no custom logo”. |
 
 ---
 
