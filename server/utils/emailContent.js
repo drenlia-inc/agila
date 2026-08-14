@@ -279,8 +279,8 @@ export async function buildEmailAuthorAvatar({
 
 /**
  * Build an <img> for the site logo in transactional emails (public URLs only — no CID).
- * Custom uploads → `${baseUrl}/api/settings/site-logo`.
- * Built-in / empty SITE_LOGO with embedDefaultBrandLogo → `${baseUrl}/agila-logo.png`.
+ * Uses `${baseUrl}/api/settings/site-logo`, which serves a custom upload or the
+ * shipping Agila logo (see GET /api/settings/site-logo).
  *
  * @returns {{ html: string, attachments: object[] }}
  */
@@ -300,35 +300,35 @@ export function buildEmailSiteLogo({
   const imgStyle =
     'max-height:48px;max-width:200px;width:auto;height:auto;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;';
 
+  if (!origin) {
+    return { html: '', attachments: [] };
+  }
+
   const isBuiltinPath =
     !raw ||
     raw.startsWith('/agila') ||
     raw.startsWith('/kanban') ||
     raw.startsWith('/assets/');
 
-  let src = '';
-
-  if (raw && !isBuiltinPath) {
-    if (/^https?:\/\//i.test(raw)) {
-      src = raw;
-    } else if (origin) {
-      const cacheKey = raw.includes('/avatars/')
-        ? raw.split('/avatars/').pop()?.split('?')[0] || ''
-        : '';
-      src = `${origin}/api/settings/site-logo${cacheKey ? `?v=${encodeURIComponent(cacheKey)}` : ''}`;
-    }
-  } else if (embedDefaultBrandLogo && origin) {
-    // Shipping brand asset from public/ (also copied to dist/ in production)
-    const builtin =
-      raw.startsWith('/agila') || raw.startsWith('/kanban') || raw.startsWith('/assets/')
-        ? raw
-        : '/agila-logo.png';
-    src = `${origin}${builtin}`;
+  // Custom absolute URL — use as-is
+  if (raw && /^https?:\/\//i.test(raw)) {
+    return {
+      html: `<img src="${escapeHtml(raw)}" alt="${escapeHtml(alt)}" style="${imgStyle}" />`,
+      attachments: [],
+    };
   }
 
-  if (!src) {
+  // No custom logo and caller did not ask for the default brand mark
+  if (isBuiltinPath && !embedDefaultBrandLogo) {
     return { html: '', attachments: [] };
   }
+
+  // Custom upload or default brand — both via public API (works on API host, not only Vite)
+  const cacheKey =
+    raw && !isBuiltinPath && raw.includes('/avatars/')
+      ? raw.split('/avatars/').pop()?.split('?')[0] || ''
+      : '';
+  const src = `${origin}/api/settings/site-logo${cacheKey ? `?v=${encodeURIComponent(cacheKey)}` : ''}`;
 
   return {
     html: `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" style="${imgStyle}" />`,

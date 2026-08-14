@@ -111,6 +111,9 @@ const Admin: React.FC<AdminProps> = ({
 }) => {
   const { t } = useTranslation('admin');
   const { systemSettings, refreshSettings, updateSiteSetting, updateSiteSettings } = useSettings(); // Use SettingsContext for admin settings
+  const refreshSettingsRef = useRef(refreshSettings);
+  refreshSettingsRef.current = refreshSettings;
+  const isAdminAccount = Boolean(currentUser?.roles?.includes('admin'));
   const [activeTab, setActiveTab] = useState(() => {
     const tab = adminTabFromHash(window.location.hash);
     return tab && ADMIN_TABS.includes(tab) ? tab : ROUTES.DEFAULT_ADMIN_TAB;
@@ -273,7 +276,7 @@ const Admin: React.FC<AdminProps> = ({
 
   // WebSocket event listeners for real-time updates
   useEffect(() => {
-    if (!currentUser?.roles?.includes('admin')) return;
+    if (!isAdminAccount) return;
 
     // Tag management event handlers
     const handleTagCreated = async (data: any) => {
@@ -349,50 +352,45 @@ const Admin: React.FC<AdminProps> = ({
     websocketClient.onPriorityReordered(handlePriorityReordered);
 
     // User management event handlers
-    const handleUserCreated = async (data: any) => {
-      try {
-        const usersResponse = await api.get('/admin/users');
-        setUsers(usersResponse.data || []);
-      } catch (error) {
-        console.error('Failed to refresh users after creation:', error);
+    const applyAdminUsersFromResponse = (payload: unknown) => {
+      if (Array.isArray(payload)) {
+        setUsers(payload);
       }
     };
 
-    const handleUserUpdated = async (data: any) => {
+    const refreshAdminUsers = async (reason: string) => {
       try {
         const usersResponse = await api.get('/admin/users');
-        setUsers(usersResponse.data || []);
+        applyAdminUsersFromResponse(usersResponse.data);
       } catch (error) {
-        console.error('Failed to refresh users after update:', error);
+        console.error(`Failed to refresh users after ${reason}:`, error);
       }
     };
 
-    const handleUserRoleUpdated = async (data: any) => {
-      try {
-        const usersResponse = await api.get('/admin/users');
-        setUsers(usersResponse.data || []);
-      } catch (error) {
-        console.error('Failed to refresh users after role update:', error);
-      }
+    const handleUserCreated = async () => {
+      await refreshAdminUsers('creation');
+    };
+
+    const handleUserUpdated = async () => {
+      await refreshAdminUsers('update');
+    };
+
+    const handleUserRoleUpdated = async () => {
+      await refreshAdminUsers('role update');
     };
 
     const handleUserDeleted = async (data: any) => {
-      try {
-        const usersResponse = await api.get('/admin/users');
-        setUsers(usersResponse.data || []);
-      } catch (error) {
-        console.error('Failed to refresh users after deletion:', error);
+      const deletedId = data?.userId ?? data?.user?.id;
+      if (deletedId != null) {
+        setUsers((prev) =>
+          Array.isArray(prev) ? prev.filter((u) => String(u.id) !== String(deletedId)) : prev
+        );
       }
+      await refreshAdminUsers('deletion');
     };
 
-    const handleUserProfileUpdated = async (data: any) => {
-      try {
-        // Refresh users list to get updated avatar/color/profile info
-        const usersResponse = await api.get('/admin/users');
-        setUsers(usersResponse.data || []);
-      } catch (error) {
-        console.error('Failed to refresh users after profile update:', error);
-      }
+    const handleUserProfileUpdated = async () => {
+      await refreshAdminUsers('profile update');
     };
 
     // Settings event handlers
@@ -449,7 +447,7 @@ const Admin: React.FC<AdminProps> = ({
           }
         } else {
           // Fallback: Refresh from SettingsContext if WebSocket data is incomplete
-          await refreshSettings();
+          await refreshSettingsRef.current();
           // SettingsContext will update, and our useEffect will trigger loadData() to sync local state
         }
       } catch (error) {
@@ -481,7 +479,7 @@ const Admin: React.FC<AdminProps> = ({
       websocketClient.offUserProfileUpdated(handleUserProfileUpdated);
       websocketClient.offSettingsUpdated(handleSettingsUpdated);
     };
-  }, [currentUser?.roles, refreshSettings]);
+  }, [isAdminAccount]);
 
   // System info fetching removed - Header.tsx handles all system info polling
   // Header is always loaded and has the same admin check, so no need for duplicate polling

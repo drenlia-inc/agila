@@ -75,15 +75,39 @@ export const useMemberWebSocket = ({
     }
   }, [setMembers, taskFilters.includeSystem]);
 
-  const handleMemberDeleted = useCallback(async (data: any) => {
-    // Refresh members list from server (don't pass empty array!)
+  const applyMembersFromServer = useCallback(async () => {
     try {
       const loadedMembers = await getMembers(taskFilters.includeSystem);
       setMembers(Array.isArray(loadedMembers) ? loadedMembers : []);
     } catch (error) {
       console.error('Failed to refresh members after deletion:', error);
     }
-  }, [taskFilters.includeSystem, setMembers]);
+  }, [setMembers, taskFilters.includeSystem]);
+
+  const removeMemberLocally = useCallback((data: any) => {
+    const userId = data?.userId ?? data?.user?.id;
+    const memberId = data?.memberId;
+    const email = String(data?.userEmail || data?.user?.email || '').trim().toLowerCase();
+    setMembers((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      return list.filter((m) => {
+        if (memberId != null && String(m.id) === String(memberId)) return false;
+        if (userId != null && m.user_id != null && String(m.user_id) === String(userId)) return false;
+        if (email && m.email && String(m.email).trim().toLowerCase() === email) return false;
+        return true;
+      });
+    });
+  }, [setMembers]);
+
+  const handleMemberDeleted = useCallback(async (data: any) => {
+    removeMemberLocally(data);
+    await applyMembersFromServer();
+  }, [removeMemberLocally, applyMembersFromServer]);
+
+  const handleUserDeleted = useCallback(async (data: any) => {
+    removeMemberLocally(data);
+    await applyMembersFromServer();
+  }, [removeMemberLocally, applyMembersFromServer]);
 
   const handleUserProfileUpdated = useCallback(async (data: any) => {
     // If this is the current user's profile update, refresh currentUser
@@ -156,6 +180,7 @@ export const useMemberWebSocket = ({
     handleMemberCreated,
     handleMemberUpdated,
     handleMemberDeleted,
+    handleUserDeleted,
     handleUserProfileUpdated,
     handleActivityUpdated,
     handleFilterCreated,
