@@ -5,11 +5,28 @@
 
 const KEY_PREFIX = 'easy-kanban-help-session:';
 
+export type HelpAssistantPersistedMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  target?: {
+    kind: 'admin' | 'view' | 'page';
+    hash?: string;
+    mode?: 'kanban' | 'list' | 'gantt';
+    page?: 'kanban' | 'reports';
+    profileFocus?: string;
+    highlights?: string[];
+  } | null;
+};
+
 export type HelpSessionState = {
   open: boolean;
   minimized: boolean;
   activeTab?: string;
   scrollByTab?: Partial<Record<string, number>>;
+  assistantOpen?: boolean;
+  assistantMessages?: HelpAssistantPersistedMessage[];
+  assistantPositionX?: number | null;
+  assistantHeight?: number;
 };
 
 function storageKey(userId: string): string {
@@ -23,6 +40,16 @@ export function loadHelpSession(userId: string): HelpSessionState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<HelpSessionState>;
     if (typeof parsed?.open !== 'boolean') return null;
+    const assistantMessages = Array.isArray(parsed.assistantMessages)
+      ? parsed.assistantMessages
+          .filter(
+            (m): m is HelpAssistantPersistedMessage =>
+              !!m &&
+              (m.role === 'user' || m.role === 'assistant') &&
+              typeof m.content === 'string'
+          )
+          .slice(-20)
+      : undefined;
     return {
       open: parsed.open,
       minimized: Boolean(parsed.minimized),
@@ -31,6 +58,12 @@ export function loadHelpSession(userId: string): HelpSessionState | null {
         parsed.scrollByTab && typeof parsed.scrollByTab === 'object'
           ? parsed.scrollByTab
           : undefined,
+      assistantOpen: Boolean(parsed.assistantOpen),
+      assistantMessages,
+      assistantPositionX:
+        typeof parsed.assistantPositionX === 'number' ? parsed.assistantPositionX : undefined,
+      assistantHeight:
+        typeof parsed.assistantHeight === 'number' ? parsed.assistantHeight : undefined,
     };
   } catch {
     return null;

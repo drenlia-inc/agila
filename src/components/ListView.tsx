@@ -2177,6 +2177,7 @@ export default function ListView({
                                   ? { target: '_blank', rel: 'noopener noreferrer' }
                                   : {})}
                                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline transition-colors cursor-pointer"
+                                data-help-target="task-page-link"
                                 title={`Go to task ${task.ticket}`}
                                 onClick={(e) => e.stopPropagation()}
                               >

@@ -43,7 +43,7 @@ interface ProfileProps {
   onActivityFeedToggle?: (enabled: boolean) => void;
   onAccountDeleted?: () => void;
   /** Field to focus when the modal opens (default: display name). */
-  initialFocus?: 'displayName' | 'bio';
+  initialFocus?: 'displayName' | 'bio' | 'activityFeed';
 }
 
 export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated, isProfileBeingEdited, onProfileEditingChange, onActivityFeedToggle, onAccountDeleted, initialFocus = 'displayName' }: ProfileProps) {
@@ -94,6 +94,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   // Refs for focus management
   const displayNameRef = useRef<HTMLInputElement>(null);
   const bioRef = useRef<HTMLTextAreaElement>(null);
+  const activityFeedPrefRef = useRef<HTMLDivElement>(null);
   const deleteConfirmationRef = useRef<HTMLInputElement>(null);
   
   // Track original values to detect changes
@@ -175,10 +176,17 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
       setPreviewUrl(null);
       setError(null);
       setIsSubmitting(false);
-      setActiveTab('profile'); // Reset to profile tab
+      setActiveTab(initialFocus === 'activityFeed' ? 'app-settings' : 'profile');
       onProfileEditingChange(false); // Reset editing state when modal opens
     }
-  }, [isOpen, onProfileEditingChange]); // Removed currentUser dependency to prevent resets during editing
+  }, [isOpen, onProfileEditingChange, initialFocus]); // Removed currentUser dependency to prevent resets during editing
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialFocus === 'activityFeed') {
+      setActiveTab('app-settings');
+    }
+  }, [isOpen, initialFocus]);
 
   // Leave Dev tab if AI is off or user is view-only (no PATs / agent credentials)
   useEffect(() => {
@@ -204,6 +212,10 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   useEffect(() => {
     if (!isOpen) return;
     const timer = setTimeout(() => {
+      if (initialFocus === 'activityFeed') {
+        activityFeedPrefRef.current?.scrollIntoView({ block: 'center' });
+        return;
+      }
       if (initialFocus === 'bio' && bioRef.current) {
         bioRef.current.focus();
         const len = bioRef.current.value.length;
@@ -212,10 +224,10 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
       }
       displayNameRef.current?.focus();
       displayNameRef.current?.select();
-    }, 100);
+    }, 120);
 
     return () => clearTimeout(timer);
-  }, [isOpen, initialFocus]);
+  }, [isOpen, initialFocus, activeTab]);
 
   // Auto-focus delete confirmation field when it becomes visible
   useEffect(() => {
@@ -909,7 +921,11 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
               </div>
 
               {/* Activity Feed Setting */}
-              <div className="bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <div
+                ref={activityFeedPrefRef}
+                data-help-target="profile-activity-feed"
+                className="bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+              >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-1">

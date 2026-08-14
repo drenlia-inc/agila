@@ -1,0 +1,2096 @@
+{
+  "generated": true,
+  "entries": [
+    {
+      "id": "help:activity-feed-close",
+      "attr": "help",
+      "value": "activity-feed-close",
+      "en": "Expand Activity Feed",
+      "fr": "Développer le flux d'activité",
+      "searchEn": "Expand Activity Feed Expand Activity Feed Close Activity Feed activity feed profile activity-feed-close",
+      "searchFr": "Développer le flux d'activité Développer le flux d'activité Fermer le flux d'activité fil activite profil activity-feed-close",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"activity-feed-close\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/ActivityFeed.tsx"
+    },
+    {
+      "id": "help:kanban-column-filter",
+      "attr": "help",
+      "value": "kanban-column-filter",
+      "en": "Filter columns",
+      "fr": "Filtrer les colonnes",
+      "searchEn": "Filter columns Filter columns Columns kanban-column-filter",
+      "searchFr": "Filtrer les colonnes Filtrer les colonnes Colonnes kanban-column-filter",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"kanban-column-filter\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/ColumnFilterDropdown.tsx"
+    },
+    {
+      "id": "help:profile-activity-feed",
+      "attr": "help",
+      "value": "profile-activity-feed",
+      "en": "Activity Feed",
+      "fr": "Flux d'activité",
+      "searchEn": "Activity Feed English Français Activity Feed Show a floating activity feed on the screen to see recent actions and changes. System default: Enabled System default: Disabled activity feed profile profile-activity-feed",
+      "searchFr": "Flux d'activité English Français Flux d'activité Afficher un flux d'activité flottant à l'écran pour voir les actions et modifications récentes. Par défaut du système : Activé Par défaut du système : Désactivé fil activite profil profile-activity-feed",
+      "kind": "profile",
+      "profileFocus": "activityFeed",
+      "highlights": [
+        "[data-help-target=\"profile-activity-feed\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/Profile.tsx"
+    },
+    {
+      "id": "help:task-page-link",
+      "attr": "help",
+      "value": "task-page-link",
+      "en": "Direct link to",
+      "fr": "Lien direct vers",
+      "searchEn": "Direct link to  full page task page TaskPage ticket direct link task-page-link",
+      "searchFr": "Lien direct vers  page tache vue page ticket lien direct task-page-link",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"task-page-link\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/ListView.tsx"
+    },
+    {
+      "id": "ownerSetup:add-priority",
+      "attr": "ownerSetup",
+      "value": "add-priority",
+      "en": "Create and manage priority levels for tasks. Each priority has a custom color for visual identification.",
+      "fr": "Créez et gérez les niveaux de priorité pour les tâches. Chaque priorité a une couleur personnalisée pour l'identification visuelle.",
+      "searchEn": "Create and manage priority levels for tasks. Each priority has a custom color for visual identification. Create and manage priority levels for tasks. Each priority has a custom color for visual identification. Add Priority add-priority",
+      "searchFr": "Créez et gérez les niveaux de priorité pour les tâches. Chaque priorité a une couleur personnalisée pour l'identification visuelle. Créez et gérez les niveaux de priorité pour les tâches. Chaque priorité a une couleur personnalisée pour l'identification visuelle. Ajouter une priorité add-priority",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-owner-setup=\"add-priority\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminPrioritiesTab.tsx"
+    },
+    {
+      "id": "ownerSetup:add-tag",
+      "attr": "ownerSetup",
+      "value": "add-tag",
+      "en": "Create and manage tags for organizing tasks. Tags can have custom colors and descriptions.",
+      "fr": "Créez et gérez des étiquettes pour organiser les tâches. Les étiquettes peuvent avoir des couleurs et des descriptions personnalisées.",
+      "searchEn": "Create and manage tags for organizing tasks. Tags can have custom colors and descriptions. Create and manage tags for organizing tasks. Tags can have custom colors and descriptions. Add Tag add-tag",
+      "searchFr": "Créez et gérez des étiquettes pour organiser les tâches. Les étiquettes peuvent avoir des couleurs et des descriptions personnalisées. Créez et gérez des étiquettes pour organiser les tâches. Les étiquettes peuvent avoir des couleurs et des descriptions personnalisées. Ajouter une étiquette add-tag",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-owner-setup=\"add-tag\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminTagsTab.tsx"
+    },
+    {
+      "id": "ownerSetup:add-user",
+      "attr": "ownerSetup",
+      "value": "add-user",
+      "en": "User limit reached. Cannot create more users.",
+      "fr": "Limite d'utilisateurs atteinte. Impossible de créer plus d'utilisateurs.",
+      "searchEn": "User limit reached. Cannot create more users. User limit reached. Cannot create more users. Manage user accounts and permissions. Regular users can only manage their own profile information, while administrators have full access to manage all content, users, and site settings. Add User add-user",
+      "searchFr": "Limite d'utilisateurs atteinte. Impossible de créer plus d'utilisateurs. Limite d'utilisateurs atteinte. Impossible de créer plus d'utilisateurs. Gérer les comptes utilisateurs et les permissions. Les utilisateurs réguliers ne peuvent gérer que leurs propres informations de profil, tandis que les administrateurs ont un accès complet pour gérer tout le contenu, les utilisateurs et les paramètres du site. Ajouter un utilisateur add-user",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-owner-setup=\"add-user\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminUsersTab.tsx"
+    },
+    {
+      "id": "ownerSetup:create-sprint",
+      "attr": "ownerSetup",
+      "value": "create-sprint",
+      "en": "Manage sprints and planning periods for reporting and time-based filters",
+      "fr": "Gérer les sprints et les périodes de planification pour les rapports et les filtres basés sur le temps",
+      "searchEn": "Manage sprints and planning periods for reporting and time-based filters Manage sprints and planning periods for reporting and time-based filters Create Sprint Edit Sprint Create New Sprint create-sprint",
+      "searchFr": "Gérer les sprints et les périodes de planification pour les rapports et les filtres basés sur le temps Gérer les sprints et les périodes de planification pour les rapports et les filtres basés sur le temps Créer un sprint Modifier le sprint Créer un nouveau sprint create-sprint",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-owner-setup=\"create-sprint\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSprintSettingsTab.tsx"
+    },
+    {
+      "id": "ownerSetup:licensing-panel",
+      "attr": "ownerSetup",
+      "value": "licensing-panel",
+      "en": "Open Customer Portal",
+      "fr": "Ouvrir le portail client",
+      "searchEn": "Open Customer Portal Open Customer Portal Website URL not configured. Please contact your system administrator to set the WEBSITE_URL in Site Settings. Overview licensing-panel",
+      "searchFr": "Ouvrir le portail client Ouvrir le portail client URL du site Web non configurée. Veuillez contacter votre administrateur système pour définir WEBSITE_URL dans les paramètres du site. Vue d'ensemble licensing-panel",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-owner-setup=\"licensing-panel\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminLicensingTab.tsx"
+    },
+    {
+      "id": "ownerSetup:storage-test-connection",
+      "attr": "ownerSetup",
+      "value": "storage-test-connection",
+      "en": "Force path-style URLs",
+      "fr": "Forcer les URL path-style",
+      "searchEn": "Force path-style URLs Force path-style URLs optional Leave off for Amazon S3. Turn on for MinIO and some S3-compatible providers. Testing… Test S3 connection Last test succeeded storage-test-connection",
+      "searchFr": "Forcer les URL path-style Forcer les URL path-style optionnel Laissez désactivé pour Amazon S3. Activez pour MinIO et certains fournisseurs compatibles S3. Test en cours… Tester la connexion S3 Dernier test réussi storage-test-connection",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-owner-setup=\"storage-test-connection\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "ownerSetup:switch-custom-smtp",
+      "attr": "ownerSetup",
+      "value": "switch-custom-smtp",
+      "en": "Managed Email Service",
+      "fr": "Service de messagerie géré",
+      "searchEn": "Managed Email Service Managed Email Service Your email service is currently managed by Agila. This means emails are sent using our infrastructure with the sender address Switch to Custom SMTP switch-custom-smtp",
+      "searchFr": "Service de messagerie géré Service de messagerie géré Votre service de messagerie est actuellement géré par Agila. Cela signifie que les emails sont envoyés en utilisant notre infrastructure avec l'adresse d'expéditeur Passer à SMTP personnalisé switch-custom-smtp",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-owner-setup=\"switch-custom-smtp\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "ownerSetup:switch-custom-storage",
+      "attr": "ownerSetup",
+      "value": "switch-custom-storage",
+      "en": "Store attachments and avatars on local disk or an S3-compatible bucket. Public URLs stay the same; only where bytes live changes.",
+      "fr": "Stockez les pièces jointes et avatars sur le disque local ou un bucket S3 compatible. Les URL publiques restent identiques.",
+      "searchEn": "Store attachments and avatars on local disk or an S3-compatible bucket. Public URLs stay the same; only where bytes live changes. Store attachments and avatars on local disk or an S3-compatible bucket. Public URLs stay the same; only where bytes live changes. Managed Storage Object storage is provided by Agila. Attachments and avatars use the platform S3 configuration. Use your own S3 bucket Configure the destination below, test it, then run Migrate S3 → S3. Platform credentials stay until cutover. switch-custom-storage",
+      "searchFr": "Stockez les pièces jointes et avatars sur le disque local ou un bucket S3 compatible. Les URL publiques restent identiques. Stockez les pièces jointes et avatars sur le disque local ou un bucket S3 compatible. Les URL publiques restent identiques. Stockage géré Le stockage objet est fourni par Agila. Les pièces jointes et avatars utilisent la configuration S3 de la plateforme. Utiliser votre propre bucket S3 Configurez la destination ci-dessous, testez-la, puis lancez Migrer S3 → S3. Les identifiants plateforme restent jusqu’au basculement. switch-custom-storage",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-owner-setup=\"switch-custom-storage\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:…",
+      "attr": "setting",
+      "value": "…",
+      "en": "…",
+      "fr": "…",
+      "searchEn": "…  …",
+      "searchFr": "…  …",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-setting-key=\"…\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/constants/adminSearchIndex.ts"
+    },
+    {
+      "id": "setting:AI_API_BASE_URL",
+      "attr": "setting",
+      "value": "AI_API_BASE_URL",
+      "en": "AI API base URL",
+      "fr": "URL de base de l'API IA",
+      "searchEn": "AI API base URL AI API base URL Endpoint Agila probes for connectivity. Override when using a proxy, Azure, or a host reachable from this server (e.g. host.docker.internal for Ollama in Docker). AI_API_BASE_URL",
+      "searchFr": "URL de base de l'API IA URL de base de l'API IA Point de terminaison testé par Agila. Remplacez-le pour un proxy, Azure, ou un hôte joignable depuis ce serveur (ex. host.docker.internal pour Ollama sous Docker). AI_API_BASE_URL",
+      "kind": "admin",
+      "hash": "#admin#system-settings#ai",
+      "highlights": [
+        "[data-setting-key=\"AI_API_BASE_URL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAISettingsTab.tsx"
+    },
+    {
+      "id": "setting:AI_API_KEY",
+      "attr": "setting",
+      "value": "AI_API_KEY",
+      "en": "AI API key",
+      "fr": "Clé API IA",
+      "searchEn": "AI API key Suggested endpoint click to restore AI API key Optional for this provider. AI_API_KEY",
+      "searchFr": "Clé API IA Point de terminaison suggéré cliquer pour restaurer Clé API IA Optionnelle pour ce fournisseur. AI_API_KEY",
+      "kind": "admin",
+      "hash": "#admin#system-settings#ai",
+      "highlights": [
+        "[data-setting-key=\"AI_API_KEY\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAISettingsTab.tsx"
+    },
+    {
+      "id": "setting:AI_ENABLED",
+      "attr": "setting",
+      "value": "AI_ENABLED",
+      "en": "Enable AI",
+      "fr": "Activer l'IA",
+      "searchEn": "Enable AI 1. Enable AI Master switch for agent features on this instance. Turns on the Agent assignee, user Dev credentials, and agent APIs. Disable to hide these features. AI_ENABLED",
+      "searchFr": "Activer l'IA 1. Activer l'IA Interrupteur principal des fonctions agent sur cette instance. Active l'assignation Agent, les identifiants Dev utilisateur et les API agent. Désactivez pour masquer ces fonctions. AI_ENABLED",
+      "kind": "admin",
+      "hash": "#admin#system-settings#ai",
+      "highlights": [
+        "[data-setting-key=\"AI_ENABLED\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAISettingsTab.tsx"
+    },
+    {
+      "id": "setting:AI_MAX_CONCURRENT",
+      "attr": "setting",
+      "value": "AI_MAX_CONCURRENT",
+      "en": "Max concurrent agent jobs",
+      "fr": "Tâches agent simultanées max",
+      "searchEn": "Max concurrent agent jobs 4. Job limits How many agent jobs can run at once for this tenant. Max concurrent agent jobs How many Agent tasks this tenant may run at once (1–10). The runner also has a pool limit. AI_MAX_CONCURRENT",
+      "searchFr": "Tâches agent simultanées max 4. Limites de tâches Combien de tâches agent peuvent tourner en parallèle pour ce tenant. Tâches agent simultanées max Nombre de tâches Agent que ce locataire peut exécuter à la fois (1–10). Le runner a aussi une limite de pool. AI_MAX_CONCURRENT",
+      "kind": "admin",
+      "hash": "#admin#system-settings#ai",
+      "highlights": [
+        "[data-setting-key=\"AI_MAX_CONCURRENT\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAISettingsTab.tsx"
+    },
+    {
+      "id": "setting:AI_MODEL",
+      "attr": "setting",
+      "value": "AI_MODEL",
+      "en": "Default model",
+      "fr": "Modèle par défaut",
+      "searchEn": "Default model Leave blank to keep current key Optional Enter API key Default model Pick a model from the list after testing, or choose Custom and type an id (e.g. gpt-4o, claude-sonnet-4-20250514, llama3.2). AI_MODEL",
+      "searchFr": "Modèle par défaut Laisser vide pour conserver la clé actuelle Optionnel Entrer la clé API Modèle par défaut Choisissez un modèle dans la liste après un test, ou « Personnalisé » pour saisir un id (ex. gpt-4o, claude-sonnet-4-20250514, llama3.2). AI_MODEL",
+      "kind": "admin",
+      "hash": "#admin#system-settings#ai",
+      "highlights": [
+        "[data-setting-key=\"AI_MODEL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAISettingsTab.tsx"
+    },
+    {
+      "id": "setting:AI_PROVIDER",
+      "attr": "setting",
+      "value": "AI_PROVIDER",
+      "en": "AI provider",
+      "fr": "Fournisseur IA",
+      "searchEn": "AI provider 3. Language model (LLM) Provider, API endpoint, key, and default model used for assist and coding jobs. AI provider Choose a preset (OpenAI, Anthropic, OpenRouter, Ollama, or custom). You can still override the base URL and model. AI_PROVIDER",
+      "searchFr": "Fournisseur IA 3. Modèle de langage (LLM) Fournisseur, point d'accès API, clé et modèle par défaut pour l'assistance et le code. Fournisseur IA Choisissez un préréglage (OpenAI, Anthropic, OpenRouter, Ollama ou personnalisé). Vous pouvez toujours remplacer l'URL de base et le modèle. AI_PROVIDER",
+      "kind": "admin",
+      "hash": "#admin#system-settings#ai",
+      "highlights": [
+        "[data-setting-key=\"AI_PROVIDER\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAISettingsTab.tsx"
+    },
+    {
+      "id": "setting:AI_RUNNER_TOKEN",
+      "attr": "setting",
+      "value": "AI_RUNNER_TOKEN",
+      "en": "Runner bearer token",
+      "fr": "Jeton bearer du runner",
+      "searchEn": "Runner bearer token Testing runner… Test runner Runner bearer token Shared secret so only Agila can launch jobs. Leave blank to use RUNNER_TOKEN from the environment. AI_RUNNER_TOKEN",
+      "searchFr": "Jeton bearer du runner Test du runner… Tester le runner Jeton bearer du runner Secret partagé pour que seul Agila puisse lancer des tâches. Laissez vide pour utiliser RUNNER_TOKEN de l'environnement. AI_RUNNER_TOKEN",
+      "kind": "admin",
+      "hash": "#admin#system-settings#ai",
+      "highlights": [
+        "[data-setting-key=\"AI_RUNNER_TOKEN\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAISettingsTab.tsx"
+    },
+    {
+      "id": "setting:AI_RUNNER_URL",
+      "attr": "setting",
+      "value": "AI_RUNNER_URL",
+      "en": "Agent runner URL",
+      "fr": "URL du runner agent",
+      "searchEn": "Agent runner URL Allowed range: {{min}}–{{max}} 5. Coding runner Service that clones repos, edits code, and opens PRs. Not required for comment-only assist mode. Agent runner URL Platform-managed internal URL shared by all tenants. Not editable here. Internal URL of the push runner (Docker: http://agila-runner:8080). Leave blank to use the platform default from the environment. AI_RUNNER_URL",
+      "searchFr": "URL du runner agent Plage autorisée : {{min}}–{{max}} 5. Runner de code Service qui clone les dépôts, modifie le code et ouvre des PR. Non requis pour l'assistance par commentaires seulement. URL du runner agent URL interne gérée par la plateforme, partagée par tous les locataires. Non modifiable ici. URL interne du runner push (Docker : http://agila-runner:8080). Laissez vide pour la valeur plateforme de l'environnement. AI_RUNNER_URL",
+      "kind": "admin",
+      "hash": "#admin#system-settings#ai",
+      "highlights": [
+        "[data-setting-key=\"AI_RUNNER_URL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAISettingsTab.tsx"
+    },
+    {
+      "id": "setting:ALLOW_USER_SELF_DELETE",
+      "attr": "setting",
+      "value": "ALLOW_USER_SELF_DELETE",
+      "en": "Allow users to delete their own account",
+      "fr": "Autoriser les utilisateurs à supprimer leur compte",
+      "searchEn": "Allow users to delete their own account Require confirmation before deleting tasks. Users can override this in their personal preferences. Enabled Disabled Allow users to delete their own account When enabled, users can permanently delete their profile from Profile settings. Assigned and requested tasks are reassigned to the System account. Disable this if your organization requires admin-only offboarding. ALLOW_USER_SELF_DELETE",
+      "searchFr": "Autoriser les utilisateurs à supprimer leur compte Exiger une confirmation avant de supprimer des tâches. Les utilisateurs peuvent remplacer ce paramètre dans leurs préférences personnelles. Activé Désactivé Autoriser les utilisateurs à supprimer leur compte Lorsqu'elle est activée, les utilisateurs peuvent supprimer définitivement leur profil depuis les paramètres du profil. Les tâches assignées ou demandées sont réassignées au compte Système. Désactivez si votre organisation exige un départ géré par un administrateur uniquement. ALLOW_USER_SELF_DELETE",
+      "kind": "admin",
+      "hash": "#admin#app-settings#user-interface",
+      "highlights": [
+        "[data-setting-key=\"ALLOW_USER_SELF_DELETE\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAppSettingsTab.tsx"
+    },
+    {
+      "id": "setting:APP_LANGUAGE",
+      "attr": "setting",
+      "value": "APP_LANGUAGE",
+      "en": "Configure application-wide behavior settings. These settings apply as defaults for all users, but users can override them in their personal preferences.",
+      "fr": "Configurez les paramètres de comportement à l'échelle de l'application. Ces paramètres s'appliquent par défaut à tous les utilisateurs, mais les utilisateurs peuvent les remplacer dans leurs préférences personnelles.",
+      "searchEn": "Configure application-wide behavior settings. These settings apply as defaults for all users, but users can override them in their personal preferences. Configure application-wide behavior settings. These settings apply as defaults for all users, but users can override them in their personal preferences. User Interface Settings Default Application Language Set the default language for system-generated content. This affects:\n• Email notifications (invitations, task updates, password resets)\n• Default column names for new boards (e.g., \"To Do\", \"In Progress\")\n• Reports (when user language preference is not set)\n\nNote: User interface language and activity feed messages are controlled by individual user preferences, not this setting. APP_LANGUAGE",
+      "searchFr": "Configurez les paramètres de comportement à l'échelle de l'application. Ces paramètres s'appliquent par défaut à tous les utilisateurs, mais les utilisateurs peuvent les remplacer dans leurs préférences personnelles. Configurez les paramètres de comportement à l'échelle de l'application. Ces paramètres s'appliquent par défaut à tous les utilisateurs, mais les utilisateurs peuvent les remplacer dans leurs préférences personnelles. Paramètres de l'interface utilisateur Langue par défaut de l'application Définissez la langue par défaut pour le contenu généré par le système. Ceci affecte :\n• Les notifications par courriel (invitations, mises à jour de tâches, réinitialisations de mot de passe)\n• Les noms de colonnes par défaut pour les nouveaux tableaux (p. ex. \"À faire\", \"En cours\")\n• Les rap",
+      "kind": "admin",
+      "hash": "#admin#app-settings#user-interface",
+      "highlights": [
+        "[data-setting-key=\"APP_LANGUAGE\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAppSettingsTab.tsx"
+    },
+    {
+      "id": "setting:DEFAULT_BOARD_COLUMNS",
+      "attr": "setting",
+      "value": "DEFAULT_BOARD_COLUMNS",
+      "en": "DEFAULT BOARD COLUMNS",
+      "fr": "DEFAULT BOARD COLUMNS",
+      "searchEn": "DEFAULT BOARD COLUMNS  DEFAULT_BOARD_COLUMNS",
+      "searchFr": "DEFAULT BOARD COLUMNS  DEFAULT_BOARD_COLUMNS",
+      "kind": "admin",
+      "hash": "#admin#project-settings#project",
+      "highlights": [
+        "[data-setting-key=\"DEFAULT_BOARD_COLUMNS\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminProjectSettingsTab.tsx"
+    },
+    {
+      "id": "setting:DEFAULT_FINISHED_COLUMN_NAMES",
+      "attr": "setting",
+      "value": "DEFAULT_FINISHED_COLUMN_NAMES",
+      "en": "DEFAULT FINISHED COLUMN NAMES",
+      "fr": "DEFAULT FINISHED COLUMN NAMES",
+      "searchEn": "DEFAULT FINISHED COLUMN NAMES  DEFAULT_FINISHED_COLUMN_NAMES",
+      "searchFr": "DEFAULT FINISHED COLUMN NAMES  DEFAULT_FINISHED_COLUMN_NAMES",
+      "kind": "admin",
+      "hash": "#admin#project-settings#project",
+      "highlights": [
+        "[data-setting-key=\"DEFAULT_FINISHED_COLUMN_NAMES\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminProjectSettingsTab.tsx"
+    },
+    {
+      "id": "setting:DEFAULT_TASK_VIEW_MODE",
+      "attr": "setting",
+      "value": "DEFAULT_TASK_VIEW_MODE",
+      "en": "Default view mode for new users (Kanban or List view)",
+      "fr": "Mode d'affichage par défaut pour les nouveaux utilisateurs (Vue Kanban ou Liste)",
+      "searchEn": "Default view mode for new users (Kanban or List view) Default view mode for new users (Kanban or List view) Default Task View Mode Default task card density for new users (same as Full, Preview, and Minimal in the Kanban tools menu) DEFAULT_TASK_VIEW_MODE",
+      "searchFr": "Mode d'affichage par défaut pour les nouveaux utilisateurs (Vue Kanban ou Liste) Mode d'affichage par défaut pour les nouveaux utilisateurs (Vue Kanban ou Liste) Mode d'affichage des tâches par défaut Densité par défaut des cartes pour les nouveaux utilisateurs (comme Complet, Aperçu et Minimal dans le menu Outils du Kanban) DEFAULT_TASK_VIEW_MODE",
+      "kind": "admin",
+      "hash": "#admin#app-settings#user-interface",
+      "highlights": [
+        "[data-setting-key=\"DEFAULT_TASK_VIEW_MODE\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAppSettingsTab.tsx"
+    },
+    {
+      "id": "setting:DEFAULT_VIEW_MODE",
+      "attr": "setting",
+      "value": "DEFAULT_VIEW_MODE",
+      "en": "Enabled",
+      "fr": "Activé",
+      "searchEn": "Enabled Enabled Disabled New User Defaults Configure default preferences for new users. Existing users keep their current settings. Default View Mode Default view mode for new users (Kanban or List view) DEFAULT_VIEW_MODE",
+      "searchFr": "Activé Activé Désactivé Paramètres par défaut pour les nouveaux utilisateurs Configurez les préférences par défaut pour les nouveaux utilisateurs. Les utilisateurs existants conservent leurs paramètres actuels. Mode d'affichage par défaut Mode d'affichage par défaut pour les nouveaux utilisateurs (Vue Kanban ou Liste) DEFAULT_VIEW_MODE",
+      "kind": "admin",
+      "hash": "#admin#app-settings#user-interface",
+      "highlights": [
+        "[data-setting-key=\"DEFAULT_VIEW_MODE\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAppSettingsTab.tsx"
+    },
+    {
+      "id": "setting:EFFORT_UNIT",
+      "attr": "setting",
+      "value": "EFFORT_UNIT",
+      "en": "EFFORT UNIT",
+      "fr": "EFFORT UNIT",
+      "searchEn": "EFFORT UNIT  EFFORT_UNIT",
+      "searchFr": "EFFORT UNIT  EFFORT_UNIT",
+      "kind": "admin",
+      "hash": "#admin#project-settings#features",
+      "highlights": [
+        "[data-setting-key=\"EFFORT_UNIT\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminFeaturesSettingsTab.tsx"
+    },
+    {
+      "id": "setting:GOOGLE_CALLBACK_URL",
+      "attr": "setting",
+      "value": "GOOGLE_CALLBACK_URL",
+      "en": "Google Callback URL",
+      "fr": "URL de rappel Google",
+      "searchEn": "Google Callback URL Leave blank to keep current secret Enter Google OAuth Client Secret Keep this secret secure. Changes are applied immediately. Google Callback URL e.g., {{callbackUrl}} GOOGLE_CALLBACK_URL",
+      "searchFr": "URL de rappel Google Laisser vide pour conserver le secret actuel Entrer le secret client Google OAuth Gardez ce secret sécurisé. Les modifications sont appliquées immédiatement. URL de rappel Google ex. : {{callbackUrl}} GOOGLE_CALLBACK_URL",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"GOOGLE_CALLBACK_URL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "setting:GOOGLE_CLIENT_ID",
+      "attr": "setting",
+      "value": "GOOGLE_CLIENT_ID",
+      "en": "Google Client ID",
+      "fr": "ID client Google",
+      "searchEn": "Google Client ID Configure Google OAuth authentication. Changes are applied immediately without requiring a restart. Google Client ID Enter Google OAuth Client ID GOOGLE_CLIENT_ID",
+      "searchFr": "ID client Google Configurez l'authentification Google OAuth. Les modifications sont appliquées immédiatement sans nécessiter de redémarrage. ID client Google Entrer l'ID client Google OAuth GOOGLE_CLIENT_ID",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"GOOGLE_CLIENT_ID\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "setting:GOOGLE_CLIENT_SECRET",
+      "attr": "setting",
+      "value": "GOOGLE_CLIENT_SECRET",
+      "en": "Google Client Secret",
+      "fr": "Secret client Google",
+      "searchEn": "Google Client Secret Google Client ID Enter Google OAuth Client ID Found in your Google Cloud Console under APIs & Services > Credentials Google Client Secret GOOGLE_CLIENT_SECRET",
+      "searchFr": "Secret client Google ID client Google Entrer l'ID client Google OAuth Trouvé dans votre Google Cloud Console sous APIs & Services > Credentials Secret client Google GOOGLE_CLIENT_SECRET",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"GOOGLE_CLIENT_SECRET\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "setting:HIGHLIGHT_OVERDUE_TASKS",
+      "attr": "setting",
+      "value": "HIGHLIGHT_OVERDUE_TASKS",
+      "en": "HIGHLIGHT OVERDUE TASKS",
+      "fr": "HIGHLIGHT OVERDUE TASKS",
+      "searchEn": "HIGHLIGHT OVERDUE TASKS  HIGHLIGHT_OVERDUE_TASKS",
+      "searchFr": "HIGHLIGHT OVERDUE TASKS  HIGHLIGHT_OVERDUE_TASKS",
+      "kind": "admin",
+      "hash": "#admin#project-settings#features",
+      "highlights": [
+        "[data-setting-key=\"HIGHLIGHT_OVERDUE_TASKS\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminFeaturesSettingsTab.tsx"
+    },
+    {
+      "id": "setting:LIFECYCLE_ARCHIVED_RETENTION_DAYS",
+      "attr": "setting",
+      "value": "LIFECYCLE_ARCHIVED_RETENTION_DAYS",
+      "en": "Archived retention (days)",
+      "fr": "Rétention des archives (jours)",
+      "searchEn": "Archived retention (days)  LIFECYCLE_ARCHIVED_RETENTION_DAYS",
+      "searchFr": "Rétention des archives (jours)  LIFECYCLE_ARCHIVED_RETENTION_DAYS",
+      "kind": "admin",
+      "hash": "#admin#project-settings#lifecycle",
+      "highlights": [
+        "[data-setting-key=\"LIFECYCLE_ARCHIVED_RETENTION_DAYS\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminLifecycleTab.tsx"
+    },
+    {
+      "id": "setting:LIFECYCLE_DELETED_RETENTION_DAYS",
+      "attr": "setting",
+      "value": "LIFECYCLE_DELETED_RETENTION_DAYS",
+      "en": "Deleted retention (days)",
+      "fr": "Rétention des suppressions (jours)",
+      "searchEn": "Deleted retention (days)  LIFECYCLE_DELETED_RETENTION_DAYS",
+      "searchFr": "Rétention des suppressions (jours)  LIFECYCLE_DELETED_RETENTION_DAYS",
+      "kind": "admin",
+      "hash": "#admin#project-settings#lifecycle",
+      "highlights": [
+        "[data-setting-key=\"LIFECYCLE_DELETED_RETENTION_DAYS\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminLifecycleTab.tsx"
+    },
+    {
+      "id": "setting:MAIL_ENABLED",
+      "attr": "setting",
+      "value": "MAIL_ENABLED",
+      "en": "Switch to Custom SMTP",
+      "fr": "Passer à SMTP personnalisé",
+      "searchEn": "Switch to Custom SMTP Switch to Custom SMTP Mail Server Status Email functionality is disabled in demo mode to prevent sending emails from demo environments. ⚠️ Fill in the required fields below and test the mail server configuration. The toggle will be enabled after a successful test. Mail server tested successfully! You can manually enable/disable it as needed. If disabled, you'll need to test again before re-enabling. MAIL_ENABLED",
+      "searchFr": "Passer à SMTP personnalisé Passer à SMTP personnalisé État du serveur de messagerie La fonctionnalité email est désactivée en mode démo pour empêcher l'envoi d'emails depuis les environnements de démonstration. ⚠️ Remplissez les champs requis ci-dessous et testez la configuration du serveur de messagerie. Le bouton sera activé après un test réussi. Serveur de messagerie testé avec succès ! Vous pouvez l'activer/désactiver manuellement selon vos besoins. S'il est désactivé, vous devrez tester à nouveau avant de le réactiver. MAIL_ENABLED",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"MAIL_ENABLED\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:MAIL_SECTION",
+      "attr": "setting",
+      "value": "MAIL_SECTION",
+      "en": "Configure SMTP settings for sending emails. Changes are applied immediately.",
+      "fr": "Configurez les paramètres SMTP pour l'envoi d'emails. Les modifications sont appliquées immédiatement.",
+      "searchEn": "Configure SMTP settings for sending emails. Changes are applied immediately. Configure SMTP settings for sending emails. Changes are applied immediately. MAIL_SECTION",
+      "searchFr": "Configurez les paramètres SMTP pour l'envoi d'emails. Les modifications sont appliquées immédiatement. Configurez les paramètres SMTP pour l'envoi d'emails. Les modifications sont appliquées immédiatement. MAIL_SECTION",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"MAIL_SECTION\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:MAIL_TEST_EMAIL",
+      "attr": "setting",
+      "value": "MAIL_TEST_EMAIL",
+      "en": "Save Configuration",
+      "fr": "Enregistrer la configuration",
+      "searchEn": "Save Configuration Save Configuration Email testing is disabled in demo mode Email testing is not needed for managed email service Fill in all required fields to test email MAIL_TEST_EMAIL",
+      "searchFr": "Enregistrer la configuration Enregistrer la configuration Le test d'email est désactivé en mode démo Le test d'email n'est pas nécessaire pour le service de messagerie géré Remplissez tous les champs requis pour tester l'email MAIL_TEST_EMAIL",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"MAIL_TEST_EMAIL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:NOTIFICATION_QUEUE_RETENTION_DAYS",
+      "attr": "setting",
+      "value": "NOTIFICATION_QUEUE_RETENTION_DAYS",
+      "en": "Keep sent/failed (days)",
+      "fr": "Conserver envoyés/échoués (jours)",
+      "searchEn": "Keep sent/failed (days) Automatically delete sent and failed queue rows older than this many days. Pending notifications are never auto-deleted. Keep sent/failed (days) NOTIFICATION_QUEUE_RETENTION_DAYS",
+      "searchFr": "Conserver envoyés/échoués (jours) Supprime automatiquement les lignes envoyées ou échouées plus anciennes que ce nombre de jours. Les notifications en attente ne sont jamais purgées automatiquement. Conserver envoyés/échoués (jours) NOTIFICATION_QUEUE_RETENTION_DAYS",
+      "kind": "admin",
+      "hash": "#admin#system-settings#notification-queue",
+      "highlights": [
+        "[data-setting-key=\"NOTIFICATION_QUEUE_RETENTION_DAYS\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminNotificationQueueTab.tsx"
+    },
+    {
+      "id": "setting:NOTIFICATIONS_SECTION",
+      "attr": "setting",
+      "value": "NOTIFICATIONS_SECTION",
+      "en": "Notifications",
+      "fr": "Notifications",
+      "searchEn": "Notifications A comment is added to a task I'm involved in Get notified when comments are added to tasks you're assigned to, watching, collaborating on, or requested A task is created and I'm the requester Get notified when tasks you requested are created A task is updated where I'm the requester Get notified when tasks you requested are modified Email Throttling Accumulate task changes and send consolidated notifications. Set to 0 for immediate notifications. NOTIFICATIONS_SECTION",
+      "searchFr": "Notifications Un commentaire est ajouté à une tâche à laquelle je participe Être notifié lorsque des commentaires sont ajoutés aux tâches qui vous sont assignées, que vous surveillez, sur lesquelles vous collaborez, ou que vous avez demandées Une tâche est créée et je suis le demandeur Être notifié lorsque les tâches que vous avez demandées sont créées Une tâche est mise à jour où je suis le demandeur Être notifié lorsque les tâches que vous avez demandées sont modifiées Limitation des emails Accumuler les modifications de tâches et envoyer des notifications consolidées. Réglez sur 0 pour des notifications immédiates. NOTIFICATIONS_SECTION",
+      "kind": "admin",
+      "hash": "#admin#system-settings#notifications",
+      "highlights": [
+        "[data-setting-key=\"NOTIFICATIONS_SECTION\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminNotificationsSettingsTab.tsx"
+    },
+    {
+      "id": "setting:REPORTS_ENABLED",
+      "attr": "setting",
+      "value": "REPORTS_ENABLED",
+      "en": "Configure reporting features, gamification, and data retention",
+      "fr": "Configurez les fonctionnalités de rapport, la gamification et la rétention des données",
+      "searchEn": "Configure reporting features, gamification, and data retention Configure reporting features, gamification, and data retention Module Configuration Enable Reports Module Master toggle for all reporting features REPORTS_ENABLED",
+      "searchFr": "Configurez les fonctionnalités de rapport, la gamification et la rétention des données Configurez les fonctionnalités de rapport, la gamification et la rétention des données Configuration du module Activer le module de rapports Interrupteur principal pour toutes les fonctionnalités de rapport REPORTS_ENABLED",
+      "kind": "admin",
+      "hash": "#admin#project-settings#reporting",
+      "highlights": [
+        "[data-setting-key=\"REPORTS_ENABLED\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminReportingTab.tsx"
+    },
+    {
+      "id": "setting:S3_ACCESS_KEY_ID",
+      "attr": "setting",
+      "value": "S3_ACCESS_KEY_ID",
+      "en": "Optional object key prefix inside the bucket (e.g. tenants/acme/).",
+      "fr": "Préfixe optionnel des objets dans le bucket (ex. tenants/acme/).",
+      "searchEn": "Optional object key prefix inside the bucket (e.g. tenants/acme/). Optional object key prefix inside the bucket (e.g. tenants/acme/). Credentials Access key ID Secret access key S3_ACCESS_KEY_ID",
+      "searchFr": "Préfixe optionnel des objets dans le bucket (ex. tenants/acme/). Préfixe optionnel des objets dans le bucket (ex. tenants/acme/). Identifiants Clé d’accès Clé secrète S3_ACCESS_KEY_ID",
+      "kind": "admin",
+      "hash": "#admin#system-settings#storage",
+      "highlights": [
+        "[data-setting-key=\"S3_ACCESS_KEY_ID\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:S3_BUCKET",
+      "attr": "setting",
+      "value": "S3_BUCKET",
+      "en": "For Amazon S3, keep https://s3.amazonaws.com (or use https://s3.<your-region>.amazonaws.com). For MinIO / R2 / Spaces, paste that provider’s endpoint URL instead.",
+      "fr": "Pour Amazon S3, gardez https://s3.amazonaws.com (ou https://s3.<votre-région>.amazonaws.com). Pour MinIO / R2 / Spaces, collez l’URL du fournisseur.",
+      "searchEn": "For Amazon S3, keep https://s3.amazonaws.com (or use https://s3.<your-region>.amazonaws.com). For MinIO / R2 / Spaces, paste that provider’s endpoint URL instead. For Amazon S3, keep https://s3.amazonaws.com (or use https://s3.<your-region>.amazonaws.com). For MinIO / R2 / Spaces, paste that provider’s endpoint URL instead. Region Must match the bucket’s region exactly (AWS console → bucket → Properties). Example: ca-central-1 or us-east-1. A wrong region often causes “temporary endpoint” errors. Bucket name Key prefix S3_BUCKET",
+      "searchFr": "Pour Amazon S3, gardez https://s3.amazonaws.com (ou https://s3.<votre-région>.amazonaws.com). Pour MinIO / R2 / Spaces, collez l’URL du fournisseur. Pour Amazon S3, gardez https://s3.amazonaws.com (ou https://s3.<votre-région>.amazonaws.com). Pour MinIO / R2 / Spaces, collez l’URL du fournisseur. Région Doit correspondre exactement à la région du bucket (console cloud → bucket → Propriétés). Ex. : ca-central-1 ou us-east-1. Une mauvaise région provoque souvent l’erreur « temporary endpoint ». Nom du bucket Préfixe des clés S3_BUCKET",
+      "kind": "admin",
+      "hash": "#admin#system-settings#storage",
+      "highlights": [
+        "[data-setting-key=\"S3_BUCKET\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:S3_ENDPOINT",
+      "attr": "setting",
+      "value": "S3_ENDPOINT",
+      "en": "S3 bucket settings",
+      "fr": "Paramètres du bucket S3",
+      "searchEn": "S3 bucket settings S3 bucket settings Optional while on disk — required before switching to S3 or migrating. Connection S3 endpoint For Amazon S3, keep https://s3.amazonaws.com (or use https://s3.<your-region>.amazonaws.com). For MinIO / R2 / Spaces, paste that provider’s endpoint URL instead. Region S3_ENDPOINT",
+      "searchFr": "Paramètres du bucket S3 Paramètres du bucket S3 Optionnel tant que le disque est actif — requis avant de passer à S3 ou de migrer. Connexion Point de terminaison S3 Pour Amazon S3, gardez https://s3.amazonaws.com (ou https://s3.<votre-région>.amazonaws.com). Pour MinIO / R2 / Spaces, collez l’URL du fournisseur. Région S3_ENDPOINT",
+      "kind": "admin",
+      "hash": "#admin#system-settings#storage",
+      "highlights": [
+        "[data-setting-key=\"S3_ENDPOINT\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:S3_FORCE_PATH_STYLE",
+      "attr": "setting",
+      "value": "S3_FORCE_PATH_STYLE",
+      "en": "Secret access key",
+      "fr": "Clé secrète",
+      "searchEn": "Secret access key Secret access key Leave blank to keep current secret Options S3_FORCE_PATH_STYLE",
+      "searchFr": "Clé secrète Clé secrète Laisser vide pour conserver le secret actuel Options S3_FORCE_PATH_STYLE",
+      "kind": "admin",
+      "hash": "#admin#system-settings#storage",
+      "highlights": [
+        "[data-setting-key=\"S3_FORCE_PATH_STYLE\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:S3_KEY_PREFIX",
+      "attr": "setting",
+      "value": "S3_KEY_PREFIX",
+      "en": "Must match the bucket’s region exactly (AWS console → bucket → Properties). Example: ca-central-1 or us-east-1. A wrong region often causes “temporary endpoint” errors.",
+      "fr": "Doit correspondre exactement à la région du bucket (console cloud → bucket → Propriétés). Ex. : ca-central-1 ou us-east-1. Une mauvaise région provoque souvent l’erreur « temporary endpoint ».",
+      "searchEn": "Must match the bucket’s region exactly (AWS console → bucket → Properties). Example: ca-central-1 or us-east-1. A wrong region often causes “temporary endpoint” errors. Must match the bucket’s region exactly (AWS console → bucket → Properties). Example: ca-central-1 or us-east-1. A wrong region often causes “temporary endpoint” errors. Bucket name Key prefix Optional object key prefix inside the bucket (e.g. tenants/acme/). S3_KEY_PREFIX",
+      "searchFr": "Doit correspondre exactement à la région du bucket (console cloud → bucket → Propriétés). Ex. : ca-central-1 ou us-east-1. Une mauvaise région provoque souvent l’erreur « temporary endpoint ». Doit correspondre exactement à la région du bucket (console cloud → bucket → Propriétés). Ex. : ca-central-1 ou us-east-1. Une mauvaise région provoque souvent l’erreur « temporary endpoint ». Nom du bucket Préfixe des clés Préfixe optionnel des objets dans le bucket (ex. tenants/acme/). S3_KEY_PREFIX",
+      "kind": "admin",
+      "hash": "#admin#system-settings#storage",
+      "highlights": [
+        "[data-setting-key=\"S3_KEY_PREFIX\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:S3_REGION",
+      "attr": "setting",
+      "value": "S3_REGION",
+      "en": "S3 endpoint",
+      "fr": "Point de terminaison S3",
+      "searchEn": "S3 endpoint S3 endpoint For Amazon S3, keep https://s3.amazonaws.com (or use https://s3.<your-region>.amazonaws.com). For MinIO / R2 / Spaces, paste that provider’s endpoint URL instead. Region Must match the bucket’s region exactly (AWS console → bucket → Properties). Example: ca-central-1 or us-east-1. A wrong region often causes “temporary endpoint” errors. Bucket name S3_REGION",
+      "searchFr": "Point de terminaison S3 Point de terminaison S3 Pour Amazon S3, gardez https://s3.amazonaws.com (ou https://s3.<votre-région>.amazonaws.com). Pour MinIO / R2 / Spaces, collez l’URL du fournisseur. Région Doit correspondre exactement à la région du bucket (console cloud → bucket → Propriétés). Ex. : ca-central-1 ou us-east-1. Une mauvaise région provoque souvent l’erreur « temporary endpoint ». Nom du bucket S3_REGION",
+      "kind": "admin",
+      "hash": "#admin#system-settings#storage",
+      "highlights": [
+        "[data-setting-key=\"S3_REGION\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:S3_SECRET_ACCESS_KEY",
+      "attr": "setting",
+      "value": "S3_SECRET_ACCESS_KEY",
+      "en": "Credentials",
+      "fr": "Identifiants",
+      "searchEn": "Credentials Credentials Access key ID Secret access key Leave blank to keep current secret S3_SECRET_ACCESS_KEY",
+      "searchFr": "Identifiants Identifiants Clé d’accès Clé secrète Laisser vide pour conserver le secret actuel S3_SECRET_ACCESS_KEY",
+      "kind": "admin",
+      "hash": "#admin#system-settings#storage",
+      "highlights": [
+        "[data-setting-key=\"S3_SECRET_ACCESS_KEY\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:SHOW_ACTIVITY_FEED",
+      "attr": "setting",
+      "value": "SHOW_ACTIVITY_FEED",
+      "en": "Minimal",
+      "fr": "Minimal",
+      "searchEn": "Minimal Minimal Activity Feed Defaults Configure default activity feed settings for new users. Users can override these in their personal preferences. Default Visibility Whether the activity feed is shown by default activity feed profile SHOW_ACTIVITY_FEED",
+      "searchFr": "Minimal Minimal Paramètres par défaut du fil d'activité Configurez les paramètres par défaut du fil d'activité pour les nouveaux utilisateurs. Les utilisateurs peuvent remplacer ces paramètres dans leurs préférences personnelles. Visibilité par défaut Si le fil d'activité est affiché par défaut fil activite profil SHOW_ACTIVITY_FEED",
+      "kind": "admin",
+      "hash": "#admin#app-settings#user-interface",
+      "highlights": [
+        "[data-setting-key=\"SHOW_ACTIVITY_FEED\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAppSettingsTab.tsx"
+    },
+    {
+      "id": "setting:SITE_LOGO",
+      "attr": "setting",
+      "value": "SITE_LOGO",
+      "en": "Site Logo",
+      "fr": "Logo du site",
+      "searchEn": "Site Logo  SITE_LOGO",
+      "searchFr": "Logo du site  SITE_LOGO",
+      "kind": "admin",
+      "hash": "#admin#site-settings",
+      "highlights": [
+        "[data-setting-key=\"SITE_LOGO\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/utils/ownerSetup.ts"
+    },
+    {
+      "id": "setting:SITE_NAME",
+      "attr": "setting",
+      "value": "SITE_NAME",
+      "en": "Site Name",
+      "fr": "Nom du site",
+      "searchEn": "Site Name Crop dark-mode logo Crop site logo Configure basic site information that appears throughout the application. Site Name Enter site name SITE_NAME",
+      "searchFr": "Nom du site Recadrer le logo mode sombre Recadrer le logo du site Configurez les informations de base du site qui apparaissent dans toute l'application. Nom du site Entrer le nom du site SITE_NAME",
+      "kind": "admin",
+      "hash": "#admin#site-settings",
+      "highlights": [
+        "[data-setting-key=\"SITE_NAME\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSiteSettingsTab.tsx"
+    },
+    {
+      "id": "setting:SITE_SETTINGS_SECTION",
+      "attr": "setting",
+      "value": "SITE_SETTINGS_SECTION",
+      "en": "Crop dark-mode logo",
+      "fr": "Recadrer le logo mode sombre",
+      "searchEn": "Crop dark-mode logo Crop dark-mode logo Crop site logo Configure basic site information that appears throughout the application. Site Name SITE_SETTINGS_SECTION",
+      "searchFr": "Recadrer le logo mode sombre Recadrer le logo mode sombre Recadrer le logo du site Configurez les informations de base du site qui apparaissent dans toute l'application. Nom du site SITE_SETTINGS_SECTION",
+      "kind": "admin",
+      "hash": "#admin#site-settings",
+      "highlights": [
+        "[data-setting-key=\"SITE_SETTINGS_SECTION\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSiteSettingsTab.tsx"
+    },
+    {
+      "id": "setting:SITE_URL",
+      "attr": "setting",
+      "value": "SITE_URL",
+      "en": "Site URL",
+      "fr": "URL du site",
+      "searchEn": "Site URL Site Name Enter site name Leave blank to hide the site name in the header (useful when using a logo only). Clearing the name will not fall back to \"Agila\". Site URL SITE_URL",
+      "searchFr": "URL du site Nom du site Entrer le nom du site Laissez vide pour masquer le nom du site dans l'en-tête (utile avec un logo uniquement). Un nom vide n'affichera pas « Agila ». URL du site SITE_URL",
+      "kind": "admin",
+      "hash": "#admin#site-settings",
+      "highlights": [
+        "[data-setting-key=\"SITE_URL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSiteSettingsTab.tsx"
+    },
+    {
+      "id": "setting:SMTP_FROM_EMAIL",
+      "attr": "setting",
+      "value": "SMTP_FROM_EMAIL",
+      "en": "From Email",
+      "fr": "Email expéditeur",
+      "searchEn": "From Email Hostname or IP of your SMTP server. Tab into this field to auto-fill with Gmail example. From Email Email address that appears as sender SMTP Port SMTP_FROM_EMAIL",
+      "searchFr": "Email expéditeur Nom d'hôte ou IP de votre serveur SMTP. Appuyez sur Tab dans ce champ pour le remplir automatiquement avec l'exemple Gmail. Email expéditeur Adresse email qui apparaît comme expéditeur Port SMTP SMTP_FROM_EMAIL",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"SMTP_FROM_EMAIL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:SMTP_FROM_NAME",
+      "attr": "setting",
+      "value": "SMTP_FROM_NAME",
+      "en": "From Name",
+      "fr": "Nom expéditeur",
+      "searchEn": "From Name 587 (TLS), 465 (SSL), 25 (plain). Tab into this field to auto-fill with common port. From Name Kanban Admin Display name that appears as sender SMTP Username SMTP_FROM_NAME",
+      "searchFr": "Nom expéditeur 587 (TLS), 465 (SSL), 25 (plain). Appuyez sur Tab dans ce champ pour le remplir automatiquement avec le port commun. Nom expéditeur Administrateur Kanban Nom d'affichage qui apparaît comme expéditeur Nom d'utilisateur SMTP SMTP_FROM_NAME",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"SMTP_FROM_NAME\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:SMTP_HOST",
+      "attr": "setting",
+      "value": "SMTP_HOST",
+      "en": "SMTP Host",
+      "fr": "Hôte SMTP",
+      "searchEn": "SMTP Host SMTP Host Hostname or IP of your SMTP server. SMTP_HOST",
+      "searchFr": "Hôte SMTP Hôte SMTP Nom d'hôte ou IP de votre serveur SMTP. SMTP_HOST",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"SMTP_HOST\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:SMTP_PASSWORD",
+      "attr": "setting",
+      "value": "SMTP_PASSWORD",
+      "en": "SMTP Password",
+      "fr": "Mot de passe SMTP",
+      "searchEn": "SMTP Password SMTP Security TLS (Recommended) SSL None (Plain) TLS recommended for modern servers SMTP Password SMTP_PASSWORD",
+      "searchFr": "Mot de passe SMTP Sécurité SMTP TLS (Recommandé) SSL Aucun (Plain) TLS recommandé pour les serveurs modernes Mot de passe SMTP SMTP_PASSWORD",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"SMTP_PASSWORD\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:SMTP_PORT",
+      "attr": "setting",
+      "value": "SMTP_PORT",
+      "en": "SMTP Port",
+      "fr": "Port SMTP",
+      "searchEn": "SMTP Port Tab into this field to auto-fill with Gmail example. From Email Email address that appears as sender SMTP Port SMTP_PORT",
+      "searchFr": "Port SMTP Appuyez sur Tab dans ce champ pour le remplir automatiquement avec l'exemple Gmail. Email expéditeur Adresse email qui apparaît comme expéditeur Port SMTP SMTP_PORT",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"SMTP_PORT\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:SMTP_SECURE",
+      "attr": "setting",
+      "value": "SMTP_SECURE",
+      "en": "SMTP Security",
+      "fr": "Sécurité SMTP",
+      "searchEn": "SMTP Security Display name that appears as sender SMTP Username Usually your email address SMTP Security TLS (Recommended) SSL None (Plain) TLS recommended for modern servers SMTP_SECURE",
+      "searchFr": "Sécurité SMTP Nom d'affichage qui apparaît comme expéditeur Nom d'utilisateur SMTP Généralement votre adresse email Sécurité SMTP TLS (Recommandé) SSL Aucun (Plain) TLS recommandé pour les serveurs modernes SMTP_SECURE",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"SMTP_SECURE\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:SMTP_USERNAME",
+      "attr": "setting",
+      "value": "SMTP_USERNAME",
+      "en": "SMTP Username",
+      "fr": "Nom d'utilisateur SMTP",
+      "searchEn": "SMTP Username Tab into this field to auto-fill with common port. From Name Kanban Admin Display name that appears as sender SMTP Username Usually your email address SMTP Security SMTP_USERNAME",
+      "searchFr": "Nom d'utilisateur SMTP Appuyez sur Tab dans ce champ pour le remplir automatiquement avec le port commun. Nom expéditeur Administrateur Kanban Nom d'affichage qui apparaît comme expéditeur Nom d'utilisateur SMTP Généralement votre adresse email Sécurité SMTP SMTP_USERNAME",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"SMTP_USERNAME\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:STORAGE_BACKEND",
+      "attr": "setting",
+      "value": "STORAGE_BACKEND",
+      "en": "Migrate to another S3 bucket",
+      "fr": "Migrer vers un autre bucket S3",
+      "searchEn": "Migrate to another S3 bucket Migrate to another S3 bucket Copy objects from the current bucket to a new one, then cut over live settings. Where files are stored Local disk Files stay on this server’s disk volumes. STORAGE_BACKEND",
+      "searchFr": "Migrer vers un autre bucket S3 Migrer vers un autre bucket S3 Copie les objets du bucket actuel vers un nouveau, puis bascule les réglages actifs. Emplacement des fichiers Disque local Les fichiers restent sur les volumes disque de ce serveur. STORAGE_BACKEND",
+      "kind": "admin",
+      "hash": "#admin#system-settings#storage",
+      "highlights": [
+        "[data-setting-key=\"STORAGE_BACKEND\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:STORAGE_SECTION",
+      "attr": "setting",
+      "value": "STORAGE_SECTION",
+      "en": "Migration finished",
+      "fr": "Migration terminée",
+      "searchEn": "Migration finished Migration finished Migration failed {{count}} file(s) missing on the source (no path details recorded) Store attachments and avatars on local disk or an S3-compatible bucket. Public URLs stay the same; only where bytes live changes. Managed Storage Object storage is provided by Agila. Attachments and avatars use the platform S3 configuration. STORAGE_SECTION",
+      "searchFr": "Migration terminée Migration terminée Échec de la migration {{count}} fichier(s) absents à la source (aucun chemin enregistré) Stockez les pièces jointes et avatars sur le disque local ou un bucket S3 compatible. Les URL publiques restent identiques. Stockage géré Le stockage objet est fourni par Agila. Les pièces jointes et avatars utilisent la configuration S3 de la plateforme. STORAGE_SECTION",
+      "kind": "admin",
+      "hash": "#admin#system-settings#storage",
+      "highlights": [
+        "[data-setting-key=\"STORAGE_SECTION\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminStorageTab.tsx"
+    },
+    {
+      "id": "setting:TASK_DELETE_CONFIRM",
+      "attr": "setting",
+      "value": "TASK_DELETE_CONFIRM",
+      "en": "Set the default language for system-generated content. This affects:\n• Email notifications (invitations, task updates, password resets)\n• Default column names for new boards (e.g., \"To Do\", \"In Progress\")\n• Reports (when user language prefe",
+      "fr": "Définissez la langue par défaut pour le contenu généré par le système. Ceci affecte :\n• Les notifications par courriel (invitations, mises à jour de tâches, réinitialisations de mot de passe)\n• Les noms de colonnes par défaut pour les nouve",
+      "searchEn": "Set the default language for system-generated content. This affects:\n• Email notifications (invitations, task updates, password resets)\n• Default column names for new boards (e.g., \"To Do\", \"In Progress\")\n• Reports (when user language preference is not set)\n\nNote: User interface language and activity feed messages are controlled by individual user preferences, not this setting. Set the default language for system-generated content. This affects:\n• Email notifications (invitations, task updates, password resets)\n• Default column names for new boards (e.g., \"To Do\", \"In Progress\")\n• Reports (when user language preference is not set)\n\nNote: User interface language and activity feed messages are controlled by individual user preferences, not this setting. Task Delete Confirmation Require confi",
+      "searchFr": "Définissez la langue par défaut pour le contenu généré par le système. Ceci affecte :\n• Les notifications par courriel (invitations, mises à jour de tâches, réinitialisations de mot de passe)\n• Les noms de colonnes par défaut pour les nouveaux tableaux (p. ex. \"À faire\", \"En cours\")\n• Les rapports (lorsque la préférence linguistique de l'utilisateur n'est pas définie)\n\nNote : La langue de l'interface utilisateur et les messages du fil d'activité sont contrôlés par les préférences individuelles des utilisateurs, pas par ce paramètre. Définissez la langue par défaut pour le contenu généré par le système. Ceci affecte :\n• Les notifications par courriel (invitations, mises à jour de tâches, réinitialisations de mot de passe)\n• Les noms de colonnes par défaut pour les nouveaux tableaux (p. ex. ",
+      "kind": "admin",
+      "hash": "#admin#app-settings#user-interface",
+      "highlights": [
+        "[data-setting-key=\"TASK_DELETE_CONFIRM\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAppSettingsTab.tsx"
+    },
+    {
+      "id": "setting:TASK_EMAIL_NOTIFICATIONS_ENABLED",
+      "attr": "setting",
+      "value": "TASK_EMAIL_NOTIFICATIONS_ENABLED",
+      "en": "Task email notifications",
+      "fr": "Notifications email de tâches",
+      "searchEn": "Task email notifications Task email notifications When off, task activity emails stay in the Notification Queue and are not sent. Invites and password resets are unchanged. Task emails on Task emails paused TASK_EMAIL_NOTIFICATIONS_ENABLED",
+      "searchFr": "Notifications email de tâches Notifications email de tâches Lorsque c'est désactivé, les emails d'activité de tâches restent dans la file d'attente et ne sont pas envoyés. Les invitations et réinitialisations de mot de passe ne sont pas affectées. Emails de tâches activés Emails de tâches en pause TASK_EMAIL_NOTIFICATIONS_ENABLED",
+      "kind": "admin",
+      "hash": "#admin#system-settings#mail-server",
+      "highlights": [
+        "[data-setting-key=\"TASK_EMAIL_NOTIFICATIONS_ENABLED\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminMailTab.tsx"
+    },
+    {
+      "id": "setting:TROUBLESHOOTING_SECTION",
+      "attr": "setting",
+      "value": "TROUBLESHOOTING_SECTION",
+      "en": "Troubleshooting",
+      "fr": "Dépannage",
+      "searchEn": "Troubleshooting Troubleshooting Enable diagnostic logging and performance tools. Keep these off in normal use. Performance Test Overlay TROUBLESHOOTING_SECTION",
+      "searchFr": "Dépannage Dépannage Activez les journaux de diagnostic et les outils de performance. Laissez-les désactivés en usage normal. Superposition de tests de performance TROUBLESHOOTING_SECTION",
+      "kind": "admin",
+      "hash": "#admin#app-settings#troubleshooting",
+      "highlights": [
+        "[data-setting-key=\"TROUBLESHOOTING_SECTION\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminTroubleshootingTab.tsx"
+    },
+    {
+      "id": "setting:UPLOADS_SECTION",
+      "attr": "setting",
+      "value": "UPLOADS_SECTION",
+      "en": "File Uploads",
+      "fr": "Téléchargements de fichiers",
+      "searchEn": "File Uploads Configure file upload restrictions and security settings. These settings control what types of files users can upload and their maximum size. Enforce Upload Restrictions When enabled, file uploads will be restricted by size and type settings below. When disabled, all file uploads will be allowed regardless of these settings. UPLOADS_SECTION",
+      "searchFr": "Téléchargements de fichiers Configurez les restrictions et les paramètres de sécurité pour les téléchargements de fichiers. Ces paramètres contrôlent les types de fichiers que les utilisateurs peuvent télécharger et leur taille maximale. Appliquer les restrictions de téléchargement Lorsqu'elle est activée, les téléchargements de fichiers seront restreints par les paramètres de taille et de type ci-dessous. Lorsqu'elle est désactivée, tous les téléchargements de fichiers seront autorisés indépendamment de ces paramètres. UPLOADS_SECTION",
+      "kind": "admin",
+      "hash": "#admin#system-settings#file-uploads",
+      "highlights": [
+        "[data-setting-key=\"UPLOADS_SECTION\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminFileUploadsTab.tsx"
+    },
+    {
+      "id": "tour:add-board-button",
+      "attr": "tour",
+      "value": "add-board-button",
+      "en": "As an admin, you can create new boards by clicking this \"+\" button. Boards help organize different projects or teams.",
+      "fr": "En tant qu'administrateur, vous pouvez créer de nouveaux tableaux en cliquant sur ce bouton \"+\". Les tableaux aident à organiser différents projets ou équipes.",
+      "searchEn": "As an admin, you can create new boards by clicking this \"+\" button. Boards help organize different projects or teams. Add New Board (Admin only) add-board-button",
+      "searchFr": "En tant qu'administrateur, vous pouvez créer de nouveaux tableaux en cliquant sur ce bouton \"+\". Les tableaux aident à organiser différents projets ou équipes. Ajouter un nouveau tableau (Admin uniquement) add-board-button",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"add-board-button\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTabs.tsx"
+    },
+    {
+      "id": "tour:add-task-button",
+      "attr": "tour",
+      "value": "add-task-button",
+      "en": "Click the \"+\" button on any column to add a new task. This is the main way to create new work items.",
+      "fr": "Cliquez sur le bouton \"+\" de n'importe quelle colonne pour ajouter une nouvelle tâche. C'est le principal moyen de créer de nouveaux éléments de travail.",
+      "searchEn": "Click the \"+\" button on any column to add a new task. This is the main way to create new work items. Network Offline - Changes Disabled Add Task Archived Column add-task-button",
+      "searchFr": "Cliquez sur le bouton \"+\" de n'importe quelle colonne pour ajouter une nouvelle tâche. C'est le principal moyen de créer de nouveaux éléments de travail. Hors ligne - Modifications désactivées Ajouter une tâche Colonne archivée add-task-button",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"add-task-button\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/Column.tsx"
+    },
+    {
+      "id": "tour:admin-",
+      "attr": "tour",
+      "value": "admin-",
+      "en": "admin ",
+      "fr": "admin ",
+      "searchEn": "admin   admin-",
+      "searchFr": "admin   admin-",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/contexts/TourContext.tsx"
+    },
+    {
+      "id": "tour:admin-ai",
+      "attr": "tour",
+      "value": "admin-ai",
+      "en": "Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs.",
+      "fr": "Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code.",
+      "searchEn": "Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings ta",
+      "searchFr": "Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos t",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-ai\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-app-settings",
+      "attr": "tour",
+      "value": "admin-app-settings",
+      "en": "Configure application settings, user preferences, and system behavior in the App Settings tab.",
+      "fr": "Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application.",
+      "searchEn": "Configure application settings, user preferences, and system behavior in the App Settings tab. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting",
+      "searchFr": "Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dan",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-app-settings\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-features-panel",
+      "attr": "tour",
+      "value": "admin-features-panel",
+      "en": "admin features panel",
+      "fr": "admin features panel",
+      "searchEn": "admin features panel  admin-features-panel",
+      "searchFr": "admin features panel  admin-features-panel",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-features-panel\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/HelpModal.tsx"
+    },
+    {
+      "id": "tour:admin-file-uploads",
+      "attr": "tour",
+      "value": "admin-file-uploads",
+      "en": "Set attachment size limits and which file types users may upload.",
+      "fr": "Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser.",
+      "searchEn": "Set attachment size limits and which file types users may upload. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. a",
+      "searchFr": "Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâche",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-file-uploads\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-licensing",
+      "attr": "tour",
+      "value": "admin-licensing",
+      "en": "View and manage your license information, usage limits, and subscription details.",
+      "fr": "Consultez et gérez vos informations de licence, limites d'utilisation et détails d'abonnement.",
+      "searchEn": "View and manage your license information, usage limits, and subscription details. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team. Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore soft-deleted tasks and boards, or permanently purge them when they are no longer needed. View and manage your license information, usage limits, and subscription details. This system usage panel shows real-time resource monitoring: RAM usage, CPU usage, and disk space. It ",
+      "searchFr": "Consultez et gérez vos informations de licence, limites d'utilisation et détails d'abonnement. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints actifs. Configurez les fonctionnalités de rapport, y compris la gamification, la visibilité du classement et les paramètres d'achievements. Activez ou désactivez diverses capacités de rapport pour votre équipe. Gérez le cycle de vie des éléments supprimés et archivés. Définissez les périodes de rétention (purge) automatique, restaurez les tâches et tableaux en suppression récupérable, ou purgez-les définitivement lorsqu'ils ne sont plus nécessaires. Consultez et g",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-licensing\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-lifecycle",
+      "attr": "tour",
+      "value": "admin-lifecycle",
+      "en": "Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore soft-deleted tasks and boards, or permanently purge them when they are no longer needed.",
+      "fr": "Gérez le cycle de vie des éléments supprimés et archivés. Définissez les périodes de rétention (purge) automatique, restaurez les tâches et tableaux en suppression récupérable, ou purgez-les définitivement lorsqu'ils ne sont plus nécessaire",
+      "searchEn": "Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore soft-deleted tasks and boards, or permanently purge them when they are no longer needed. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team. Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore soft-deleted tasks and boards, or permanently purge them when they are no ",
+      "searchFr": "Gérez le cycle de vie des éléments supprimés et archivés. Définissez les périodes de rétention (purge) automatique, restaurez les tâches et tableaux en suppression récupérable, ou purgez-les définitivement lorsqu'ils ne sont plus nécessaires. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints actifs. Configurez les fonctionnalités de rapport, y compris la gamification, la visibilité du classement et les paramètres d'achievements. Activez ou désactivez diverses capacités de rapp",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-lifecycle\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-lifecycle-content",
+      "attr": "tour",
+      "value": "admin-lifecycle-content",
+      "en": "admin lifecycle content",
+      "fr": "admin lifecycle content",
+      "searchEn": "admin lifecycle content  admin-lifecycle-content",
+      "searchFr": "admin lifecycle content  admin-lifecycle-content",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-lifecycle-content\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/HelpModal.tsx"
+    },
+    {
+      "id": "tour:admin-mail-server",
+      "attr": "tour",
+      "value": "admin-mail-server",
+      "en": "Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality.",
+      "fr": "Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail.",
+      "searchEn": "Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored —",
+      "searchFr": "Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Configurez les par",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-mail-server\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-priorities",
+      "attr": "tour",
+      "value": "admin-priorities",
+      "en": "Set up priority levels for your tasks to help team members understand urgency.",
+      "fr": "Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence.",
+      "searchEn": "Set up priority levels for your tasks to help team members understand urgency. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning perio",
+      "searchFr": "Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-priorities\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-project-settings",
+      "attr": "tour",
+      "value": "admin-project-settings",
+      "en": "Manage project-specific settings, workflows, and custom configurations in Project Settings.",
+      "fr": "Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet.",
+      "searchEn": "Manage project-specific settings, workflows, and custom configurations in Project Settings. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achieve",
+      "searchFr": "Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planif",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-project-settings\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-reporting",
+      "attr": "tour",
+      "value": "admin-reporting",
+      "en": "Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team.",
+      "fr": "Configurez les fonctionnalités de rapport, y compris la gamification, la visibilité du classement et les paramètres d'achievements. Activez ou désactivez diverses capacités de rapport pour votre équipe.",
+      "searchEn": "Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team. Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore s",
+      "searchFr": "Configurez les fonctionnalités de rapport, y compris la gamification, la visibilité du classement et les paramètres d'achievements. Activez ou désactivez diverses capacités de rapport pour votre équipe. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints actifs. Configurez les fonctionnalités de rapport, y compris la gamification, la vi",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-reporting\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-site-settings",
+      "attr": "tour",
+      "value": "admin-site-settings",
+      "en": "Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header.",
+      "fr": "Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application.",
+      "searchEn": "Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. Use this button to show or hide the system metrics panel. When enabled, you'll see real-time monitoring of RAM, CPU, and disk usage. Your preference is saved and will persist across sessions. The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance.",
+      "searchFr": "Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Utilisez ce bouton pour afficher ou masquer le panneau de métriques système. Lorsqu'il est activé, vous verrez la surveillance en temps réel de la RAM, du CPU et de l'utilisation du disque. Votre préférence est enregistrée et persistera entre les sessions. Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, ",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-site-settings\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-sprint-settings",
+      "attr": "tour",
+      "value": "admin-sprint-settings",
+      "en": "Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints.",
+      "fr": "Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints act",
+      "searchEn": "Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achievement settings. E",
+      "searchFr": "Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints actifs. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de pla",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-sprint-settings\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-sso",
+      "attr": "tour",
+      "value": "admin-sso",
+      "en": "Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials.",
+      "fr": "Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth.",
+      "searchEn": "Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatibl",
+      "searchFr": "Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Configurez les paramètres du serveur de messagerie pour l'envoi de",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-sso\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-storage",
+      "attr": "tour",
+      "value": "admin-storage",
+      "en": "Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends.",
+      "fr": "Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends.",
+      "searchEn": "Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment s",
+      "searchFr": "Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionn",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-storage\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-system-settings",
+      "attr": "tour",
+      "value": "admin-system-settings",
+      "en": "System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance.",
+      "fr": "Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance.",
+      "searchEn": "System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emai",
+      "searchFr": "Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Configurez l'aut",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-system-settings\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-tab",
+      "attr": "tour",
+      "value": "admin-tab",
+      "en": "The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more.",
+      "fr": "Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore.",
+      "searchEn": "The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. Reports Admin Menu admin-tab",
+      "searchFr": "Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore. Rapports Admin Menu admin-tab",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-tab\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/layout/Header.tsx"
+    },
+    {
+      "id": "tour:admin-tabs",
+      "attr": "tour",
+      "value": "admin-tabs",
+      "en": "Security Warning",
+      "fr": "Avertissement de sécurité",
+      "searchEn": "Security Warning Security Warning The default admin account (admin@example.com) still exists. This is a security risk. Please create a new admin user first, then delete this default account. Admin Panel Manage users, site settings, and authentication configuration admin-tabs",
+      "searchFr": "Avertissement de sécurité Avertissement de sécurité Le compte administrateur par défaut (admin@example.com) existe toujours. C'est un risque de sécurité. Veuillez d'abord créer un nouvel utilisateur administrateur, puis supprimer ce compte par défaut. Panneau d'administration Gérer les utilisateurs, les paramètres du site et la configuration de l'authentification admin-tabs",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-tabs\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/Admin.tsx"
+    },
+    {
+      "id": "tour:admin-tags",
+      "attr": "tour",
+      "value": "admin-tags",
+      "en": "Create and manage tags to categorize and organize your tasks effectively.",
+      "fr": "Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches.",
+      "searchEn": "Create and manage tags to categorize and organize your tasks effectively. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific s",
+      "searchFr": "Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les me",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-tags\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-users",
+      "attr": "tour",
+      "value": "admin-users",
+      "en": "In the admin panel, manage team members, create new users, and assign roles.",
+      "fr": "Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles.",
+      "searchEn": "In the admin panel, manage team members, create new users, and assign roles. In List View, you can show or hide columns to customize your view. Click the menu icon in the table header to toggle column visibility. Use this button to show or hide the system metrics panel. When enabled, you'll see real-time monitoring of RAM, CPU, and disk usage. Your preference is saved and will persist across sessions. The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO,",
+      "searchFr": "Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Dans la vue Liste, vous pouvez afficher ou masquer des colonnes pour personnaliser votre vue. Cliquez sur l'icône de menu dans l'en-tête du tableau pour basculer la visibilité des colonnes. Utilisez ce bouton pour afficher ou masquer le panneau de métriques système. Lorsqu'il est activé, vous verrez la surveillance en temps réel de la RAM, du CPU et de l'utilisation du disque. Votre préférence est enregistrée et persistera entre les sessions. Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore. Dans le panneau d'adminis",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-users\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:app-nav-menu",
+      "attr": "tour",
+      "value": "app-nav-menu",
+      "en": "Menu",
+      "fr": "Menu",
+      "searchEn": "Menu Menu Admin Reports Kanban app-nav-menu",
+      "searchFr": "Menu Menu Admin Rapports Kanban app-nav-menu",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"app-nav-menu\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/Header.tsx"
+    },
+    {
+      "id": "tour:board-tabs",
+      "attr": "tour",
+      "value": "board-tabs",
+      "en": "These are your board tabs. Click on any tab to switch between different project boards.",
+      "fr": "Ce sont vos onglets de tableaux. Cliquez sur n'importe quel onglet pour basculer entre différents tableaux de projet.",
+      "searchEn": "These are your board tabs. Click on any tab to switch between different project boards. Scroll left board-tabs",
+      "searchFr": "Ce sont vos onglets de tableaux. Cliquez sur n'importe quel onglet pour basculer entre différents tableaux de projet. Défiler vers la gauche board-tabs",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"board-tabs\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTabs.tsx"
+    },
+    {
+      "id": "tour:board-trash-bulk-purge-confirm",
+      "attr": "tour",
+      "value": "board-trash-bulk-purge-confirm",
+      "en": "Permanently delete all {{count}} task(s) in trash? This cannot be undone.",
+      "fr": "Supprimer définitivement les {{count}} tâche(s) de la corbeille ? Cette action est irréversible.",
+      "searchEn": "Permanently delete all {{count}} task(s) in trash? This cannot be undone. Permanently delete all {{count}} task(s) in trash? This cannot be undone. Permanently delete {{count}} selected task(s)? This cannot be undone. Cancel Empty trash Delete selected trash deleted board-trash-bulk-purge-confirm",
+      "searchFr": "Supprimer définitivement les {{count}} tâche(s) de la corbeille ? Cette action est irréversible. Supprimer définitivement les {{count}} tâche(s) de la corbeille ? Cette action est irréversible. Supprimer définitivement {{count}} tâche(s) sélectionnée(s) ? Cette action est irréversible. Annuler Vider la corbeille Supprimer la sélection corbeille supprimees supprimes board-trash-bulk-purge-confirm",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"board-trash-bulk-purge-confirm\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTrashView.tsx"
+    },
+    {
+      "id": "tour:board-trash-close",
+      "attr": "tour",
+      "value": "board-trash-close",
+      "en": "Close",
+      "fr": "Fermer",
+      "searchEn": "Close Close trash deleted board-trash-close",
+      "searchFr": "Fermer Fermer corbeille supprimees supprimes board-trash-close",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"board-trash-close\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTrashView.tsx"
+    },
+    {
+      "id": "tour:board-trash-delete-selected",
+      "attr": "tour",
+      "value": "board-trash-delete-selected",
+      "en": "Unselect all",
+      "fr": "Tout désélectionner",
+      "searchEn": "Unselect all Unselect all Select all Restore selected Delete selected Empty trash {{count}} selected trash deleted board-trash-delete-selected",
+      "searchFr": "Tout désélectionner Tout désélectionner Tout sélectionner Restaurer la sélection Supprimer la sélection Vider la corbeille {{count}} sélectionné(s) corbeille supprimees supprimes board-trash-delete-selected",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"board-trash-delete-selected\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTrashView.tsx"
+    },
+    {
+      "id": "tour:board-trash-empty",
+      "attr": "tour",
+      "value": "board-trash-empty",
+      "en": "Delete selected",
+      "fr": "Supprimer la sélection",
+      "searchEn": "Delete selected Delete selected Empty trash {{count}} selected Restore or Delete permanently the tasks below. Live board below trash deleted board-trash-empty",
+      "searchFr": "Supprimer la sélection Supprimer la sélection Vider la corbeille {{count}} sélectionné(s) Restaurez ou supprimez définitivement les tâches ci-dessous. Tableau actif ci-dessous corbeille supprimees supprimes board-trash-empty",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"board-trash-empty\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTrashView.tsx"
+    },
+    {
+      "id": "tour:board-trash-restore-selected",
+      "attr": "tour",
+      "value": "board-trash-restore-selected",
+      "en": "Unselect all",
+      "fr": "Tout désélectionner",
+      "searchEn": "Unselect all Unselect all Select all Restore selected Delete selected trash deleted board-trash-restore-selected",
+      "searchFr": "Tout désélectionner Tout désélectionner Tout sélectionner Restaurer la sélection Supprimer la sélection corbeille supprimees supprimes board-trash-restore-selected",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"board-trash-restore-selected\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTrashView.tsx"
+    },
+    {
+      "id": "tour:board-trash-select-all",
+      "attr": "tour",
+      "value": "board-trash-select-all",
+      "en": "Trash",
+      "fr": "Corbeille",
+      "searchEn": "Trash Trash Unselect all Select all Restore selected trash deleted board-trash-select-all",
+      "searchFr": "Corbeille Corbeille Tout désélectionner Tout sélectionner Restaurer la sélection corbeille supprimees supprimes board-trash-select-all",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"board-trash-select-all\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTrashView.tsx"
+    },
+    {
+      "id": "tour:board-trash-toggle",
+      "attr": "tour",
+      "value": "board-trash-toggle",
+      "en": "Hide trash",
+      "fr": "Masquer la corbeille",
+      "searchEn": "Hide trash Hide trash Show trash trash deleted board-trash-toggle",
+      "searchFr": "Masquer la corbeille Masquer la corbeille Afficher la corbeille corbeille supprimees supprimes board-trash-toggle",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"board-trash-toggle\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTabs.tsx"
+    },
+    {
+      "id": "tour:board-trash-view",
+      "attr": "tour",
+      "value": "board-trash-view",
+      "en": "Trash",
+      "fr": "Corbeille",
+      "searchEn": "Trash Trash trash deleted board-trash-view",
+      "searchFr": "Corbeille Corbeille corbeille supprimees supprimes board-trash-view",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"board-trash-view\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTrashView.tsx"
+    },
+    {
+      "id": "tour:column-management-menu",
+      "attr": "tour",
+      "value": "column-management-menu",
+      "en": "As an admin, use the three-dot menu on any column header to add new columns or delete existing ones. This helps you customize your workflow to match your team's process.",
+      "fr": "En tant qu'administrateur, utilisez le menu à trois points sur l'en-tête de n'importe quelle colonne pour ajouter de nouvelles colonnes ou supprimer celles existantes. Cela vous aide à personnaliser votre flux de travail pour correspondre a",
+      "searchEn": "As an admin, use the three-dot menu on any column header to add new columns or delete existing ones. This helps you customize your workflow to match your team's process. Column management options column-management-menu",
+      "searchFr": "En tant qu'administrateur, utilisez le menu à trois points sur l'en-tête de n'importe quelle colonne pour ajouter de nouvelles colonnes ou supprimer celles existantes. Cela vous aide à personnaliser votre flux de travail pour correspondre au processus de votre équipe. Options de gestion de colonne column-management-menu",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"column-management-menu\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/Column.tsx"
+    },
+    {
+      "id": "tour:column-visibility",
+      "attr": "tour",
+      "value": "column-visibility",
+      "en": "In List View, you can show or hide columns to customize your view. Click the menu icon in the table header to toggle column visibility.",
+      "fr": "Dans la vue Liste, vous pouvez afficher ou masquer des colonnes pour personnaliser votre vue. Cliquez sur l'icône de menu dans l'en-tête du tableau pour basculer la visibilité des colonnes.",
+      "searchEn": "In List View, you can show or hide columns to customize your view. Click the menu icon in the table header to toggle column visibility. Show/Hide Columns column-visibility",
+      "searchFr": "Dans la vue Liste, vous pouvez afficher ou masquer des colonnes pour personnaliser votre vue. Cliquez sur l'icône de menu dans l'en-tête du tableau pour basculer la visibilité des colonnes. Afficher/Masquer les colonnes column-visibility",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"column-visibility\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/ListView.tsx"
+    },
+    {
+      "id": "tour:empty-column-add-task",
+      "attr": "tour",
+      "value": "empty-column-add-task",
+      "en": "Add Task",
+      "fr": "Ajouter une tâche",
+      "searchEn": "Add Task Add Task empty-column-add-task",
+      "searchFr": "Ajouter une tâche Ajouter une tâche empty-column-add-task",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"empty-column-add-task\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/Column.tsx"
+    },
+    {
+      "id": "tour:export-menu",
+      "attr": "tour",
+      "value": "export-menu",
+      "en": "In List View, admins can export tasks to CSV or XLSX format. Use the export menu in the table header to download task data for analysis or reporting.",
+      "fr": "Dans la vue Liste, les administrateurs peuvent exporter les tâches au format CSV ou XLSX. Utilisez le menu d'exportation dans l'en-tête du tableau pour télécharger les données des tâches pour analyse ou rapport.",
+      "searchEn": "In List View, admins can export tasks to CSV or XLSX format. Use the export menu in the table header to download task data for analysis or reporting. Export failed. Please try again. Export Data CSV Export export-menu",
+      "searchFr": "Dans la vue Liste, les administrateurs peuvent exporter les tâches au format CSV ou XLSX. Utilisez le menu d'exportation dans l'en-tête du tableau pour télécharger les données des tâches pour analyse ou rapport. L'export a échoué. Veuillez réessayer. Exporter les données Export CSV export-menu",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"export-menu\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/ExportMenu.tsx"
+    },
+    {
+      "id": "tour:header-task-search",
+      "attr": "tour",
+      "value": "header-task-search",
+      "en": "Search tasks…",
+      "fr": "Rechercher des tâches…",
+      "searchEn": "Search tasks… Search tasks… Clear search header-task-search",
+      "searchFr": "Rechercher des tâches… Rechercher des tâches… Effacer la recherche header-task-search",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"header-task-search\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/HeaderTaskSearch.tsx"
+    },
+    {
+      "id": "tour:help-button",
+      "attr": "tour",
+      "value": "help-button",
+      "en": "Need help? Click the help button (or press F1 or ?) anytime to open the help guide.",
+      "fr": "Besoin d'aide ? Cliquez sur le bouton d'aide (ou appuyez sur F1 ou ?) à tout moment pour ouvrir le guide d'aide.",
+      "searchEn": "Need help? Click the help button (or press F1 or ?) anytime to open the help guide. Show system panel Help (F1 / ?) GitHub help-button",
+      "searchFr": "Besoin d'aide ? Cliquez sur le bouton d'aide (ou appuyez sur F1 ou ?) à tout moment pour ouvrir le guide d'aide. Afficher le panneau système Aide (F1 / ?) GitHub help-button",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"help-button\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/Header.tsx"
+    },
+    {
+      "id": "tour:invite-user-button",
+      "attr": "tour",
+      "value": "invite-user-button",
+      "en": "As an admin, you can invite new users to join your team. Click the invite button and enter their email address to send an invitation.",
+      "fr": "En tant qu'administrateur, vous pouvez inviter de nouveaux utilisateurs à rejoindre votre équipe. Cliquez sur le bouton d'invitation et entrez leur adresse e-mail pour envoyer une invitation.",
+      "searchEn": "As an admin, you can invite new users to join your team. Click the invite button and enter their email address to send an invitation. Invite Invite User invite-user-button",
+      "searchFr": "En tant qu'administrateur, vous pouvez inviter de nouveaux utilisateurs à rejoindre votre équipe. Cliquez sur le bouton d'invitation et entrez leur adresse e-mail pour envoyer une invitation. Inviter Inviter un utilisateur invite-user-button",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"invite-user-button\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/Header.tsx"
+    },
+    {
+      "id": "tour:kanban-columns",
+      "attr": "tour",
+      "value": "kanban-columns",
+      "en": "This is your Kanban board! Tasks are organized in columns. You can drag and drop tasks between columns to update their status.",
+      "fr": "C'est votre tableau Kanban ! Les tâches sont organisées en colonnes. Vous pouvez faire glisser et déposer les tâches entre les colonnes pour mettre à jour leur statut.",
+      "searchEn": "This is your Kanban board! Tasks are organized in columns. You can drag and drop tasks between columns to update their status. Click or hold to scroll right kanban-columns",
+      "searchFr": "C'est votre tableau Kanban ! Les tâches sont organisées en colonnes. Vous pouvez faire glisser et déposer les tâches entre les colonnes pour mettre à jour leur statut. Cliquer ou maintenir pour défiler vers la droite kanban-columns",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"kanban-columns\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/KanbanPage.tsx"
+    },
+    {
+      "id": "tour:navigation",
+      "attr": "tour",
+      "value": "navigation",
+      "en": "navigation",
+      "fr": "navigation",
+      "searchEn": "navigation  navigation",
+      "searchFr": "navigation  navigation",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"navigation\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/Header.tsx"
+    },
+    {
+      "id": "tour:profile-menu",
+      "attr": "tour",
+      "value": "profile-menu",
+      "en": "Click on your profile to access settings, view your profile, or logout.",
+      "fr": "Cliquez sur votre profil pour accéder aux paramètres, voir votre profil ou vous déconnecter.",
+      "searchEn": "Click on your profile to access settings, view your profile, or logout. View only Account menu profile-menu",
+      "searchFr": "Cliquez sur votre profil pour accéder aux paramètres, voir votre profil ou vous déconnecter. Lecture seule Menu du compte profile-menu",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"profile-menu\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/Header.tsx"
+    },
+    {
+      "id": "tour:reports-button",
+      "attr": "tour",
+      "value": "reports-button",
+      "en": "Access the Reports section to view analytics and insights about team performance, task completion, burndown charts, and detailed task listings. Reports are available when enabled in settings.",
+      "fr": "Accédez à la section Rapports pour consulter les analyses et informations sur les performances de l'équipe, l'achèvement des tâches, les graphiques de burndown et les listes détaillées de tâches. Les rapports sont disponibles lorsqu'ils son",
+      "searchEn": "Access the Reports section to view analytics and insights about team performance, task completion, burndown charts, and detailed task listings. Reports are available when enabled in settings. Kanban Reports Admin reports-button",
+      "searchFr": "Accédez à la section Rapports pour consulter les analyses et informations sur les performances de l'équipe, l'achèvement des tâches, les graphiques de burndown et les listes détaillées de tâches. Les rapports sont disponibles lorsqu'ils sont activés dans les paramètres. Kanban Rapports Admin reports-button",
+      "kind": "page",
+      "page": "reports",
+      "highlights": [
+        "[data-tour-id=\"reports-button\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/Header.tsx"
+    },
+    {
+      "id": "tour:reports-tabs",
+      "attr": "tour",
+      "value": "reports-tabs",
+      "en": "Reports & Analytics",
+      "fr": "Rapports et analyses",
+      "searchEn": "Reports & Analytics Reports & Analytics reports-tabs",
+      "searchFr": "Rapports et analyses Rapports et analyses reports-tabs",
+      "kind": "page",
+      "page": "reports",
+      "highlights": [
+        "[data-tour-id=\"reports-tabs\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/Reports.tsx"
+    },
+    {
+      "id": "tour:search-filter",
+      "attr": "tour",
+      "value": "search-filter",
+      "en": "Use the search and filter tools to find specific tasks. You can filter by assignee, tags, priority, and more.",
+      "fr": "Utilisez les outils de recherche et de filtrage pour trouver des tâches spécifiques. Vous pouvez filtrer par assigné, étiquettes, priorité, et plus encore.",
+      "searchEn": "Use the search and filter tools to find specific tasks. You can filter by assignee, tags, priority, and more. Hide search filters Show search filters search-filter",
+      "searchFr": "Utilisez les outils de recherche et de filtrage pour trouver des tâches spécifiques. Vous pouvez filtrer par assigné, étiquettes, priorité, et plus encore. Masquer les filtres de recherche Afficher les filtres de recherche search-filter",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"search-filter\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/Tools.tsx"
+    },
+    {
+      "id": "tour:sprint-association",
+      "attr": "tour",
+      "value": "sprint-association",
+      "en": "Click the calendar icon on a task card to associate it with a sprint. This helps organize tasks by time periods and track progress within specific sprints.",
+      "fr": "Cliquez sur l'icône de calendrier sur une carte de tâche pour l'associer à un sprint. Cela aide à organiser les tâches par périodes et à suivre les progrès dans des sprints spécifiques.",
+      "searchEn": "Click the calendar icon on a task card to associate it with a sprint. This helps organize tasks by time periods and track progress within specific sprints.  sprint-association",
+      "searchFr": "Cliquez sur l'icône de calendrier sur une carte de tâche pour l'associer à un sprint. Cela aide à organiser les tâches par périodes et à suivre les progrès dans des sprints spécifiques.  sprint-association",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"sprint-association\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/TaskCard.tsx"
+    },
+    {
+      "id": "tour:sprint-selector",
+      "attr": "tour",
+      "value": "sprint-selector",
+      "en": "Use the Sprint Selector to filter tasks by sprint. You can view all sprints, the backlog (unassigned tasks), or a specific sprint. This helps you focus on tasks for a particular time period.",
+      "fr": "Utilisez le sélecteur de sprint pour filtrer les tâches par sprint. Vous pouvez afficher tous les sprints, le backlog (tâches non assignées) ou un sprint spécifique. Cela vous aide à vous concentrer sur les tâches d'une période donnée.",
+      "searchEn": "Use the Sprint Selector to filter tasks by sprint. You can view all sprints, the backlog (unassigned tasks), or a specific sprint. This helps you focus on tasks for a particular time period. Select Sprint sprint-selector",
+      "searchFr": "Utilisez le sélecteur de sprint pour filtrer les tâches par sprint. Vous pouvez afficher tous les sprints, le backlog (tâches non assignées) ou un sprint spécifique. Cela vous aide à vous concentrer sur les tâches d'une période donnée. Sélectionner un sprint sprint-selector",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"sprint-selector\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/SprintSelector.tsx"
+    },
+    {
+      "id": "tour:system-panel-toggle",
+      "attr": "tour",
+      "value": "system-panel-toggle",
+      "en": "Use this button to show or hide the system metrics panel. When enabled, you'll see real-time monitoring of RAM, CPU, and disk usage. Your preference is saved and will persist across sessions.",
+      "fr": "Utilisez ce bouton pour afficher ou masquer le panneau de métriques système. Lorsqu'il est activé, vous verrez la surveillance en temps réel de la RAM, du CPU et de l'utilisation du disque. Votre préférence est enregistrée et persistera ent",
+      "searchEn": "Use this button to show or hide the system metrics panel. When enabled, you'll see real-time monitoring of RAM, CPU, and disk usage. Your preference is saved and will persist across sessions. Hide system panel Show system panel Help (F1 / ?) system-panel-toggle",
+      "searchFr": "Utilisez ce bouton pour afficher ou masquer le panneau de métriques système. Lorsqu'il est activé, vous verrez la surveillance en temps réel de la RAM, du CPU et de l'utilisation du disque. Votre préférence est enregistrée et persistera entre les sessions. Masquer le panneau système Afficher le panneau système Aide (F1 / ?) system-panel-toggle",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"system-panel-toggle\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/Header.tsx"
+    },
+    {
+      "id": "tour:system-usage-panel",
+      "attr": "tour",
+      "value": "system-usage-panel",
+      "en": "This system usage panel shows real-time resource monitoring: RAM usage, CPU usage, and disk space. It helps you monitor your instance performance and resource consumption.",
+      "fr": "Ce panneau d'utilisation du système affiche la surveillance des ressources en temps réel : utilisation de la RAM, utilisation du CPU et espace disque. Il vous aide à surveiller les performances de votre instance et la consommation de ressou",
+      "searchEn": "This system usage panel shows real-time resource monitoring: RAM usage, CPU usage, and disk space. It helps you monitor your instance performance and resource consumption. Logout system-usage-panel",
+      "searchFr": "Ce panneau d'utilisation du système affiche la surveillance des ressources en temps réel : utilisation de la RAM, utilisation du CPU et espace disque. Il vous aide à surveiller les performances de votre instance et la consommation de ressources. Déconnexion system-usage-panel",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"system-usage-panel\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/layout/Header.tsx"
+    },
+    {
+      "id": "tour:task-card-comments",
+      "attr": "tour",
+      "value": "task-card-comments",
+      "en": "Hover to view comments",
+      "fr": "Survoler pour voir les commentaires",
+      "searchEn": "Hover to view comments Hover to view comments Add comment task-card-comments",
+      "searchFr": "Survoler pour voir les commentaires Survoler pour voir les commentaires Ajouter un commentaire task-card-comments",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"task-card-comments\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/TaskCard.tsx"
+    },
+    {
+      "id": "tour:task-card-delete",
+      "attr": "tour",
+      "value": "task-card-delete",
+      "en": "Delete Task (Shift+click to delete forever)",
+      "fr": "Supprimer la tâche (Maj+clic pour supprimer définitivement)",
+      "searchEn": "Delete Task (Shift+click to delete forever) Delete Task (Shift+click to delete forever) Delete Task task-card-delete",
+      "searchFr": "Supprimer la tâche (Maj+clic pour supprimer définitivement) Supprimer la tâche (Maj+clic pour supprimer définitivement) Supprimer la tâche task-card-delete",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"task-card-delete\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/TaskCardToolbar.tsx"
+    },
+    {
+      "id": "tour:task-card-toolbar",
+      "attr": "tour",
+      "value": "task-card-toolbar",
+      "en": "Hover over a task card to see the toolbar with quick actions. You can assign members, change priority, add tags, copy tasks, and more without opening the task details.",
+      "fr": "Survolez une carte de tâche pour voir la barre d'outils avec des actions rapides. Vous pouvez assigner des membres, changer la priorité, ajouter des étiquettes, copier des tâches, et plus encore sans ouvrir les détails de la tâche.",
+      "searchEn": "Hover over a task card to see the toolbar with quick actions. You can assign members, change priority, add tags, copy tasks, and more without opening the task details. Add tag task-card-toolbar",
+      "searchFr": "Survolez une carte de tâche pour voir la barre d'outils avec des actions rapides. Vous pouvez assigner des membres, changer la priorité, ajouter des étiquettes, copier des tâches, et plus encore sans ouvrir les détails de la tâche. Ajouter une étiquette task-card-toolbar",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"task-card-toolbar\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/TaskCardToolbar.tsx"
+    },
+    {
+      "id": "tour:task-view-mode-toggle",
+      "attr": "tour",
+      "value": "task-view-mode-toggle",
+      "en": "task view mode toggle",
+      "fr": "task view mode toggle",
+      "searchEn": "task view mode toggle  task-view-mode-toggle",
+      "searchFr": "task view mode toggle  task-view-mode-toggle",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"task-view-mode-toggle\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/Tools.tsx"
+    },
+    {
+      "id": "tour:team-members",
+      "attr": "tour",
+      "value": "team-members",
+      "en": "Filter tasks by team members. Click on member avatars to show only their tasks, or use the \"Clear\" button to see everyone.",
+      "fr": "Filtrez les tâches par membres de l'équipe. Cliquez sur les avatars des membres pour afficher uniquement leurs tâches, ou utilisez le bouton \"Effacer\" pour voir tout le monde.",
+      "searchEn": "Filter tasks by team members. Click on member avatars to show only their tasks, or use the \"Clear\" button to see everyone.  team-members",
+      "searchFr": "Filtrez les tâches par membres de l'équipe. Cliquez sur les avatars des membres pour afficher uniquement leurs tâches, ou utilisez le bouton \"Effacer\" pour voir tout le monde.  team-members",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"team-members\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/TeamMembers.tsx"
+    },
+    {
+      "id": "tour:theme-toggle",
+      "attr": "tour",
+      "value": "theme-toggle",
+      "en": "Switch between light and dark mode using the theme toggle. Choose the appearance that works best for you.",
+      "fr": "Basculez entre le mode clair et sombre à l'aide du bouton de thème. Choisissez l'apparence qui vous convient le mieux.",
+      "searchEn": "Switch between light and dark mode using the theme toggle. Choose the appearance that works best for you. Switch to dark mode Switch to light mode theme-toggle",
+      "searchFr": "Basculez entre le mode clair et sombre à l'aide du bouton de thème. Choisissez l'apparence qui vous convient le mieux. Passer en mode sombre Passer en mode clair theme-toggle",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"theme-toggle\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/ThemeToggle.tsx"
+    },
+    {
+      "id": "tour:view-mode-toggle",
+      "attr": "tour",
+      "value": "view-mode-toggle",
+      "en": "Switch between different view modes: Kanban (default), List view, or Gantt chart to see your tasks in different ways.",
+      "fr": "Basculez entre différents modes d'affichage : Kanban (par défaut), vue Liste ou diagramme de Gantt pour voir vos tâches de différentes manières.",
+      "searchEn": "Switch between different view modes: Kanban (default), List view, or Gantt chart to see your tasks in different ways.  view-mode-toggle",
+      "searchFr": "Basculez entre différents modes d'affichage : Kanban (par défaut), vue Liste ou diagramme de Gantt pour voir vos tâches de différentes manières.  view-mode-toggle",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"view-mode-toggle\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/Tools.tsx"
+    },
+    {
+      "id": "tour:view-modes",
+      "attr": "tour",
+      "value": "view-modes",
+      "en": "Tools",
+      "fr": "Outils",
+      "searchEn": "Tools Tools Highlight linked tasks (on) — hover a linked card to see parents/children; Shift+click the link icon on a highlighted card to unlink Highlight linked tasks (off) view-modes",
+      "searchFr": "Outils Outils Mettre en évidence les tâches liées (activé) — survolez une carte liée pour voir parents/enfants ; Maj+clic sur l'icône de lien d'une carte mise en évidence pour dissocier Mettre en évidence les tâches liées (désactivé) view-modes",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-tour-id=\"view-modes\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/Tools.tsx"
+    }
+  ]
+}

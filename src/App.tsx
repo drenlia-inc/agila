@@ -5103,6 +5103,7 @@ function AppContent() {
           onHelpClose={() => modalState.closeHelpModal()}
           onPageChange={handlePageChange}
           onViewModeChange={handleViewModeChange}
+          onOpenProfile={(focus) => modalState.openProfileModal(focus)}
           showProfileModal={modalState.showProfileModal}
           currentUser={currentUser}
           onProfileClose={() => {

@@ -36,7 +36,8 @@ interface ModalManagerProps {
   onActivityFeedToggle?: (enabled: boolean) => void;
   onAccountDeleted?: () => void;
   /** Focus target when Profile opens (e.g. bio from Meet the team). */
-  profileInitialFocus?: 'displayName' | 'bio';
+  profileInitialFocus?: 'displayName' | 'bio' | 'activityFeed';
+  onOpenProfile?: (focus?: 'displayName' | 'bio' | 'activityFeed') => void;
   siteSettings?: { [key: string]: string };
   boards?: any[];
   canMutate?: boolean;
@@ -64,6 +65,7 @@ const ModalManager: React.FC<ModalManagerProps> = ({
   profileInitialFocus = 'displayName',
   onActivityFeedToggle,
   onAccountDeleted,
+  onOpenProfile,
   siteSettings,
   boards,
   canMutate = true,
@@ -104,6 +106,7 @@ const ModalManager: React.FC<ModalManagerProps> = ({
             currentUser={currentUser}
             onPageChange={onPageChange}
             onViewModeChange={onViewModeChange}
+            onOpenProfile={onOpenProfile}
           />
         </Suspense>
       )}

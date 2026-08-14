@@ -1672,6 +1672,7 @@ export default function TaskDetails({
                       <a 
                         href={generateTaskUrl(task.ticket, getProjectIdentifier())}
                         className="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                        data-help-target="task-page-link"
                         title={`Direct link to ${task.ticket}`}
                       >
                         {task.ticket}

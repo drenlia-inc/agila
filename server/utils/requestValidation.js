@@ -644,3 +644,16 @@ export const agentRunnerCallbackBodySchema = z
     callbackToken: z.string().max(512).optional()
   })
   .passthrough();
+
+export const helpAssistantChatBodySchema = z.object({
+  language: z.enum(['en', 'fr']),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().min(1).max(2000)
+      })
+    )
+    .min(1)
+    .max(12)
+});

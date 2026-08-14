@@ -47,6 +47,8 @@ import {
   type BoardTrashChangedDetail,
 } from '../../utils/boardTrashEvents';
 import { getTaskSprintId, taskMatchesSelectedSprint } from '../../utils/columnFilters';
+import { isArchivedColumnFlag } from '../../utils/columnUtils';
+import { onHelpReveal, takeHelpReveal } from '../../utils/helpGoThere';
 
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
@@ -844,6 +846,20 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     }
   };
 
+  useEffect(() => {
+    const applyHelpReveal = () => {
+      if (takeHelpReveal('boardToolbar')) {
+        setShowBoardToolbar(true);
+        void updateAppSettingsPreference('showBoardToolbar', true, currentUser?.id ?? null);
+      }
+      if (takeHelpReveal('trash')) {
+        setTrashOpenPersisted(true);
+      }
+    };
+    applyHelpReveal();
+    return onHelpReveal(applyHelpReveal);
+  }, [currentUser?.id, setTrashOpenPersisted]);
+
   const handleToggleHighlightLinks = useCallback(() => {
     setHighlightLinksMode((prev) => {
       const next = !prev;
@@ -949,7 +965,36 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     });
   };
 
+  const pendingArchiveScrollRef = useRef<
+    | { kind: 'show'; columnId: string; restoreLeft: number }
+    | { kind: 'hide' }
+    | null
+  >(null);
+  const archiveScrollRestoreRef = useRef<number | null>(null);
+  const columnsContainerRef = useRef<HTMLDivElement>(null);
+
   const handleColumnVisibilityChange = (boardId: string, visibleColumns: string[]) => {
+    if (viewMode === 'kanban') {
+      const prev = visibleColumnsForCurrentBoard;
+      const addedArchive = visibleColumns.filter(
+        (id) => !prev.includes(id) && isArchivedColumnFlag(columns[id])
+      );
+      const removedArchive = prev.filter(
+        (id) => !visibleColumns.includes(id) && isArchivedColumnFlag(columns[id])
+      );
+      if (addedArchive.length > 0) {
+        const lastAdded = [...addedArchive].sort(
+          (a, b) => (columns[a]?.position || 0) - (columns[b]?.position || 0)
+        )[addedArchive.length - 1];
+        pendingArchiveScrollRef.current = {
+          kind: 'show',
+          columnId: lastAdded,
+          restoreLeft: columnsContainerRef.current?.scrollLeft ?? 0,
+        };
+      } else if (removedArchive.length > 0) {
+        pendingArchiveScrollRef.current = { kind: 'hide' };
+      }
+    }
     onBoardColumnVisibilityChange(boardId, visibleColumns);
   };
 
@@ -1011,7 +1056,6 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     scrollLeft: () => void;
     scrollRight: () => void;
   } | null>(null);
-  const columnsContainerRef = useRef<HTMLDivElement>(null);
   const trashScrollContainerRef = useRef<HTMLDivElement>(null);
   const syncingHorizontalScrollRef = useRef(false);
   const scrollSyncFrameRef = useRef<number | null>(null);
@@ -1122,6 +1166,47 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     
     return () => clearTimeout(timeoutId);
   }, [columns, viewMode]);
+
+  useEffect(() => {
+    const pending = pendingArchiveScrollRef.current;
+    if (!pending) return;
+
+    const timeoutId = window.setTimeout(() => {
+      const action = pendingArchiveScrollRef.current;
+      pendingArchiveScrollRef.current = null;
+      const container = columnsContainerRef.current;
+      if (!action || !container || viewMode !== 'kanban') return;
+
+      if (action.kind === 'show') {
+        const el = container.querySelector(
+          `[data-kanban-column-id="${CSS.escape(action.columnId)}"]`
+        ) as HTMLElement | null;
+        if (!el) return;
+        const cRect = container.getBoundingClientRect();
+        const eRect = el.getBoundingClientRect();
+        const fullyVisible = eRect.left >= cRect.left - 2 && eRect.right <= cRect.right + 2;
+        if (fullyVisible) {
+          archiveScrollRestoreRef.current = null;
+          return;
+        }
+        archiveScrollRestoreRef.current = action.restoreLeft;
+        const overflowRight = eRect.right - cRect.right;
+        const overflowLeft = cRect.left - eRect.left;
+        const delta = overflowRight > 2 ? overflowRight + 8 : overflowLeft > 2 ? -(overflowLeft + 8) : 0;
+        if (delta !== 0) {
+          container.scrollBy({ left: delta, behavior: 'smooth' });
+        }
+        return;
+      }
+
+      const restoreLeft = archiveScrollRestoreRef.current;
+      archiveScrollRestoreRef.current = null;
+      if (restoreLeft == null) return;
+      container.scrollTo({ left: restoreLeft, behavior: 'smooth' });
+    }, 80);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [visibleColumnsForCurrentBoard, viewMode]);
 
   // Ensure scroll state is checked when switching to Kanban view
   useEffect(() => {
@@ -1553,7 +1638,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                     .sort((a, b) => (a.position || 0) - (b.position || 0))
                     .map((column, index, array) => (
                       <React.Fragment key={column.id}>
-                        <div className="relative">
+                        <div className="relative" data-kanban-column-id={column.id}>
                           <KanbanColumn
                             column={column}
                             filteredTasks={filteredColumns[column.id]?.tasks || []}
@@ -1662,7 +1747,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                   .sort((a, b) => (a.position || 0) - (b.position || 0))
                   .map((column, index, array) => (
                     <React.Fragment key={column.id}>
-                      <div className="relative">
+                      <div className="relative" data-kanban-column-id={column.id}>
                         <KanbanColumn
                           column={column}
                       filteredTasks={filteredColumns[column.id]?.tasks || []}

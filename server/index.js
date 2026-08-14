@@ -472,6 +472,7 @@ app.use('/api/tasks', taskRelationsRouter);
 app.use('/api/agent/runner', lazyRouteLoader('./routes/agentRunnerCallback.js'));
 app.use('/api/agent/automation', lazyRouteLoader('./routes/agentAutomation.js'));
 app.use('/api/agent', agentRouter);
+app.use('/api/help-assistant', lazyRouteLoader('./routes/helpAssistant.js'));
 app.use('/api/user/dev', userDevRouter);
 app.use('/api/activity', activityRouter);
 app.use('/api/user', activityRouter);

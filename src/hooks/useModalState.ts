@@ -9,7 +9,7 @@ import {
   saveHelpSession,
 } from '../utils/helpSessionPersistence';
 
-export type ProfileInitialFocus = 'displayName' | 'bio';
+export type ProfileInitialFocus = 'displayName' | 'bio' | 'activityFeed';
 
 export interface UseModalStateReturn {
   showHelpModal: boolean;
@@ -55,6 +55,10 @@ export const useModalState = (userId?: string | null): UseModalStateReturn => {
         minimized: open ? (prev?.minimized ?? minimized) : false,
         activeTab: prev?.activeTab,
         scrollByTab: prev?.scrollByTab,
+        assistantOpen: open ? prev?.assistantOpen : false,
+        assistantMessages: open ? prev?.assistantMessages : undefined,
+        assistantPositionX: open ? prev?.assistantPositionX : undefined,
+        assistantHeight: open ? prev?.assistantHeight : undefined,
       });
     },
     [userId]

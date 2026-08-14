@@ -1914,6 +1914,7 @@ const TaskCard = React.memo(function TaskCard({
                   ? { target: '_blank', rel: 'noopener noreferrer' }
                   : {})}
                 className={`bg-white dark:bg-gray-800 px-1.5 py-0.8 text-gray-600 dark:text-gray-300 font-mono font-bold hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 transition-all duration-200 cursor-pointer whitespace-nowrap max-w-none`}
+                data-help-target="task-page-link"
                 style={{
                   borderTopLeftRadius: '0.25rem',
                   borderTopRightRadius: '0.25rem',

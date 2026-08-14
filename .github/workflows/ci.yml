@@ -26,6 +26,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Help UI index (stale check)
+        run: npm run help:ui-index:check
+
       - name: Build
         run: npm run build
 
