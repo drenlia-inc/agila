@@ -62,6 +62,7 @@ export const AUTOMATION_CAPABILITIES = Object.freeze({
     'create_task',
     'update_tasks',
     'move_tasks',
+    'restore_tasks',
     'create_sprint',
     'update_sprint',
     'set_task_sprint',

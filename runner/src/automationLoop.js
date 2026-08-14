@@ -8,6 +8,7 @@ import { stripModelReasoning } from './stripReasoning.js';
 import { sendCallback } from './callback.js';
 import { updateJob, removeJob } from './jobQueue.js';
 import { AUTOMATION_MAX_TOOL_STEPS } from './automationConstants.js';
+import { replyLanguageInstruction } from './replyLanguage.js';
 
 const MAX_STEPS = AUTOMATION_MAX_TOOL_STEPS || 40;
 
@@ -54,7 +55,7 @@ const TOOLS = [
   {
     name: 'search_tasks',
     description:
-      'Search tasks in scope. Excludes the automation launch task. Returns compact rows with boardTitle, columnTitle, and descriptionPreview (first 500 chars) so you usually do NOT need get_task for each match. Filter by boardId, sprintId, columnId, text, assigneeId, tagId. Set includeDescription:false only if you need ids only. Use boardTitle in summaries; boardId only in tool args.',
+      'Search live tasks in scope (trash is excluded by default). Excludes the automation launch task. Returns compact rows with boardTitle, columnTitle, and descriptionPreview. Set trashOnly:true (or includeTrash:true) only when the user asked to find or recover tasks from trash. Then use restore_tasks.',
     parameters: {
       type: 'object',
       properties: {
@@ -65,7 +66,15 @@ const TOOLS = [
         assigneeId: { type: 'string' },
         tagId: { type: 'string' },
         limit: { type: 'number' },
-        includeDescription: { type: 'boolean' }
+        includeDescription: { type: 'boolean' },
+        includeTrash: {
+          type: 'boolean',
+          description: 'Include live and trashed tasks. Prefer trashOnly for recovery.'
+        },
+        trashOnly: {
+          type: 'boolean',
+          description: 'Search only tasks in trash (for recovery).'
+        }
       }
     }
   },
@@ -117,6 +126,19 @@ const TOOLS = [
         dryRun: { type: 'boolean' }
       },
       required: ['taskIds', 'fields']
+    }
+  },
+  {
+    name: 'restore_tasks',
+    description:
+      'Restore tasks from trash onto their board. Use only when the user asked to recover trashed work. Discover with search_tasks trashOnly:true first. Use dryRun:true while planning.',
+    parameters: {
+      type: 'object',
+      properties: {
+        taskIds: { type: 'array', items: { type: 'string' } },
+        dryRun: { type: 'boolean' }
+      },
+      required: ['taskIds']
     }
   },
   {
@@ -353,6 +375,35 @@ async function applyPlan(automation) {
   return body;
 }
 
+const AGENT_MEMBER_ID = '00000000-0000-0000-0000-000000000011';
+
+function commentPlainText(c) {
+  return String(c?.text || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isAgentComment(c) {
+  const authorId = String(c?.authorId || '').trim();
+  if (authorId && authorId === AGENT_MEMBER_ID) return true;
+  const author = String(c?.author || '').trim().toLowerCase();
+  return author === 'agent' || author.endsWith(' agent');
+}
+
+/** Human comments posted after the last Agent reply — this run's instruction. */
+function thisTurnHumanComments(payload) {
+  const comments = Array.isArray(payload.comments) ? payload.comments : [];
+  let lastAgent = -1;
+  for (let i = comments.length - 1; i >= 0; i--) {
+    if (isAgentComment(comments[i])) {
+      lastAgent = i;
+      break;
+    }
+  }
+  return comments.slice(lastAgent + 1).filter((c) => !isAgentComment(c) && commentPlainText(c));
+}
+
 function buildContext(payload) {
   const boards = payload.automation?.boards;
   const boardLines =
@@ -364,15 +415,23 @@ function buildContext(payload) {
         ? `Board IDs: ${payload.automation.boardIds.join(', ')}`
         : '';
 
+  const thisTurn = thisTurnHumanComments(payload);
+  const thisTurnBlock = thisTurn.length
+    ? `This run's human messages (since last Agent reply) — this is the current instruction:\n${thisTurn
+        .map((c) => `- ${c.author || 'user'}: ${commentPlainText(c)}`)
+        .join('\n')}`
+    : 'This run has no new human comments since the last Agent reply. Execute the standing recipe.';
+
   return [
     `Task ticket: ${payload.ticket || '(none)'}`,
     `Title: ${payload.title || ''}`,
-    `Description:\n${payload.description || '(none)'}`,
+    `Standing recipe (task description):\n${payload.description || '(none)'}`,
+    thisTurnBlock,
     `Scope: ${payload.automation?.scopeType || 'this_board'}`,
     boardLines,
     payload.comments?.length
-      ? `Recent comments:\n${payload.comments
-          .map((c) => `- ${c.author || 'user'}: ${c.text}`)
+      ? `Full thread (context only — do not re-do already completed Agent work unless this run asks):\n${payload.comments
+          .map((c) => `- ${c.author || 'user'}: ${commentPlainText(c)}`)
           .join('\n')
           .slice(0, 6000)}`
       : ''
@@ -408,15 +467,19 @@ export async function runAutomationJob(job) {
     'You are the Easy Kanban Automation agent (admin-only board operations).',
     'Discover data with list/search tools, then plan mutations with dryRun:true.',
     'Never delete tasks, boards, or columns — those are denied.',
+    'search_tasks excludes trash by default. Only use trashOnly/includeTrash when the user asked to find or recover trashed tasks; then restore_tasks (not update/move).',
     'The automation launch task (this recipe card) is NEVER a target: search/get/move/update skip it automatically. Do not try to move or edit it.',
     'Prefer search_tasks for analysis — results include descriptionPreview, boardTitle, and columnTitle. Avoid calling get_task once per match; use get_tasks only when you need fuller fields for a small set.',
     'When names are ambiguous, prefer IDs from list tools; refuse to guess.',
     'In human-facing text (submit_dry_run_plan summary, finish, comments), always use board titles and column titles — never raw board/column UUIDs. Keep using IDs only in tool arguments.',
+    replyLanguageInstruction(payload),
     'When the plan is ready, call submit_dry_run_plan with a clear summary and operations array',
     '(operations should use dryRun:false arguments — the server applies them only after admin Apply).',
     'If there is nothing to change, submit_dry_run_plan with an empty operations array, then call finish immediately (no Apply).',
     'After submit_dry_run_plan with non-empty operations you will wait; do not mutate further until told Apply succeeded.',
     'Finally call finish with a human summary.',
+    'The standing recipe is the default job when this run has no new human comments.',
+    'If this run has new human comments, that is the current instruction. Use the full thread as context (follow-ups like "those", "also", questions). Do not also execute the recipe in the same run unless they asked. If the new instruction conflicts with the recipe, follow this run.',
     'Reply with tool calls only when acting; keep summaries concise.',
     buildContext(payload)
   ].join('\n\n');
@@ -426,7 +489,7 @@ export async function runAutomationJob(job) {
     {
       role: 'user',
       content:
-        'Execute the automation described in the task. Discover first, then submit_dry_run_plan.'
+        'Follow the current instruction in context (this run vs standing recipe). Discover with tools first. For trash/recovery, use search_tasks with trashOnly:true then restore_tasks. Then submit_dry_run_plan.'
     }
   ];
 
@@ -492,6 +555,7 @@ export async function runAutomationJob(job) {
         'rename_column',
         'create_board',
         'rename_board',
+        'restore_tasks',
         'add_comment',
         'export_tasks_xlsx',
         'export_tasks_csv'
@@ -515,8 +579,7 @@ export async function runAutomationJob(job) {
             await sendCallback(job, {
               event: 'progress',
               progress: 90,
-              log: `[runner] Empty plan — nothing to apply; finishing`,
-              comment: summaryText
+              log: `[runner] Empty plan — nothing to apply; finishing`
             });
             messages.push({
               role: 'tool',

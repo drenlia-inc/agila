@@ -105,7 +105,17 @@ router.post('/callback', async (req, res) => {
         // Agent replies are Markdown; TipTap UI expects HTML
         const cleaned = stripModelReasoning(String(body.comment));
         const htmlBody = markdownToHtml(cleaned || String(body.comment));
-        await commentQueries.createComment(
+        const normalizeComment = (s) =>
+          String(s || '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const existingComments = await commentQueries.getCommentsForTask(db, taskId);
+        const lastAgent = [...existingComments].reverse().find((c) => c.authorId === AGENT_MEMBER_ID);
+        if (lastAgent && normalizeComment(lastAgent.text) === normalizeComment(htmlBody)) {
+          // Same summary posted twice (empty-plan progress + done)
+        } else {
+          await commentQueries.createComment(
           db,
           commentId,
           taskId,
@@ -133,6 +143,7 @@ router.post('/callback', async (req, res) => {
           'agent comment',
           { db, tenantId, commentContent: htmlBody }
         ).catch((err) => console.error('Agent comment activity log failed:', err));
+        }
       } catch (e) {
         console.error('Runner callback comment error:', e);
       }

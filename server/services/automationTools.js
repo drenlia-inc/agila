@@ -106,6 +106,11 @@ function compactTask(task, { includeDescription = false } = {}) {
     base.descriptionPreview = plain.slice(0, 500);
     base.descriptionLength = plain.length;
   }
+  const deletedAt = task.deleted_at || task.deletedAt || null;
+  if (deletedAt) {
+    base.inTrash = true;
+    base.deletedAt = deletedAt;
+  }
   return base;
 }
 
@@ -151,6 +156,10 @@ async function enrichTaskTitles(ctx, task) {
 /** Never mutate/search the automation launch card itself (avoids self-matching the recipe text). */
 function isLaunchTask(ctx, taskId) {
   return Boolean(ctx.launchTaskId && taskId && String(taskId) === String(ctx.launchTaskId));
+}
+
+function isTaskInTrash(task) {
+  return Boolean(task && (task.deleted_at || task.deletedAt));
 }
 
 function filterOutLaunchTaskIds(ctx, taskIds) {
@@ -370,6 +379,14 @@ async function searchTasksInternal(ctx, args = {}, allowedBoardIds) {
   conditions.push(`t.boardid IN (${scopePlaceholders})`);
   params.push(...scopeIds);
 
+  const trashOnly = args.trashOnly === true;
+  const includeTrash = trashOnly || args.includeTrash === true;
+  if (trashOnly) {
+    conditions.push('t.deleted_at IS NOT NULL');
+  } else if (!includeTrash) {
+    conditions.push('t.deleted_at IS NULL');
+  }
+
   if (args.sprintId) {
     conditions.push(`t.sprint_id = $${idx++}`);
     params.push(args.sprintId);
@@ -400,7 +417,7 @@ async function searchTasksInternal(ctx, args = {}, allowedBoardIds) {
   params.push(limit);
   const query = `
     SELECT t.id, t.ticket, t.title, t.boardid, t.columnid, t.sprint_id, t.memberid, t.priority, t.description,
-           b.title AS board_title, c.title AS column_title
+           t.deleted_at, b.title AS board_title, c.title AS column_title
     FROM tasks t
     LEFT JOIN boards b ON b.id = t.boardid
     LEFT JOIN columns c ON c.id = t.columnid
@@ -429,7 +446,8 @@ async function searchTasksInternal(ctx, args = {}, allowedBoardIds) {
     excludedLaunchTask: Boolean(ctx.launchTaskId),
     note: ctx.launchTaskId
       ? 'The automation launch task itself is excluded from search results. Prefer boardTitle/columnTitle in human summaries.'
-      : 'Prefer boardTitle/columnTitle in human summaries; use boardId/columnId only in tool arguments.'
+      : 'Prefer boardTitle/columnTitle in human summaries; use boardId/columnId only in tool arguments.',
+    trash: trashOnly ? 'only' : includeTrash ? 'include' : 'exclude'
   };
 }
 
@@ -625,6 +643,12 @@ async function toolUpdateTasks(ctx, args, { dryRun }, allowedBoardIds) {
     const before = await taskQueries.getTaskById(ctx.db, taskId);
     if (!before) return { error: `Task not found: ${taskId}` };
     assertTaskInScope(ctx, before, allowedBoardIds);
+    if (isTaskInTrash(before)) {
+      return {
+        error: `Task ${taskId} is in trash — use restore_tasks first (or search with trashOnly:true)`,
+        inTrash: true
+      };
+    }
     wouldAffect.push({ taskId, before: taskSnapshot(before), after: { ...taskSnapshot(before), ...updates } });
   }
 
@@ -674,6 +698,12 @@ async function toolMoveTasks(ctx, args, { dryRun }, allowedBoardIds) {
     const task = await taskQueries.getTaskById(ctx.db, taskId);
     if (!task) return { error: `Task not found: ${taskId}` };
     assertTaskInScope(ctx, task, allowedBoardIds);
+    if (isTaskInTrash(task)) {
+      return {
+        error: `Task ${taskId} is in trash — use restore_tasks first (or search with trashOnly:true)`,
+        inTrash: true
+      };
+    }
 
     const taskBoard = taskBoardId(task);
     if (taskBoard !== targetBoardId && taskBoard !== column.boardId) {
@@ -726,6 +756,123 @@ async function toolMoveTasks(ctx, args, { dryRun }, allowedBoardIds) {
   }
 
   return { moved: wouldAffect.map((w) => w.taskId), skippedLaunchTask: skippedLaunchTask || undefined };
+}
+
+async function toolRestoreTasks(ctx, args, { dryRun }, allowedBoardIds) {
+  const rawIds = args?.taskIds;
+  if (!Array.isArray(rawIds) || !rawIds.length) {
+    return { error: 'taskIds array is required' };
+  }
+  const { taskIds, skippedLaunchTask } = filterOutLaunchTaskIds(ctx, rawIds);
+  if (!taskIds.length) {
+    return {
+      error: 'No restorable tasks after excluding the automation launch task',
+      skippedLaunchTask: true
+    };
+  }
+
+  const wouldAffect = [];
+  const skippedLive = [];
+  for (const taskId of taskIds) {
+    const task = await taskQueries.getTaskById(ctx.db, taskId);
+    if (!task) return { error: `Task not found: ${taskId}` };
+    assertTaskInScope(ctx, task, allowedBoardIds);
+    if (!isTaskInTrash(task)) {
+      skippedLive.push(taskId);
+      continue;
+    }
+
+    const boardId = taskBoardId(task);
+    const board = await boardQueries.getBoardById(ctx.db, boardId);
+    if (!board || board.deleted_at || board.deletedAt) {
+      return {
+        error: `Restore the board before restoring task ${taskId}`,
+        code: 'board_soft_deleted'
+      };
+    }
+
+    const originalColumnId = taskColumnId(task);
+    const boardColumns = await helpers.getColumnsForBoard(ctx.db, boardId);
+    let columnId = originalColumnId;
+    const colOnBoard = (boardColumns || []).find((c) => c.id === columnId);
+    if (!colOnBoard) {
+      const fallback = (boardColumns || []).find(
+        (c) => !(c.is_archived === true || c.is_archived === 1)
+      );
+      if (!fallback) {
+        return { error: `No column available to restore task ${taskId}` };
+      }
+      columnId = fallback.id;
+    }
+
+    wouldAffect.push({
+      taskId,
+      boardId,
+      columnId,
+      originalPosition: Number(task.position),
+      before: taskSnapshot(task)
+    });
+  }
+
+  if (!wouldAffect.length) {
+    return {
+      restored: [],
+      skippedLive,
+      skippedLaunchTask: skippedLaunchTask || undefined,
+      note: 'No tasks were in trash'
+    };
+  }
+
+  if (dryRun) {
+    return {
+      wouldAffect: wouldAffect.map((w) => ({
+        taskId: w.taskId,
+        boardId: w.boardId,
+        columnId: w.columnId
+      })),
+      skippedLive,
+      dryRun: true,
+      skippedLaunchTask: skippedLaunchTask || undefined
+    };
+  }
+
+  const restoredIds = [];
+  for (const item of wouldAffect) {
+    const origPos = Number.isFinite(item.originalPosition) ? item.originalPosition : NaN;
+    let position = origPos;
+    if (Number.isFinite(origPos) && origPos >= 0) {
+      await taskQueries.shiftLiveTasksFromPosition(ctx.db, item.columnId, origPos);
+    } else {
+      const maxPos = await taskQueries.getMaxLivePositionInColumn(ctx.db, item.columnId);
+      position = maxPos + 1;
+    }
+    const restored = await taskQueries.restoreTask(
+      ctx.db,
+      item.taskId,
+      item.columnId,
+      item.boardId,
+      position
+    );
+    if (!restored) continue;
+    await enrichTaskTitles(ctx, restored);
+    await journal(ctx, 'restore_task', 'task', item.taskId, item.before, taskSnapshot(restored));
+    await notificationService.publish(
+      'task-restored',
+      {
+        boardId: item.boardId,
+        task: restored,
+        timestamp: new Date().toISOString()
+      },
+      ctx.tenantId || null
+    );
+    restoredIds.push(item.taskId);
+  }
+
+  return {
+    restored: restoredIds,
+    skippedLive,
+    skippedLaunchTask: skippedLaunchTask || undefined
+  };
 }
 
 async function toolCreateSprint(ctx, args, { dryRun }) {
@@ -1453,6 +1600,8 @@ export async function executeTool(ctx, name, args = {}, { dryRun = false } = {})
         return await toolUpdateTasks(ctx, args, opts, allowedBoardIds);
       case 'move_tasks':
         return await toolMoveTasks(ctx, args, opts, allowedBoardIds);
+      case 'restore_tasks':
+        return await toolRestoreTasks(ctx, args, opts, allowedBoardIds);
       case 'create_sprint':
         return await toolCreateSprint(ctx, args, opts);
       case 'update_sprint':
@@ -1546,6 +1695,9 @@ async function reverseJournalEntry(ctx, entry) {
         );
         await publishTaskUpdated(ctx, entityId, before.boardId);
       }
+      break;
+    case 'restore_task':
+      await taskQueries.softDeleteTask(ctx.db, entityId, ctx.userId || 'system');
       break;
     case 'create_task':
       await taskQueries.deleteTask(ctx.db, entityId);

@@ -2239,14 +2239,15 @@ const TaskCard = React.memo(function TaskCard({
           const displayName = sprintName.length > 20 ? sprintName.substring(0, 17) + '...' : sprintName;
           
           return (
-            <div className="flex justify-end mb-2" data-sprint-badge="true">
+            <div className="mb-2 flex justify-end">
               <KanbanChromeTooltip
                 label={t('taskCard.clickToSelectSprint')}
                 delayMs={0}
-                wrapperClassName="inline-flex max-w-full justify-end"
+                wrapperClassName="inline-flex max-w-full shrink-0"
               >
                 <span
                   ref={sprintBadgeRef}
+                  data-sprint-badge="true"
                   className={`px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700 max-w-full truncate transition-colors ${
                     allowMutations ? 'cursor-pointer hover:bg-indigo-200' : 'cursor-default'
                   }`}

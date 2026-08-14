@@ -1437,7 +1437,7 @@
     "close": "Fermer",
     "last": "Terminer",
     "next": "Suivant ↵",
-    "nextWithProgress": "Suivant ↵ (Étape {step} de {steps})",
+    "nextWithProgress": "Suivant ↵\n(Étape {step}/{steps})",
     "skip": "Sortir",
     "nudgeTitle": "Faire une visite rapide ?",
     "nudgeDescription": "Découvrez les bases des tableaux, des tâches et des vues en quelques étapes. Vous pouvez relancer le tutoriel à tout moment depuis Aide.",
