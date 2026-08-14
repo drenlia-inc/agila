@@ -4,11 +4,11 @@
 # Stage 1: Build the frontend
 FROM node:22-alpine AS frontend-builder
 
-# Build argument for MULTI_TENANT (needed for frontend build)
+# Build arguments baked into the Vite bundle (define + import.meta.env)
 ARG MULTI_TENANT=false
-
-# Set as environment variable so Vite can access it during build
+ARG DEMO_ENABLED=false
 ENV MULTI_TENANT=${MULTI_TENANT}
+ENV DEMO_ENABLED=${DEMO_ENABLED}
 
 WORKDIR /app
 
