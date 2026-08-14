@@ -5,6 +5,7 @@ import { TaskViewMode, ViewMode, loadUserPreferences, updateUserPreference } fro
 import { hasConfiguredSearchFilters, filterTasks } from '../utils/taskUtils';
 import { SYSTEM_MEMBER_ID } from '../constants/appConstants';
 import { isAgentMemberId } from '../utils/agentMemberUi';
+import { onHelpReveal, takeHelpReveal } from '../utils/helpGoThere';
 import {
   applyActiveColumnFilters,
   taskMatchesSelectedSprint,
@@ -249,6 +250,16 @@ export const useTaskFilters = ({
     setIsSearchActive(newValue);
     updateCurrentUserPreference('isSearchActive', newValue);
   };
+
+  useEffect(() => {
+    const openSearch = () => {
+      if (!takeHelpReveal('searchFilters')) return;
+      setIsSearchActive(true);
+      updateCurrentUserPreference('isSearchActive', true);
+    };
+    openSearch();
+    return onHelpReveal(openSearch);
+  }, [updateCurrentUserPreference]);
 
   const handleSearchFiltersChange = (newFilters: typeof searchFilters) => {
     setSearchFilters(newFilters);

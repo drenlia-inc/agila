@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Columns, Check, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { onHelpReveal, takeHelpReveal } from '../utils/helpGoThere';
 
 interface ColumnFilterDropdownProps {
   columns: Columns;
@@ -33,6 +34,15 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    const openFromHelp = () => {
+      if (!takeHelpReveal('columnFilter')) return;
+      window.setTimeout(() => setIsOpen(true), 0);
+    };
+    openFromHelp();
+    return onHelpReveal(openFromHelp);
+  }, []);
+
   const columnList = Object.values(columns).sort((a, b) => (a.position || 0) - (b.position || 0));
   const allVisible = columnList.length > 0 && visibleColumns.length === columnList.length;
   const someVisible = visibleColumns.length > 0 && visibleColumns.length < columnList.length;
@@ -62,7 +72,7 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative" ref={dropdownRef} data-help-target="kanban-column-filter">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"

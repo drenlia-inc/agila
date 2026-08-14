@@ -11,12 +11,18 @@ import {
   applyOwnerSetupFieldHighlights,
   clearOwnerSetupFieldHighlights,
 } from '../utils/ownerSetup';
+import { queueHelpReveal } from '../utils/helpGoThere';
 import { CurrentUser } from '../types';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import {
   loadHelpSession,
   saveHelpSession,
 } from '../utils/helpSessionPersistence';
+import HelpAssistantChat, {
+  type HelpAssistantUiMessage,
+} from './HelpAssistantChat';
+import HelpAssistantShell, { HELP_ASSISTANT_OVERLAY_HEIGHT } from './HelpAssistantShell';
+import HelpAssistantTitle from './HelpAssistantTitle';
 import {
   TROUBLESHOOTING_UNLOCK_KEY,
   TROUBLESHOOTING_VISIBILITY_EVENT,
@@ -24,12 +30,15 @@ import {
 } from '../utils/troubleshootingAccess';
 
 type HelpGoTarget = {
-  kind: 'admin' | 'view' | 'page';
+  kind: 'admin' | 'view' | 'page' | 'profile';
   hash?: string;
   mode?: ViewMode;
   page?: 'kanban' | 'reports';
+  profileFocus?: 'displayName' | 'bio' | 'activityFeed';
   /** CSS selectors highlighted like Configuration guide Guide me */
   highlights?: string[];
+  /** Open closed chrome (search, column filter, trash) before highlight */
+  reveal?: string[];
 };
 
 type ChecklistNavOptions = {
@@ -108,6 +117,7 @@ interface HelpModalProps {
   expandToken?: number;
   onPageChange?: (page: 'kanban' | 'admin' | 'reports' | 'test', options?: { hash?: string }) => void;
   onViewModeChange?: (mode: ViewMode) => void;
+  onOpenProfile?: (focus?: 'displayName' | 'bio' | 'activityFeed') => void;
 }
 
 type TabType = 'overview' | 'delivery' | 'shortcuts' | 'kanban' | 'list' | 'gantt' | 'reports' | 'ai' | 'admin';
@@ -285,6 +295,7 @@ export default function HelpModal({
   expandToken = 0,
   onPageChange,
   onViewModeChange,
+  onOpenProfile,
 }: HelpModalProps) {
   const { t, i18n } = useTranslation('common');
   const { siteSettings, systemSettings } = useSettings();
@@ -326,6 +337,21 @@ export default function HelpModal({
   const [troubleshootingVisible, setTroubleshootingVisible] = useState(() =>
     isTroubleshootingVisible()
   );
+  const [assistantOpen, setAssistantOpen] = useState(() =>
+    Boolean(currentUser?.id && loadHelpSession(currentUser.id)?.assistantOpen)
+  );
+  const [assistantMessages, setAssistantMessages] = useState<HelpAssistantUiMessage[]>(() => {
+    if (!currentUser?.id) return [];
+    return (loadHelpSession(currentUser.id)?.assistantMessages || []) as HelpAssistantUiMessage[];
+  });
+  const [assistantPositionX, setAssistantPositionX] = useState<number | null>(() => {
+    const x = currentUser?.id ? loadHelpSession(currentUser.id)?.assistantPositionX : undefined;
+    return typeof x === 'number' ? x : null;
+  });
+  const [assistantHeight, setAssistantHeight] = useState(() => {
+    const h = currentUser?.id ? loadHelpSession(currentUser.id)?.assistantHeight : undefined;
+    return typeof h === 'number' ? h : 280;
+  });
 
   // Keep in sync with Admin (gated deployments unlock via TROUBLE sequence)
   useEffect(() => {
@@ -408,9 +434,16 @@ export default function HelpModal({
         requestAdminNavigation(target.hash);
       } else if (target.kind === 'page' && target.page) {
         onPageChange?.(target.page);
+      } else if (target.kind === 'profile') {
+        onPageChange?.('kanban');
+        onOpenProfile?.(target.profileFocus || 'displayName');
       } else if (target.kind === 'view' && target.mode) {
         onPageChange?.('kanban');
         onViewModeChange?.(target.mode);
+      }
+
+      if (target.reveal?.length) {
+        queueHelpReveal(target.reveal);
       }
 
       if (target.highlights?.length) {
@@ -422,7 +455,7 @@ export default function HelpModal({
         });
       }
     },
-    [minimizeHelp, onPageChange, onViewModeChange]
+    [minimizeHelp, onPageChange, onViewModeChange, onOpenProfile]
   );
 
   const renderGoThereButton = useCallback(
@@ -449,6 +482,10 @@ export default function HelpModal({
           minimized: false,
           activeTab,
           scrollByTab: { ...savedScrollByTabRef.current },
+          assistantOpen,
+          assistantMessages,
+          assistantPositionX,
+          assistantHeight,
         });
       }
     }
@@ -475,12 +512,16 @@ export default function HelpModal({
         minimized,
         activeTab,
         scrollByTab: { ...savedScrollByTabRef.current },
+        assistantOpen,
+        assistantMessages,
+        assistantPositionX,
+        assistantHeight,
       });
     };
     flush();
     window.addEventListener('pagehide', flush);
     return () => window.removeEventListener('pagehide', flush);
-  }, [isOpen, userId, minimized, activeTab]);
+  }, [isOpen, userId, minimized, activeTab, assistantOpen, assistantMessages, assistantPositionX, assistantHeight]);
 
   const currentLanguage = useMemo(() => {
     if (i18n.language?.startsWith('fr')) return 'fr';
@@ -2040,30 +2081,30 @@ export default function HelpModal({
   if (minimized) {
     const activeTabMeta = tabs.find((tab) => tab.id === activeTab);
     const ActiveIcon = activeTabMeta?.icon || ClipboardList;
-    return (
-      <div className="fixed bottom-4 right-4 z-[10040] max-w-sm w-[min(100vw-2rem,20rem)]">
+    const showDockedChat = aiEnabled && assistantOpen;
+    const dockHeader = (
+      <>
         <div
           role="button"
           tabIndex={0}
-          onClick={() => setMinimized(false)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               setMinimized(false);
             }
           }}
-          className="w-full flex items-center justify-between gap-3 rounded-xl border border-blue-300 dark:border-blue-700 bg-white dark:bg-gray-800 shadow-xl px-4 py-3 text-left hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-between gap-3 px-4 pb-2 text-left"
           aria-label={t('help.expand')}
         >
           <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
-            <ActiveIcon size={18} aria-hidden />
+            {showDockedChat ? <Bot size={18} aria-hidden /> : <ActiveIcon size={18} aria-hidden />}
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-              {t('help.minimizedTitle')}
+              {showDockedChat ? <HelpAssistantTitle /> : t('help.minimizedTitle')}
             </div>
             <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-              {activeTabMeta?.label}
+              {showDockedChat ? t('help.minimizedTitle') : activeTabMeta?.label}
             </div>
           </div>
           <button
@@ -2083,6 +2124,37 @@ export default function HelpModal({
             aria-hidden
           />
         </div>
+      </>
+    );
+
+    if (showDockedChat) {
+      return (
+        <HelpAssistantShell
+          variant="dock"
+          positionX={assistantPositionX}
+          height={assistantHeight}
+          onPositionXChange={setAssistantPositionX}
+          onHeightChange={setAssistantHeight}
+          onHeaderActivate={() => setMinimized(false)}
+          header={dockHeader}
+        >
+          <HelpAssistantChat
+            compact
+            isAdmin={isAdmin}
+            language={currentLanguage}
+            messages={assistantMessages}
+            onMessagesChange={setAssistantMessages}
+            onGoThere={goThere}
+          />
+        </HelpAssistantShell>
+      );
+    }
+
+    return (
+      <div className="fixed bottom-4 right-4 z-[10040] w-[min(33vw,20rem)] max-w-[33vw]">
+        <div className="rounded-xl border border-blue-300 dark:border-blue-700 bg-white dark:bg-gray-800 shadow-xl overflow-hidden">
+          {dockHeader}
+        </div>
       </div>
     );
   }
@@ -2091,19 +2163,37 @@ export default function HelpModal({
     <div className="fixed inset-0 z-[10030] flex items-center justify-center bg-slate-900/45 backdrop-blur-[2px] p-3 sm:p-6">
       <div
         ref={modalRef}
-        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-gray-700 w-full max-w-6xl h-[min(90vh,920px)] flex flex-col overflow-hidden"
+        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-gray-700 w-full max-w-6xl h-[min(90vh,920px)] flex flex-col overflow-hidden relative"
         role="dialog"
         aria-modal="true"
         aria-labelledby="help-modal-title"
       >
         <div className="relative flex items-center justify-between gap-3 px-4 py-3 sm:px-5 border-b border-slate-200/80 dark:border-gray-700 bg-gradient-to-r from-blue-50 via-white to-indigo-50 dark:from-gray-800 dark:via-gray-800 dark:to-slate-900">
-          <div className="min-w-0 shrink">
-            <h2 id="help-modal-title" className="text-lg sm:text-xl font-bold text-slate-800 dark:text-gray-100 tracking-tight truncate">
-              {t('help.title')}
-            </h2>
-            <p className="hidden md:block text-xs text-slate-500 dark:text-gray-400 mt-0.5 truncate">
-              {t('help.pressF1')}
-            </p>
+          <div className="min-w-0 shrink flex items-center gap-2">
+            <div className="min-w-0">
+              <h2 id="help-modal-title" className="text-lg sm:text-xl font-bold text-slate-800 dark:text-gray-100 tracking-tight truncate">
+                {t('help.title')}
+              </h2>
+              <p className="hidden md:block text-xs text-slate-500 dark:text-gray-400 mt-0.5 truncate">
+                {t('help.pressF1')}
+              </p>
+            </div>
+            {aiEnabled && (
+              <button
+                type="button"
+                onClick={() => setAssistantOpen((open) => !open)}
+                className={`p-1.5 rounded-lg border transition-colors ${
+                  assistantOpen
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-white/80 dark:hover:bg-gray-700'
+                }`}
+                aria-pressed={assistantOpen}
+                aria-label={t('help.assistant.title')}
+                title={t('help.assistant.title')}
+              >
+                <Bot size={18} />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
             <div className="relative">
@@ -2216,17 +2306,43 @@ export default function HelpModal({
           </nav>
         </div>
 
-        <div
-          ref={contentRef}
-          onScroll={() => {
-            if (contentRef.current) {
-              savedScrollByTabRef.current[activeTab] = contentRef.current.scrollTop;
-            }
-          }}
-          className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 min-h-0 bg-slate-50/40 dark:bg-gray-900/20"
-        >
-          {renderTabContent()}
+        <div className="flex flex-1 min-h-0">
+          <div
+            ref={contentRef}
+            onScroll={() => {
+              if (contentRef.current) {
+                savedScrollByTabRef.current[activeTab] = contentRef.current.scrollTop;
+              }
+            }}
+            className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1 min-h-0 bg-slate-50/40 dark:bg-gray-900/20"
+          >
+            {renderTabContent()}
+          </div>
         </div>
+        {aiEnabled && assistantOpen && (
+          <HelpAssistantShell
+            variant="overlay"
+            boundsEl={modalRef.current}
+            positionX={null}
+            height={HELP_ASSISTANT_OVERLAY_HEIGHT}
+            onPositionXChange={() => {}}
+            onHeightChange={() => {}}
+            header={
+              <div className="px-3 pt-3 pb-1 text-sm font-semibold text-slate-800 dark:text-gray-100">
+                <HelpAssistantTitle />
+              </div>
+            }
+          >
+            <HelpAssistantChat
+              language={currentLanguage}
+              isAdmin={isAdmin}
+              messages={assistantMessages}
+              onMessagesChange={setAssistantMessages}
+              onGoThere={goThere}
+              onInteract={() => setAssistantOpen(true)}
+            />
+          </HelpAssistantShell>
+        )}
 
         <div className="flex justify-between items-center gap-3 px-5 py-3.5 sm:px-6 border-t border-slate-200/80 dark:border-gray-700 bg-white/90 dark:bg-gray-800/90">
           <span className="text-xs sm:text-sm text-slate-500 dark:text-gray-400 tabular-nums">

@@ -814,6 +814,7 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
             <button
               type="button"
               onClick={onClose}
+              data-help-target="activity-feed-close"
               className="p-1.5 rounded-full text-slate-500 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               aria-label={t('activityFeed.close')}
             >
@@ -877,6 +878,7 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
             <button
               type="button"
               onClick={onClose}
+              data-help-target="activity-feed-close"
               className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors"
               aria-label={t('activityFeed.close')}
             >

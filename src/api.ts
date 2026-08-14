@@ -1529,4 +1529,27 @@ export const getAgentLlmInfo = async (): Promise<{ tenantModel: string }> => {
   return data;
 };
 
+export type HelpAssistantTarget = {
+  kind: 'admin' | 'view' | 'page' | 'profile';
+  hash?: string;
+  mode?: 'kanban' | 'list' | 'gantt';
+  page?: 'kanban' | 'reports';
+  profileFocus?: string;
+  highlights?: string[];
+  /** Open closed chrome before highlighting (search panel, dropdowns, trash). */
+  reveal?: string[];
+};
+
+export const postHelpAssistantChat = async (payload: {
+  language: 'en' | 'fr';
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+}): Promise<{
+  answer: string;
+  targetId: string | null;
+  target: HelpAssistantTarget | null;
+}> => {
+  const { data } = await api.post('/help-assistant/chat', payload);
+  return data;
+};
+
 export default api;

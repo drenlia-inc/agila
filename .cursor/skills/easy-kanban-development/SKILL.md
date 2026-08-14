@@ -383,7 +383,17 @@ src/                  # React frontend
 └── types/            # TypeScript types
 ```
 
-## Additional Resources
+## Help Assistant UI index
+
+Locatable Help/chat targets are **harvested**, not hand-listed in EN/FR:
+
+- Hooks: `data-setting-key`, `data-tour-id`, `data-help-target`, `data-owner-setup`
+- Generate: `npm run help:ui-index` → `server/config/helpUiIndex.generated.json`
+- CI: `npm run help:ui-index:check` (must commit the generated file)
+- Facts only (behavior labels get wrong): `server/config/helpAssistantFacts.js`
+
+Each chat request retrieves a **small slice** of the index; the full file is not sent to the model.
+
 
 - **Public Routes List**: See AGENTS.md for complete list of unauthenticated routes
 - **Authentication Flow**: `server/middleware/auth.js` and `server/routes/auth.js`

@@ -221,6 +221,14 @@ export const oauthCallbackLimiter = createLimiter({
 });
 
 // CSP violation reports (public browser beacon): 60 per minute per IP
+// Help Assistant chat: 30 per 15 minutes per IP
+export const helpAssistantLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many help assistant requests, please try again later' },
+  prefix: 'help-assistant'
+});
+
 export const cspReportLimiter = createLimiter({
   windowMs: 60 * 1000,
   max: 60,

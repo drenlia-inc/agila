@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"vite --host 0.0.0.0 --port 3010\" \"node server/index.js\"",
     "dev:external": "concurrently \"vite --host 0.0.0.0 --port 3010 --https\" \"node server/index.js\"",
-    "build": "node scripts/generate-version.js && tsc && vite build",
+    "build": "node scripts/generate-version.js && npm run help:ui-index && tsc && vite build",
     "start": "node server/index.js",
     "start:prod": "concurrently \"./node_modules/.bin/vite preview --host 0.0.0.0 --port 3010\" \"node server/index.js\"",
     "version:generate": "node scripts/generate-version.js",
@@ -15,6 +15,8 @@
     "audit:sql": "node scripts/audit-sql-columns.js",
     "audit:js": "node scripts/audit-js-identifiers.js",
     "audit:schema": "npm run audit:sql && npm run audit:js",
+    "help:ui-index": "node scripts/harvest-help-ui-index.js",
+    "help:ui-index:check": "node scripts/harvest-help-ui-index.js --check",
     "preview": "vite preview",
     "security:check": "node scripts/security-check.js",
     "security:offline": "node scripts/offline-security.js",

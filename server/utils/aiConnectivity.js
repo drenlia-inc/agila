@@ -456,6 +456,161 @@ async function probeAnthropicMessage({ normalized, key, modelId, signal }) {
   };
 }
 
+/**
+ * Chat completion for Help Assistant (OpenAI-compatible or Anthropic).
+ * @param {object} opts
+ * @param {string} [opts.provider]
+ * @param {string} opts.baseUrl
+ * @param {string} [opts.apiKey]
+ * @param {string} opts.model
+ * @param {Array<{ role: 'system'|'user'|'assistant', content: string }>} opts.messages
+ * @param {number} [opts.timeoutMs]
+ * @param {number} [opts.maxTokens]
+ * @returns {Promise<{ ok: true, text: string } | { ok: false, error: string, status?: number }>}
+ */
+export async function completeAiChat(opts) {
+  const prepared = prepareRequest({
+    provider: opts.provider,
+    baseUrl: opts.baseUrl,
+    apiKey: opts.apiKey,
+    model: opts.model,
+    timeoutMs: opts.timeoutMs || 25_000
+  });
+  if (!prepared.ok) return prepared;
+  if (!prepared.modelId) {
+    return { ok: false, error: 'AI model is not configured' };
+  }
+
+  const { preset, normalized, key, modelId, timeoutMs } = prepared;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const maxTokens = Math.min(Math.max(Number(opts.maxTokens) || 700, 64), 2000);
+
+  try {
+    if (preset.apiStyle === 'anthropic') {
+      return await completeAnthropicChat({
+        normalized,
+        key,
+        modelId,
+        messages: opts.messages,
+        maxTokens,
+        signal: controller.signal
+      });
+    }
+    return await completeOpenAiChat({
+      normalized,
+      key,
+      modelId,
+      messages: opts.messages,
+      maxTokens,
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      return { ok: false, error: `Timed out after ${Math.round(timeoutMs / 1000)}s` };
+    }
+    return { ok: false, error: err?.message || String(err) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function completeOpenAiChat({
+  normalized,
+  key,
+  modelId,
+  messages,
+  maxTokens,
+  signal
+}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json'
+  };
+  if (key) headers.Authorization = `Bearer ${key}`;
+
+  const res = await fetch(`${normalized}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: modelId,
+      messages,
+      max_tokens: maxTokens,
+      temperature: 0.3
+    }),
+    signal
+  });
+
+  if (!res.ok) {
+    const hint = await safeErrorText(res);
+    return {
+      ok: false,
+      status: res.status,
+      error: `Provider returned HTTP ${res.status}.${hint ? ` ${hint}` : ''}`
+    };
+  }
+
+  const body = await res.json();
+  const text = String(body?.choices?.[0]?.message?.content || '').trim();
+  if (!text) return { ok: false, error: 'Empty model response' };
+  return { ok: true, text };
+}
+
+async function completeAnthropicChat({
+  normalized,
+  key,
+  modelId,
+  messages,
+  maxTokens,
+  signal
+}) {
+  const system = messages
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n\n');
+  const rest = messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .map((m) => ({ role: m.role, content: m.content }));
+
+  const base = normalized.replace(/\/v1$/i, '') + '/v1';
+  const res = await fetch(`${base}/messages`, {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({
+      model: modelId,
+      max_tokens: maxTokens,
+      system: system || undefined,
+      messages: rest
+    }),
+    signal
+  });
+
+  if (!res.ok) {
+    const hint = await safeErrorText(res);
+    return {
+      ok: false,
+      status: res.status,
+      error: `Anthropic returned HTTP ${res.status}.${hint ? ` ${hint}` : ''}`
+    };
+  }
+
+  const body = await res.json();
+  const text = Array.isArray(body?.content)
+    ? body.content
+        .filter((b) => b?.type === 'text')
+        .map((b) => b.text)
+        .join('\n')
+        .trim()
+    : '';
+  if (!text) return { ok: false, error: 'Empty model response' };
+  return { ok: true, text };
+}
+
 async function safeErrorText(res) {
   try {
     const text = await res.text();
