@@ -38,6 +38,7 @@ import {
   aiRunnerProbeBodySchema
 } from '../utils/requestValidation.js';
 import { validateUploadedFileMagic } from '../utils/fileMagicBytes.js';
+import { resolveDefaultBrandLogoPath } from '../utils/brandAssets.js';
 
 const router = express.Router();
 
@@ -155,8 +156,9 @@ router.get('/', async (req, res, next) => {
 
 /**
  * Public site logo for emails / unauthenticated branding.
- * Only serves the currently configured SITE_LOGO (or SITE_LOGO_DARK) file —
- * not arbitrary avatar filenames. User avatars remain auth-gated.
+ * Serves the configured SITE_LOGO (or SITE_LOGO_DARK) file when set;
+ * otherwise falls back to the shipping Agila logo under public/.
+ * User avatars remain auth-gated.
  */
 router.get('/site-logo', async (req, res, next) => {
   if (req.baseUrl === '/api/admin/settings') {
@@ -182,13 +184,20 @@ router.get('/site-logo', async (req, res, next) => {
         ? (dark?.value || light?.value || '').trim()
         : (light?.value || '').trim();
 
-    if (
+    const isBuiltinPath =
       !logoPath ||
       logoPath.startsWith('/agila') ||
       logoPath.startsWith('/kanban') ||
-      logoPath.startsWith('/assets/')
-    ) {
-      return res.status(404).json({ error: 'No site logo configured' });
+      logoPath.startsWith('/assets/');
+
+    if (isBuiltinPath) {
+      const defaultPath = resolveDefaultBrandLogoPath(variant);
+      if (!defaultPath) {
+        return res.status(404).json({ error: 'No site logo configured' });
+      }
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.sendFile(defaultPath);
     }
 
     if (/^https?:\/\//i.test(logoPath)) {

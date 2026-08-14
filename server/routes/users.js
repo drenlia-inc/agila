@@ -376,28 +376,32 @@ router.delete("/account", authenticateToken, async (req, res) => {
       }
     }
 
-    notificationService.publish('member-deleted', {
-      userId,
-      memberId: userMember?.id || null,
-      userName: `${user.first_name} ${user.last_name}`,
-      userEmail: user.email,
-      timestamp: new Date().toISOString(),
-    }, tenantId).catch((err) => {
+    try {
+      await notificationService.publish('member-deleted', {
+        userId,
+        memberId: userMember?.id || null,
+        userName: `${user.first_name} ${user.last_name}`,
+        userEmail: user.email,
+        timestamp: new Date().toISOString(),
+      }, tenantId);
+    } catch (err) {
       console.error('Failed to publish member-deleted event:', err);
-    });
+    }
 
-    notificationService.publish('user-deleted', {
-      userId,
-      user: {
-        id: userId,
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-      },
-      timestamp: new Date().toISOString(),
-    }, tenantId).catch((err) => {
+    try {
+      await notificationService.publish('user-deleted', {
+        userId,
+        user: {
+          id: userId,
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name,
+        },
+        timestamp: new Date().toISOString(),
+      }, tenantId);
+    } catch (err) {
       console.error('Failed to publish user-deleted event:', err);
-    });
+    }
 
     res.json({
       message: 'Account deleted successfully',

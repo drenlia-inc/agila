@@ -1409,6 +1409,7 @@ function AppContent() {
     websocketClient.onMemberUpdated(memberWebSocket.handleMemberUpdated);
     websocketClient.onMemberCreated(memberWebSocket.handleMemberCreated);
     websocketClient.onMemberDeleted(memberWebSocket.handleMemberDeleted);
+    websocketClient.onUserDeleted(memberWebSocket.handleUserDeleted);
     websocketClient.onUserProfileUpdated(memberWebSocket.handleUserProfileUpdated);
     websocketClient.onActivityUpdated(memberWebSocket.handleActivityUpdated);
     websocketClient.onFilterCreated(memberWebSocket.handleFilterCreated);
@@ -1460,6 +1461,7 @@ function AppContent() {
       websocketClient.offMemberUpdated(memberWebSocket.handleMemberUpdated);
       websocketClient.offMemberCreated(memberWebSocket.handleMemberCreated);
       websocketClient.offMemberDeleted(memberWebSocket.handleMemberDeleted);
+      websocketClient.offUserDeleted(memberWebSocket.handleUserDeleted);
       websocketClient.offUserProfileUpdated(memberWebSocket.handleUserProfileUpdated);
       websocketClient.offActivityUpdated(memberWebSocket.handleActivityUpdated);
       websocketClient.offFilterCreated(memberWebSocket.handleFilterCreated);
