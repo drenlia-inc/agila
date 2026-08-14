@@ -15,8 +15,9 @@ import { dbTransaction } from '../utils/dbAsync.js';
 import { tasks as taskQueries, boards as boardQueries, helpers, sprints as sprintQueries, taskWork as taskWorkQueries } from '../utils/sqlManager/index.js';
 import { AUTOMATION_CONFIG_KEYS } from '../constants/automation.js';
 import {
-  purgeTaskCompletelyAndUpdateStorage,
+  purgeTaskCompletely,
 } from '../services/taskPurgeService.js';
+import { updateStorageUsage } from '../utils/storageUtils.js';
 import { notifyCollaboratorAdded, notifyBulkColumnMove, notifyWatcherAdded } from '../services/taskEmailNotificationService.js';
 import {
   parseBody,
@@ -1861,22 +1862,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: tTranslator('errors.taskNotFound') });
     }
 
-    const remainingTasks = await taskQueries.getRemainingTasksInColumn(db, columnId, boardId);
-    await taskQueries.renumberTasksInColumn(db, remainingTasks);
-
-    if (remainingTasks.length > 0) {
-      const positionUpdates = remainingTasks.map((taskItem, index) => ({
-        taskId: taskItem.id,
-        position: index,
-        columnId,
-      }));
-      await notificationService.publish('tasks-positions-updated', {
-        boardId,
-        updates: positionUpdates,
-        timestamp: new Date().toISOString(),
-      }, getTenantId(req));
-    }
-
     const taskRef = taskTicket ? ` (${taskTicket})` : '';
     const deleteDetails = JSON.stringify({
       en: t('activity.deletedTask', { taskTitle: task.title, taskRef, boardTitle }, 'en'),
@@ -1895,12 +1880,15 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       console.error('Background activity logging failed:', error);
     });
 
-    await notificationService.publish('task-deleted', {
+    // Positions keep their gaps; dense 0..n renumber is unnecessary and slow on large columns.
+    notificationService.publish('task-deleted', {
       boardId,
       taskId: id,
       softDeleted: true,
       timestamp: new Date().toISOString(),
-    }, getTenantId(req));
+    }, getTenantId(req)).catch((error) => {
+      console.error('Background WebSocket publish failed:', error);
+    });
 
     res.json({ message: 'Task moved to trash', softDeleted: true });
   } catch (error) {
@@ -2059,16 +2047,13 @@ router.delete('/:id/permanent', authenticateToken, requireRole(['admin']), async
     }
     const boardId = task.boardid || task.boardId;
     const wasSoftDeleted = !!(task.deleted_at || task.deletedAt);
-    const columnId = task.columnid || task.columnId;
 
-    await purgeTaskCompletelyAndUpdateStorage(db, id, resolveTenantStoragePaths(req));
+    await purgeTaskCompletely(db, id, resolveTenantStoragePaths(req));
+    updateStorageUsage(db).catch((error) => {
+      console.error('Background storage usage update failed:', error);
+    });
 
-    if (!wasSoftDeleted) {
-      const remainingTasks = await taskQueries.getRemainingTasksInColumn(db, columnId, boardId);
-      await taskQueries.renumberTasksInColumn(db, remainingTasks);
-    }
-
-    await notificationService.publish(
+    notificationService.publish(
       wasSoftDeleted ? 'task-purged' : 'task-deleted',
       {
         boardId,
@@ -2076,7 +2061,9 @@ router.delete('/:id/permanent', authenticateToken, requireRole(['admin']), async
         timestamp: new Date().toISOString(),
       },
       getTenantId(req)
-    );
+    ).catch((error) => {
+      console.error('Background WebSocket publish failed:', error);
+    });
 
     res.json({ message: 'Task permanently deleted' });
   } catch (error) {
@@ -2102,14 +2089,9 @@ router.post('/permanent-batch', authenticateToken, requireRole(['admin']), async
       const task = await taskQueries.getTaskById(db, taskId);
       if (!task) continue;
       const boardId = task.boardid || task.boardId;
-      const columnId = task.columnid || task.columnId;
       const wasSoftDeleted = !!(task.deleted_at || task.deletedAt);
-      await purgeTaskCompletelyAndUpdateStorage(db, taskId, storagePaths);
-      if (!wasSoftDeleted && columnId && boardId) {
-        const remainingTasks = await taskQueries.getRemainingTasksInColumn(db, columnId, boardId);
-        await taskQueries.renumberTasksInColumn(db, remainingTasks);
-      }
-      await notificationService.publish(
+      await purgeTaskCompletely(db, taskId, storagePaths);
+      notificationService.publish(
         wasSoftDeleted ? 'task-purged' : 'task-deleted',
         {
           boardId,
@@ -2117,8 +2099,15 @@ router.post('/permanent-batch', authenticateToken, requireRole(['admin']), async
           timestamp: new Date().toISOString(),
         },
         getTenantId(req)
-      );
+      ).catch((error) => {
+        console.error('Background WebSocket publish failed:', error);
+      });
       purged.push(taskId);
+    }
+    if (purged.length > 0) {
+      updateStorageUsage(db).catch((error) => {
+        console.error('Background storage usage update failed:', error);
+      });
     }
     res.json({ purged });
   } catch (error) {

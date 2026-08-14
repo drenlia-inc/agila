@@ -352,12 +352,6 @@ function AppContent() {
 
       await deleteTask(taskId, options);
       removeTaskFromLocalColumns(taskId);
-
-      // NOTE: Backend already renumbers tasks after deletion and sends a WebSocket event
-      await refreshBoardData();
-      await fetchQueryLogs();
-
-      // Do not rely only on WebSocket for the trash badge — refresh after HTTP success
       notifyBoardTrashChanged(boardIdForTrash);
     } catch (error) {
       throw error;
@@ -374,9 +368,6 @@ function AppContent() {
 
       await purgeTask(taskId);
       removeTaskFromLocalColumns(taskId);
-
-      await refreshBoardData();
-      await fetchQueryLogs();
     } catch (error: any) {
       toast.error(error?.response?.data?.error || t('trash.purgeFailed'));
       throw error;

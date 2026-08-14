@@ -80,6 +80,49 @@ export function orderedCheckedTasksInColumn(
     .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
 }
 
+/** sessionStorage: survive refresh in this tab; cleared on tab close. */
+export const KANBAN_MULTISELECT_SESSION_KEY = 'agila:kanbanMultiSelect';
+
+export type KanbanMultiSelectSession = {
+  boardId: string;
+  taskIds: string[];
+};
+
+export function readKanbanMultiSelectSession(): KanbanMultiSelectSession | null {
+  try {
+    const raw = sessionStorage.getItem(KANBAN_MULTISELECT_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const boardId = typeof parsed?.boardId === 'string' ? parsed.boardId : '';
+    const taskIds = Array.isArray(parsed?.taskIds)
+      ? parsed.taskIds.filter((id: unknown) => typeof id === 'string' && id)
+      : [];
+    if (!boardId || taskIds.length === 0) return null;
+    return { boardId, taskIds };
+  } catch {
+    return null;
+  }
+}
+
+export function writeKanbanMultiSelectSession(
+  boardId: string | null | undefined,
+  taskIds: Set<string>
+): void {
+  try {
+    if (!boardId || taskIds.size === 0) {
+      sessionStorage.removeItem(KANBAN_MULTISELECT_SESSION_KEY);
+      return;
+    }
+    const payload: KanbanMultiSelectSession = {
+      boardId,
+      taskIds: Array.from(taskIds),
+    };
+    sessionStorage.setItem(KANBAN_MULTISELECT_SESSION_KEY, JSON.stringify(payload));
+  } catch {
+    /* private mode / quota */
+  }
+}
+
 export function pruneCheckedTaskIds(
   checkedTaskIds: Set<string>,
   columns: Columns

@@ -129,6 +129,9 @@
     "relationshipChild": "enfant",
     "relationshipRelated": "lié"
   },
+  "dnd": {
+    "keyboardMoveHint": "Déplacement de {{label}} — flèches pour repositionner, Entrée pour déposer, Échap pour annuler"
+  },
   "toolbar": {
     "dragToMove": "Glisser pour déplacer la tâche",
     "addComment": "Ajouter un commentaire",
@@ -295,7 +298,9 @@
     "moveToBoard": "Déplacer vers un tableau",
     "noSprint": "Aucun (Backlog)",
     "deleteConfirm": "Déplacer {{count}} tâche(s) sélectionnée(s) vers la corbeille ?",
+    "deleteConfirmTitle": "Mettre à la corbeille ?",
     "deleteConfirmPermanent": "Supprimer définitivement {{count}} tâche(s) sélectionnée(s) ? Cette action est irréversible.",
+    "deleteConfirmPermanentTitle": "Supprimer définitivement ?",
     "moveToBoardConfirm": "Déplacer {{count}} tâche(s) vers « {{board}} » ? Les relations peuvent être supprimées.",
     "copiedCount": "{{count}} tâche(s) dupliquée(s)",
     "archivedCount": "{{count}} tâche(s) archivée(s)",
