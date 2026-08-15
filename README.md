@@ -8,6 +8,8 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 
 *[View sample screenshots →](/screenshots/SCREENSHOTS.md)*
 
+**Quick start (Docker):** `git clone https://github.com/drenlia-inc/agila.git && cd agila && cp docker-compose-example.yml docker-compose.yml && docker compose up --build` — then open http://localhost:3010. Default admin is created on first boot; see [Installation](#installation).
+
 ## Key Features
 
 ### Core Functionality
@@ -97,11 +99,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 
 **Product Owners / Scrum Masters:** after the instance is up, follow the **[Delivery Playbook](docs/DELIVERY_PLAYBOOK.md)** (first-hour setup, board & WIP conventions, rituals, anti-patterns).
 
-**Default Admin Account:**
-- Email: `admin@kanban.local`
-- Password: `generated` at initialization - look for it in the backend console log (or on the login page when demo mode is enabled)
-
-1. Log in with the default admin account
+1. Log in with the default admin account (see [Installation](#installation))
 2. Go to the admin panel and setup:
    1. The site name and URL in Site Settings
    2. In the App Settings, choose the default language (FR/EN)
@@ -153,33 +151,41 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 
 ## Installation
 
-### Docker
+### Docker (recommended)
 
-**Step 1: Clone and setup**
 ```bash
-# Clone the repo
 git clone https://github.com/drenlia-inc/agila.git
 cd agila
 cp docker-compose-example.yml docker-compose.yml
+docker compose up --build
 ```
 
-**Step 2: Configure and run**
-1. Edit `docker-compose.yml` and update the following environment variables:
-   - `JWT_SECRET`: Set a strong secret key for authentication
-   - `ALLOWED_ORIGINS`: Set your domain(s), e.g., `yourdomain.com`
-   - `DEMO_ENABLED`: Set to `true` to try the demo with generated data, `false` for production
-   - Optional AI runner (for Agent **Code** jobs): `AI_RUNNER_URL`, `AI_CALLBACK_BASE_URL`, `RUNNER_TOKEN` (see `docker-compose-example.yml` / `docker-compose-dev.yml`)
+(`npm run docker:dev` is the same command: `docker compose up --build`.)
 
-2. Start the application:
-```bash
-npm run docker:dev
+Before the first production run, edit `docker-compose.yml`:
+- `JWT_SECRET`: strong secret for authentication
+- `ALLOWED_ORIGINS`: your domain(s), e.g. `yourdomain.com`
+- `DEMO_ENABLED`: `false` for a real instance; `true` only for a generated demo dataset
+- Optional AI runner (Agent **Code** jobs): `AI_RUNNER_URL`, `AI_CALLBACK_BASE_URL`, `RUNNER_TOKEN`
+
+**Access:** frontend http://localhost:3010 · API http://localhost:3222
+
+More detail: [DOCKER.md](/DOCKER.md)
+
+### Default admin (first boot)
+
+On a **new empty database**, Agila creates `admin@kanban.local` with a **random password** and prints it **once** in the app container logs:
+
+```text
+Email: admin@kanban.local
+Password: <generated>
 ```
 
-**Access the application:**
-- Frontend: http://localhost:3010
-- Backend API: http://localhost:3222
+Follow the logs with `docker compose logs -f agila`.
 
-*For more Docker information, see [DOCKER.md](/DOCKER.md)*
+- **`DEMO_ENABLED=true`:** the login page also shows this password (and a one-click sign-in on the public demo).
+- **`DEMO_ENABLED=false`:** the password is **not** shown on the login page — only in those first-boot logs.
+- Later restarts **do not** print the password again. If you lose it, reset it from another admin account; it will not reappear in logs.
 
 ## Database Backup & Restore
 

@@ -22,6 +22,11 @@
     "continue": "Continue",
     "back": "Back"
   },
+  "mobileWarning": {
+    "title": "Not optimized for mobile yet",
+    "body": "Agila is designed for a larger screen. You can browse, but the board works best on a computer or tablet.",
+    "dismiss": "Dismiss"
+  },
   "labels": {
     "name": "Name",
     "title": "Title",
@@ -78,7 +83,9 @@
     "more": "More",
     "menu": "Menu",
     "github": "GitHub",
-    "profileMenu": "Account menu"
+    "profileMenu": "Account menu",
+    "suggestFeature": "Suggest a feature",
+    "reportBug": "Report a bug"
   },
   "theme": {
     "switchToDark": "Switch to dark mode",
@@ -190,6 +197,10 @@
   "profile": {
     "title": "User Settings",
     "profileSettings": "Profile Settings",
+    "communityFeedback": "Product feedback",
+    "communityFeedbackHint": "Opens GitHub.",
+    "suggestFeature": "Suggest a feature",
+    "reportBug": "Report a bug",
     "appSettings": "App Settings",
     "notifications": "Notifications",
     "profilePicture": "Profile Picture",

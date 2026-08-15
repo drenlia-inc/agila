@@ -7,6 +7,7 @@ import DebugPanel from './components/DebugPanel';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { TourProvider } from './contexts/TourContext';
 import TourNudge from './components/tour/TourNudge';
+import MobileUnoptimizedBanner from './components/MobileUnoptimizedBanner';
 import { OwnerSetupProvider } from './contexts/OwnerSetupContext';
 import OwnerSetupChecklist from './components/ownerSetup/OwnerSetupChecklist';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
@@ -4910,6 +4911,8 @@ function AppContent() {
         boards={boards}
         sprints={availableSprints}
       />
+
+      <MobileUnoptimizedBanner enabled={currentPage === 'kanban'} />
 
       {/* Network Status Indicator */}
       <NetworkStatusIndicator isOnline={isOnline} />

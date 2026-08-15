@@ -404,7 +404,10 @@ const ProfileDevTab: React.FC = () => {
       <section>
         <div className="mb-2">
           <h3 className="text-base font-medium text-gray-900 dark:text-gray-100">
-            {t('profile.devApiTokens')}
+            <span>{t('profile.devApiTokens')}</span>
+            <sup className="ml-1 text-[0.58em] font-medium uppercase tracking-[0.12em] text-slate-500 dark:text-gray-400">
+              {t('help.assistant.beta')}
+            </sup>
           </h3>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
             {t('profile.devApiTokensHint')}

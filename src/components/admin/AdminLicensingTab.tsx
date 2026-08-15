@@ -48,7 +48,7 @@ interface AdminLicensingTabProps {
 }
 
 const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, settings }) => {
-  const { t } = useTranslation('admin');
+  const { t, i18n } = useTranslation('admin');
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'subscription'>('overview');
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -592,7 +592,7 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
                 onClick={() => {
                   // Check SITE_OPENS_NEW_TAB setting (default to true if not set)
                   const opensInNewTab = settings?.SITE_OPENS_NEW_TAB === undefined || settings?.SITE_OPENS_NEW_TAB === 'true';
-                  const target = buildCustomerPortalUrl(websiteUrl, currentUser?.email);
+                  const target = buildCustomerPortalUrl(websiteUrl, currentUser?.email, i18n.language);
                   if (opensInNewTab) {
                     window.open(target, '_blank', 'noopener,noreferrer');
                   } else {

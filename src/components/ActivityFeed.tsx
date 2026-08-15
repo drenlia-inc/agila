@@ -837,9 +837,10 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
         height: dimensions.height,
         zIndex: ACTIVITY_FEED_Z,
       }}
+      aria-label={t('activityFeed.title')}
     >
-      {/* Header */}
-      <div className="flex items-center gap-1.5 px-2.5 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/40">
+      {/* Header: controls only (title is rarely visible over the board) */}
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/40">
         <div 
           className="cursor-grab active:cursor-grabbing p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800"
           onMouseDown={handleDragStart}
@@ -848,14 +849,6 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
         </div>
         
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400">
-            <Activity className="w-3.5 h-3.5" />
-          </span>
-          {!isExtraNarrowMode && (
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-xs truncate tracking-tight">
-              {isNarrowMode ? t('activityFeed.titleShort') : t('activityFeed.title')}
-            </h3>
-          )}
           {unreadCount > 0 && (
             <span className="shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-sky-600 text-white text-[10px] font-semibold leading-5 text-center tabular-nums">
               {unreadBadgeLabel}
