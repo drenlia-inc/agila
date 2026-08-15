@@ -24,7 +24,7 @@ interface SocketEvents {
   'column:updated': (data: { column: any; timestamp: string }) => void;
   'column:deleted': (data: { columnId: string; boardId: string; timestamp: string }) => void;
   
-  // User presence events
+  // Board join/leave events
   'user:joined': (data: { userId: string; firstName: string; lastName: string; timestamp: string }) => void;
   'user:left': (data: { userId: string; firstName: string; lastName: string; timestamp: string }) => void;
   

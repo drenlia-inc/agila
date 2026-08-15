@@ -22,6 +22,11 @@
     "continue": "Continuer",
     "back": "Retour"
   },
+  "mobileWarning": {
+    "title": "Pas encore adaptée au mobile",
+    "body": "Agila est conçue pour un écran plus large. Vous pouvez explorer, mais le tableau fonctionne mieux sur un ordinateur ou une tablette.",
+    "dismiss": "Fermer"
+  },
   "labels": {
     "name": "Nom",
     "title": "Titre",
@@ -78,7 +83,9 @@
     "more": "Plus",
     "menu": "Menu",
     "github": "GitHub",
-    "profileMenu": "Menu du compte"
+    "profileMenu": "Menu du compte",
+    "suggestFeature": "Suggérer une fonctionnalité",
+    "reportBug": "Signaler un bogue"
   },
   "theme": {
     "switchToDark": "Passer en mode sombre",
@@ -190,6 +197,10 @@
   "profile": {
     "title": "Paramètres utilisateur",
     "profileSettings": "Paramètres du profil",
+    "communityFeedback": "Retour produit",
+    "communityFeedbackHint": "Ouvre GitHub.",
+    "suggestFeature": "Suggérer une fonctionnalité",
+    "reportBug": "Signaler un bogue",
     "appSettings": "Paramètres de l'application",
     "notifications": "Notifications",
     "profilePicture": "Photo de profil",

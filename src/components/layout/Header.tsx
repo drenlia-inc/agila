@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Github, HelpCircle, LogOut, User, RefreshCw, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check, Eye, Shield } from 'lucide-react';
+import { Bug, Github, HelpCircle, Lightbulb, LogOut, User, RefreshCw, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check, Eye, Shield } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CurrentUser, SiteSettings, TeamMember } from '../../types';
 import ThemeToggle from '../ThemeToggle';
@@ -16,6 +16,7 @@ import { toast } from '../../utils/toast';
 import { getAuthenticatedAvatarUrl } from '../../utils/authImageUrl';
 import {
   AGILA_GITHUB_URL,
+  agilaGithubFeedbackUrls,
   DEFAULT_SITE_LOGO,
   DEFAULT_SITE_LOGO_DARK,
   isPublicBrandAssetPath,
@@ -1036,7 +1037,7 @@ const Header: React.FC<HeaderProps> = ({
               {showProfileMenu && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full mt-2 min-w-[12rem] bg-white dark:bg-gray-800 rounded-lg shadow-lg z-[70] border border-gray-200 dark:border-gray-700"
+                  className="absolute right-0 top-full mt-2 min-w-[14rem] bg-white dark:bg-gray-800 rounded-lg shadow-lg z-[70] border border-gray-200 dark:border-gray-700"
                 >
                   <div className="border-b border-gray-100 px-4 py-2.5 dark:border-gray-700">
                     <div className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -1073,6 +1074,32 @@ const Header: React.FC<HeaderProps> = ({
                       <User size={18} />
                       {t('navigation.profile')}
                     </button>
+                    {isAdminAccount && !isViewOnlyAccount && !isDemoMode && (
+                      <>
+                        <a
+                          role="menuitem"
+                          href={agilaGithubFeedbackUrls(i18n.language).ideas}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShowProfileMenu(false)}
+                          className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors whitespace-nowrap"
+                        >
+                          <Lightbulb size={18} />
+                          {t('navigation.suggestFeature')}
+                        </a>
+                        <a
+                          role="menuitem"
+                          href={agilaGithubFeedbackUrls(i18n.language).issues}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShowProfileMenu(false)}
+                          className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors whitespace-nowrap"
+                        >
+                          <Bug size={18} />
+                          {t('navigation.reportBug')}
+                        </a>
+                      </>
+                    )}
                     <button
                       type="button"
                       role="menuitem"

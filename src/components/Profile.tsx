@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Upload, Trash2, ExternalLink } from 'lucide-react';
+import { X, Upload, Trash2, ExternalLink, Lightbulb, Bug } from 'lucide-react';
 import { uploadAvatar, deleteAccount, getUserSettings } from '../api';
 import {
   loadUserPreferences,
@@ -15,7 +15,8 @@ import { useSettings } from '../contexts/SettingsContext';
 import ProfileDevTab from './profile/ProfileDevTab';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { setExplicitGuestLanguage } from '../utils/guestLanguage';
-import { userIsViewer } from '../utils/permissions';
+import { userIsViewer, userIsAdmin } from '../utils/permissions';
+import { agilaGithubFeedbackUrls } from '../constants';
 import { isDemoModeClient } from '../utils/demoReset';
 import { buildCustomerPortalUrl } from '../utils/customerPortalUrl';
 
@@ -32,6 +33,27 @@ const NOTIFICATION_PREF_KEYS: NotificationPreferenceKey[] = [
   'requesterTaskCreated',
   'requesterTaskUpdated',
 ];
+
+type ProfileFormSnapshot = {
+  displayName: string;
+  bio: string;
+};
+
+function snapshotOfProfileForm(data: ProfileFormSnapshot): string {
+  return JSON.stringify({
+    displayName: data.displayName.trim(),
+    bio: data.bio.trim(),
+  });
+}
+
+function displayNameFromSnapshot(snapshot: string): string {
+  try {
+    const parsed = JSON.parse(snapshot) as ProfileFormSnapshot;
+    return typeof parsed.displayName === 'string' ? parsed.displayName : '';
+  } catch {
+    return '';
+  }
+}
 
 interface ProfileProps {
   isOpen: boolean;
@@ -51,6 +73,8 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   const { systemSettings: contextSystemSettings, siteSettings } = useSettings(); // Use SettingsContext instead of fetching
   const aiEnabled = siteSettings?.AI_ENABLED === 'true' || contextSystemSettings?.AI_ENABLED === 'true';
   const isViewOnlyUser = userIsViewer(currentUser);
+  const isAdminUser = userIsAdmin(currentUser);
+  const githubFeedback = agilaGithubFeedbackUrls(i18n.language);
   const [activeTab, setActiveTab] = useState<'profile' | 'app-settings' | 'notifications' | 'dev'>('profile');
   const [displayName, setDisplayName] = useState(currentUser?.firstName + ' ' + currentUser?.lastName || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
@@ -83,7 +107,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
 
   const handleOpenCustomerPortal = () => {
     if (!websiteUrl) return;
-    const target = buildCustomerPortalUrl(websiteUrl, currentUser?.email);
+    const target = buildCustomerPortalUrl(websiteUrl, currentUser?.email, i18n.language);
     if (opensPortalInNewTab) {
       window.open(target, '_blank', 'noopener,noreferrer');
     } else {
@@ -97,10 +121,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   const activityFeedPrefRef = useRef<HTMLDivElement>(null);
   const deleteConfirmationRef = useRef<HTMLInputElement>(null);
   
-  // Track original values to detect changes
-  const [originalDisplayName, setOriginalDisplayName] = useState(currentUser?.displayName || currentUser?.firstName + ' ' + currentUser?.lastName || '');
-  const [originalBio, setOriginalBio] = useState(currentUser?.bio || '');
-  const [originalAvatarUrl, setOriginalAvatarUrl] = useState(currentUser?.googleAvatarUrl || currentUser?.avatarUrl || '');
+  const [savedSnapshot, setSavedSnapshot] = useState('');
 
   // Load system settings when modal opens - use SettingsContext instead of fetching
   useEffect(() => {
@@ -164,14 +185,11 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   useEffect(() => {
     if (isOpen && !isProfileBeingEdited) {
       const initialDisplayName = currentUser?.displayName || currentUser?.firstName + ' ' + currentUser?.lastName || '';
-      const initialAvatarUrl = currentUser?.googleAvatarUrl || currentUser?.avatarUrl || '';
       const initialBio = currentUser?.bio || '';
       
       setDisplayName(initialDisplayName);
-      setOriginalDisplayName(initialDisplayName);
       setBio(initialBio);
-      setOriginalBio(initialBio);
-      setOriginalAvatarUrl(initialAvatarUrl);
+      setSavedSnapshot(snapshotOfProfileForm({ displayName: initialDisplayName, bio: initialBio }));
       setSelectedFile(null);
       setPreviewUrl(null);
       setError(null);
@@ -195,18 +213,15 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
     }
   }, [aiEnabled, isViewOnlyUser, activeTab]);
 
-  // Monitor for changes to display name, bio, or avatar to set editing state
+  const isDirty =
+    savedSnapshot !== '' &&
+    (snapshotOfProfileForm({ displayName, bio }) !== savedSnapshot || selectedFile !== null);
+
   useEffect(() => {
     if (isOpen) {
-      const hasDisplayNameChanged = displayName.trim() !== originalDisplayName.trim();
-      const hasBioChanged = bio.trim() !== originalBio.trim();
-      const hasAvatarChanged = selectedFile !== null || 
-        (currentUser?.authProvider === 'local' && !currentUser?.avatarUrl && originalAvatarUrl);
-
-      const isEditing = hasDisplayNameChanged || hasBioChanged || hasAvatarChanged;
-      onProfileEditingChange(isEditing);
+      onProfileEditingChange(isDirty);
     }
-  }, [displayName, bio, selectedFile, originalDisplayName, originalBio, originalAvatarUrl, currentUser, isOpen, onProfileEditingChange]);
+  }, [isDirty, isOpen, onProfileEditingChange]);
 
   // Focus the requested field when the modal opens
   useEffect(() => {
@@ -299,6 +314,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isDirty || isSubmitting) return;
     if (!displayName.trim()) {
       setError(t('profile.displayNameRequired'));
       return;
@@ -323,6 +339,9 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
         }
       }
       
+      setSavedSnapshot(snapshotOfProfileForm({ displayName: displayName.trim(), bio: bio.trim() }));
+      setSelectedFile(null);
+
       // Call the callback to refresh user data AFTER all updates
       onProfileUpdated();
       
@@ -442,6 +461,27 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
     return 'system';
   };
 
+  const revertDisplayNameAndBlur = useCallback(() => {
+    setDisplayName(displayNameFromSnapshot(savedSnapshot));
+    setError(null);
+    displayNameRef.current?.blur();
+  }, [savedSnapshot]);
+
+  const handleDisplayNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (isDirty) {
+        e.currentTarget.form?.requestSubmit();
+      }
+      return;
+    }
+    if (e.key === 'Escape' && displayName.trim() !== displayNameFromSnapshot(savedSnapshot)) {
+      e.preventDefault();
+      e.stopPropagation();
+      revertDisplayNameAndBlur();
+    }
+  };
+
   const handleEscape = useCallback(() => {
     if (isSubmitting || isDeletingAccount) return;
     if (showDeleteConfirm) {
@@ -449,12 +489,29 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
       setDeleteConfirmation('');
       return;
     }
+    if (
+      document.activeElement === displayNameRef.current &&
+      displayName.trim() !== displayNameFromSnapshot(savedSnapshot)
+    ) {
+      revertDisplayNameAndBlur();
+      return;
+    }
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }
     onProfileEditingChange(false);
     onClose();
-  }, [isSubmitting, isDeletingAccount, showDeleteConfirm, previewUrl, onProfileEditingChange, onClose]);
+  }, [
+    isSubmitting,
+    isDeletingAccount,
+    showDeleteConfirm,
+    previewUrl,
+    displayName,
+    savedSnapshot,
+    revertDisplayNameAndBlur,
+    onProfileEditingChange,
+    onClose,
+  ]);
 
   useEscapeDismiss(handleEscape, { enabled: isOpen });
 
@@ -542,12 +599,13 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
         onClick={e => e.stopPropagation()}
       >
         <div className="mt-3">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{t('profile.title')}</h3>
             <button
               onClick={handleClose}
               disabled={isSubmitting}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-50 transition-colors"
+              aria-label={t('buttons.close')}
             >
               <X size={24} />
             </button>
@@ -604,7 +662,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
           {/* Profile Tab Content */}
           {activeTab === 'profile' && (
             <>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form id="profile-settings-form" onSubmit={handleSubmit} className="space-y-4">
                 {/* Avatar + display name */}
                 <div className="flex items-start gap-3">
                   <div className="flex-shrink-0 relative">
@@ -621,22 +679,42 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                     )}
                   </div>
 
-                  <div className="flex-1 min-w-0 space-y-2">
+                  <div className="min-w-0 space-y-2">
                     <div>
                       <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         {t('profile.displayName')}
                       </label>
-                      <input
-                        ref={displayNameRef}
-                        type="text"
-                        id="displayName"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        maxLength={30}
-                        className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                        placeholder={t('profile.displayNamePlaceholder')}
-                        required
-                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          ref={displayNameRef}
+                          type="text"
+                          id="displayName"
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
+                          onKeyDown={handleDisplayNameKeyDown}
+                          maxLength={30}
+                          className="w-56 max-w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          placeholder={t('profile.displayNamePlaceholder')}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={handleClose}
+                          disabled={isSubmitting}
+                          className="px-3 py-1.5 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-100 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors disabled:opacity-50"
+                        >
+                          {t('buttons.cancel')}
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || !isDirty}
+                          className={`px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors ${
+                            isSubmitting || !isDirty ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          {isSubmitting ? t('profile.saving') : t('buttons.save')}
+                        </button>
+                      </div>
                     </div>
                     {currentUser?.authProvider === 'local' && (
                       <div className="flex flex-wrap items-center gap-2">
@@ -697,28 +775,38 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                     <div className="text-sm text-red-600 dark:text-red-300">{error}</div>
                   </div>
                 )}
-
-                {/* Action Buttons */}
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors ${
-                      isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {isSubmitting ? t('profile.saving') : t('profile.saveChanges')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    disabled={isSubmitting}
-                    className="flex-1 px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-100 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors"
-                  >
-                    {t('buttons.cancel')}
-                  </button>
-                </div>
               </form>
+
+              {isAdminUser && !isViewOnlyUser && !isDemoModeClient() && (
+                <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
+                    {t('profile.communityFeedback')}
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    {t('profile.communityFeedbackHint')}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={githubFeedback.ideas}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      <Lightbulb size={16} aria-hidden />
+                      {t('profile.suggestFeature')}
+                    </a>
+                    <a
+                      href={githubFeedback.issues}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      <Bug size={16} aria-hidden />
+                      {t('profile.reportBug')}
+                    </a>
+                  </div>
+                </div>
+              )}
 
               {/* Owner: customer portal. Demo: no self-delete (shared sandbox).
                   Everyone else: Danger Zone / self-delete when allowed.

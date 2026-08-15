@@ -1,8 +1,11 @@
 export {
   AGILA_GITHUB_CLONE_URL,
+  AGILA_GITHUB_IDEAS_URL,
+  AGILA_GITHUB_ISSUES_URL,
   AGILA_GITHUB_OWNER,
   AGILA_GITHUB_REPO,
   AGILA_GITHUB_URL,
+  agilaGithubFeedbackUrls,
 } from './brand';
 
 // Application constants
