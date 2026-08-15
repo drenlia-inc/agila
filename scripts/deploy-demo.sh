@@ -13,7 +13,7 @@ ssh -o BatchMode=yes "$REMOTE" bash -s <<EOF
 set -euo pipefail
 cd ${DEST}
 
-git remote set-url origin https://github.com/Drenlia-Inc/agila.git
+git remote set-url origin https://github.com/drenlia-inc/agila.git
 git fetch origin main
 git checkout main
 git reset --hard origin/main

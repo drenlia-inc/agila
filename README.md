@@ -158,7 +158,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 **Step 1: Clone and setup**
 ```bash
 # Clone the repo
-git clone https://github.com/drenlia/agila.git
+git clone https://github.com/drenlia-inc/agila.git
 cd agila
 cp docker-compose-example.yml docker-compose.yml
 ```
