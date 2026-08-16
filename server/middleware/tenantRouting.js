@@ -186,9 +186,16 @@ const getTenantDatabase = async (tenantId) => {
   return initPromise;
 };
 
+const PROBE_PATHS = new Set(['/health', '/ready', '/api/health', '/api/ready']);
+
 // Tenant routing middleware
 export const tenantRouting = async (req, res, next) => {
   try {
+    // Kube probes hit these with Host=<pod-ip>; do not init public/tenant DB.
+    if (PROBE_PATHS.has(req.path)) {
+      return next();
+    }
+
     // Extract tenant ID from hostname
     // Priority order:
     // 1. X-Forwarded-Host (set by ingress/nginx) - most reliable for multi-tenant
