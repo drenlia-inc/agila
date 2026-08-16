@@ -2226,7 +2226,15 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
     
     // MIGRATED: Validate all tasks exist and get their current data
     const validateStartTime = Date.now();
-    const taskIds = updates.map(u => u.taskId);
+    // Last write wins for duplicate taskIds (rapid DnD can send the same id twice when
+    // local columns briefly contain ghost duplicates). Unique ids for the DB length check.
+    const updatesByTaskId = new Map();
+    for (const update of updates) {
+      if (!update?.taskId) continue;
+      updatesByTaskId.set(update.taskId, update);
+    }
+    const uniqueUpdates = Array.from(updatesByTaskId.values());
+    const taskIds = Array.from(updatesByTaskId.keys());
     const currentTasks = await taskQueries.getTasksByIdsBasic(db, taskIds);
     taskHttpLog(dbgHttp, `⏱️  [batch-update-positions] Task validation took ${Date.now() - validateStartTime}ms`);
     
@@ -2238,7 +2246,7 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
     
     // Group updates by column for efficient batch processing
     const updatesByColumn = new Map();
-    updates.forEach(update => {
+    uniqueUpdates.forEach(update => {
       const currentTask = taskMap.get(update.taskId);
       if (!currentTask) return;
       
@@ -2448,7 +2456,7 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
     
     // Build minimal payloads for each task (only position and columnid changes)
     // Include essential fields for frontend display (title, boardId, memberId, ticket)
-    const publishPromises = updates.map(update => {
+    const publishPromises = uniqueUpdates.map(update => {
       const currentTask = taskMap.get(update.taskId);
       if (!currentTask) return Promise.resolve();
       
@@ -2503,8 +2511,8 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
     });
     
     const wsTime = Date.now() - wsStartTime;
-    const totalPayloadSize = updates.length * 200; // Estimate ~200 bytes per minimal task
-    taskHttpLog(dbgHttp, `⏱️  [batch-update-positions] WebSocket payload preparation took ${wsTime}ms (estimated ${totalPayloadSize} bytes total, ${updates.length} tasks)`);
+    const totalPayloadSize = uniqueUpdates.length * 200; // Estimate ~200 bytes per minimal task
+    taskHttpLog(dbgHttp, `⏱️  [batch-update-positions] WebSocket payload preparation took ${wsTime}ms (estimated ${totalPayloadSize} bytes total, ${uniqueUpdates.length} tasks)`);
     
     // Start publishing in background (fire-and-forget)
     Promise.all(publishPromises).then(() => {
@@ -2514,9 +2522,9 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
     });
     
     const totalTime = Date.now() - endpointStartTime;
-    taskHttpLog(dbgHttp, `⏱️  [batch-update-positions] Total endpoint time: ${totalTime}ms for ${updates.length} updates (WebSocket publishing in background)`);
+    taskHttpLog(dbgHttp, `⏱️  [batch-update-positions] Total endpoint time: ${totalTime}ms for ${uniqueUpdates.length} updates (WebSocket publishing in background)`);
     
-    res.json({ message: `Updated ${updates.length} task positions successfully` });
+    res.json({ message: `Updated ${uniqueUpdates.length} task positions successfully` });
   } catch (error) {
     console.error('Error batch updating task positions:', error);
     const db = getRequestDatabase(req);

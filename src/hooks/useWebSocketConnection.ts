@@ -54,7 +54,12 @@ export const useWebSocketConnection = ({
           console.log(`🔄 [${refreshTimestamp}] WebSocket reconnected after being offline - refreshing data to sync changes (attempt`, retryCount + 1, ')');
           console.log(`📊 [${refreshTimestamp}] Current selectedBoard:`, selectedBoardRef.current);
           if (refreshBoardDataRef.current) {
-            await refreshBoardDataRef.current();
+            // Scope to the visible board; refreshBoardData skips setColumns when
+            // the fetched snapshot matches local (no unnecessary flash).
+            await refreshBoardDataRef.current({
+              force: true,
+              forBoardId: selectedBoardRef.current || undefined,
+            });
             
             // ALSO refresh activities to ensure activity feed is up-to-date
             // This catches any activity events that were missed during disconnection

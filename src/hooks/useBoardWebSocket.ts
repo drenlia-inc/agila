@@ -22,6 +22,8 @@ interface UseBoardWebSocketProps {
   refreshBoardDataRef: RefObject<
     ((options?: { force?: boolean; forBoardId?: string }) => Promise<void>) | null
   >;
+  /** Boards created by this client via HTTP — skip delayed force refresh on WS echo. */
+  pendingSelfBoardCreatesRef?: RefObject<Set<string>>;
 }
 
 export const useBoardWebSocket = ({
@@ -33,9 +35,15 @@ export const useBoardWebSocket = ({
   onClearSelectedTask,
   selectedBoardRef,
   refreshBoardDataRef,
+  pendingSelfBoardCreatesRef,
 }: UseBoardWebSocketProps) => {
   const handleBoardCreated = useCallback((data: any) => {
     if (!data.board || !data.boardId) return;
+
+    const selfCreated = Boolean(pendingSelfBoardCreatesRef?.current?.has(data.boardId));
+    if (selfCreated) {
+      pendingSelfBoardCreatesRef?.current?.delete(data.boardId);
+    }
 
     // Add the new board to the boards state immediately
     // This ensures the board appears in real-time, even before columns are created
@@ -81,18 +89,19 @@ export const useBoardWebSocket = ({
       newBoards.splice(insertIndex, 0, newBoard);
       return newBoards;
     });
+
+    // Initiator already hydrated via handleAddBoard — avoid a second force refresh flash.
+    if (selfCreated) return;
     
-    // Also refresh board data to ensure we have the complete structure
-    // This will fetch columns if they exist, but won't block if they don't exist yet
+    // Peers: refresh after a short delay so default columns exist
     if (refreshBoardDataRef.current) {
-      // Use a small delay to allow columns to be created first
       setTimeout(() => {
         if (refreshBoardDataRef.current) {
           refreshBoardDataRef.current({ force: true });
         }
       }, 500);
     }
-  }, [setBoards, refreshBoardDataRef]);
+  }, [setBoards, refreshBoardDataRef, pendingSelfBoardCreatesRef]);
 
   const handleBoardUpdated = useCallback((data: any) => {
     const board = data?.board;

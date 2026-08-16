@@ -22,6 +22,8 @@ interface UseTaskWebSocketProps {
     ((options?: { force?: boolean; forBoardId?: string }) => Promise<void>) | null
   >;
   recentlyDeletedTasksRef: RefObject<Set<string>>;
+  /** Task IDs restored via our own HTTP — skip WS echo's settled force refresh. */
+  pendingSelfTaskRestoresRef?: RefObject<Set<string>>;
   
   // Task filters hook
   taskFilters: {
@@ -50,6 +52,7 @@ export const useTaskWebSocket = ({
   pendingTaskRefreshesRef,
   refreshBoardDataRef,
   recentlyDeletedTasksRef,
+  pendingSelfTaskRestoresRef,
   taskFilters,
   taskLinking,
   currentUser,
@@ -905,7 +908,10 @@ export const useTaskWebSocket = ({
     }
   }, [setBoards, setColumns, selectedBoardRef, setSelectedTask]);
 
-  const handleTaskRestored = useCallback((data: any) => {
+  const handleTaskRestored = useCallback((
+    data: any,
+    options?: { skipSettledRefresh?: boolean }
+  ) => {
     if (!data.task || !data.boardId) return;
     // Allow the task to reappear after soft-delete ignore window
     recentlyDeletedTasksRef.current?.delete(data.task.id);
@@ -925,8 +931,15 @@ export const useTaskWebSocket = ({
     data.task.deleted_at = null;
     data.task.deleted_by = null;
     handleTaskCreated(data);
-    // Keep the post-board-restore refresh from firing mid-batch
-    scheduleSettledBoardRefresh(refreshBoardDataRef.current);
+    // Lifecycle "restore board then tasks" still needs a settled force refresh.
+    // Local trash/details restores already patched from HTTP — skip the 1.5s flash
+    // (including the WS echo for our own restore).
+    const selfRestore =
+      options?.skipSettledRefresh ||
+      pendingSelfTaskRestoresRef?.current?.delete(data.task.id);
+    if (!selfRestore) {
+      scheduleSettledBoardRefresh(refreshBoardDataRef.current);
+    }
     // If TaskDetails is open on this task, exit read-only lifecycle mode
     if (selectedTaskRef.current?.id === data.task.id) {
       setSelectedTask({
@@ -938,7 +951,7 @@ export const useTaskWebSocket = ({
         deleted_by: null,
       });
     }
-  }, [handleTaskCreated, recentlyDeletedTasksRef, setSelectedTask, refreshBoardDataRef]);
+  }, [handleTaskCreated, recentlyDeletedTasksRef, setSelectedTask, refreshBoardDataRef, pendingSelfTaskRestoresRef]);
 
   const handleTaskPurged = useCallback((data: any) => {
     if (!data.taskId) return;
