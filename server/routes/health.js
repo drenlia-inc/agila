@@ -139,26 +139,31 @@ router.get('/', async (req, res) => {
     let emailServicePayload = {
       implemented: true,
       available: false,
-      message: 'No database on request (cannot read SMTP settings)'
+      message: 'not configured',
     };
     if (db) {
       try {
         const EmailService = (await import('../services/emailService.js')).default;
         const emailSvc = new EmailService(db);
         const v = await emailSvc.validateEmailConfig();
+        let message = 'not configured';
+        if (v.valid) {
+          message = 'enabled and configured';
+        } else if (v.demoMode) {
+          message = 'disabled in demo';
+        } else if (v.error === 'Email is not enabled') {
+          message = 'disabled';
+        }
         emailServicePayload = {
           implemented: true,
-          available: v.valid,
-          message: v.valid
-            ? 'MAIL_ENABLED and required SMTP settings are present'
-            : (v.error || 'Email not configured')
+          available: Boolean(v.valid),
+          message,
         };
-      } catch (emailErr) {
+      } catch {
         emailServicePayload = {
           implemented: true,
           available: false,
-          message: 'Failed to evaluate email configuration',
-          error: emailErr.message
+          message: 'not configured',
         };
       }
     }
