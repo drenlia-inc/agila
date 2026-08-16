@@ -1134,6 +1134,7 @@
     "someAlreadySent": "{{sendable}} of {{total}} selected notifications can be sent. Already sent notifications will be skipped.",
     "sendNow": "Send Now",
     "sending": "Sending...",
+    "sendingProgress": "Sending {{done}} of {{total}}",
     "sendSuccess": "Successfully sent {{count}} notification(s)",
     "sendPartial": "Sent {{sent}} notification(s); {{failed}} failed",
     "sendNone": "No notifications were sent. Check SMTP settings or the error details on each row.",

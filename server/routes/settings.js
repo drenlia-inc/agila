@@ -149,6 +149,8 @@ router.get('/', async (req, res, next) => {
       settingsObj[setting.key] = setting.value;
     });
     await applyEffectiveAiEnabledToSettings(db, settingsObj);
+    settingsObj.DEPLOY_MULTI_TENANT = process.env.MULTI_TENANT === 'true' ? 'true' : 'false';
+    settingsObj.DEPLOY_DEMO_ENABLED = process.env.DEMO_ENABLED === 'true' ? 'true' : 'false';
     // Per-tenant OAuth and site metadata must not be cached by browsers or intermediaries
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json(settingsObj);
@@ -289,6 +291,8 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
     }
 
     await applyEffectiveAiEnabledToSettings(db, settingsObj);
+    settingsObj.DEPLOY_MULTI_TENANT = process.env.MULTI_TENANT === 'true' ? 'true' : 'false';
+    settingsObj.DEPLOY_DEMO_ENABLED = process.env.DEMO_ENABLED === 'true' ? 'true' : 'false';
     
     res.json(settingsObj);
   } catch (error) {

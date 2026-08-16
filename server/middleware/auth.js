@@ -72,6 +72,13 @@ function isAllowedViewerMutation(req) {
   // Comment attachments (upload only; attachment DELETE stays blocked)
   if (method === 'POST' && /\/api\/upload\/?$/.test(raw)) return true;
   if (method === 'POST' && /\/api\/(users|user)\/upload\/?$/.test(raw)) return true;
+  // Own watcher add/remove (self-check in the route)
+  if (
+    (method === 'POST' || method === 'DELETE') &&
+    /\/api\/tasks\/[^/]+\/watchers\/[^/]+\/?$/.test(raw)
+  ) {
+    return true;
+  }
   return false;
 }
 

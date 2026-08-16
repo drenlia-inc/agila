@@ -5,6 +5,11 @@ import { getTourSteps } from '../components/tour/TourSteps';
 import { parseTaskRoute } from '../utils/routingUtils';
 import { adminHashForTabId } from '../utils/adminNavigation';
 import { useTheme } from './ThemeContext';
+import { useSettings } from './SettingsContext';
+import {
+  isSystemPanelAvailable as readSystemPanelAvailable,
+  TROUBLESHOOTING_VISIBILITY_EVENT,
+} from '../utils/troubleshootingAccess';
 
 interface TourContextType {
   isRunning: boolean;
@@ -102,6 +107,7 @@ function ensureSystemUsagePanelVisible(): boolean {
 export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUser, onViewModeChange, onPageChange }) => {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
+  const { siteSettings } = useSettings();
   const [isRunning, setIsRunning] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
@@ -187,8 +193,15 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
   const advancingRef = React.useRef(false);
 
   const isAdmin = currentUser?.roles?.includes('admin') || currentUser?.role === 'admin';
-  const isSystemPanelAvailable =
-    process.env.MULTI_TENANT !== 'true' && process.env.DEMO_ENABLED !== 'true';
+  const [isSystemPanelAvailable, setIsSystemPanelAvailable] = useState(() =>
+    readSystemPanelAvailable()
+  );
+  useEffect(() => {
+    const sync = () => setIsSystemPanelAvailable(readSystemPanelAvailable(siteSettings));
+    sync();
+    window.addEventListener(TROUBLESHOOTING_VISIBILITY_EVENT, sync);
+    return () => window.removeEventListener(TROUBLESHOOTING_VISIBILITY_EVENT, sync);
+  }, [siteSettings]);
   const steps = useMemo(() => {
     const { userSteps, adminSteps } = getTourSteps();
     const raw = isAdmin ? adminSteps : userSteps;

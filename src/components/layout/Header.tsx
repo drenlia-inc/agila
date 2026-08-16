@@ -22,6 +22,10 @@ import {
   isPublicBrandAssetPath,
 } from '../../constants';
 import { userIsAdmin, userIsViewer } from '../../utils/permissions';
+import {
+  isSystemPanelAvailable as readSystemPanelAvailable,
+  TROUBLESHOOTING_VISIBILITY_EVENT,
+} from '../../utils/troubleshootingAccess';
 
 interface SystemInfo {
   memory: {
@@ -123,9 +127,16 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const isDemoMode = process.env.DEMO_ENABLED === 'true';
   const { theme } = useTheme();
-  // Host-level metrics are misleading in multi-tenant; hide in demo mode as well.
-  const isSystemPanelAvailable =
-    process.env.MULTI_TENANT !== 'true' && process.env.DEMO_ENABLED !== 'true';
+  const [systemPanelUnlocked, setSystemPanelUnlocked] = useState(() =>
+    readSystemPanelAvailable(siteSettings)
+  );
+  useEffect(() => {
+    const sync = () => setSystemPanelUnlocked(readSystemPanelAvailable(siteSettings));
+    sync();
+    window.addEventListener(TROUBLESHOOTING_VISIBILITY_EVENT, sync);
+    return () => window.removeEventListener(TROUBLESHOOTING_VISIBILITY_EVENT, sync);
+  }, [siteSettings]);
+  const isSystemPanelAvailable = systemPanelUnlocked;
   // Extract all tasks from all boards for sprint counting
   const allTasks = useMemo(() => {
     const tasks: Array<{ id: string; sprintId?: string | null }> = [];

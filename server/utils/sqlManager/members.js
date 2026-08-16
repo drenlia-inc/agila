@@ -44,7 +44,13 @@ export async function getAllMembers(db, includeSystemOrOpts = false) {
       u.bio as "bio",
       u.avatar_path as "avatarPath", 
       u.auth_provider as "authProvider", 
-      u.google_avatar_url as "googleAvatarUrl"
+      u.google_avatar_url as "googleAvatarUrl",
+      COALESCE((
+        SELECT bool_or(r.name = 'viewer') AND NOT bool_or(r.name IN ('admin', 'user'))
+        FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+      ), false) AS "isViewer"
     FROM members m
     LEFT JOIN users u ON m.user_id = u.id
     ${whereClause}
@@ -72,7 +78,8 @@ export async function getAllMembers(db, includeSystemOrOpts = false) {
     bio: member.bio || undefined,
     avatarUrl: member.avatarPath,
     authProvider: member.authProvider,
-    googleAvatarUrl: member.googleAvatarUrl
+    googleAvatarUrl: member.googleAvatarUrl,
+    isViewer: member.isViewer === true
   }));
 }
 
@@ -164,6 +171,26 @@ export async function getMemberByUserId(db, userId) {
     color: member.color,
     user_id: member.userId
   };
+}
+
+/**
+ * True when the member's linked user is a read-only viewer (no admin/user role).
+ */
+export async function isReadOnlyViewerMember(db, memberId) {
+  if (!memberId) return false;
+  const query = `
+    SELECT COALESCE(
+      bool_or(r.name = 'viewer') AND NOT bool_or(r.name IN ('admin', 'user')),
+      false
+    ) AS "isViewer"
+    FROM members m
+    JOIN user_roles ur ON ur.user_id = m.user_id
+    JOIN roles r ON r.id = ur.role_id
+    WHERE m.id = $1
+  `;
+  const stmt = wrapQuery(db.prepare(query), 'SELECT');
+  const row = await stmt.get(memberId);
+  return row?.isViewer === true;
 }
 
 /**

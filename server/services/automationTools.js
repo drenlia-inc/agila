@@ -354,9 +354,10 @@ async function resolvePriority(ctx, fields) {
 
 async function searchTasksInternal(ctx, args = {}, allowedBoardIds) {
   const limit = Math.min(
-    Number(args.limit) || AUTOMATION_MAX_TASKS_PER_APPLY,
+    Math.max(1, Number(args.limit) || AUTOMATION_MAX_TASKS_PER_APPLY),
     AUTOMATION_MAX_TASKS_PER_APPLY
   );
+  const offset = Math.max(0, Number(args.offset) || 0);
 
   const conditions = [];
   const params = [];
@@ -367,7 +368,17 @@ async function searchTasksInternal(ctx, args = {}, allowedBoardIds) {
       ? [args.boardId]
       : allowedBoardIds;
 
-  if (!scopeIds.length) return { tasks: [], excludedLaunchTask: false };
+  if (!scopeIds.length) {
+    return {
+      tasks: [],
+      count: 0,
+      totalCount: 0,
+      offset,
+      limit,
+      hasMore: false,
+      excludedLaunchTask: false
+    };
+  }
 
   // Always exclude the automation recipe/launch task from discovery
   if (ctx.launchTaskId) {
@@ -414,39 +425,53 @@ async function searchTasksInternal(ctx, args = {}, allowedBoardIds) {
     idx += 1;
   }
 
-  params.push(limit);
+  const whereSql = conditions.join(' AND ');
+  const countStmt = wrapQuery(
+    ctx.db.prepare(`SELECT COUNT(*)::int AS n FROM tasks t WHERE ${whereSql}`),
+    'SELECT'
+  );
+  const countRow = await countStmt.get(...params);
+  const totalCount = countRow?.n || 0;
+
+  const listParams = [...params, limit, offset];
   const query = `
     SELECT t.id, t.ticket, t.title, t.boardid, t.columnid, t.sprint_id, t.memberid, t.priority, t.description,
            t.deleted_at, b.title AS board_title, c.title AS column_title
     FROM tasks t
     LEFT JOIN boards b ON b.id = t.boardid
     LEFT JOIN columns c ON c.id = t.columnid
-    WHERE ${conditions.join(' AND ')}
+    WHERE ${whereSql}
     ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
-    LIMIT $${idx}
+    LIMIT $${idx} OFFSET $${idx + 1}
   `;
 
   const stmt = wrapQuery(ctx.db.prepare(query), 'SELECT');
-  let rows = await stmt.all(...params);
+  const rows = await stmt.all(...listParams);
 
-  if (args.text) {
-    const needle = String(args.text).trim().toLowerCase();
-    rows = rows.filter((row) => {
-      const hay = `${row.title || ''} ${stripHtml(row.description)}`.toLowerCase();
-      return hay.includes(needle);
-    });
-  }
-
-  // Include description previews by default so the model rarely needs N× get_task
-  const includeDescription = args.includeDescription !== false;
-  const tasks = rows.slice(0, limit).map((row) => compactTask(row, { includeDescription }));
+  // Previews are opt-in: default off so bulk assignee searches fit in the runner tool payload.
+  const includeDescription = args.includeDescription === true;
+  const tasks = rows.map((row) => compactTask(row, { includeDescription }));
+  const hasMore = offset + tasks.length < totalCount;
   return {
     tasks,
     count: tasks.length,
+    totalCount,
+    offset,
+    limit,
+    hasMore,
     excludedLaunchTask: Boolean(ctx.launchTaskId),
-    note: ctx.launchTaskId
-      ? 'The automation launch task itself is excluded from search results. Prefer boardTitle/columnTitle in human summaries.'
-      : 'Prefer boardTitle/columnTitle in human summaries; use boardId/columnId only in tool arguments.',
+    note: [
+      hasMore
+        ? `Paged results: ${offset + 1}–${offset + tasks.length} of ${totalCount}. Call search_tasks again with offset=${offset + tasks.length} until hasMore is false before planning bulk updates.`
+        : `Complete result set (${totalCount} match${totalCount === 1 ? '' : 'es'}).`,
+      ctx.launchTaskId
+        ? 'The automation launch task itself is excluded from search results.'
+        : null,
+      'Use assigneeId (from list_members) for “assigned to X”, not text search on the name.',
+      'Prefer boardTitle/columnTitle in human summaries; use boardId/columnId only in tool arguments.'
+    ]
+      .filter(Boolean)
+      .join(' '),
     trash: trashOnly ? 'only' : includeTrash ? 'include' : 'exclude'
   };
 }
@@ -614,9 +639,26 @@ async function toolUpdateTasks(ctx, args, { dryRun }, allowedBoardIds) {
       skippedLaunchTask: true
     };
   }
-  const { fields } = args || {};
-  if (!fields || typeof fields !== 'object') {
-    return { error: 'fields object is required' };
+  const rawFields =
+    args?.fields && typeof args.fields === 'object' && !Array.isArray(args.fields)
+      ? args.fields
+      : {};
+  const fields = { ...rawFields };
+  for (const key of [
+    'memberId',
+    'title',
+    'description',
+    'effort',
+    'startDate',
+    'dueDate',
+    'sprintId',
+    'priority',
+    'priorityId'
+  ]) {
+    if (args[key] !== undefined && fields[key] === undefined) fields[key] = args[key];
+  }
+  if (!Object.keys(fields).length) {
+    return { error: 'fields object is required (e.g. fields.memberId)' };
   }
 
   const updates = {};
@@ -639,6 +681,7 @@ async function toolUpdateTasks(ctx, args, { dryRun }, allowedBoardIds) {
   }
 
   const wouldAffect = [];
+  const snapshots = [];
   for (const taskId of taskIds) {
     const before = await taskQueries.getTaskById(ctx.db, taskId);
     if (!before) return { error: `Task not found: ${taskId}` };
@@ -649,15 +692,25 @@ async function toolUpdateTasks(ctx, args, { dryRun }, allowedBoardIds) {
         inTrash: true
       };
     }
-    wouldAffect.push({ taskId, before: taskSnapshot(before), after: { ...taskSnapshot(before), ...updates } });
+    snapshots.push({ taskId, before: taskSnapshot(before) });
+    wouldAffect.push({
+      taskId,
+      ticket: before.ticket,
+      fields: updates
+    });
   }
 
   if (dryRun) {
-    return { wouldAffect, dryRun: true, skippedLaunchTask: skippedLaunchTask || undefined };
+    return {
+      wouldAffect,
+      count: wouldAffect.length,
+      dryRun: true,
+      skippedLaunchTask: skippedLaunchTask || undefined
+    };
   }
 
   const updatedIds = [];
-  for (const item of wouldAffect) {
+  for (const item of snapshots) {
     await taskQueries.updateTask(ctx.db, item.taskId, updates);
     const after = await taskQueries.getTaskById(ctx.db, item.taskId);
     await journal(ctx, 'update_task', 'task', item.taskId, item.before, taskSnapshot(after));

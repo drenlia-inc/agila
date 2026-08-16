@@ -15,15 +15,15 @@ import ModalManager from './layout/ModalManager';
 import Header from './layout/Header';
 import TaskFlowChart from './TaskFlowChart';
 import DOMPurify from 'dompurify';
-import { getAuthenticatedAttachmentUrl, getAuthenticatedAvatarUrl } from '../utils/authImageUrl';
+import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { commentTextToHtml } from '../utils/commentContent';
 import { feDebug } from '../utils/clientDebug';
 import { parseEffortUnit, isTaskSoftDeleted } from '../utils/taskUtils';
-import { AGENT_MEMBER_ID, SYSTEM_MEMBER_ID } from '../constants/appConstants';
 import { mergeTaskTagsWithLiveData } from '../utils/tagUtils';
-import { userCanMutate } from '../utils/permissions';
+import { userCanMutate, userIsViewer } from '../utils/permissions';
 import MemberAvatar, { getPriorityPillStyle } from './ui/MemberAvatar';
 import MemberPicker from './ui/MemberPicker';
+import WatchThisTaskButton from './ui/WatchThisTaskButton';
 import TagPicker from './ui/TagPicker';
 import PriorityPicker from './ui/PriorityPicker';
 import SprintSelector from './SprintSelector';
@@ -953,6 +953,8 @@ export default function TaskPage({
   const canMutate = userCanMutate(currentUser);
   const fieldsLocked = isInTrash || !canMutate;
   const commentsLocked = isInTrash;
+  const ownMember = members.find((m) => m.user_id === currentUser?.id);
+  const viewerWatchOk = userIsViewer(currentUser) && !isInTrash && Boolean(ownMember);
 
   const toggleTaskTag = async (tag: Tag) => {
     if (fieldsLocked) return;
@@ -1261,26 +1263,7 @@ export default function TaskPage({
                     <div key={comment.id} className="border border-gray-200 dark:border-gray-600 rounded-md p-4 bg-white dark:bg-gray-900/40">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center space-x-2">
-                          {author?.googleAvatarUrl || author?.avatarUrl ? (
-                            <img
-                              src={getAuthenticatedAvatarUrl(
-                                author.googleAvatarUrl || author.avatarUrl
-                              )}
-                              alt={author?.name || ''}
-                              className="h-6 w-6 rounded-full object-cover shrink-0"
-                            />
-                          ) : (
-                            <div
-                              className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium text-white shrink-0"
-                              style={{ backgroundColor: author?.color || '#6b7280' }}
-                            >
-                              {author?.id === SYSTEM_MEMBER_ID
-                                ? '🤖'
-                                : author?.id === AGENT_MEMBER_ID
-                                  ? '✨'
-                                  : author?.name?.[0]?.toUpperCase() || 'U'}
-                            </div>
-                          )}
+                          <MemberAvatar member={author} members={members} size="sm" />
                           <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{author?.name || 'Unknown'}</span>
                           <span className="text-xs text-gray-500 dark:text-gray-400">
                             {new Date(comment.createdAt).toLocaleDateString()} {new Date(comment.createdAt).toLocaleTimeString()}
@@ -1462,6 +1445,7 @@ export default function TaskPage({
                   value={editedTask.memberId}
                   onChange={(memberId) => handleTaskUpdate({ memberId })}
                   mode="single"
+                  excludeViewers
                   disabled={fieldsLocked}
                 />
 
@@ -1487,7 +1471,7 @@ export default function TaskPage({
                         >
                           <MemberAvatar memberId={watcher.id} members={members} size="xs" />
                           <span className="max-w-[7rem] truncate">{truncateMemberName(watcher.name)}</span>
-                          {!fieldsLocked && (
+                          {(!fieldsLocked || (viewerWatchOk && ownMember?.id === watcher.id)) && (
                           <button
                             type="button"
                             onClick={async () => {
@@ -1506,7 +1490,22 @@ export default function TaskPage({
                         </span>
                       ))}
                     </div>
-                    {fieldsLocked ? (
+                    {viewerWatchOk && ownMember ? (
+                      <WatchThisTaskButton
+                        watching={taskWatchers.some((w) => w.id === ownMember.id)}
+                        onClick={async () => {
+                          try {
+                            if (taskWatchers.some((w) => w.id === ownMember.id)) {
+                              await handleRemoveWatcher(ownMember.id);
+                            } else {
+                              await handleAddWatcher(ownMember.id);
+                            }
+                          } catch (error) {
+                            console.error('Error toggling watcher:', error);
+                          }
+                        }}
+                      />
+                    ) : fieldsLocked ? (
                       taskWatchers.length === 0 && (
                         <div
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"

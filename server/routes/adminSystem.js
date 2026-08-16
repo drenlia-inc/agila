@@ -112,9 +112,12 @@ router.post('/jobs/cleanup', authenticateToken, requireRole(['admin']), async (r
 
 router.get('/system-info', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    // Host/container metrics are not tenant-scoped; hide in multi-tenant and demo deployments
+    // Host/container metrics are not tenant-scoped. Hidden in multi-tenant and demo
+    // unless the admin session sent the troubleshooting unlock header (TROUBLE).
     if (process.env.MULTI_TENANT === 'true' || process.env.DEMO_ENABLED === 'true') {
-      return res.status(404).json({ error: 'System metrics are not available in this deployment mode' });
+      if (String(req.get('x-agila-troubleshooting') || '') !== '1') {
+        return res.status(404).json({ error: 'System metrics are not available in this deployment mode' });
+      }
     }
 
     const db = getRequestDatabase(req);

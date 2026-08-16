@@ -1,6 +1,6 @@
 import React from 'react';
 import { Task, TeamMember } from '../types';
-import { getAuthenticatedAvatarUrl } from '../utils/authImageUrl';
+import MemberAvatar from './ui/MemberAvatar';
 
 interface MiniTaskIconProps {
   task: Task;
@@ -19,13 +19,8 @@ const MiniTaskIcon: React.FC<MiniTaskIconProps> = ({ task, member, className = '
       `}
       title={task.title}
     >
-      {/* Task icon - show first letter of title or member avatar */}
-      {member?.avatarUrl ? (
-        <img 
-          src={getAuthenticatedAvatarUrl(member.avatarUrl)} 
-          alt={member.name}
-          className="w-6 h-6 rounded-full object-cover"
-        />
+      {member ? (
+        <MemberAvatar member={member} size="sm" />
       ) : (
         <span className="text-blue-600">
           {task.title.charAt(0).toUpperCase()}

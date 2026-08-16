@@ -9,3 +9,7 @@ export const truncateMemberName = (name: string, maxLength: number = 30): string
   return name.substring(0, maxLength) + '...';
 };
 
+export function memberIsViewer(member?: { isViewer?: boolean } | null): boolean {
+  return Boolean(member?.isViewer);
+}
+

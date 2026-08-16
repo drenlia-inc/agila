@@ -4,6 +4,10 @@ import { versionDetection } from './utils/versionDetection';
 import { handleAuthError } from './utils/authErrorHandler';
 import { feDebug } from './utils/clientDebug';
 import { clearMediaSession } from './utils/mediaSession';
+import {
+  readTroubleshootingUnlocked,
+  TROUBLESHOOTING_REQUEST_HEADER,
+} from './utils/troubleshootingAccess';
 
 function summarizeApiPayload(data: unknown, max = 400): string {
   if (data == null) return '';
@@ -962,7 +966,11 @@ export const getStorageInfo = async () => {
 
 // System information (admin only)
 export const getSystemInfo = async () => {
-  const { data } = await api.get('/admin/system-info');
+  const headers: Record<string, string> = {};
+  if (readTroubleshootingUnlocked()) {
+    headers[TROUBLESHOOTING_REQUEST_HEADER] = '1';
+  }
+  const { data } = await api.get('/admin/system-info', { headers });
   return data;
 };
 

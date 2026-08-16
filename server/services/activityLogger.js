@@ -432,6 +432,8 @@ export const logTaskActivity = async (userId, action, taskId, details, additiona
           changedField: additionalData.changedField || null,
           projectIdentifier: additionalData.projectIdentifier || projectIdentifier || null,
           taskTicket: additionalData.taskTicket || taskTicket || null,
+          tagId: additionalData.tagId || null,
+          emailChange: additionalData.emailChange || null,
         },
         emailTenantId
       ).catch((notificationError) => {

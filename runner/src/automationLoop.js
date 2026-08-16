@@ -11,6 +11,46 @@ import { AUTOMATION_MAX_TOOL_STEPS } from './automationConstants.js';
 import { replyLanguageInstruction } from './replyLanguage.js';
 
 const MAX_STEPS = AUTOMATION_MAX_TOOL_STEPS || 40;
+const TOOL_RESULT_MAX = 20000;
+
+/** Keep search/list payloads valid JSON; never cut mid-object (that hid remaining task ids). */
+function toolResultContent(result) {
+  let payload = result;
+  let text = JSON.stringify(payload);
+  if (text.length <= TOOL_RESULT_MAX) return text;
+
+  if (payload && Array.isArray(payload.tasks)) {
+    payload = {
+      ...payload,
+      truncatedForLlm: true,
+      note: `${payload.note || ''} Rows compacted for size; use offset/hasMore if incomplete.`.trim(),
+      tasks: payload.tasks.map((t) => ({
+        id: t.id,
+        ticket: t.ticket,
+        memberId: t.memberId,
+        boardTitle: t.boardTitle,
+        columnTitle: t.columnTitle
+      }))
+    };
+    text = JSON.stringify(payload);
+  }
+  if (text.length <= TOOL_RESULT_MAX) return text;
+
+  if (payload && Array.isArray(payload.tasks) && payload.tasks.length > 60) {
+    const kept = payload.tasks.slice(0, 60);
+    payload = {
+      ...payload,
+      truncatedForLlm: true,
+      hasMore: true,
+      count: kept.length,
+      note: `${payload.note || ''} Returning first ${kept.length} of ${payload.totalCount ?? payload.tasks.length} in this page; call search_tasks with offset.`.trim(),
+      tasks: kept
+    };
+    text = JSON.stringify(payload);
+  }
+  if (text.length <= TOOL_RESULT_MAX) return text;
+  return `${text.slice(0, TOOL_RESULT_MAX - 80)}\n[TRUNCATED — page with search_tasks offset; do not assume this is the full set]`;
+}
 
 const TOOLS = [
   {
@@ -55,7 +95,7 @@ const TOOLS = [
   {
     name: 'search_tasks',
     description:
-      'Search live tasks in scope (trash is excluded by default). Excludes the automation launch task. Returns compact rows with boardTitle, columnTitle, and descriptionPreview. Set trashOnly:true (or includeTrash:true) only when the user asked to find or recover tasks from trash. Then use restore_tasks.',
+      'Search live tasks in scope (trash excluded by default). Excludes the launch task. Returns compact rows (id, ticket, titles, memberId) plus totalCount/hasMore/offset. Page with offset until hasMore is false before bulk updates. For “assigned to X”, use assigneeId from list_members — not text. Set includeDescription:true only when you need previews. trashOnly/includeTrash only for recovery, then restore_tasks.',
     parameters: {
       type: 'object',
       properties: {
@@ -66,6 +106,10 @@ const TOOLS = [
         assigneeId: { type: 'string' },
         tagId: { type: 'string' },
         limit: { type: 'number' },
+        offset: {
+          type: 'number',
+          description: 'Skip this many matches (use with hasMore / totalCount).'
+        },
         includeDescription: { type: 'boolean' },
         includeTrash: {
           type: 'boolean',
@@ -117,7 +161,8 @@ const TOOLS = [
   },
   {
     name: 'update_tasks',
-    description: 'Bulk update task fields. Use dryRun:true while planning.',
+    description:
+      'Bulk update task fields (e.g. memberId). Pass fields:{ memberId } (top-level memberId is also accepted). Use dryRun:true while planning.',
     parameters: {
       type: 'object',
       properties: {
@@ -337,6 +382,15 @@ function automationHeaders(automation, extra = {}) {
   return headers;
 }
 
+function toolCallLogStatus(result) {
+  if (!result || typeof result !== 'object') return 'ok';
+  if (result.denied === true) {
+    return `denied${result.error ? `: ${String(result.error).slice(0, 180)}` : ''}`;
+  }
+  if (result.error) return `error: ${String(result.error).slice(0, 180)}`;
+  return 'ok';
+}
+
 async function callToolApi(automation, name, args, dryRun = false) {
   const base = String(automation.apiBaseUrl || '').replace(/\/+$/, '');
   const res = await fetch(`${base}/api/agent/automation/tools`, {
@@ -469,7 +523,7 @@ export async function runAutomationJob(job) {
     'Never delete tasks, boards, or columns — those are denied.',
     'search_tasks excludes trash by default. Only use trashOnly/includeTrash when the user asked to find or recover trashed tasks; then restore_tasks (not update/move).',
     'The automation launch task (this recipe card) is NEVER a target: search/get/move/update skip it automatically. Do not try to move or edit it.',
-    'Prefer search_tasks for analysis — results include descriptionPreview, boardTitle, and columnTitle. Avoid calling get_task once per match; use get_tasks only when you need fuller fields for a small set.',
+    'Prefer search_tasks for discovery. Rows are compact (no descriptionPreview unless includeDescription:true). Always read totalCount and hasMore; if hasMore, call search_tasks again with offset until complete, then plan. For “all tasks assigned to X”, list_members then search_tasks assigneeId — never match the name via text. After applying a bulk assignee change, search that assigneeId again; if any remain, continue or report the remainder — do not claim “all” unless a verify search returns totalCount 0.',
     'When names are ambiguous, prefer IDs from list tools; refuse to guess.',
     'In human-facing text (submit_dry_run_plan summary, finish, comments), always use board titles and column titles — never raw board/column UUIDs. Keep using IDs only in tool arguments.',
     replyLanguageInstruction(payload),
@@ -584,7 +638,7 @@ export async function runAutomationJob(job) {
             messages.push({
               role: 'tool',
               tool_call_id: tc.id,
-              content: JSON.stringify(result).slice(0, 20000)
+              content: toolResultContent(result)
             });
             // Prefer finishing immediately with the plan summary
             finished = {
@@ -614,15 +668,13 @@ export async function runAutomationJob(job) {
         messages.push({
           role: 'tool',
           tool_call_id: tc.id,
-          content: JSON.stringify(result).slice(0, 20000)
+          content: toolResultContent(result)
         });
       }
 
       await sendCallback(job, {
         event: 'log',
-        log: `[runner] tool ${tc.name}${dryRun ? ' (dry-run)' : ''}: ${
-          result.error || result.denied ? 'denied/error' : 'ok'
-        }`
+        log: `[runner] tool ${tc.name}${dryRun ? ' (dry-run)' : ''}: ${toolCallLogStatus(result)}`
       });
     }
 

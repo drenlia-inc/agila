@@ -40,7 +40,7 @@ import { generateUUID } from '../utils/uuid';
 import { loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
 import { generateTaskUrl } from '../utils/routingUtils';
 import { mergeTaskTagsWithLiveData, getTagDisplayStyle } from '../utils/tagUtils';
-import { getAuthenticatedAttachmentUrl, getAuthenticatedAvatarUrl } from '../utils/authImageUrl';
+import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { truncateMemberName } from '../utils/memberUtils';
 import {
   isAgentMemberId,
@@ -49,6 +49,7 @@ import AddTagModal from './AddTagModal';
 import AgentPanel from './AgentPanel';
 import type { AgentPanelView } from './AgentPanel';
 import MemberPicker from './ui/MemberPicker';
+import WatchThisTaskButton from './ui/WatchThisTaskButton';
 import MemberAvatar from './ui/MemberAvatar';
 import AgentStatusButton from './AgentStatusButton';
 import {
@@ -59,6 +60,7 @@ import {
 import { feDebug } from '../utils/clientDebug';
 import { commentTextToHtml } from '../utils/commentContent';
 import { parseEffortUnit, isTaskSoftDeleted } from '../utils/taskUtils';
+import { userIsViewer } from '../utils/permissions';
 import websocketClient from '../services/websocketClient';
 
 function detailsLog(...args: unknown[]) {
@@ -192,6 +194,9 @@ export default function TaskDetails({
   const isWritersLocked = isAgentWorkActive || isReadOnlyMode || !canMutate;
   /** Comments allowed for viewers on live tasks; blocked in trash. */
   const commentsLocked = isReadOnlyMode;
+  const ownMember = members.find((m) => m.user_id === currentUser?.id);
+  const viewerWatchOk =
+    userIsViewer(currentUser) && !isReadOnlyMode && !isAgentWorkActive && Boolean(ownMember);
 
   useEffect(() => {
     if (!isAgentAssigned) {
@@ -1810,6 +1815,7 @@ export default function TaskDetails({
                   value={validMemberId}
                   onChange={(memberId) => handleUpdate({ memberId })}
                   mode="single"
+                  excludeViewers
                   disabled={isSubmitting || isWritersLocked}
                 />
               </div>
@@ -1843,7 +1849,7 @@ export default function TaskDetails({
                       >
                         <MemberAvatar memberId={watcher.id} members={members} size="xs" />
                         <span className="max-w-[7rem] truncate">{truncateMemberName(watcher.name)}</span>
-                        {!isWritersLocked && (
+                        {!isWritersLocked || (viewerWatchOk && ownMember?.id === watcher.id) ? (
                         <button
                           type="button"
                           disabled={isSubmitting}
@@ -1854,11 +1860,17 @@ export default function TaskDetails({
                         >
                           ×
                         </button>
-                        )}
+                        ) : null}
                       </span>
                     ))}
                   </div>
-                  {isWritersLocked ? (
+                  {viewerWatchOk && ownMember ? (
+                    <WatchThisTaskButton
+                      watching={taskWatchers.some((w) => w.id === ownMember.id)}
+                      disabled={isSubmitting}
+                      onClick={() => toggleWatcher(ownMember)}
+                    />
+                  ) : isWritersLocked ? (
                     taskWatchers.length === 0 && (
                       <div
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"
@@ -2433,26 +2445,7 @@ export default function TaskDetails({
                 <div key={comment.id} className="border-b border-gray-200 pb-6">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      {author.googleAvatarUrl || author.avatarUrl ? (
-                        <img
-                          src={getAuthenticatedAvatarUrl(
-                            author.googleAvatarUrl || author.avatarUrl
-                          )}
-                          alt={author.name}
-                          className="w-7 h-7 rounded-full object-cover shrink-0"
-                        />
-                      ) : (
-                        <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium text-white shrink-0"
-                          style={{ backgroundColor: author.color }}
-                        >
-                          {author.id === SYSTEM_MEMBER_ID
-                            ? '🤖'
-                            : author.id === AGENT_MEMBER_ID
-                              ? '✨'
-                              : author.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      <MemberAvatar member={author} members={members} size="md" />
                       <span className="font-medium">{author.name}</span>
                       <span className="text-sm text-gray-500">
                         {formatToYYYYMMDDHHmmss(comment.createdAt)}

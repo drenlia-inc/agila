@@ -156,6 +156,10 @@ export const useTaskDetails = ({
 
   const canMutateRef = useRef(canMutate);
   canMutateRef.current = canMutate;
+  const ownMemberIdRef = useRef<string | undefined>(undefined);
+  ownMemberIdRef.current = members.find((m) => m.user_id === currentUser?.id)?.id;
+  const canChangeOwnWatcher = (memberId: string) =>
+    canMutateRef.current || ownMemberIdRef.current === memberId;
 
   // Immediate save — always persist the latest editedTaskRef snapshot
   const saveImmediately = useCallback(async (taskToSave?: Task) => {
@@ -354,7 +358,7 @@ export const useTaskDetails = ({
 
   // Handle watcher operations
   const handleAddWatcher = useCallback(async (memberId: string) => {
-    if (!canMutateRef.current) return;
+    if (!canChangeOwnWatcher(memberId)) return;
     try {
       await addWatcherToTask(task.id, memberId);
       const member = members.find(m => m.id === memberId);
@@ -374,7 +378,7 @@ export const useTaskDetails = ({
   }, [task.id, members, taskWatchers, editedTask, onUpdate]);
 
   const handleRemoveWatcher = useCallback(async (memberId: string) => {
-    if (!canMutateRef.current) return;
+    if (!canChangeOwnWatcher(memberId)) return;
     try {
       await removeWatcherFromTask(task.id, memberId);
       const newWatchers = taskWatchers.filter(w => w.id !== memberId);

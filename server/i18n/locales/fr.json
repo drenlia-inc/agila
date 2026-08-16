@@ -68,6 +68,8 @@
     "failedToMoveTaskToBoard": "Échec du déplacement de la tâche vers le tableau",
     "failedToGetTasks": "Échec de la récupération des tâches",
     "failedToAddWatcher": "Échec de l'ajout de l'observateur",
+    "cannotAssignViewer": "Les membres en lecture seule ne peuvent pas être assignés aux tâches",
+    "readOnly": "Le rôle en lecture seule ne peut pas modifier les données",
     "failedToRemoveWatcher": "Échec de la suppression de l'observateur",
     "failedToAddCollaborator": "Échec de l'ajout du collaborateur",
     "failedToRemoveCollaborator": "Échec de la suppression du collaborateur",
@@ -187,7 +189,7 @@
     },
     "taskNotification": {
       "newTaskAssigned": {
-        "subject": "📋 Nouvelle tâche assignée : {taskTitle}",
+        "subject": "✨ Tâche assignée : {taskTitle}",
         "title": "Nouvelle tâche assignée",
         "taskId": "ID de la tâche :",
         "assignedBy": "Assignée par :",
@@ -195,7 +197,7 @@
         "receivingReason": "Vous recevez ceci car vous avez été assigné à cette tâche."
       },
       "myTaskUpdated": {
-        "subject": "📝 Votre tâche a été mise à jour : {taskTitle}",
+        "subject": "✏️ Tâche mise à jour : {taskTitle}",
         "title": "Tâche mise à jour",
         "taskId": "ID de la tâche :",
         "updatedBy": "Mise à jour par :",
@@ -204,7 +206,7 @@
         "receivingReason": "Vous recevez ceci car vous êtes assigné à cette tâche."
       },
       "watchedTaskUpdated": {
-        "subject": "👀 Tâche surveillée mise à jour : {taskTitle}",
+        "subject": "🔖 Tâche surveillée mise à jour : {taskTitle}",
         "title": "Tâche surveillée mise à jour",
         "taskId": "ID de la tâche :",
         "updatedBy": "Mise à jour par :",
@@ -213,7 +215,7 @@
         "receivingReason": "Vous recevez ceci car vous surveillez cette tâche."
       },
       "addedAsCollaborator": {
-        "subject": "🤝 Ajouté en tant que collaborateur : {taskTitle}",
+        "subject": "👥 Ajouté en tant que collaborateur : {taskTitle}",
         "title": "Ajouté en tant que collaborateur",
         "taskId": "ID de la tâche :",
         "addedBy": "Ajouté par :",
@@ -221,7 +223,7 @@
         "receivingReason": "Vous collaborez maintenant sur cette tâche et recevrez des mises à jour sur les changements."
       },
       "addedAsWatcher": {
-        "subject": "👀 Ajouté en tant que surveillant : {taskTitle}",
+        "subject": "🔖 Ajouté en tant que surveillant : {taskTitle}",
         "title": "Ajouté en tant que surveillant",
         "taskId": "ID de la tâche :",
         "addedBy": "Ajouté par :",
@@ -229,7 +231,7 @@
         "receivingReason": "Vous surveillez maintenant cette tâche et recevrez des mises à jour sur les changements."
       },
       "collaboratingTaskUpdated": {
-        "subject": "🤝 Tâche en collaboration mise à jour : {taskTitle}",
+        "subject": "👥 Tâche en collaboration mise à jour : {taskTitle}",
         "title": "Tâche en collaboration mise à jour",
         "taskId": "ID de la tâche :",
         "updatedBy": "Mise à jour par :",
@@ -238,7 +240,7 @@
         "receivingReason": "Vous recevez ceci car vous collaborez sur cette tâche."
       },
       "requesterTaskCreated": {
-        "subject": "✅ Votre tâche demandée a été créée : {taskTitle}",
+        "subject": "✨ Votre tâche demandée a été créée : {taskTitle}",
         "title": "Tâche créée",
         "taskId": "ID de la tâche :",
         "createdBy": "Créée par :",
@@ -246,7 +248,7 @@
         "receivingReason": "Vous recevez ceci car vous avez demandé cette tâche."
       },
       "requesterTaskUpdated": {
-        "subject": "📋 Votre tâche demandée a été mise à jour : {taskTitle}",
+        "subject": "✏️ Votre tâche demandée a été mise à jour : {taskTitle}",
         "title": "Tâche demandée mise à jour",
         "taskId": "ID de la tâche :",
         "updatedBy": "Mise à jour par :",
@@ -257,7 +259,7 @@
       "common": {
         "taskNotification": "Notification de tâche",
         "hi": "Bonjour {firstName},",
-        "actionInBoard": "{actionMessage} dans {boardName} :",
+        "actionInBoard": "{actionMessage} dans {boardName}.",
         "actionMessage": {
           "created": "Une nouvelle tâche a été créée",
           "assigned": "Vous avez été assigné à une tâche",
@@ -289,6 +291,14 @@
         "fieldRequester": "Demandeur",
         "fieldPriority": "Priorité",
         "fieldSprint": "Sprint",
+        "fieldDate": "Date",
+        "fromTo": "de « {from} » à « {to} »",
+        "detailsDeleted": "« {taskTitle} » ({ticket}) a été supprimée.",
+        "subjectDeleted": "🗑️ Tâche supprimée : {taskTitle}",
+        "tagsAdded": "Nouvelle étiquette associée :",
+        "tagsAddedPlural": "Nouvelles étiquettes associées :",
+        "tagsRemoved": "Étiquette retirée :",
+        "tagsRemovedPlural": "Étiquettes retirées :",
         "timestamp": "Date/Heure",
         "viewTask": "Voir la tâche",
         "viewTaskReply": "💬 Voir la tâche et répondre",

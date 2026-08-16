@@ -1,8 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown } from 'lucide-react';
 import type { TeamMember } from '../../types';
 import { truncateMemberName } from '../../utils/memberUtils';
+import { layoutMemberDropdownFromElement, type MemberDropdownLayout } from '../../utils/memberDropdownLayout';
 import MemberAvatar from './MemberAvatar';
 import MemberSearchList from './MemberSearchList';
 
@@ -28,6 +30,8 @@ export interface MemberPickerProps {
   className?: string;
   /** Highlight agent in its own section (default true for single) */
   showAgentSection?: boolean;
+  /** Hide read-only viewers from assignee lists */
+  excludeViewers?: boolean;
 }
 
 /**
@@ -44,25 +48,54 @@ export default function MemberPicker({
   disabled = false,
   className = '',
   showAgentSection,
+  excludeViewers = false,
 }: MemberPickerProps) {
   const { t } = useTranslation('tasks');
   const [open, setOpen] = useState(false);
+  const [layout, setLayout] = useState<MemberDropdownLayout | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const preferAgentSection = showAgentSection ?? mode === 'single';
   const selected = value ? members.find((m) => m.id === value) : undefined;
 
   const close = () => setOpen(false);
 
+  const measure = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    setLayout(
+      layoutMemberDropdownFromElement(el, members, {
+        showAgent: preferAgentSection,
+        excludeViewers,
+        selectedId: mode === 'single' ? value : null,
+        placement: 'below',
+      })
+    );
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    measure();
+  }, [open, members, preferAgentSection, excludeViewers, value, mode]);
+
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        close();
-      }
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      close();
     };
+    const onWin = () => measure();
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
+    window.addEventListener('resize', onWin);
+    window.addEventListener('scroll', onWin, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', onWin);
+      window.removeEventListener('scroll', onWin, true);
+    };
+  }, [open, members, preferAgentSection, excludeViewers, value, mode]);
 
   useEffect(() => {
     if (disabled) setOpen(false);
@@ -119,6 +152,7 @@ export default function MemberPicker({
         </label>
       )}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           if (open) close();
@@ -147,19 +181,35 @@ export default function MemberPicker({
         />
       </button>
 
-      {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-lg border border-gray-200 dark:border-gray-600 shadow-lg overflow-hidden max-h-80">
-          <MemberSearchList
-            members={members}
-            excludeIds={excludeIds}
-            selectedId={mode === 'single' ? value : null}
-            showAgentSection={preferAgentSection}
-            onSelect={pick}
-            onEscape={close}
-            maxHeightClassName="max-h-56"
-          />
-        </div>
-      )}
+      {open &&
+        layout &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="fixed z-[80] rounded-lg border border-gray-200 dark:border-gray-600 shadow-lg overflow-hidden flex flex-col bg-white dark:bg-gray-800"
+            style={{
+              left: layout.left,
+              top: layout.top,
+              width: layout.width,
+              height: layout.height,
+              maxHeight: layout.height,
+            }}
+          >
+            <MemberSearchList
+              members={members}
+              excludeIds={excludeIds}
+              selectedId={mode === 'single' ? value : null}
+              showAgentSection={preferAgentSection}
+              excludeViewers={excludeViewers}
+              columns={layout.columns}
+              onSelect={pick}
+              onEscape={close}
+              maxHeightClassName="max-h-none"
+              className="min-h-0 flex-1"
+            />
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

@@ -9,13 +9,17 @@ import {
 import { formatDateTimeLocal } from '../utils/dateFormatter.js';
 // recipientTimeZone: IANA tz from user_settings (browser-synced)
 import {
-  formatDetailsForEmail,
   stripHtmlForEmail,
   formatWordDiffHtml,
   formatWordDiffText,
   buildTaskEmailUrl,
   buildEmailSiteLogo,
 } from '../utils/emailContent.js';
+import {
+  contrastTextForHex,
+  priorityBadgeStyle,
+  shouldUseWordDiff,
+} from '../utils/taskEmailPayload.js';
 
 /**
  * Email language: explicit data.lang → recipient user pref → APP_LANGUAGE → en
@@ -69,10 +73,12 @@ function resolveActionMessageKey(actionType, changedField, notificationType) {
   if (notificationType === 'newTaskAssigned') return 'assigned';
   if (notificationType === 'addedAsCollaborator') return 'added_as_collaborator';
   if (notificationType === 'addedAsWatcher') return 'added_as_watcher';
+  if (actionType === 'delete_task') return 'deleted';
   if (changedField === 'memberId') return 'assignee_changed';
   if (changedField === 'requesterId') return 'requester_changed';
   if (changedField === 'columnId') return 'status_changed';
   if (changedField === 'isBlocked') return 'status_changed';
+  if (changedField === 'priorityId') return 'priority_changed';
   if (!actionType) return 'default';
   return ACTION_MESSAGE_KEY_MAP[actionType] || 'default';
 }
@@ -124,6 +130,18 @@ function escapeHtml(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function emailPriorityChip(name, hex) {
+  const style = priorityBadgeStyle(hex);
+  return `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background-color:${escapeHtml(style.backgroundColor)};color:${escapeHtml(style.color)};">${escapeHtml(name || '')}</span>`;
+}
+
+function emailTagChip(name, hex) {
+  const bg = hex || '#4F46E5';
+  const fg = contrastTextForHex(bg);
+  const border = fg === '#374151' ? 'border:1px solid #d1d5db;' : 'border:1px solid transparent;';
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background-color:${escapeHtml(bg)};color:${escapeHtml(fg)};${border}margin:0 4px 0 0;vertical-align:middle;">${escapeHtml(name || '')}</span>`;
 }
 
 /**
@@ -302,9 +320,7 @@ ${t('emails.userInvite.body6', { siteName: brand })}`,
       user, 
       task, 
       board, 
-      project, 
       actionType, 
-      actionDetails, 
       taskUrl, 
       siteName,
       oldValue,
@@ -313,6 +329,8 @@ ${t('emails.userInvite.body6', { siteName: brand })}`,
       changedField = null,
       notificationType = null,
       recipientTimeZone = null,
+      emailChange = null,
+      isRecentAssignment = false,
       db,
       lang: langOverride,
     } = data;
@@ -324,106 +342,55 @@ ${t('emails.userInvite.body6', { siteName: brand })}`,
     });
     const firstName = displayFirstName(user);
     const boardName = displayBoardName(board);
-    const detailsText = formatDetailsForEmail(actionDetails, lang);
     const taskTitle = task?.title || 'Task';
     const taskHeading = formatTaskHeading(task);
+    const items = (emailChange?.items || []).filter((i) => i && i.field !== 'effort');
+    const showDescriptionAsDetails =
+      isRecentAssignment ||
+      notificationType === 'newTaskAssigned' ||
+      actionType === 'create_task';
+
+    const effectiveActionType =
+      actionType === 'delete_task' ? 'delete_task' : actionType;
+    const effectiveNotificationType =
+      showDescriptionAsDetails && notificationType !== 'requesterTaskCreated'
+        ? 'newTaskAssigned'
+        : notificationType;
 
     const getActionMessage = () => {
+      if (
+        items.filter((i) => i.field !== 'generic').length > 1 &&
+        effectiveActionType !== 'delete_task' &&
+        !showDescriptionAsDetails
+      ) {
+        return t('emails.taskNotification.common.actionMessage.consolidated_update');
+      }
       const actionKey = resolveActionMessageKey(
-        actionType,
+        effectiveActionType,
         changedField,
-        notificationType
+        effectiveNotificationType
       );
       return t(`emails.taskNotification.common.actionMessage.${actionKey}`);
     };
 
-    const getPeopleChangeDetails = () => {
-      const beforeRaw = stripHtmlForEmail(oldValue);
-      const afterRaw = stripHtmlForEmail(newValue);
-      if (!beforeRaw && !afterRaw) return '';
-      if (beforeRaw === afterRaw) return '';
-      // Never surface raw IDs in the people-change card
-      if (looksLikeId(beforeRaw) || looksLikeId(afterRaw)) return '';
-
-      const before =
-        beforeRaw || t('emails.taskNotification.common.unassigned');
-      const after = afterRaw || t('emails.taskNotification.common.unassigned');
-      const fieldLabel =
-        changedField === 'requesterId'
-          ? t('emails.taskNotification.common.fieldRequester')
-          : t('emails.taskNotification.common.fieldAssignee');
-
+    const fromToCard = (label, before, after, beforeHtml = null, afterHtml = null) => {
+      if (!before && !after) return '';
+      if (before === after && !beforeHtml && !afterHtml) return '';
       return `<div style="margin: 14px 0 0 0; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px;">
-          <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 10px;">${escapeHtml(fieldLabel)}</div>
+          <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 10px;">${escapeHtml(label)}</div>
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width:100%;">
             <tr>
-              <td style="padding: 8px 10px; background:#fef2f2; border-radius:4px; color:#7f1d1d; font-size:14px;">${escapeHtml(before)}</td>
+              <td style="padding: 8px 10px; background:#fef2f2; border-radius:4px; color:#7f1d1d; font-size:14px;">${beforeHtml || escapeHtml(before || '—')}</td>
               <td style="width:36px; text-align:center; color:#9ca3af; font-size:16px;">→</td>
-              <td style="padding: 8px 10px; background:#f0fdf4; border-radius:4px; color:#14532d; font-size:14px; font-weight:600;">${escapeHtml(after)}</td>
+              <td style="padding: 8px 10px; background:#f0fdf4; border-radius:4px; color:#14532d; font-size:14px; font-weight:600;">${afterHtml || escapeHtml(after || '—')}</td>
             </tr>
           </table>
         </div>`;
     };
 
-    const getChangeDetails = () => {
-      if (isPeopleField(changedField)) {
-        return getPeopleChangeDetails();
-      }
-
-      let before = stripHtmlForEmail(oldValue);
-      let after = stripHtmlForEmail(newValue);
-
-      // Localize boolean blocked flag for the recipient language
-      if (changedField === 'isBlocked') {
-        const toBlockedLabel = (value) => {
-          const blocked =
-            value === true ||
-            value === 1 ||
-            value === '1' ||
-            String(value).toLowerCase() === 'true';
-          return blocked ? t('activity.blocked') : t('activity.unblocked');
-        };
-        before = toBlockedLabel(oldValue);
-        after = toBlockedLabel(newValue);
-      }
-
-      if (!before && !after) return '';
-      if (before === after) return '';
-      // People-like short values without changedField (legacy queue rows)
-      if (
-        before.length < 80 &&
-        after.length < 80 &&
-        !before.includes('\n') &&
-        !after.includes('\n') &&
-        (looksLikeId(before) || looksLikeId(after))
-      ) {
-        return '';
-      }
-      if (
-        before.length < 80 &&
-        after.length < 80 &&
-        !before.includes('\n') &&
-        !after.includes('\n') &&
-        !before.includes('<') &&
-        !after.includes('<')
-      ) {
-        // Short non-prose change: From → To (dates, names, priorities, etc.)
-        return `<div style="margin: 14px 0 0 0; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px;">
-          <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 10px;">${t('emails.taskNotification.common.changed')}</div>
-          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width:100%;">
-            <tr>
-              <td style="padding: 8px 10px; background:#fef2f2; border-radius:4px; color:#7f1d1d; font-size:14px;">${escapeHtml(before || '—')}</td>
-              <td style="width:36px; text-align:center; color:#9ca3af; font-size:16px;">→</td>
-              <td style="padding: 8px 10px; background:#f0fdf4; border-radius:4px; color:#14532d; font-size:14px; font-weight:600;">${escapeHtml(after || '—')}</td>
-            </tr>
-          </table>
-        </div>`;
-      }
-
+    const wordDiffCard = (before, after) => {
       const diffHtml = formatWordDiffHtml(before, after);
       if (!diffHtml) return '';
-
-      // Inline word diff: red strike = removed, green bold = added
       return `<div style="margin: 14px 0 0 0; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px;">
           <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 8px;">${t('emails.taskNotification.common.changed')}</div>
           <div style="font-size: 14px; line-height: 1.55; color: #374151;">${diffHtml}</div>
@@ -435,68 +402,203 @@ ${t('emails.userInvite.body6', { siteName: brand })}`,
         </div>`;
     };
 
-    // Format timestamp in the recipient's timezone when known
+    const valueChangeCard = (field, beforeRaw, afterRaw) => {
+      let before = stripHtmlForEmail(beforeRaw);
+      let after = stripHtmlForEmail(afterRaw);
+      if (field === 'isBlocked') {
+        const toBlockedLabel = (value) => {
+          const blocked =
+            value === true ||
+            value === 1 ||
+            value === '1' ||
+            String(value).toLowerCase() === 'true';
+          return blocked ? t('activity.blocked') : t('activity.unblocked');
+        };
+        before = toBlockedLabel(beforeRaw);
+        after = toBlockedLabel(afterRaw);
+      }
+      if (!before && !after) return '';
+      if (before === after) return '';
+      if (looksLikeId(before) || looksLikeId(after)) return '';
+      if (shouldUseWordDiff(before, after, field)) {
+        return wordDiffCard(before, after);
+      }
+      return fromToCard(t('emails.taskNotification.common.changed'), before, after);
+    };
+
+    const buildStructuredDetailsHtml = () => {
+      if (effectiveActionType === 'delete_task') {
+        return escapeHtml(
+          t('emails.taskNotification.common.detailsDeleted', {
+            taskTitle,
+            ticket: task?.ticket || '',
+          })
+        );
+      }
+      if (showDescriptionAsDetails) {
+        const desc = stripHtmlForEmail(task?.description || '');
+        return desc ? escapeHtml(desc) : '';
+      }
+
+      const lines = [];
+      for (const item of items) {
+        if (item.field === 'sprintId') {
+          const name = item.newName || item.oldName || '';
+          if (name) {
+            lines.push(
+              `${escapeHtml(t('emails.taskNotification.common.fieldSprint'))}: "${escapeHtml(name)}"`
+            );
+          }
+        } else if (item.field === 'startDate' || item.field === 'date') {
+          const from = item.oldValue || item.oldName || '';
+          const to = item.newValue || item.newName || '';
+          if (from || to) {
+            lines.push(
+              `${escapeHtml(t('emails.taskNotification.common.fieldDate'))}: ${escapeHtml(
+                t('emails.taskNotification.common.fromTo', {
+                  from: from || '—',
+                  to: to || '—',
+                })
+              )}`
+            );
+          }
+        } else if (item.field === 'tags') {
+          const added = item.added || [];
+          const removed = item.removed || [];
+          if (added.length) {
+            const key =
+              added.length > 1
+                ? 'emails.taskNotification.common.tagsAddedPlural'
+                : 'emails.taskNotification.common.tagsAdded';
+            lines.push(
+              `${escapeHtml(t(key))} ${added.map((tag) => emailTagChip(tag.name, tag.color)).join('')}`
+            );
+          }
+          if (removed.length) {
+            const key =
+              removed.length > 1
+                ? 'emails.taskNotification.common.tagsRemovedPlural'
+                : 'emails.taskNotification.common.tagsRemoved';
+            lines.push(
+              `${escapeHtml(t(key))} ${removed.map((tag) => emailTagChip(tag.name, tag.color)).join('')}`
+            );
+          }
+        } else if (item.field === 'priorityId') {
+          const oldChip = item.oldName
+            ? emailPriorityChip(item.oldName, item.oldColor)
+            : escapeHtml('—');
+          const newChip = item.newName
+            ? emailPriorityChip(item.newName, item.newColor)
+            : escapeHtml('—');
+          lines.push(
+            `${escapeHtml(t('emails.taskNotification.common.fieldPriority'))}: ${oldChip} → ${newChip}`
+          );
+        }
+      }
+      if (lines.length) return lines.join('<br>');
+      if (items.length) return '';
+      return '';
+    };
+
+    const getChangeDetails = () => {
+      if (showDescriptionAsDetails) return '';
+      if (effectiveActionType === 'delete_task') return '';
+
+      const parts = [];
+      if (items.length) {
+        for (const item of items) {
+          if (item.field === 'sprintId' || item.field === 'tags' || item.field === 'priorityId' || item.field === 'startDate' || item.field === 'delete') {
+            continue;
+          }
+          if (item.field === 'memberId' || item.field === 'requesterId') {
+            if (showDescriptionAsDetails) continue;
+            const before = item.oldName || item.oldValue || '';
+            const after = item.newName || item.newValue || '';
+            const label =
+              item.field === 'requesterId'
+                ? t('emails.taskNotification.common.fieldRequester')
+                : t('emails.taskNotification.common.fieldAssignee');
+            parts.push(fromToCard(label, before || t('emails.taskNotification.common.unassigned'), after || t('emails.taskNotification.common.unassigned')));
+            continue;
+          }
+          parts.push(valueChangeCard(item.field, item.oldValue, item.newValue));
+        }
+        return parts.join('');
+      }
+
+      if (isPeopleField(changedField) && !showDescriptionAsDetails) {
+        const beforeRaw = stripHtmlForEmail(oldValue);
+        const afterRaw = stripHtmlForEmail(newValue);
+        if (!beforeRaw && !afterRaw) return '';
+        if (looksLikeId(beforeRaw) || looksLikeId(afterRaw)) return '';
+        const label =
+          changedField === 'requesterId'
+            ? t('emails.taskNotification.common.fieldRequester')
+            : t('emails.taskNotification.common.fieldAssignee');
+        return fromToCard(
+          label,
+          beforeRaw || t('emails.taskNotification.common.unassigned'),
+          afterRaw || t('emails.taskNotification.common.unassigned')
+        );
+      }
+      return valueChangeCard(changedField, oldValue, newValue);
+    };
+
     const formattedTimestamp = formatDateTimeLocal(
       timestamp || new Date(),
       recipientTimeZone
     );
     
-    // Get task ticket for subject
     const taskTicket = task?.ticket || '';
     const ticketPrefix = taskTicket ? `[ ${taskTicket} ] ` : '';
     const actionMessage = getActionMessage();
-    const typeSpecificSubject =
-      notificationType === 'addedAsCollaborator' ||
-      notificationType === 'addedAsWatcher' ||
-      notificationType === 'newTaskAssigned' ||
-      notificationType === 'myTaskUpdated' ||
-      notificationType === 'watchedTaskUpdated' ||
-      notificationType === 'collaboratingTaskUpdated' ||
-      notificationType === 'requesterTaskCreated' ||
-      notificationType === 'requesterTaskUpdated'
-        ? t(`emails.taskNotification.${notificationType}.subject`, { taskTitle })
-        : null;
+    const knownTypes = [
+      'addedAsCollaborator',
+      'addedAsWatcher',
+      'newTaskAssigned',
+      'myTaskUpdated',
+      'watchedTaskUpdated',
+      'collaboratingTaskUpdated',
+      'requesterTaskCreated',
+      'requesterTaskUpdated',
+    ];
+    let subjectKey = knownTypes.includes(effectiveNotificationType)
+      ? `emails.taskNotification.${effectiveNotificationType}.subject`
+      : null;
+    if (effectiveActionType === 'delete_task') {
+      subjectKey = 'emails.taskNotification.common.subjectDeleted';
+    }
+    const typeSpecificSubject = subjectKey
+      ? t(subjectKey, { taskTitle })
+      : null;
     const emailSubject = typeSpecificSubject
       ? `${ticketPrefix}${typeSpecificSubject}`
       : `${ticketPrefix}${actionMessage} - ${taskTitle}`;
     const receivingReason =
-      notificationType === 'addedAsCollaborator' ||
-      notificationType === 'addedAsWatcher' ||
-      notificationType === 'newTaskAssigned' ||
-      notificationType === 'myTaskUpdated' ||
-      notificationType === 'watchedTaskUpdated' ||
-      notificationType === 'collaboratingTaskUpdated' ||
-      notificationType === 'requesterTaskCreated' ||
-      notificationType === 'requesterTaskUpdated'
-        ? t(`emails.taskNotification.${notificationType}.receivingReason`)
+      knownTypes.includes(effectiveNotificationType)
+        ? t(`emails.taskNotification.${effectiveNotificationType}.receivingReason`)
         : t('emails.taskNotification.common.receivingReason');
-    const beforeTextRaw = stripHtmlForEmail(oldValue);
-    const afterTextRaw = stripHtmlForEmail(newValue);
-    let beforeText = beforeTextRaw;
-    let afterText = afterTextRaw;
-    if (changedField === 'isBlocked') {
-      const toBlockedLabel = (value) => {
-        const blocked =
-          value === true ||
-          value === 1 ||
-          value === '1' ||
-          String(value).toLowerCase() === 'true';
-        return blocked ? t('activity.blocked') : t('activity.unblocked');
-      };
-      beforeText = toBlockedLabel(oldValue);
-      afterText = toBlockedLabel(newValue);
-    }
+
+    const detailsHtml = buildStructuredDetailsHtml();
+    const detailsTextPlain = detailsHtml
+      ? detailsHtml.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+      : '';
+    const changeHtml = getChangeDetails();
     let textChangeBlock = '';
-    if (
-      beforeText !== afterText &&
-      (beforeText || afterText) &&
-      !looksLikeId(beforeText) &&
-      !looksLikeId(afterText)
-    ) {
-      if (isPeopleField(changedField) || (beforeText.length < 80 && afterText.length < 80)) {
-        textChangeBlock = `\n${t('emails.taskNotification.common.changed')} ${beforeText || '—'} → ${afterText || '—'}\n`;
-      } else {
-        textChangeBlock = `\n${t('emails.taskNotification.common.changed')} ${formatWordDiffText(beforeText, afterText)}\n`;
+    if (!showDescriptionAsDetails && effectiveActionType !== 'delete_task') {
+      const beforeText = stripHtmlForEmail(oldValue);
+      const afterText = stripHtmlForEmail(newValue);
+      if (
+        beforeText !== afterText &&
+        (beforeText || afterText) &&
+        !looksLikeId(beforeText) &&
+        !looksLikeId(afterText)
+      ) {
+        if (shouldUseWordDiff(beforeText, afterText, changedField)) {
+          textChangeBlock = `\n${t('emails.taskNotification.common.changed')} ${formatWordDiffText(beforeText, afterText)}\n`;
+        } else if (isPeopleField(changedField) || !shouldUseWordDiff(beforeText, afterText, changedField)) {
+          textChangeBlock = `\n${t('emails.taskNotification.common.changed')} ${beforeText || '—'} → ${afterText || '—'}\n`;
+        }
       }
     }
 
@@ -506,23 +608,19 @@ ${t('emails.userInvite.body6', { siteName: brand })}`,
 
 ${t('emails.taskNotification.common.actionInBoard', { actionMessage, boardName })}
 
-Task: ${taskHeading}
-${project ? `${t('emails.taskNotification.common.project')} ${project}` : ''}
-${t('emails.taskNotification.common.details')} ${detailsText}
+${taskHeading}
+${t('emails.taskNotification.common.project')} ${boardName}
+${t('emails.taskNotification.common.timestamp')} ${formattedTimestamp}
+${detailsTextPlain ? `${t('emails.taskNotification.common.details')}\n${detailsTextPlain}` : ''}
 ${textChangeBlock}
 ${t('emails.taskNotification.common.viewTask')}: ${taskUrl}
 
-Best regards,
 ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agila' })}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #2563eb; margin: 0;">📋 ${t('emails.taskNotification.common.taskNotification')}</h1>
-          </div>
-          
           <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h2 style="color: #374151; margin-top: 0;">${t('emails.taskNotification.common.hi', { firstName })}</h2>
-            <p style="color: #6b7280; line-height: 1.6; font-size: 16px;">
+            <p style="color: #374151; margin: 0 0 8px 0; font-size: 16px;">${t('emails.taskNotification.common.hi', { firstName })}</p>
+            <p style="color: #6b7280; line-height: 1.6; font-size: 16px; margin: 0;">
               ${t('emails.taskNotification.common.actionInBoard', {
                 actionMessage: escapeHtml(actionMessage),
                 boardName: `<strong>${escapeHtml(boardName)}</strong>`,
@@ -531,11 +629,11 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
           </div>
 
           <div style="background-color: #fff; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h3 style="color: #1f2937; margin-top: 0; font-size: 18px;">📝 ${escapeHtml(taskHeading)}</h3>
-            ${project ? `<p style="color: #6b7280; margin: 5px 0;"><strong>${t('emails.taskNotification.common.project')}</strong> ${escapeHtml(project)}</p>` : ''}
+            <h3 style="color: #1f2937; margin-top: 0; font-size: 18px;">${escapeHtml(taskHeading)}</h3>
+            <p style="color: #6b7280; margin: 5px 0;"><strong>${t('emails.taskNotification.common.project')}</strong> ${escapeHtml(boardName)}</p>
             <p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>${t('emails.taskNotification.common.timestamp')}</strong> ${escapeHtml(formattedTimestamp)}</p>
-            <p style="color: #374151; margin: 10px 0;"><strong>${t('emails.taskNotification.common.details')}</strong> ${escapeHtml(detailsText)}</p>
-            ${getChangeDetails()}
+            ${detailsHtml ? `<div style="color: #374151; margin: 12px 0 0 0; line-height: 1.55;"><strong>${t('emails.taskNotification.common.details')}</strong><div style="margin-top:6px;">${detailsHtml}</div></div>` : ''}
+            ${changeHtml}
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
@@ -543,7 +641,7 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
               <tr>
                 <td align="center" style="border-radius: 6px; background-color: #2563eb;">
                   <a href="${taskUrl}" target="_blank" style="display: inline-block; padding: 12px 24px; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                    👀 ${t('emails.taskNotification.common.viewTask')}
+                    ${t('emails.taskNotification.common.viewTask')}
                   </a>
                 </td>
               </tr>
@@ -630,10 +728,6 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
       attachments: emailAttachments,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #2563eb; margin: 0;">💬 ${t('emails.commentNotification.title')}</h1>
-          </div>
-          
           <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
             <h2 style="color: #374151; margin-top: 0;">${t('emails.taskNotification.common.hi', { firstName })}</h2>
             <p style="color: #6b7280; line-height: 1.6;">
@@ -643,7 +737,7 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
 
           <div style="background-color: #fff; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
             <h3 style="color: #1f2937; margin-top: 0;">📝 ${escapeHtml(taskHeading)}</h3>
-            ${project ? `<p style="color: #6b7280; margin: 5px 0;"><strong>${t('emails.taskNotification.common.project')}</strong> ${escapeHtml(project)}</p>` : ''}
+            ${project ? `<p style="color: #6b7280; margin: 5px 0;"><strong>${t('emails.taskNotification.common.project')}</strong> ${escapeHtml(boardName)}</p>` : ''}
             <p style="color: #6b7280; margin: 5px 0;"><strong>${t('emails.taskNotification.common.board')}</strong> ${escapeHtml(boardName)}</p>
             <p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>${t('emails.taskNotification.common.timestamp')}</strong> ${escapeHtml(formattedTimestamp)}</p>
           </div>

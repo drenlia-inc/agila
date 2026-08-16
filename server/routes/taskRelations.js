@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, userCanMutate } from '../middleware/auth.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { logActivity, logTaskActivity } from '../services/activityLogger.js';
 import { TAG_ACTIONS } from '../constants/activityActions.js';
@@ -12,8 +12,8 @@ import notificationService from '../services/notificationService.js';
 import { updateStorageUsage } from '../utils/storageUtils.js';
 import { getLicenseManager } from '../config/license.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
-import { helpers, tasks as taskQueries, files as fileQueries, activity as activityQueries } from '../utils/sqlManager/index.js';
-import { getBilingualTranslation, getTranslatorForLanguage } from '../utils/i18n.js';
+import { helpers, tasks as taskQueries, files as fileQueries, activity as activityQueries, members as memberQueries } from '../utils/sqlManager/index.js';
+import { getBilingualTranslation, getTranslatorForLanguage, getTranslator } from '../utils/i18n.js';
 import { notifyCollaboratorAdded, notifyWatcherAdded } from '../services/taskEmailNotificationService.js';
 import { parseBody, taskAttachmentsBodySchema } from '../utils/requestValidation.js';
 
@@ -128,6 +128,15 @@ router.post('/:taskId/tags/:tagId', authenticateToken, async (req, res) => {
               authType: req.user?.authType,
               db: db,
               skipEmail: skipEmail === true,
+              emailChange: {
+                items: [
+                  {
+                    field: 'tags',
+                    added: [{ name: tag.tag, color: tag.color }],
+                    removed: [],
+                  },
+                ],
+              },
             }
           );
         } catch (error) {
@@ -350,7 +359,16 @@ router.delete('/:taskId/tags/:tagId', authenticateToken, async (req, res) => {
               boardId: normalizedTask.boardId,
               tenantId: getTenantId(req),
               authType: req.user?.authType,
-              db: db
+              db: db,
+              emailChange: {
+                items: [
+                  {
+                    field: 'tags',
+                    added: [],
+                    removed: [{ name: tag.tag, color: tag.color }],
+                  },
+                ],
+              },
             }
           );
         } catch (error) {
@@ -479,6 +497,13 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
     req.body?.skipEmail === true;
   
   try {
+    if (!userCanMutate(req.user)) {
+      const tTranslator = await getTranslator(db);
+      const ownMember = await memberQueries.getMemberByUserId(db, userId);
+      if (!ownMember || ownMember.id !== memberId) {
+        return res.status(403).json({ error: tTranslator('errors.readOnly'), code: 'READ_ONLY' });
+      }
+    }
     // MIGRATED: Check if association already exists using sqlManager
     // Note: addWatcher uses ON CONFLICT DO NOTHING, so we check first
     const existingWatchers = await helpers.getWatchersForTask(db, taskId);
@@ -545,8 +570,16 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
 router.delete('/:taskId/watchers/:memberId', authenticateToken, async (req, res) => {
   const { taskId, memberId } = req.params;
   const db = getRequestDatabase(req);
+  const userId = req.user?.id || 'system';
   
   try {
+    if (!userCanMutate(req.user)) {
+      const tTranslator = await getTranslator(db);
+      const ownMember = await memberQueries.getMemberByUserId(db, userId);
+      if (!ownMember || ownMember.id !== memberId) {
+        return res.status(403).json({ error: tTranslator('errors.readOnly'), code: 'READ_ONLY' });
+      }
+    }
     // MIGRATED: Remove watcher using sqlManager
     const result = await helpers.removeWatcher(db, taskId, memberId);
     

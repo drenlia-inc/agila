@@ -68,6 +68,8 @@
     "failedToMoveTaskToBoard": "Failed to move task to board",
     "failedToGetTasks": "Failed to get tasks",
     "failedToAddWatcher": "Failed to add watcher",
+    "cannotAssignViewer": "View-only members cannot be assigned to tasks",
+    "readOnly": "Read-only role cannot modify data",
     "failedToRemoveWatcher": "Failed to remove watcher",
     "failedToAddCollaborator": "Failed to add collaborator",
     "failedToRemoveCollaborator": "Failed to remove collaborator",
@@ -187,7 +189,7 @@
     },
     "taskNotification": {
       "newTaskAssigned": {
-        "subject": "📋 New task assigned: {taskTitle}",
+        "subject": "✨ Task assigned to you: {taskTitle}",
         "title": "New Task Assigned",
         "taskId": "Task ID:",
         "assignedBy": "Assigned by:",
@@ -195,7 +197,7 @@
         "receivingReason": "You're receiving this because you were assigned to this task."
       },
       "myTaskUpdated": {
-        "subject": "📝 Your task was updated: {taskTitle}",
+        "subject": "✏️ Task updated: {taskTitle}",
         "title": "Task Updated",
         "taskId": "Task ID:",
         "updatedBy": "Updated by:",
@@ -204,7 +206,7 @@
         "receivingReason": "You're receiving this because you're assigned to this task."
       },
       "watchedTaskUpdated": {
-        "subject": "👀 Watched task updated: {taskTitle}",
+        "subject": "🔖 Watched task updated: {taskTitle}",
         "title": "Watched Task Updated",
         "taskId": "Task ID:",
         "updatedBy": "Updated by:",
@@ -213,7 +215,7 @@
         "receivingReason": "You're receiving this because you're watching this task."
       },
       "addedAsCollaborator": {
-        "subject": "🤝 Added as collaborator: {taskTitle}",
+        "subject": "👥 Added as collaborator: {taskTitle}",
         "title": "Added as Collaborator",
         "taskId": "Task ID:",
         "addedBy": "Added by:",
@@ -221,7 +223,7 @@
         "receivingReason": "You're now collaborating on this task and will receive updates about changes."
       },
       "addedAsWatcher": {
-        "subject": "👀 Added as watcher: {taskTitle}",
+        "subject": "🔖 Added as watcher: {taskTitle}",
         "title": "Added as Watcher",
         "taskId": "Task ID:",
         "addedBy": "Added by:",
@@ -229,7 +231,7 @@
         "receivingReason": "You're now watching this task and will receive updates about changes."
       },
       "collaboratingTaskUpdated": {
-        "subject": "🤝 Collaborating task updated: {taskTitle}",
+        "subject": "👥 Collaborating task updated: {taskTitle}",
         "title": "Collaborating Task Updated",
         "taskId": "Task ID:",
         "updatedBy": "Updated by:",
@@ -238,7 +240,7 @@
         "receivingReason": "You're receiving this because you're collaborating on this task."
       },
       "requesterTaskCreated": {
-        "subject": "✅ Your requested task was created: {taskTitle}",
+        "subject": "✨ Requested task created: {taskTitle}",
         "title": "Task Created",
         "taskId": "Task ID:",
         "createdBy": "Created by:",
@@ -246,7 +248,7 @@
         "receivingReason": "You're receiving this because you requested this task."
       },
       "requesterTaskUpdated": {
-        "subject": "📋 Your requested task was updated: {taskTitle}",
+        "subject": "✏️ Requested task updated: {taskTitle}",
         "title": "Requested Task Updated",
         "taskId": "Task ID:",
         "updatedBy": "Updated by:",
@@ -257,7 +259,7 @@
       "common": {
         "taskNotification": "Task Notification",
         "hi": "Hi {firstName},",
-        "actionInBoard": "{actionMessage} in {boardName}:",
+        "actionInBoard": "{actionMessage} in {boardName}.",
         "actionMessage": {
           "created": "A new task has been created",
           "assigned": "You have been assigned to a task",
@@ -289,6 +291,14 @@
         "fieldRequester": "Requester",
         "fieldPriority": "Priority",
         "fieldSprint": "Sprint",
+        "fieldDate": "Date",
+        "fromTo": "from \"{from}\" to \"{to}\"",
+        "detailsDeleted": "\"{taskTitle}\" ({ticket}) was deleted.",
+        "subjectDeleted": "🗑️ Task deleted: {taskTitle}",
+        "tagsAdded": "New tag associated:",
+        "tagsAddedPlural": "New tag(s) associated:",
+        "tagsRemoved": "Tag removed:",
+        "tagsRemovedPlural": "Tag(s) removed:",
         "timestamp": "Date/Time",
         "viewTask": "View Task",
         "viewTaskReply": "💬 View Task & Reply",

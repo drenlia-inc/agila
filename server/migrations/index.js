@@ -108,7 +108,7 @@ const migrations = [
           PRIMARY KEY (task_id, key)
         );
         CREATE INDEX IF NOT EXISTS idx_task_work_task_id ON task_work(task_id);
-        CREATE INDEX IF NOT EXISTS idx_task_work_key_value ON task_work(key, value);
+        CREATE INDEX IF NOT EXISTS idx_task_work_status_value ON task_work (value) WHERE key = 'status';
 
         CREATE TABLE IF NOT EXISTS user_api_tokens (
           id TEXT PRIMARY KEY,
@@ -811,6 +811,53 @@ const migrations = [
         await settingsQueries.createSetting(db, DEFAULT_BOARD_COLUMNS_SETTING_KEY, DEFAULT_BOARD_COLUMNS_JSON);
       }
       console.log('✅ Migration 38: DEFAULT_BOARD_COLUMNS ready');
+    }
+  },
+  {
+    version: 39,
+    name: 'unique_pending_notification_per_user_task',
+    description:
+      'One pending notification_queue row per user+task so delayed emails consolidate',
+    up: async (db) => {
+      await dbExec(
+        db,
+        `
+          DELETE FROM notification_queue a
+          USING notification_queue b
+          WHERE a.status = 'pending'
+            AND b.status = 'pending'
+            AND a.user_id = b.user_id
+            AND a.task_id = b.task_id
+            AND a.created_at < b.created_at
+        `
+      );
+      await dbExec(
+        db,
+        `
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_queue_pending_user_task
+          ON notification_queue (user_id, task_id)
+          WHERE status = 'pending'
+        `
+      );
+      console.log('✅ Migration 39: unique pending notification per user+task');
+    }
+  },
+  {
+    version: 40,
+    name: 'task_work_drop_value_btree',
+    description:
+      'Stop btree-indexing task_work.value (plans/logs exceed 2704-byte index rows)',
+    up: async (db) => {
+      await dbExec(db, 'DROP INDEX IF EXISTS idx_task_work_key_value');
+      await dbExec(
+        db,
+        `
+          CREATE INDEX IF NOT EXISTS idx_task_work_status_value
+          ON task_work (value)
+          WHERE key = 'status'
+        `
+      );
+      console.log('✅ Migration 40: task_work status partial index (no value btree)');
     }
   }
 ];

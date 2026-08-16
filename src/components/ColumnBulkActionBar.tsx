@@ -23,7 +23,7 @@ import { truncateMemberName } from '../utils/memberUtils';
 import AddTagModal from './AddTagModal';
 import MemberAvatar from './ui/MemberAvatar';
 import MemberSearchList from './ui/MemberSearchList';
-import { useFixedColumnFabPosition } from '../hooks/useFixedColumnFabPosition';
+import { layoutMemberDropdownFromElement } from '../utils/memberDropdownLayout';
 
 export type ColumnBulkActionBarProps = {
   columnId: string;
@@ -147,7 +147,9 @@ export default function ColumnBulkActionBar({
   const { t } = useTranslation(['tasks', 'common']);
   const rootRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<MenuKind>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<
+    { top: number; left: number; width?: number; height?: number; columns?: 1 | 2 } | null
+  >(null);
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [permanentDeleteConfirm, setPermanentDeleteConfirm] = useState(false);
@@ -178,6 +180,18 @@ export default function ColumnBulkActionBar({
       return;
     }
     const rect = el.getBoundingClientRect();
+    if (kind === 'assignee' || kind === 'requester') {
+      const layout = layoutMemberDropdownFromElement(el, members || [], {
+        showAgent: kind === 'assignee',
+        excludeViewers: kind === 'assignee',
+        placement: 'beside',
+      });
+      setMenuPos(layout);
+      setMenu(kind);
+      setDeleteConfirm(false);
+      setBoardConfirm(null);
+      return;
+    }
     const menuWidth = kind === 'tag' ? 200 : isMemberMenu(kind) ? MEMBER_MENU_WIDTH : 192;
     const menuHeight = kind === 'tag' ? 400 : isMemberMenu(kind) ? 360 : 256;
     const preferredLeft = rect.right + 6;
@@ -303,14 +317,26 @@ export default function ColumnBulkActionBar({
             className={`fixed z-[9990] overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800 ${
               menu === 'tag'
                 ? 'max-h-[400px] w-[200px] overflow-y-auto'
-                : isMemberMenu(menu)
-                  ? ''
-                  : 'max-h-64 w-48 overflow-y-auto py-1'
+                : menu === 'assignee' || menu === 'requester'
+                  ? 'flex flex-col'
+                  : isMemberMenu(menu)
+                    ? ''
+                    : 'max-h-64 w-48 overflow-y-auto py-1'
             }`}
             style={{
               top: menuPos.top,
               left: menuPos.left,
-              width: isMemberMenu(menu) ? MEMBER_MENU_WIDTH : undefined,
+              width: isMemberMenu(menu)
+                ? menuPos.width || MEMBER_MENU_WIDTH
+                : undefined,
+              height:
+                menu === 'assignee' || menu === 'requester'
+                  ? menuPos.height
+                  : undefined,
+              maxHeight:
+                menu === 'assignee' || menu === 'requester'
+                  ? menuPos.height
+                  : undefined,
             }}
             role="menu"
           >
@@ -418,6 +444,10 @@ export default function ColumnBulkActionBar({
               <MemberSearchList
                 members={members}
                 showAgentSection
+                excludeViewers
+                columns={menuPos.columns || 1}
+                maxHeightClassName="max-h-none"
+                className="min-h-0 flex-1"
                 onSelect={(memberId) => {
                   onAssignee(memberId);
                   closeMenu();
@@ -429,6 +459,9 @@ export default function ColumnBulkActionBar({
               <MemberSearchList
                 members={members}
                 showAgentSection={false}
+                columns={menuPos.columns || 1}
+                maxHeightClassName="max-h-none"
+                className="min-h-0 flex-1"
                 onSelect={(memberId) => {
                   onRequester(memberId);
                   closeMenu();

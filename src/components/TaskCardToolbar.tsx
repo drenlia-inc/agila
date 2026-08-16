@@ -4,20 +4,16 @@ import { createPortal } from 'react-dom';
 import { Copy, Eye, UserPlus, GripVertical, TagIcon, Plus, Trash2, Link, Archive } from 'lucide-react';
 import { Task, TeamMember, Tag } from '../types';
 import { formatMembersTooltip } from '../utils/taskUtils';
-import { getAuthenticatedAvatarUrl } from '../utils/authImageUrl';
 import AddTagModal from './AddTagModal';
 import MemberSearchList from './ui/MemberSearchList';
+import MemberAvatar from './ui/MemberAvatar';
+import { layoutMemberDropdownFromElement } from '../utils/memberDropdownLayout';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import AgentStatusButton from './AgentStatusButton';
 import {
   AGENT_MEMBER_ID,
-  SYSTEM_MEMBER_ID,
   AGENT_DRAG_BLOCKING_STATUSES,
 } from '../constants/appConstants';
-import {
-  getAgentAvatarSrc,
-  isAgentMemberId,
-} from '../utils/agentMemberUi';
 import type { TaskRelationshipSummary } from '../utils/taskRelationshipSummary';
 import { getTaskRelationshipSummary } from '../utils/taskRelationshipSummary';
 import { getArchivedColumnId, isArchivedColumnFlag } from '../utils/columnUtils';
@@ -291,35 +287,15 @@ export default function TaskCardToolbar({
   // Calculate member dropdown position for portal rendering
   const getMemberDropdownPosition = () => {
     if (memberButtonRef.current) {
-      const dropdownWidth = 280;
-      const rect = memberButtonRef.current.getBoundingClientRect();
-
-      // Search header (~52) + agent section padding + rows; cap to viewport
-      const searchHeaderHeight = 52;
-      const memberItemHeight = 40;
-      const availableSpaceBelow = window.innerHeight - rect.bottom - 20;
-      const availableSpaceAbove = rect.top - 20;
-      const maxAvailableSpace = Math.max(availableSpaceBelow, availableSpaceAbove);
-      const maxVisibleMembers = Math.floor(
-        Math.max(80, maxAvailableSpace - searchHeaderHeight) / memberItemHeight
-      );
-      const visibleMembers = Math.max(3, Math.min(10, maxVisibleMembers, members.length || 3));
-      const dropdownHeight = searchHeaderHeight + visibleMembers * memberItemHeight + 24;
-
-      let left = rect.right - dropdownWidth;
-      let top = rect.bottom + 5;
-
-      if (left < 20) left = 20;
-      if (left + dropdownWidth > window.innerWidth - 20) {
-        left = window.innerWidth - dropdownWidth - 20;
-      }
-      if (top + dropdownHeight > window.innerHeight - 20) {
-        top = rect.top - dropdownHeight - 5;
-      }
-
-      return { left, top, height: dropdownHeight, width: dropdownWidth };
+      return layoutMemberDropdownFromElement(memberButtonRef.current, members, {
+        showAgent: true,
+        excludeViewers: true,
+        selectedId: member.id,
+        placement: 'below',
+        extraChrome: 28,
+      });
     }
-    return { left: 0, top: 0, height: 280, width: 280 };
+    return { left: 0, top: 0, height: 280, width: 280, columns: 1 as const };
   };
 
   // Close quick tag dropdown when clicking outside
@@ -523,26 +499,7 @@ export default function TaskCardToolbar({
       ? 'pointer-events-auto opacity-100'
       : toolbarHoverVisibility;
 
-  const assigneeAvatar = isAgentMemberId(member.id) ? (
-    <img
-      src={getAgentAvatarSrc(member)}
-      alt={member.name}
-      className="w-8 h-8 rounded-full object-cover"
-    />
-  ) : member.googleAvatarUrl || member.avatarUrl ? (
-    <img
-      src={getAuthenticatedAvatarUrl(member.googleAvatarUrl || member.avatarUrl)}
-      alt={member.name}
-      className="w-8 h-8 rounded-full object-cover"
-    />
-  ) : (
-    <div
-      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white"
-      style={{ backgroundColor: member.color }}
-    >
-      {member.id === SYSTEM_MEMBER_ID ? '🤖' : member.name.charAt(0).toUpperCase()}
-    </div>
-  );
+  const assigneeAvatar = <MemberAvatar member={member} members={members} size="lg" />;
 
   // Viewers: assignee avatar + watcher/collaborator counts only (no mutation controls).
   if (!canMutate) {
@@ -853,6 +810,8 @@ export default function TaskCardToolbar({
               members={members}
               selectedId={member.id}
               showAgentSection
+              excludeViewers
+              columns={position.columns}
               onSelect={(memberId) => {
                 onMemberChange(memberId);
                 onCloseMemberSelect();

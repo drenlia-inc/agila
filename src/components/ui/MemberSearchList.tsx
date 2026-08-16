@@ -7,7 +7,7 @@ import {
   isAgentMemberId,
   sortMembersAgentLast,
 } from '../../utils/agentMemberUi';
-import { truncateMemberName } from '../../utils/memberUtils';
+import { truncateMemberName, memberIsViewer } from '../../utils/memberUtils';
 import MemberAvatar from './MemberAvatar';
 
 export interface MemberSearchListProps {
@@ -17,6 +17,8 @@ export interface MemberSearchListProps {
   excludeIds?: string[];
   /** Highlight currently selected id (assignee/requester single pick) */
   selectedId?: string | null;
+  /** Hide read-only viewers (assignee pickers). Still shows selectedId if it is a viewer. */
+  excludeViewers?: boolean;
   /** Highlight agent in its own section */
   showAgentSection?: boolean;
   /** Auto-focus search on mount */
@@ -25,6 +27,8 @@ export interface MemberSearchListProps {
   /** Called when Escape is pressed in the search field */
   onEscape?: () => void;
   maxHeightClassName?: string;
+  /** People grid; agent stays full-width under the list (no horizontal scroll). */
+  columns?: 1 | 2;
 }
 
 function memberMatchesQuery(member: TeamMember, query: string): boolean {
@@ -43,11 +47,13 @@ export default function MemberSearchList({
   onSelect,
   excludeIds = [],
   selectedId = null,
+  excludeViewers = false,
   showAgentSection = true,
   autoFocus = true,
   className = '',
   onEscape,
-  maxHeightClassName = 'max-h-64',
+  maxHeightClassName = 'max-h-[min(24rem,55vh)]',
+  columns = 1,
 }: MemberSearchListProps) {
   const { t } = useTranslation('tasks');
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,9 +61,16 @@ export default function MemberSearchList({
 
   const exclude = new Set(excludeIds);
   const ordered = useMemo(
-    () => sortMembersAgentLast(members.filter((m) => !exclude.has(m.id))),
+    () =>
+      sortMembersAgentLast(
+        members.filter((m) => {
+          if (exclude.has(m.id)) return false;
+          if (excludeViewers && memberIsViewer(m) && m.id !== selectedId) return false;
+          return true;
+        })
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [members, excludeIds.join('|')]
+    [members, excludeIds.join('|'), excludeViewers, selectedId]
   );
 
   const filtered = useMemo(
@@ -87,7 +100,7 @@ export default function MemberSearchList({
         key={m.id}
         type="button"
         onClick={() => pick(m.id)}
-        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-left transition-colors ${
+        className={`w-full min-w-0 flex items-center gap-2 px-2.5 py-2 rounded-md text-left transition-colors ${
           m.id === SYSTEM_MEMBER_ID ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''
         } ${
           isSelected
@@ -159,7 +172,7 @@ export default function MemberSearchList({
         </div>
       </div>
 
-      <div className={`overflow-y-auto flex-1 p-1.5 ${maxHeightClassName}`}>
+      <div className={`overflow-y-auto overflow-x-hidden flex-1 min-h-0 p-1.5 ${maxHeightClassName}`}>
         {!hasAnyResults ? (
           <div className="px-3 py-3 text-sm text-gray-500 text-center">
             {searchTerm.trim()
@@ -171,21 +184,28 @@ export default function MemberSearchList({
                 })}
           </div>
         ) : (
-          <>
+          <div
+            className={
+              columns === 2 && people.length > 0
+                ? 'grid grid-cols-2 gap-x-1'
+                : 'flex flex-col'
+            }
+          >
             {people.map(renderRow)}
-            {showAgentSection && agent && (
-              <>
-                <div className="my-1.5 border-t border-gray-200 dark:border-gray-600" />
-                <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 px-2 mb-1">
-                  {t('toolbar.assignToAgentSection')}
-                </div>
-                {renderRow(agent)}
-              </>
+            {!showAgentSection && agent && (
+              <div className={columns === 2 ? 'col-span-2' : undefined}>{renderRow(agent)}</div>
             )}
-            {!showAgentSection && agent && renderRow(agent)}
-          </>
+          </div>
         )}
       </div>
+      {showAgentSection && agent && hasAnyResults && (
+        <div className="shrink-0 border-t border-gray-200 dark:border-gray-600 p-1.5 bg-white dark:bg-gray-800">
+          <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 px-2 mb-1">
+            {t('toolbar.assignToAgentSection')}
+          </div>
+          {renderRow(agent)}
+        </div>
+      )}
     </div>
   );
 }
