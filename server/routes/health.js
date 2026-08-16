@@ -1,12 +1,36 @@
 import express from 'express';
-import { wrapQuery } from '../utils/queryLogger.js';
+import fs from 'fs';
 import redisService from '../services/redisService.js';
 import postgresNotificationService from '../services/postgresNotificationService.js';
 import websocketService from '../services/websocketService.js';
 import { getRequestDatabase } from '../middleware/tenantRouting.js';
 import { health as healthQueries } from '../utils/sqlManager/index.js';
+import { getAppVersion } from '../utils/appVersion.js';
 
 const router = express.Router();
+
+async function readVersionPayload(db) {
+  try {
+    const versionPath = new URL('../version.json', import.meta.url);
+    const versionData = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
+    return {
+      version: versionData.version || versionData.packageVersion || null,
+      gitCommit: versionData.gitCommit || null,
+      buildTime: versionData.buildTime || null,
+    };
+  } catch {
+    try {
+      const version = await getAppVersion(db);
+      return { version, gitCommit: null, buildTime: null };
+    } catch {
+      return {
+        version: process.env.APP_VERSION || null,
+        gitCommit: null,
+        buildTime: null,
+      };
+    }
+  }
+}
 
 // Track server initialization state
 let isServerReady = false;
@@ -98,9 +122,13 @@ router.get('/', async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     if (!db) {
+      const versionPayload = await readVersionPayload(null);
       return res.status(200).json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
+        version: versionPayload.version,
+        gitCommit: versionPayload.gitCommit,
+        buildTime: versionPayload.buildTime,
         database: 'skipped',
         ready: isServerReady
       });
@@ -135,9 +163,14 @@ router.get('/', async (req, res) => {
       }
     }
 
+    const versionPayload = await readVersionPayload(db);
+
     res.status(200).json({ 
       status: 'healthy', 
       timestamp: new Date().toISOString(),
+      version: versionPayload.version,
+      gitCommit: versionPayload.gitCommit,
+      buildTime: versionPayload.buildTime,
       database: 'connected',
       dbType: 'postgresql',
       redis: redisService.isRedisConnected(),
