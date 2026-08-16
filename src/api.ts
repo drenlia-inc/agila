@@ -583,8 +583,19 @@ export const purgeLifecycleBoardsBatch = async (boardIds: string[]) => {
 };
 
 // Batch update task positions (optimized for drag-and-drop)
-export const batchUpdateTaskPositions = async (updates: Array<{ taskId: string; position: number; columnId?: string }>) => {
-  const { data } = await api.post('/tasks/batch-update-positions', { updates });
+export const batchUpdateTaskPositions = async (
+  updates: Array<{ taskId: string; position: number; columnId?: string }>
+) => {
+  // Last write wins: rapid DnD / WS can briefly leave the same task in two columns,
+  // which produced duplicate taskIds and a false 404 from the server length check.
+  const byTaskId = new Map<string, { taskId: string; position: number; columnId?: string }>();
+  for (const update of updates) {
+    if (!update?.taskId) continue;
+    byTaskId.set(update.taskId, update);
+  }
+  const deduped = Array.from(byTaskId.values());
+  if (deduped.length === 0) return;
+  const { data } = await api.post('/tasks/batch-update-positions', { updates: deduped });
   return data;
 };
 
