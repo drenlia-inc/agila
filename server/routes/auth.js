@@ -9,6 +9,11 @@ import { loginLimiter, activationLimiter, invitationVerifyLimiter, registrationL
 import { createDefaultAvatar, getRandomColor } from '../utils/avatarGenerator.js';
 import { getTranslator } from '../utils/i18n.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
+import {
+  getCachedOAuthEntry,
+  invalidateOAuthConfigCache,
+  setCachedOAuthSettings,
+} from '../utils/oauthConfigCache.js';
 // MIGRATED: Import sqlManager
 import { auth as authQueries, users as userQueries, settings as settingsQueries } from '../utils/sqlManager/index.js';
 import { parseBody, loginBodySchema, activateAccountBodySchema, registerBodySchema } from '../utils/requestValidation.js';
@@ -419,22 +424,15 @@ function debugLog(settingsObj, ...args) {
 }
 
 // Helper function to get OAuth settings with caching
-async function getOAuthSettings(db) {
-  // Check if we have cached settings and no cache invalidation flag
-  if (global.oauthConfigCache && !global.oauthConfigCache.invalidated) {
+async function getOAuthSettings(db, tenantId) {
+  const cached = getCachedOAuthEntry(tenantId);
+  if (cached && !cached.invalidated && cached.settings) {
     console.log('🔄 [GOOGLE SSO] Using cached OAuth settings');
-    return global.oauthConfigCache.settings;
+    return cached.settings;
   }
-  
-  // MIGRATED: Fetch fresh settings from database using sqlManager
+
   const settingsObj = await authQueries.getOAuthSettings(db);
-  
-  // Cache the settings
-  global.oauthConfigCache = {
-    settings: settingsObj,
-    invalidated: false,
-    timestamp: Date.now()
-  };
+  setCachedOAuthSettings(tenantId, settingsObj);
   
   // Always log basic OAuth config status, detailed logs only if debug enabled
   const oauthKeys = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'];
@@ -479,7 +477,7 @@ function verifyOAuthState(state) {
 router.get('/google/url', oauthUrlLimiter, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    const settingsObj = await getOAuthSettings(db);
+    const settingsObj = await getOAuthSettings(db, getTenantId(req));
     
     debugLog(settingsObj, '🔐 [GOOGLE SSO] Starting Google OAuth URL generation...');
     debugLog(settingsObj, '🔐 [GOOGLE SSO] Request headers:', {
@@ -533,7 +531,7 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
     const db = getRequestDatabase(req);
     
     // Get OAuth settings first to check debug mode
-    const settingsObj = await getOAuthSettings(db);
+    const settingsObj = await getOAuthSettings(db, getTenantId(req));
     
     debugLog(settingsObj, '🔐 [GOOGLE SSO] ======== CALLBACK STARTED ========');
     debugLog(settingsObj, '🔐 [GOOGLE SSO] Raw callback URL:', req.originalUrl);
@@ -831,10 +829,8 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
 // Manual OAuth config reload endpoint (for testing)
 router.post('/reload-oauth', authenticateToken, requireRole(['admin']), (req, res) => {
   try {
-    if (global.oauthConfigCache) {
-      global.oauthConfigCache.invalidated = true;
-      console.log('🔄 Manual OAuth config reload triggered by admin');
-    }
+    invalidateOAuthConfigCache(getTenantId(req));
+    console.log('🔄 Manual OAuth config reload triggered by admin');
     res.json({ message: 'OAuth configuration reloaded successfully' });
   } catch (error) {
     console.error('Reload OAuth error:', error);
@@ -874,7 +870,7 @@ router.get('/debug/oauth', authenticateToken, requireRole(['admin']), async (req
   try {
     console.log('🔍 [DEBUG] OAuth configuration debug requested by admin');
     const db = getRequestDatabase(req);
-    const settingsObj = await getOAuthSettings(db);
+    const settingsObj = await getOAuthSettings(db, getTenantId(req));
     
     const debugInfo = {
       timestamp: new Date().toISOString(),
@@ -895,7 +891,7 @@ router.get('/debug/oauth', authenticateToken, requireRole(['admin']), async (req
       environment: {
         JWT_SECRET_LENGTH: JWT_SECRET ? JWT_SECRET.length : 0,
         JWT_EXPIRES_IN,
-        cacheStatus: global.oauthConfigCache ? 'ACTIVE' : 'NOT_INITIALIZED'
+        cacheStatus: getCachedOAuthEntry(getTenantId(req))?.invalidated === false ? 'ACTIVE' : 'STALE_OR_EMPTY'
       }
     };
     

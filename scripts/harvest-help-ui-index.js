@@ -110,6 +110,7 @@ const FILE_HASH = [
   [/AdminFileUploadsTab/, '#admin#system-settings#file-uploads'],
   [/AdminAISettingsTab/, '#admin#system-settings#ai'],
   [/AdminNotificationsSettingsTab/, '#admin#system-settings#notifications'],
+  [/AdminWebhooksTab/, '#admin#system-settings#webhooks'],
   [/AdminNotificationQueueTab/, '#admin#system-settings#notification-queue'],
   [/AdminAppSettingsTab/, '#admin#app-settings#user-interface'],
   [/AdminTroubleshootingTab/, '#admin#app-settings#troubleshooting'],

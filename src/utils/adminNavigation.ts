@@ -31,6 +31,7 @@ export function adminHashForTabId(tabId: string): string {
   if (tabId === 'system-settings') return 'admin#system-settings#sso';
   if (tabId === 'app-settings') return 'admin#app-settings#user-interface';
   if (tabId === 'notifications') return 'admin#system-settings#notifications';
+  if (tabId === 'webhooks') return 'admin#system-settings#webhooks';
   return `admin#${tabId}`;
 }
 

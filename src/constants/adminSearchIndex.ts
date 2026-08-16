@@ -16,6 +16,8 @@ export type AdminSearchEntry = {
   labelKey: string;
   /** Extra EN/FR tokens (smtp, oauth, llm, …) */
   aliases?: string[];
+  /** Additional admin i18n keys included in the search haystack (EN+FR). */
+  extraLabelKeys?: string[];
 };
 
 export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
@@ -91,6 +93,24 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
     hash: '#admin#system-settings#notifications',
     labelKey: 'appSettings.notifications',
     aliases: ['notification', 'email alerts', 'alertes'],
+  },
+  {
+    id: 'tab-webhooks',
+    kind: 'tab',
+    tab: 'system-settings',
+    hash: '#admin#system-settings#webhooks',
+    labelKey: 'webhooks.tabLabel',
+    aliases: [
+      'webhook',
+      'slack',
+      'teams',
+      'telegram',
+      'whatsapp',
+      'mattermost',
+      'delivery channel',
+      'canal',
+      'outgoing',
+    ],
   },
   {
     id: 'tab-notification-queue',
@@ -419,6 +439,60 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
     settingKey: 'NOTIFICATIONS_SECTION',
     labelKey: 'appSettings.notifications',
     aliases: ['notification', 'email alerts', 'alertes'],
+  },
+  {
+    id: 'webhook-delivery-channel',
+    kind: 'setting',
+    tab: 'system-settings',
+    hash: '#admin#system-settings#webhooks',
+    settingKey: 'TASK_NOTIFICATION_CHANNELS',
+    labelKey: 'webhooks.channelModeTitle',
+    extraLabelKeys: [
+      'webhooks.channelModeHint',
+      'webhooks.channel.email',
+      'webhooks.channel.both',
+      'webhooks.channel.webhooks',
+      'webhooks.channelHelp.email',
+      'webhooks.channelHelp.both',
+      'webhooks.channelHelp.webhooks',
+    ],
+    aliases: ['delivery channel', 'canal', 'TASK_NOTIFICATION_CHANNELS'],
+  },
+  {
+    id: 'webhook-list',
+    kind: 'setting',
+    tab: 'system-settings',
+    hash: '#admin#system-settings#webhooks',
+    settingKey: 'WEBHOOKS_LIST',
+    labelKey: 'webhooks.listTitle',
+    aliases: [
+      'outgoing webhook',
+      'incoming webhook url',
+      'endpoint',
+      'slack',
+      'mattermost',
+      'teams',
+      'telegram',
+      'whatsapp',
+    ],
+  },
+  {
+    id: 'webhook-event-types',
+    kind: 'setting',
+    tab: 'system-settings',
+    hash: '#admin#system-settings#webhooks',
+    settingKey: 'WEBHOOK_EVENT_TYPES',
+    labelKey: 'webhooks.eventTypes',
+    extraLabelKeys: [
+      'webhooks.eventTypesHint',
+      'webhooks.events.taskCreated',
+      'webhooks.events.taskChanged',
+      'webhooks.events.taskDeleted',
+      'webhooks.events.boardCreated',
+      'webhooks.events.boardRenamed',
+      'webhooks.events.boardDeleted',
+    ],
+    aliases: ['event types', 'types d evenements'],
   },
   {
     id: 'notification-queue-retention',

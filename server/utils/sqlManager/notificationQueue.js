@@ -37,6 +37,10 @@ export async function getAllNotificationQueueItems(db, limit = 500) {
       nq.created_at as "createdAt",
       nq.updated_at as "updatedAt",
       nq.sent_at as "sentAt",
+      nq.delivery_channel as "deliveryChannel",
+      nq.webhook_id as "webhookId",
+      w.name as "webhookName",
+      w.platform as "webhookPlatform",
       -- User info
       u.email as "recipientEmail",
       m.name as "recipientName",
@@ -50,6 +54,7 @@ export async function getAllNotificationQueueItems(db, limit = 500) {
       -- Actor info (from JSON)
       nq.actor_data as "actorData"
     FROM notification_queue nq
+    LEFT JOIN webhooks w ON nq.webhook_id = w.id
     LEFT JOIN users u ON nq.user_id = u.id
     LEFT JOIN members m ON u.id = m.user_id
     LEFT JOIN tasks t ON nq.task_id = t.id

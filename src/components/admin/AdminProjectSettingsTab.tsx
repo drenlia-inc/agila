@@ -371,7 +371,7 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
   }
 
   return (
-    <AdminPageShell description={t('description')}>{content}</AdminPageShell>
+    <AdminPageShell>{content}</AdminPageShell>
   );
 };
 

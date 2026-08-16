@@ -859,6 +859,66 @@ const migrations = [
       );
       console.log('✅ Migration 40: task_work status partial index (no value btree)');
     }
+  },
+  {
+    version: 41,
+    name: 'webhooks_and_notification_channels',
+    description: 'Outgoing webhooks table and notification_queue delivery channel',
+    up: async (db) => {
+      await dbExec(
+        db,
+        `
+          CREATE TABLE IF NOT EXISTS webhooks (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1,
+            event_types TEXT NOT NULL DEFAULT '{}',
+            project_ids TEXT NOT NULL DEFAULT '[]',
+            min_priority_id TEXT,
+            locale TEXT,
+            endpoint_url TEXT,
+            telegram_bot_token TEXT,
+            telegram_chat_id TEXT,
+            whatsapp_access_token TEXT,
+            whatsapp_phone_number_id TEXT,
+            whatsapp_to TEXT,
+            whatsapp_graph_version TEXT DEFAULT 'v21.0',
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+          )
+        `
+      );
+      await dbExec(db, `ALTER TABLE notification_queue ADD COLUMN IF NOT EXISTS webhook_id TEXT`);
+      await dbExec(
+        db,
+        `ALTER TABLE notification_queue ADD COLUMN IF NOT EXISTS delivery_channel TEXT NOT NULL DEFAULT 'email'`
+      );
+      await dbExec(db, `ALTER TABLE notification_queue ALTER COLUMN user_id DROP NOT NULL`);
+      await dbExec(db, `DROP INDEX IF EXISTS idx_notification_queue_pending_user_task`);
+      await dbExec(
+        db,
+        `
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_queue_pending_email
+          ON notification_queue (user_id, task_id)
+          WHERE status = 'pending' AND delivery_channel = 'email'
+        `
+      );
+      await dbExec(
+        db,
+        `
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_queue_pending_webhook
+          ON notification_queue (webhook_id, task_id)
+          WHERE status = 'pending' AND delivery_channel = 'webhook'
+        `
+      );
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const existing = await settingsQueries.getSettingByKey(db, 'TASK_NOTIFICATION_CHANNELS');
+      if (!existing) {
+        await settingsQueries.createSetting(db, 'TASK_NOTIFICATION_CHANNELS', 'email');
+      }
+      console.log('✅ Migration 41: webhooks + notification delivery channel');
+    }
   }
 ];
 

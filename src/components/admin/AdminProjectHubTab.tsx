@@ -10,6 +10,7 @@ import {
   getDirtyProjectHubSubTabs,
   type ProjectHubSubTabId,
 } from '../../utils/adminSettingsDirty';
+import { adminSubtabPanelClass, adminSubNavTabClass } from './AdminSection';
 
 export type ProjectHubSubTab = ProjectHubSubTabId;
 
@@ -152,11 +153,7 @@ const AdminProjectHubTab: React.FC<AdminProjectHubTabProps> = ({
       type="button"
       onClick={() => handleSubTabChange(tab)}
       data-tour-id={TOUR_ID_BY_TAB[tab]}
-      className={`py-2 px-1 border-b-2 font-medium text-sm inline-flex items-center gap-1.5 whitespace-nowrap ${
-        activeSubTab === tab
-          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-          : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-      }`}
+      className={adminSubNavTabClass(activeSubTab === tab)}
     >
       {label}
       {tab === 'lifecycle' && (
@@ -171,12 +168,6 @@ const AdminProjectHubTab: React.FC<AdminProjectHubTabProps> = ({
 
   return (
     <div className="p-6">
-      <div className="mb-3">
-        <p className="text-gray-600 dark:text-gray-400 text-sm">
-          {t('projectHub.description')}
-        </p>
-      </div>
-
       <div className="mb-4 overflow-x-auto">
         <nav className="flex space-x-6 min-w-max" aria-label="Project settings tabs">
           {subNavBtn('project', t('projectHub.projectSubtab'))}
@@ -187,6 +178,7 @@ const AdminProjectHubTab: React.FC<AdminProjectHubTabProps> = ({
         </nav>
       </div>
 
+      <div className={adminSubtabPanelClass}>
       {visitedSubTabs.has('project') && (
         <div
           className={activeSubTab === 'project' ? undefined : 'hidden'}
@@ -254,6 +246,7 @@ const AdminProjectHubTab: React.FC<AdminProjectHubTabProps> = ({
           />
         </div>
       )}
+      </div>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n/config';
 import { useSettings } from '../contexts/SettingsContext';
@@ -190,6 +191,18 @@ export default function TextEditor({
   const [openInNewWindow, setOpenInNewWindow] = useState(opensInNewTab);
   const [showHeadingDropdown, setShowHeadingDropdown] = useState(false);
   const [showTableDropdown, setShowTableDropdown] = useState(false);
+  const [headingMenuPos, setHeadingMenuPos] = useState<{
+    top: number;
+    left: number;
+    openUp: boolean;
+    maxHeight: number;
+  } | null>(null);
+  const [tableMenuPos, setTableMenuPos] = useState<{
+    top: number;
+    left: number;
+    openUp: boolean;
+    maxHeight: number;
+  } | null>(null);
 
   useEscapeDismiss(
     () => {
@@ -217,7 +230,11 @@ export default function TextEditor({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const editorRef = React.useRef<HTMLDivElement>(null);
   const headingDropdownRef = React.useRef<HTMLDivElement>(null);
+  const headingButtonRef = React.useRef<HTMLButtonElement>(null);
+  const headingMenuRef = React.useRef<HTMLDivElement>(null);
   const tableDropdownRef = React.useRef<HTMLDivElement>(null);
+  const tableButtonRef = React.useRef<HTMLButtonElement>(null);
+  const tableMenuRef = React.useRef<HTMLDivElement>(null);
   // TipTap HTML after last programmatic setContent / create — used to ignore non-user updates
   const contentBaselineRef = React.useRef<string | null>(null);
   const maxLengthRef = React.useRef<number | undefined>(maxLength);
@@ -1070,14 +1087,63 @@ export default function TextEditor({
     };
   }, [compact, onSubmit, editor]);
 
+  const placeToolbarMenu = (
+    button: HTMLElement | null,
+    approxHeight: number
+  ): { top: number; left: number; openUp: boolean; maxHeight: number } | null => {
+    if (!button) return null;
+    const r = button.getBoundingClientRect();
+    const gap = 4;
+    const spaceBelow = window.innerHeight - r.bottom - gap;
+    const spaceAbove = r.top - gap;
+    const openUp = spaceBelow < Math.min(approxHeight, 280) && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(160, Math.min(approxHeight, openUp ? spaceAbove : spaceBelow));
+    return {
+      top: openUp ? r.top - gap : r.bottom + gap,
+      left: Math.max(8, Math.min(r.left, window.innerWidth - 200)),
+      openUp,
+      maxHeight,
+    };
+  };
+
+  const toggleHeadingDropdown = () => {
+    if (showHeadingDropdown) {
+      setShowHeadingDropdown(false);
+      setHeadingMenuPos(null);
+      return;
+    }
+    setShowTableDropdown(false);
+    setTableMenuPos(null);
+    setHeadingMenuPos(placeToolbarMenu(headingButtonRef.current, 260));
+    setShowHeadingDropdown(true);
+  };
+
+  const toggleTableDropdown = () => {
+    if (showTableDropdown) {
+      setShowTableDropdown(false);
+      setTableMenuPos(null);
+      return;
+    }
+    setShowHeadingDropdown(false);
+    setHeadingMenuPos(null);
+    setTableMenuPos(placeToolbarMenu(tableButtonRef.current, 440));
+    setShowTableDropdown(true);
+  };
+
   // Handle outside clicks for heading dropdown
   React.useEffect(() => {
     if (!showHeadingDropdown) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (headingDropdownRef.current && !headingDropdownRef.current.contains(event.target as Node)) {
-        setShowHeadingDropdown(false);
+      const target = event.target as Node;
+      if (
+        headingDropdownRef.current?.contains(target) ||
+        headingMenuRef.current?.contains(target)
+      ) {
+        return;
       }
+      setShowHeadingDropdown(false);
+      setHeadingMenuPos(null);
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -1089,14 +1155,39 @@ export default function TextEditor({
     if (!showTableDropdown) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (tableDropdownRef.current && !tableDropdownRef.current.contains(event.target as Node)) {
-        setShowTableDropdown(false);
+      const target = event.target as Node;
+      if (
+        tableDropdownRef.current?.contains(target) ||
+        tableMenuRef.current?.contains(target)
+      ) {
+        return;
       }
+      setShowTableDropdown(false);
+      setTableMenuPos(null);
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showTableDropdown]);
+
+  // Keep portaled menus aligned while scrolling / resizing
+  React.useEffect(() => {
+    if (!showHeadingDropdown && !showTableDropdown) return;
+    const reposition = () => {
+      if (showHeadingDropdown) {
+        setHeadingMenuPos(placeToolbarMenu(headingButtonRef.current, 260));
+      }
+      if (showTableDropdown) {
+        setTableMenuPos(placeToolbarMenu(tableButtonRef.current, 440));
+      }
+    };
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    return () => {
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [showHeadingDropdown, showTableDropdown]);
 
   const handleLinkSubmit = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.preventDefault();
@@ -1364,7 +1455,8 @@ export default function TextEditor({
             <div className="relative" ref={headingDropdownRef}>
               <button
                 type="button"
-                onClick={() => setShowHeadingDropdown(!showHeadingDropdown)}
+                ref={headingButtonRef}
+                onClick={toggleHeadingDropdown}
                 className={`${buttonClass} rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-1 px-2`}
                 title={t('textEditor.heading')}
               >
@@ -1378,13 +1470,28 @@ export default function TextEditor({
                 <ChevronDown size={12} />
               </button>
               
-              {showHeadingDropdown && (
-                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-50 py-1 min-w-[120px]">
+              {showHeadingDropdown &&
+                headingMenuPos &&
+                createPortal(
+                  <div
+                    ref={headingMenuRef}
+                    role="menu"
+                    className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-[10000] py-1 min-w-[120px] overflow-y-auto"
+                    style={{
+                      top: headingMenuPos.openUp ? undefined : headingMenuPos.top,
+                      bottom: headingMenuPos.openUp
+                        ? window.innerHeight - headingMenuPos.top
+                        : undefined,
+                      left: headingMenuPos.left,
+                      maxHeight: headingMenuPos.maxHeight,
+                    }}
+                  >
                   <button
                     type="button"
                     onClick={() => {
                       editor.chain().focus().setParagraph().run();
                       setShowHeadingDropdown(false);
+                      setHeadingMenuPos(null);
                     }}
                     className="w-full text-left px-3 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
                   >
@@ -1395,6 +1502,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().toggleHeading({ level: 1 }).run();
                       setShowHeadingDropdown(false);
+                      setHeadingMenuPos(null);
                     }}
                     className="w-full text-left px-3 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold text-lg"
                   >
@@ -1405,6 +1513,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().toggleHeading({ level: 2 }).run();
                       setShowHeadingDropdown(false);
+                      setHeadingMenuPos(null);
                     }}
                     className="w-full text-left px-3 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold text-base"
                   >
@@ -1415,6 +1524,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().toggleHeading({ level: 3 }).run();
                       setShowHeadingDropdown(false);
+                      setHeadingMenuPos(null);
                     }}
                     className="w-full text-left px-3 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 font-semibold text-sm"
                   >
@@ -1425,6 +1535,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().toggleHeading({ level: 4 }).run();
                       setShowHeadingDropdown(false);
+                      setHeadingMenuPos(null);
                     }}
                     className="w-full text-left px-3 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium text-sm"
                   >
@@ -1436,13 +1547,15 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().toggleCode().run();
                       setShowHeadingDropdown(false);
+                      setHeadingMenuPos(null);
                     }}
                     className="w-full text-left px-3 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 font-mono text-xs"
                   >
                     Preformatted
                   </button>
-                </div>
-              )}
+                  </div>,
+                  document.body
+                )}
             </div>
           )}
           
@@ -1659,7 +1772,8 @@ export default function TextEditor({
             <div className="relative" ref={tableDropdownRef}>
               <button
                 type="button"
-                onClick={() => setShowTableDropdown(!showTableDropdown)}
+                ref={tableButtonRef}
+                onClick={toggleTableDropdown}
                 className={`${buttonClass} rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-1 ${
                   editor.isActive('table') ? 'bg-gray-200 dark:bg-gray-600' : ''
                 }`}
@@ -1669,13 +1783,28 @@ export default function TextEditor({
                 <ChevronDown size={12} />
               </button>
               
-              {showTableDropdown && (
-                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-50 py-1 min-w-[180px]">
+              {showTableDropdown &&
+                tableMenuPos &&
+                createPortal(
+                  <div
+                    ref={tableMenuRef}
+                    role="menu"
+                    className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-[10000] py-1 min-w-[180px] overflow-y-auto"
+                    style={{
+                      top: tableMenuPos.openUp ? undefined : tableMenuPos.top,
+                      bottom: tableMenuPos.openUp
+                        ? window.innerHeight - tableMenuPos.top
+                        : undefined,
+                      left: tableMenuPos.left,
+                      maxHeight: tableMenuPos.maxHeight,
+                    }}
+                  >
                   <button
                     type="button"
                     onClick={() => {
                       editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-semibold"
                   >
@@ -1687,6 +1816,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().toggleHeaderRow().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().toggleHeaderRow()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1698,6 +1828,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().mergeCells().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().mergeCells()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1709,6 +1840,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().splitCell().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().splitCell()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1721,6 +1853,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().addColumnBefore().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().addColumnBefore()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1732,6 +1865,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().addColumnAfter().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().addColumnAfter()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1743,6 +1877,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().deleteColumn().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().deleteColumn()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1755,6 +1890,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().addRowBefore().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().addRowBefore()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1766,6 +1902,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().addRowAfter().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().addRowAfter()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1777,6 +1914,7 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().deleteRow().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().deleteRow()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1789,14 +1927,16 @@ export default function TextEditor({
                     onClick={() => {
                       editor.chain().focus().deleteTable().run();
                       setShowTableDropdown(false);
+                      setTableMenuPos(null);
                     }}
                     disabled={!editor.can().deleteTable()}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-red-600 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Delete Table
                   </button>
-                </div>
-              )}
+                  </div>,
+                  document.body
+                )}
             </div>
           )}
           

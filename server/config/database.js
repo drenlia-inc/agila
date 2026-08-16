@@ -697,11 +697,33 @@ const CREATE_SCHEMA_SQL = `
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      enabled INTEGER DEFAULT 1,
+      event_types TEXT NOT NULL DEFAULT '{}',
+      project_ids TEXT NOT NULL DEFAULT '[]',
+      min_priority_id TEXT,
+      locale TEXT,
+      endpoint_url TEXT,
+      telegram_bot_token TEXT,
+      telegram_chat_id TEXT,
+      whatsapp_access_token TEXT,
+      whatsapp_phone_number_id TEXT,
+      whatsapp_to TEXT,
+      whatsapp_graph_version TEXT DEFAULT 'v21.0',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- Migration 7: Notification queue
     CREATE TABLE IF NOT EXISTS notification_queue (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
+      user_id TEXT,
       task_id TEXT NOT NULL,
+      webhook_id TEXT,
+      delivery_channel TEXT NOT NULL DEFAULT 'email',
       notification_type TEXT NOT NULL,
       action TEXT NOT NULL,
       details TEXT,
@@ -723,6 +745,11 @@ const CREATE_SCHEMA_SQL = `
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     );
+
+    ALTER TABLE notification_queue ADD COLUMN IF NOT EXISTS webhook_id TEXT;
+    ALTER TABLE notification_queue ADD COLUMN IF NOT EXISTS delivery_channel TEXT NOT NULL DEFAULT 'email';
+    ALTER TABLE notification_queue ALTER COLUMN user_id DROP NOT NULL;
+    DROP INDEX IF EXISTS idx_notification_queue_pending_user_task;
 
     -- Migration 1: Indexes for reporting tables
     CREATE INDEX IF NOT EXISTS idx_activity_events_user_id ON activity_events(user_id);
@@ -754,9 +781,12 @@ const CREATE_SCHEMA_SQL = `
     CREATE INDEX IF NOT EXISTS idx_notification_queue_scheduled_send ON notification_queue(scheduled_send_time, status);
     CREATE INDEX IF NOT EXISTS idx_notification_queue_user_task ON notification_queue(user_id, task_id, status);
     CREATE INDEX IF NOT EXISTS idx_notification_queue_created_at ON notification_queue(created_at);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_queue_pending_user_task
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_queue_pending_email
       ON notification_queue (user_id, task_id)
-      WHERE status = 'pending';
+      WHERE status = 'pending' AND delivery_channel = 'email';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_queue_pending_webhook
+      ON notification_queue (webhook_id, task_id)
+      WHERE status = 'pending' AND delivery_channel = 'webhook';
     
     -- Migration 8: Performance indexes on tasks
     CREATE INDEX IF NOT EXISTS idx_tasks_start_date ON tasks(startdate);
@@ -982,6 +1012,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
       ['NOTIFICATION_QUEUE_RETENTION_DAYS', '0'], // Sent/failed queue rows; 0 = keep forever
       // When false, task emails stay pending in the queue (SMTP / invites still use MAIL_ENABLED)
       ['TASK_EMAIL_NOTIFICATIONS_ENABLED', 'true'],
+      ['TASK_NOTIFICATION_CHANNELS', 'email'],
       ['NOTIFICATION_DEFAULTS', JSON.stringify({
         newTaskAssigned: true,
         myTaskUpdated: true,

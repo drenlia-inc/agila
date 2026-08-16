@@ -64,8 +64,7 @@ import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
 import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask } from './api';
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
-import { isAgentMemberId } from './utils/agentMemberUi';
-import { taskMatchesSelectedSprint } from './utils/columnFilters';
+import { applyActiveColumnFilters } from './utils/columnFilters';
 import { userCanMutate } from './utils/permissions';
 import { isDemoModeClient } from './utils/demoReset';
 import { useLoadingState } from './hooks/useLoadingState';
@@ -89,6 +88,7 @@ import { generateUUID } from './utils/uuid';
 import { formatToYYYYMMDD } from './utils/dateUtils';
 import websocketClient from './services/websocketClient';
 import { resolveActivityFeedPosition } from './utils/activityFeedPosition';
+import { isMobileViewport } from './utils/mobileViewport';
 import { loadUserPreferences, loadUserPreferencesAsync, mergeClearedKanbanVisibilityFilters, saveUserPreferences, updateUserPreference, updateActivityFeedPreference, loadAdminDefaults, TaskViewMode, ViewMode, isGloballySavingPreferences, registerSavingStateCallback, UserPreferences, clearAllUserPreferenceCookies } from './utils/userPreferences';
 import { resolveGuestLanguage, normalizeAppLanguage, getExplicitGuestLanguage, setExplicitGuestLanguage } from './utils/guestLanguage';
 import { versionDetection } from './utils/versionDetection';
@@ -119,9 +119,7 @@ import {
   shouldSkipAutoBoardSelection
 } from './utils/routingUtils';
 import { 
-  filterTasks,
   hasActiveFilters,
-  hasConfiguredSearchFilters,
   wouldTaskBeFilteredOut,
   clearTaskSoftDelete,
   sumTaskEffort,
@@ -749,7 +747,10 @@ function AppContent() {
     if (!selectedTask) {
       if (activityFeedAutoMinForTaskRef.current) {
         activityFeedAutoMinForTaskRef.current = false;
-        activityFeed.setActivityFeedMinimized(false);
+        // Mobile stays minimized; expand is session-only there.
+        if (!isMobileViewport()) {
+          activityFeed.setActivityFeedMinimized(false);
+        }
       }
       return;
     }
@@ -2105,7 +2106,7 @@ function AppContent() {
           ? userSpecificPrefs.appSettings.showActivityFeed 
           : defaultFromSystem);
         activityFeed.setActivityFeedMinimized(
-          userSpecificPrefs.activityFeed.isMinimized === true
+          isMobileViewport() || userSpecificPrefs.activityFeed.isMinimized === true
         );
         activityFeed.setLastSeenActivityId(userSpecificPrefs.activityFeed.lastSeenActivityId);
         activityFeed.setClearActivityId(userSpecificPrefs.activityFeed.clearActivityId);
@@ -4580,72 +4581,28 @@ function AppContent() {
       }
     }
 
-    // Other boards (or fallback): apply same search/sprint/agent/member filters as the selected board
-    const applyMemberFilter = taskFilters.selectedMembers.length > 0;
+    // Other boards (or fallback): same filters as the live board (incl. role-only with no member picked)
+    const filteredForCount = applyActiveColumnFilters(
+      boardColumns,
+      {
+        selectedSprintId: taskFilters.selectedSprintId,
+        searchFilters: taskFilters.searchFilters,
+        selectedMembers: taskFilters.selectedMembers,
+        includeAssignees: taskFilters.includeAssignees,
+        includeWatchers: taskFilters.includeWatchers,
+        includeCollaborators: taskFilters.includeCollaborators,
+        includeRequesters: taskFilters.includeRequesters,
+        showAgentTasks: siteSettings?.AI_ENABLED === 'true' ? taskFilters.showAgentTasks : true,
+      },
+      members,
+      boards,
+      availableSprints
+    );
 
     let totalCount = 0;
-    Object.values(boardColumns).forEach((column) => {
-      if (!column?.tasks || !Array.isArray(column.tasks)) return;
-      if (!visibleSet.has(column.id)) return;
-
-      const filteredTasks = column.tasks.filter((task) => {
-        if (!task) return false;
-
-        // Agent visibility applies to every board’s tab counts, not only the selected board
-        if (
-          siteSettings?.AI_ENABLED === 'true' &&
-          !taskFilters.showAgentTasks &&
-          isAgentMemberId(task.memberId)
-        ) {
-          return false;
-        }
-
-        if (!taskMatchesSelectedSprint(task, taskFilters.selectedSprintId)) {
-          return false;
-        }
-
-        if (hasConfiguredSearchFilters(taskFilters.searchFilters)) {
-          const searchFiltered = filterTasks(
-            [task],
-            taskFilters.searchFilters,
-            true,
-            members,
-            boards,
-            availableSprints
-          );
-          if (searchFiltered.length === 0) return false;
-        }
-
-        if (!applyMemberFilter) return true;
-
-        const memberIds = new Set(taskFilters.selectedMembers);
-        let hasMatchingMember = false;
-
-        if (taskFilters.includeAssignees && task.memberId && memberIds.has(task.memberId)) {
-          hasMatchingMember = true;
-        }
-        if (!hasMatchingMember && taskFilters.includeRequesters && task.requesterId && memberIds.has(task.requesterId)) {
-          hasMatchingMember = true;
-        }
-        if (
-          !hasMatchingMember &&
-          taskFilters.includeWatchers &&
-          task.watchers?.some((w) => w && memberIds.has(w.id))
-        ) {
-          hasMatchingMember = true;
-        }
-        if (
-          !hasMatchingMember &&
-          taskFilters.includeCollaborators &&
-          task.collaborators?.some((c) => c && memberIds.has(c.id))
-        ) {
-          hasMatchingMember = true;
-        }
-
-        return hasMatchingMember;
-      });
-
-      totalCount += filteredTasks.length;
+    Object.values(filteredForCount).forEach((column) => {
+      if (!column?.tasks || !visibleSet.has(column.id)) return;
+      totalCount += column.tasks.length;
     });
 
     lastTaskCountsRef.current[board.id] = totalCount;
@@ -4720,7 +4677,13 @@ function AppContent() {
     },
     setViewMode: handleViewModeChange,
     setTaskViewMode: handleTaskViewModeChange,
-    toggleSearchPanel: taskFilters.handleToggleSearch,
+    toggleSearchPanel: () => {
+      if (isMobileViewport()) {
+        focusHeaderTaskSearch();
+        return;
+      }
+      taskFilters.handleToggleSearch();
+    },
   };
 
   // Handle password reset pages (accessible without authentication)

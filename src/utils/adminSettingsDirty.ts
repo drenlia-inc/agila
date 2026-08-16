@@ -23,6 +23,7 @@ export type SystemSettingsSubTabId =
   | 'file-uploads'
   | 'ai'
   | 'notifications'
+  | 'webhooks'
   | 'notification-queue';
 
 export type ProjectHubSubTabId =
@@ -99,7 +100,9 @@ function isNotificationKey(key: string): boolean {
   return (
     key.startsWith('NOTIFICATION_') ||
     key === 'NOTIFICATION_DELAY' ||
-    key === 'NOTIFICATION_DEFAULTS'
+    key === 'NOTIFICATION_DEFAULTS' ||
+    key === 'TASK_NOTIFICATION_CHANNELS' ||
+    key === 'TASK_EMAIL_NOTIFICATIONS_ENABLED'
   );
 }
 
@@ -331,7 +334,100 @@ export function isAdminSettingFieldDirty(
   return valuesDiffer(key, saved, draft);
 }
 
-/** Restore one key in a draft map from saved (manual-field Revert). */
+export function revertAdminSettingsWhere(
+  saved: Record<string, string | undefined>,
+  draft: Record<string, string | undefined>,
+  predicate: (key: string) => boolean
+): Record<string, string | undefined> {
+  const next = { ...draft };
+  const keys = new Set([...Object.keys(saved), ...Object.keys(draft)]);
+  for (const key of keys) {
+    if (SKIP_KEYS.has(key) || key.endsWith('_SET') || !isValidAdminSettingKey(key)) continue;
+    if (!predicate(key)) continue;
+    next[key] = saved[key] ?? '';
+  }
+  return next;
+}
+
+function systemSubTabKeyPredicate(sub: SystemSettingsSubTabId): (key: string) => boolean {
+  if (sub === 'sso') return isSsoKey;
+  if (sub === 'mail-server') return isMailKey;
+  if (sub === 'storage') return isStorageKey;
+  if (sub === 'file-uploads') return isUploadKey;
+  if (sub === 'ai') return isAiKey;
+  if (sub === 'notifications' || sub === 'webhooks') return isNotificationKey;
+  if (sub === 'notification-queue') {
+    return (key) => key === 'NOTIFICATION_QUEUE_RETENTION_DAYS';
+  }
+  return () => false;
+}
+
+function projectSubTabKeyPredicate(sub: ProjectHubSubTabId): (key: string) => boolean {
+  if (sub === 'project') return isProjectGeneralKey;
+  if (sub === 'features') return isFeaturesKey;
+  if (sub === 'lifecycle') return isLifecycleKey;
+  return () => false;
+}
+
+/** Revert only the Admin panel currently on screen (main tab / subtab). */
+export function revertAdminSettingsForHash(
+  saved: Record<string, string | undefined>,
+  draft: Record<string, string | undefined>,
+  hash: string
+): Record<string, string | undefined> {
+  const bare = hash.replace(/^#/, '');
+  if (bare.startsWith('admin#site-settings')) {
+    return revertAdminSettingsWhere(saved, draft, isSiteSettingsKey);
+  }
+  if (bare.startsWith('admin#system-settings')) {
+    const sub = systemSettingsSubTabFromBare(bare);
+    return revertAdminSettingsWhere(saved, draft, systemSubTabKeyPredicate(sub));
+  }
+  if (bare.startsWith('admin#app-settings')) {
+    const sub: AppSettingsSubTabId = bare.endsWith('#troubleshooting') ? 'troubleshooting' : 'ui';
+    return revertAdminSettingsWhere(
+      saved,
+      draft,
+      (key) => appSettingsSubTabForKey(key) === sub
+    );
+  }
+  if (bare.startsWith('admin#project-settings')) {
+    const sub = projectHubSubTabFromBare(bare);
+    return revertAdminSettingsWhere(saved, draft, projectSubTabKeyPredicate(sub));
+  }
+  return draft;
+}
+
+export function adminHashUsesLocalDiscard(hash: string): boolean {
+  const bare = hash.replace(/^#/, '');
+  return (
+    bare.endsWith('#ai') ||
+    bare.endsWith('#file-uploads') ||
+    bare.endsWith('#notifications') ||
+    bare.endsWith('#notification-queue') ||
+    bare.endsWith('#reporting') ||
+    bare.endsWith('#lifecycle')
+  );
+}
+
+function systemSettingsSubTabFromBare(bare: string): SystemSettingsSubTabId {
+  if (bare.endsWith('#mail-server')) return 'mail-server';
+  if (bare.endsWith('#storage')) return 'storage';
+  if (bare.endsWith('#file-uploads')) return 'file-uploads';
+  if (bare.endsWith('#ai')) return 'ai';
+  if (bare.endsWith('#notifications')) return 'notifications';
+  if (bare.endsWith('#webhooks')) return 'webhooks';
+  if (bare.endsWith('#notification-queue')) return 'notification-queue';
+  return 'sso';
+}
+
+function projectHubSubTabFromBare(bare: string): ProjectHubSubTabId {
+  if (bare.endsWith('#features')) return 'features';
+  if (bare.endsWith('#sprint-settings')) return 'sprint-settings';
+  if (bare.endsWith('#reporting')) return 'reporting';
+  if (bare.endsWith('#lifecycle')) return 'lifecycle';
+  return 'project';
+}
 export function revertAdminSettingField(
   key: string,
   saved: Record<string, string | undefined>,

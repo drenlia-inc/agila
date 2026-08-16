@@ -672,3 +672,29 @@ export const helpAssistantChatBodySchema = z.object({
     .min(1)
     .max(12)
 });
+
+const webhookEventTypesSchema = z.record(z.string().max(64), z.boolean()).optional();
+
+export const webhookUpsertBodySchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  platform: z.enum(['slack', 'mattermost', 'teams', 'whatsapp', 'telegram']),
+  enabled: z.boolean().optional(),
+  eventTypes: webhookEventTypesSchema,
+  projectIds: z.array(z.string().max(128)).max(200).optional(),
+  minPriorityId: z.preprocess(
+    (v) => (v === '' || v === undefined ? null : v == null ? null : String(v)),
+    z.union([z.string().max(64), z.null()]).optional()
+  ),
+  locale: z.union([z.enum(['en', 'fr']), z.literal(''), z.null()]).optional(),
+  endpointUrl: z.string().max(2048).optional().nullable(),
+  telegramBotToken: z.string().max(256).optional().nullable(),
+  telegramChatId: z.string().max(128).optional().nullable(),
+  whatsappAccessToken: z.string().max(512).optional().nullable(),
+  whatsappPhoneNumberId: z.string().max(128).optional().nullable(),
+  whatsappTo: z.string().max(32).optional().nullable(),
+  whatsappGraphVersion: z.string().max(16).optional().nullable(),
+});
+
+export const webhookEnabledBodySchema = z.object({
+  enabled: z.boolean(),
+});

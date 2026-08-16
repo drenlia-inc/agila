@@ -11,7 +11,7 @@ import {
   AdminActionsBar,
   AdminPageShell,
   AdminSection,
-  adminInputFullClass,
+  adminInputWideClass,
 } from './AdminSection';
 
 interface Settings {
@@ -67,8 +67,8 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
   const clientSecretDraft = editingSettings.GOOGLE_CLIENT_SECRET || '';
 
   return (
-    <AdminPageShell description={t('sso.description')}>
-      <AdminSection dense>
+    <AdminPageShell width="full">
+      <AdminSection title={t('sso.title')} dense>
         <div className="space-y-2.5">
           <div data-setting-key="GOOGLE_CLIENT_ID">
             <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -84,7 +84,7 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
               type="text"
               value={editingSettings.GOOGLE_CLIENT_ID || ''}
               onChange={(e) => handleInputChange('GOOGLE_CLIENT_ID', e.target.value)}
-              className={adminInputFullClass}
+              className={adminInputWideClass}
               placeholder={t('sso.enterGoogleClientId')}
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -113,7 +113,7 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
                 }
               }}
               autoComplete="new-password"
-              className={adminInputFullClass}
+              className={adminInputWideClass}
               placeholder={
                 clientSecretSet
                   ? t('sso.googleClientSecretLeaveBlank')
@@ -139,7 +139,7 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
               type="text"
               value={editingSettings.GOOGLE_CALLBACK_URL || ''}
               onChange={(e) => handleInputChange('GOOGLE_CALLBACK_URL', e.target.value)}
-              className={adminInputFullClass}
+              className={adminInputWideClass}
               placeholder={t('sso.googleCallbackUrlPlaceholder', {
                 callbackUrl: googleCallbackExample,
               })}
@@ -157,9 +157,6 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
             </h4>
             <div className="mt-1 text-xs text-blue-700 dark:text-blue-300 leading-snug">
               <p>{t('sso.hotReloadDescription')}</p>
-              <p className="mt-1">
-                <strong>{t('sso.tip')}:</strong> {t('sso.reloadOAuthConfigTip')}
-              </p>
             </div>
           </div>
         </div>

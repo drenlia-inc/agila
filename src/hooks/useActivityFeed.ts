@@ -2,12 +2,14 @@
  * Hook for managing activity feed state and handlers
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   loadUserPreferences,
   updateActivityFeedPreference,
 } from '../utils/userPreferences';
 import { DEFAULT_ACTIVITY_FEED_STORED_POSITION } from '../utils/activityFeedPosition';
+import { isMobileViewport } from '../utils/mobileViewport';
+import { useIsMobileViewport } from './useIsMobileViewport';
 
 export interface UseActivityFeedReturn {
   // State
@@ -64,8 +66,12 @@ function readActivityFeedPrefs(userId: string | null) {
 
 export const useActivityFeed = (currentUserId: string | null): UseActivityFeedReturn => {
   const [initial] = useState(() => readActivityFeedPrefs(currentUserId));
+  const isMobile = useIsMobileViewport();
   const [showActivityFeed, setShowActivityFeed] = useState<boolean>(initial.showActivityFeed);
-  const [activityFeedMinimized, setActivityFeedMinimized] = useState<boolean>(initial.isMinimized);
+  // Mobile: always start minimized; expand is session-only (refresh collapses again).
+  const [activityFeedMinimized, setActivityFeedMinimized] = useState<boolean>(
+    () => isMobileViewport() || initial.isMinimized
+  );
   const [activityFeedPosition, setActivityFeedPosition] = useState<{ x: number; y: number }>(
     initial.position
   );
@@ -76,6 +82,12 @@ export const useActivityFeed = (currentUserId: string | null): UseActivityFeedRe
   const [activities, setActivities] = useState<any[]>([]);
   const [lastSeenActivityId, setLastSeenActivityId] = useState<number>(initial.lastSeenActivityId);
   const [clearActivityId, setClearActivityId] = useState<number>(initial.clearActivityId);
+
+  useEffect(() => {
+    if (isMobile) {
+      setActivityFeedMinimized(true);
+    }
+  }, [isMobile]);
 
   const handleActivityFeedToggle = (enabled: boolean) => {
     setShowActivityFeed(enabled);

@@ -2,7 +2,12 @@ import EmailService from './emailService.js';
 import { EmailTemplates } from './emailTemplates.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { getNotificationThrottlerForDb } from './notificationThrottler.js';
-import { activity as activityQueries, tasks as taskQueries, helpers } from '../utils/sqlManager/index.js';
+import { activity as activityQueries, tasks as taskQueries, helpers, webhooks as webhookQueries, priorities as priorityQueries } from '../utils/sqlManager/index.js';
+import {
+  getTaskNotificationChannels,
+  emailsChannelEnabled,
+  webhooksChannelEnabled,
+} from '../utils/notificationChannels.js';
 import { emailChangeIsSilent, refreshTaskSnapshot, ensureTagEmailChange } from '../utils/taskEmailPayload.js';
 import { buildTaskEmailUrl, buildEmailAuthorAvatar } from '../utils/emailContent.js';
 import { getUserTimeZone } from '../utils/dateFormatter.js';
@@ -11,6 +16,11 @@ import {
   AGENT_USER_ID,
   SYSTEM_USER_ID,
 } from '../constants/agentIdentity.js';
+import {
+  webhookEventEnabled,
+  webhookEventFromTaskAction,
+} from '../constants/webhookEvents.js';
+import { dispatchWebhook } from './webhookDispatcher.js';
 
 const DEFAULT_PREFERENCES = {
   newTaskAssigned: true,
@@ -65,6 +75,8 @@ class TaskEmailNotificationService {
   /** Admin pause for task emails (queue still accepts; immediate paths must check too). */
   async areTaskEmailsEnabled() {
     try {
+      const mode = await getTaskNotificationChannels(this.db);
+      if (!emailsChannelEnabled(mode)) return false;
       const row = await wrapQuery(
         this.db.prepare('SELECT value FROM settings WHERE key = ?'),
         'SELECT'
@@ -72,6 +84,130 @@ class TaskEmailNotificationService {
       return row?.value !== 'false';
     } catch {
       return true;
+    }
+  }
+
+  parseJsonField(value, fallback) {
+    if (value == null || value === '') return fallback;
+    if (typeof value === 'object') return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+
+  async enqueueMatchingWebhooks({
+    taskId,
+    action,
+    details,
+    webhookEvent,
+    participants,
+    actor,
+    oldValue,
+    newValue,
+    commentContent = null,
+  }) {
+    try {
+      const mode = await getTaskNotificationChannels(this.db);
+      if (!webhooksChannelEnabled(mode)) return;
+      const hooks = await webhookQueries.getEnabledWebhooks(this.db);
+      if (!hooks?.length) return;
+      const eventKey = webhookEvent || webhookEventFromTaskAction(action);
+      const projectId = String(participants?.projectId || participants?.task?.projectId || '');
+      const taskPriorityId = String(
+        participants?.task?.priorityId || participants?.task?.priority_id || ''
+      );
+      let priorities = null;
+      const throttler = getNotificationThrottlerForDb(this.db, this.tenantId);
+      if (!throttler) return;
+      const actorWithTime = {
+        ...actor,
+        commentContent,
+        occurredAt: actor?.occurredAt || new Date().toISOString(),
+      };
+
+      for (const hook of hooks) {
+        const enabled = hook.enabled === true || hook.enabled === 1 || hook.enabled === '1';
+        if (!enabled) continue;
+        const eventTypes = this.parseJsonField(hook.eventTypes, {});
+        if (!webhookEventEnabled(eventTypes, eventKey)) continue;
+        const projectIds = this.parseJsonField(hook.projectIds, []);
+        if (Array.isArray(projectIds) && projectIds.length > 0) {
+          if (!projectId || !projectIds.map(String).includes(projectId)) continue;
+        }
+        if (hook.minPriorityId) {
+          if (!priorities) {
+            priorities = await priorityQueries.getAllPriorities(this.db);
+          }
+          const min = (priorities || []).find(
+            (p) => String(p.id) === String(hook.minPriorityId)
+          );
+          const taskPri = (priorities || []).find((p) => String(p.id) === taskPriorityId);
+          if (!min || !taskPri) continue;
+          if (Number(taskPri.position) > Number(min.position)) continue;
+        }
+        await throttler.addWebhookNotification(hook.id, taskId, {
+          action,
+          details,
+          oldValue,
+          newValue,
+          task: participants.task,
+          participants,
+          actor: actorWithTime,
+          notificationType: eventKey,
+        });
+      }
+    } catch (error) {
+      console.error('❌ [TASK-EMAIL] Webhook enqueue failed:', error);
+    }
+  }
+
+  async enqueueBoardWebhooks({ event, board, actorUserId, oldTitle = null }) {
+    try {
+      if (process.env.DEMO_ENABLED === 'true') return;
+      const mode = await getTaskNotificationChannels(this.db);
+      if (!webhooksChannelEnabled(mode)) return;
+      const hooks = await webhookQueries.getEnabledWebhooks(this.db);
+      if (!hooks?.length) return;
+      const actor = actorUserId ? await this.getActor(actorUserId) : null;
+      const projectId = String(board?.project || '');
+      const participants = {
+        boardTitle: board?.title || '',
+        boardId: board?.id || '',
+        projectId,
+      };
+      const occurredAt = new Date().toISOString();
+      for (const hook of hooks) {
+        const enabled = hook.enabled === true || hook.enabled === 1 || hook.enabled === '1';
+        if (!enabled) continue;
+        const eventTypes = this.parseJsonField(hook.eventTypes, {});
+        if (!webhookEventEnabled(eventTypes, event)) continue;
+        const projectIds = this.parseJsonField(hook.projectIds, []);
+        if (Array.isArray(projectIds) && projectIds.length > 0) {
+          if (!projectId || !projectIds.map(String).includes(projectId)) continue;
+        }
+        await dispatchWebhook(this.db, hook, {
+          queueRow: {
+            notification_type: event,
+            action: event,
+            task_id: board?.id || '',
+            task_data: JSON.stringify({
+              id: board?.id,
+              title: board?.title,
+              projectId,
+            }),
+            participants_data: JSON.stringify(participants),
+            actor_data: JSON.stringify({
+              ...(actor || {}),
+              oldTitle,
+              occurredAt,
+            }),
+          },
+        });
+      }
+    } catch (error) {
+      console.error('❌ [TASK-EMAIL] Board webhook dispatch failed:', error);
     }
   }
 
@@ -180,6 +316,7 @@ class TaskEmailNotificationService {
           ticket: task.ticket,
           boardId,
           projectId,
+          priorityId: task.priorityId || task.priority_id || null,
           created_at: task.created_at || task.createdAt || null,
           createdAt: task.created_at || task.createdAt || null,
         },
@@ -358,12 +495,13 @@ class TaskEmailNotificationService {
   async sendTaskNotification(activityData) {
     try {
       if (process.env.DEMO_ENABLED === 'true') return;
-      if (!(await this.areTaskEmailsEnabled())) return;
+      const channels = await getTaskNotificationChannels(this.db);
+      const emailsOn = emailsChannelEnabled(channels) && (await this.areTaskEmailsEnabled());
+      const hooksOn = webhooksChannelEnabled(channels);
+      if (!emailsOn && !hooksOn) return;
 
-      const mail = await this.isMailReady();
-      if (!mail.valid) {
-        return;
-      }
+      const mail = emailsOn ? await this.isMailReady() : { valid: false };
+      const sendEmail = emailsOn && mail.valid;
 
       const {
         userId,
@@ -440,7 +578,7 @@ class TaskEmailNotificationService {
         action !== 'copy_task' &&
         emailChangeIsSilent(emailChange)
       ) {
-        return;
+        if (!hooksOn) return;
       }
       emailChange = {
         ...emailChange,
@@ -498,6 +636,26 @@ class TaskEmailNotificationService {
         tagId: tagId || null,
       };
 
+      await this.enqueueMatchingWebhooks({
+        taskId,
+        action,
+        details,
+        webhookEvent: webhookEventFromTaskAction(action),
+        participants,
+        actor: actorWithMeta,
+        oldValue: display.oldValue,
+        newValue: display.newValue,
+      });
+
+      const skipEmailSilent =
+        action !== 'create_task' &&
+        action !== 'delete_task' &&
+        action !== 'restore_task' &&
+        action !== 'copy_task' &&
+        emailChangeIsSilent(emailChange);
+
+      if (!sendEmail || skipEmailSilent) return;
+
       for (const { recipientUserId, notificationType } of notifications) {
         const userPrefs = await this.getUserNotificationPreferences(recipientUserId);
         if (!userPrefs[notificationType]) continue;
@@ -535,19 +693,34 @@ class TaskEmailNotificationService {
   async sendCommentNotification(commentData) {
     try {
       if (process.env.DEMO_ENABLED === 'true') return;
-      if (!(await this.areTaskEmailsEnabled())) return;
-
       const { userId, action, taskId, commentContent } = commentData;
       if (action !== 'create_comment' || !userId || !taskId) return;
 
-      const mail = await this.isMailReady();
-      if (!mail.valid) return;
+      const channels = await getTaskNotificationChannels(this.db);
+      const emailsOn = emailsChannelEnabled(channels) && (await this.areTaskEmailsEnabled());
+      const hooksOn = webhooksChannelEnabled(channels);
 
       const participants = await this.getTaskParticipants(taskId);
       if (!participants.task) return;
 
       const actor = await this.getActor(userId);
       if (!actor) return;
+
+      if (hooksOn) {
+        await this.enqueueMatchingWebhooks({
+          taskId,
+          action,
+          details: commentContent,
+          webhookEvent: 'taskChanged',
+          participants,
+          actor,
+          commentContent,
+        });
+      }
+
+      if (!emailsOn) return;
+      const mail = await this.isMailReady();
+      if (!mail.valid) return;
 
       const recipientIds = new Set();
       const consider = (uid) => {
@@ -1241,6 +1414,12 @@ export function notifyBulkColumnMove(db, data, tenantId = null) {
   if (!db) return Promise.resolve();
   const service = new TaskEmailNotificationService(db, tenantId);
   return service.sendBulkColumnMoveNotification(data);
+}
+
+export function notifyBoardWebhook(db, payload, tenantId = null) {
+  if (!db) return Promise.resolve();
+  const service = new TaskEmailNotificationService(db, tenantId);
+  return service.enqueueBoardWebhooks(payload);
 }
 
 export { TaskEmailNotificationService };

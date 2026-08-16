@@ -24,6 +24,7 @@ import { updateActivityFeedPreference } from '../utils/userPreferences';
 import DOMPurify from 'dompurify';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { generateTaskUrl } from '../utils/routingUtils';
+import { isMobileViewport } from '../utils/mobileViewport';
 import {
   DEFAULT_ACTIVITY_FEED_STORED_POSITION,
   resolveActivityFeedPosition,
@@ -265,6 +266,10 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     }
     
     try {
+      // Mobile expand is session-only — do not persist so refresh starts minimized again.
+      if (isMobileViewport() && !minimized) {
+        return;
+      }
       await updateActivityFeedPreference('isMinimized', minimized, userId);
     } catch (error) {
       console.error('Failed to save activity feed minimized state:', error);

@@ -43,6 +43,10 @@ interface NotificationQueueItem {
     name: string;
     email: string;
   } | null;
+  deliveryChannel?: string;
+  webhookId?: string | null;
+  webhookName?: string | null;
+  webhookPlatform?: string | null;
 }
 
 interface AdminNotificationQueueTabProps {
@@ -94,10 +98,15 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
   const [retentionDays, setRetentionDays] = useState('0');
   const [savingRetention, setSavingRetention] = useState(false);
   const [savingSendingToggle, setSavingSendingToggle] = useState(false);
+  const [channelFilter, setChannelFilter] = useState<null | 'email' | 'webhook'>(null);
 
   const savedRetentionDays = systemSettings?.NOTIFICATION_QUEUE_RETENTION_DAYS || '0';
   const retentionDirty = retentionDays.trim() !== savedRetentionDays.trim();
-  const taskEmailSendingEnabled = systemSettings?.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false';
+  const channelMode =
+    systemSettings?.TASK_NOTIFICATION_CHANNELS || 'email';
+  const webhooksOnly = channelMode === 'webhooks';
+  const emailSendingEnabled =
+    !webhooksOnly && systemSettings?.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false';
 
   useEffect(() => {
     setRetentionDays(systemSettings?.NOTIFICATION_QUEUE_RETENTION_DAYS || '0');
@@ -208,8 +217,8 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
   }, [onRegisterLocalSave]);
 
   const toggleTaskEmailSending = async () => {
-    if (savingSendingToggle) return;
-    const next = taskEmailSendingEnabled ? 'false' : 'true';
+    if (savingSendingToggle || webhooksOnly) return;
+    const next = emailSendingEnabled ? 'false' : 'true';
     setSavingSendingToggle(true);
     try {
       await updateSetting('TASK_EMAIL_NOTIFICATIONS_ENABLED', next);
@@ -229,12 +238,18 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
 
   // Filter notifications based on search query
   const filteredNotifications = notifications.filter((notification: NotificationQueueItem) => {
+    const channel = notification.deliveryChannel || 'email';
+    if (systemSettings?.TASK_NOTIFICATION_CHANNELS === 'webhooks' && channel === 'email') {
+      return false;
+    }
+    if (channelFilter && channel !== channelFilter) return false;
     if (!searchQuery.trim()) return true;
     
     const query = searchQuery.toLowerCase();
     return (
       notification.recipientEmail?.toLowerCase().includes(query) ||
       notification.recipientName?.toLowerCase().includes(query) ||
+      notification.webhookName?.toLowerCase().includes(query) ||
       notification.taskTitle?.toLowerCase().includes(query) ||
       notification.taskTicket?.toLowerCase().includes(query) ||
       notification.columnTitle?.toLowerCase().includes(query) ||
@@ -284,30 +299,33 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
       return;
     }
 
-    if (!taskEmailSendingEnabled) {
+    const selectedNotifications = filteredNotifications.filter(n => selectedIds.has(n.id));
+    const unsentNotifications = selectedNotifications.filter((n) => n.status !== 'sent');
+    const sendableNotifications = unsentNotifications
+      .filter((n) => (n.deliveryChannel || 'email') === 'webhook' || emailSendingEnabled)
+      .slice()
+      .sort((a, b) => queueItemAgeMs(a) - queueItemAgeMs(b));
+
+    if (unsentNotifications.length === 0) {
+      toast.error(t('notificationQueue.noUnsentNotifications'));
+      return;
+    }
+
+    if (sendableNotifications.length === 0) {
       toast.error(t('notificationQueue.sendPaused'));
       return;
     }
 
-    // Filter out sent notifications - only allow sending pending/failed notifications
-    const selectedNotifications = filteredNotifications.filter(n => selectedIds.has(n.id));
-    const sendableNotifications = selectedNotifications
-      .filter(n => n.status !== 'sent')
-      .slice()
-      .sort((a, b) => queueItemAgeMs(a) - queueItemAgeMs(b));
-    
-    if (sendableNotifications.length === 0) {
-      toast.error(t('notificationQueue.noUnsentNotifications'));
-      return;
+    if (sendableNotifications.length < unsentNotifications.length) {
+      toast.warning(t('notificationQueue.sendSkippedPausedEmail'), '');
     }
-    
-    if (sendableNotifications.length < selectedNotifications.length) {
+
+    if (unsentNotifications.length < selectedNotifications.length) {
       toast.warning(
-        t('notificationQueue.someAlreadySent', { 
+        t('notificationQueue.someAlreadySent', {
           total: selectedNotifications.length,
-          sendable: sendableNotifications.length 
-        }) || `${sendableNotifications.length} of ${selectedNotifications.length} selected notifications can be sent. Already sent notifications will be skipped.`,
-        ''
+          sendable: unsentNotifications.length,
+        })
       );
     }
 
@@ -354,6 +372,8 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
           t('notificationQueue.sendSuccess', { count: progress.sent }),
           ''
         );
+      } else if (errors.length > 0) {
+        toast.error(errors[0], '');
       } else {
         toast.error(t('notificationQueue.sendNone'), '');
       }
@@ -481,39 +501,42 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
       <div className="mb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('notificationQueue.description')}
-            </p>
+            {webhooksOnly ? (
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
+                {t('notificationQueue.webhooksOnlyHint')}
+              </p>
+            ) : (
             <div
-              className="mt-2 inline-flex items-center gap-2"
+              className="inline-flex items-center gap-2"
               data-setting-key="TASK_EMAIL_NOTIFICATIONS_ENABLED"
               title={t('mail.taskEmailNotificationsHint')}
             >
               <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                {taskEmailSendingEnabled
+                {emailSendingEnabled
                   ? t('mail.taskEmailNotificationsOn')
                   : t('mail.taskEmailNotificationsOff')}
               </span>
               <button
                 type="button"
                 role="switch"
-                aria-checked={taskEmailSendingEnabled}
+                aria-checked={emailSendingEnabled}
                 aria-label={t('mail.taskEmailNotificationsLabel')}
                 disabled={savingSendingToggle}
                 onClick={() => void toggleTaskEmailSending()}
                 className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 ${
-                  taskEmailSendingEnabled
+                  emailSendingEnabled
                     ? 'bg-blue-600 dark:bg-blue-500'
                     : 'bg-gray-300 dark:bg-gray-600'
                 }`}
               >
                 <span
                   className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    taskEmailSendingEnabled ? 'translate-x-4' : 'translate-x-0'
+                    emailSendingEnabled ? 'translate-x-4' : 'translate-x-0'
                   }`}
                 />
               </button>
             </div>
+            )}
           </div>
           <div
             className="flex-shrink-0 sm:text-right"
@@ -603,6 +626,30 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
               className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setChannelFilter((prev) => (prev === 'email' ? null : 'email'))}
+              className={`rounded-full px-3 py-1 text-xs font-medium border ${
+                channelFilter === 'email'
+                  ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-100'
+                  : 'border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300'
+              }`}
+            >
+              {t('notificationQueue.filterEmail')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setChannelFilter((prev) => (prev === 'webhook' ? null : 'webhook'))}
+              className={`rounded-full px-3 py-1 text-xs font-medium border ${
+                channelFilter === 'webhook'
+                  ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-100'
+                  : 'border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300'
+              }`}
+            >
+              {t('notificationQueue.filterWebhooks')}
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-between">
@@ -644,14 +691,32 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
           <button
             onClick={handleSendImmediately}
             disabled={(() => {
-              if (!taskEmailSendingEnabled) return true;
               if (selectedIds.size === 0 || isSending || isDeleting) return true;
-              // Disable if only sent notifications are selected
-              const selectedNotifications = filteredNotifications.filter(n => selectedIds.has(n.id));
-              const hasUnsentNotifications = selectedNotifications.some(n => n.status !== 'sent');
-              return !hasUnsentNotifications;
+              const selectedNotifications = filteredNotifications.filter((n) => selectedIds.has(n.id));
+              const sendable = selectedNotifications.filter(
+                (n) =>
+                  n.status !== 'sent' &&
+                  ((n.deliveryChannel || 'email') === 'webhook' || emailSendingEnabled)
+              );
+              return sendable.length === 0;
             })()}
-            title={!taskEmailSendingEnabled ? t('notificationQueue.sendPaused') : undefined}
+            title={
+              (() => {
+                const selectedNotifications = filteredNotifications.filter((n) => selectedIds.has(n.id));
+                const unsentEmail = selectedNotifications.some(
+                  (n) =>
+                    n.status !== 'sent' && (n.deliveryChannel || 'email') !== 'webhook'
+                );
+                const unsentWebhook = selectedNotifications.some(
+                  (n) =>
+                    n.status !== 'sent' && (n.deliveryChannel || 'email') === 'webhook'
+                );
+                if (!emailSendingEnabled && unsentEmail && !unsentWebhook) {
+                  return t('notificationQueue.sendPaused');
+                }
+                return undefined;
+              })()
+            }
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             {isSending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
@@ -863,6 +928,17 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
                       />
                     </td>
                     <td className="min-w-[13rem] max-w-[16rem] px-3 py-4 align-top">
+                      {(notification.deliveryChannel || 'email') === 'webhook' ? (
+                        <>
+                          <div className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {notification.webhookName || t('notificationQueue.channelWebhook')}
+                          </div>
+                          <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+                            {t('notificationQueue.channelWebhook')}
+                          </div>
+                        </>
+                      ) : (
+                        <>
                       <div
                         className="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
                         title={notification.recipientName || notification.recipientEmail}
@@ -875,6 +951,8 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
                       >
                         {notification.recipientEmail}
                       </div>
+                        </>
+                      )}
                     </td>
                     <td
                       className="px-3 py-4 align-top"

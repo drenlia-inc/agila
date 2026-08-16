@@ -653,8 +653,8 @@
       "value": "NOTIFICATIONS_SECTION",
       "en": "Notifications",
       "fr": "Notifications",
-      "searchEn": "Notifications A comment is added to a task I'm involved in Get notified when comments are added to tasks you're assigned to, watching, collaborating on, or requested A task is created and I'm the requester Get notified when tasks you requested are created A task is updated where I'm the requester Get notified when tasks you requested are modified Email Throttling Accumulate task changes and send consolidated notifications. Set to 0 for immediate notifications. NOTIFICATIONS_SECTION",
-      "searchFr": "Notifications Un commentaire est ajouté à une tâche à laquelle je participe Être notifié lorsque des commentaires sont ajoutés aux tâches qui vous sont assignées, que vous surveillez, sur lesquelles vous collaborez, ou que vous avez demandées Une tâche est créée et je suis le demandeur Être notifié lorsque les tâches que vous avez demandées sont créées Une tâche est mise à jour où je suis le demandeur Être notifié lorsque les tâches que vous avez demandées sont modifiées Limitation des emails Accumuler les modifications de tâches et envoyer des notifications consolidées. Réglez sur 0 pour des notifications immédiates. NOTIFICATIONS_SECTION",
+      "searchEn": "Notifications A comment is added to a task I'm involved in Get notified when comments are added to tasks you're assigned to, watching, collaborating on, or requested A task is created and I'm the requester Get notified when tasks you requested are created A task is updated where I'm the requester Get notified when tasks you requested are modified Delivery channel Choose whether task activity is emailed, sent to webhooks, or both. NOTIFICATIONS_SECTION",
+      "searchFr": "Notifications Un commentaire est ajouté à une tâche à laquelle je participe Être notifié lorsque des commentaires sont ajoutés aux tâches qui vous sont assignées, que vous surveillez, sur lesquelles vous collaborez, ou que vous avez demandées Une tâche est créée et je suis le demandeur Être notifié lorsque les tâches que vous avez demandées sont créées Une tâche est mise à jour où je suis le demandeur Être notifié lorsque les tâches que vous avez demandées sont modifiées Canal d'envoi Choisissez si l'activité des tâches est envoyée par email, par webhooks, ou les deux. NOTIFICATIONS_SECTION",
       "kind": "admin",
       "hash": "#admin#system-settings#notifications",
       "highlights": [
@@ -1496,6 +1496,23 @@
       "adminOnly": true,
       "audience": "admin",
       "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-webhooks",
+      "attr": "tour",
+      "value": "admin-webhooks",
+      "en": "Webhook saved",
+      "fr": "Webhook enregistré",
+      "searchEn": "Webhook saved Webhook saved Failed to save webhook Test message sent Test failed Send short task-change messages to chat platforms. Filters apply to this webhook only and never change user email preferences. Delivery channel Choose whether task activity is emailed, sent to webhooks, or both. admin-webhooks",
+      "searchFr": "Webhook enregistré Webhook enregistré Échec de l'enregistrement du webhook Message de test envoyé Échec du test Envoyez des messages courts de changement de tâche vers les plateformes de discussion. Les filtres s'appliquent uniquement à ce webhook et ne changent jamais les préférences email des utilisateurs. Canal d'envoi Choisissez si l'activité des tâches est envoyée par email, par webhooks, ou les deux. admin-webhooks",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-webhooks\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminWebhooksTab.tsx"
     },
     {
       "id": "tour:app-nav-menu",

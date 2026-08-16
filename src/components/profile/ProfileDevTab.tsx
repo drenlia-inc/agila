@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { BETA_SUP_CLASS } from '../HelpAssistantTitle';
 import {
   listUserApiTokens,
   createUserApiToken,
@@ -405,7 +406,7 @@ const ProfileDevTab: React.FC = () => {
         <div className="mb-2">
           <h3 className="text-base font-medium text-gray-900 dark:text-gray-100">
             <span>{t('profile.devApiTokens')}</span>
-            <sup className="ml-1 text-[0.58em] font-medium uppercase tracking-[0.12em] text-slate-500 dark:text-gray-400">
+            <sup className={BETA_SUP_CLASS}>
               {t('help.assistant.beta')}
             </sup>
           </h3>

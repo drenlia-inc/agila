@@ -421,21 +421,14 @@ const AdminPrioritiesTab: React.FC<AdminPrioritiesTabProps> = ({
   return (
     <>
       <div className="p-6">
-        <div className="mb-6">
-          <div className="flex justify-between items-start gap-4">
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 leading-snug">
-                {t('priorities.description')}
-              </p>
-            </div>
-            <button
-              onClick={() => setShowAddPriorityForm(true)}
-              data-owner-setup="add-priority"
-              className="shrink-0 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              {t('priorities.addPriority')}
-            </button>
-          </div>
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => setShowAddPriorityForm(true)}
+            data-owner-setup="add-priority"
+            className="shrink-0 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            {t('priorities.addPriority')}
+          </button>
         </div>
 
         {/* Priorities Table with Drag and Drop */}

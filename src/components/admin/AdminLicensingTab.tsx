@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle, Users, ClipboardList, Layout, HardDrive, Shield, ExternalLink } from 'lucide-react';
 import api from '../../api';
 import { buildCustomerPortalUrl } from '../../utils/customerPortalUrl';
+import { adminSubNavTabClass } from './AdminSection';
 
 interface BoardTaskCount {
   id: string;
@@ -623,26 +624,18 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   return (
     <div className="p-6" data-owner-setup="licensing-panel">
       {/* Sub-tab Navigation */}
-      <div className="mb-6">
+      <div className="mb-4">
         <div className="flex items-center justify-between gap-4">
-          <nav className="flex space-x-8" aria-label="Tabs">
+          <nav className="flex space-x-6" aria-label="Tabs">
             <button
               onClick={() => handleSubTabChange('overview')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeSubTab === 'overview'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
+              className={adminSubNavTabClass(activeSubTab === 'overview')}
             >
               {t('licensing.overview')}
             </button>
             <button
               onClick={() => handleSubTabChange('subscription')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeSubTab === 'subscription'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
+              className={adminSubNavTabClass(activeSubTab === 'subscription')}
             >
               {t('licensing.manageSubscription')}
             </button>
