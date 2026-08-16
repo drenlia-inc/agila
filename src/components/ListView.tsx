@@ -15,6 +15,7 @@ import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { truncateMemberName } from '../utils/memberUtils';
 import { commentTextToHtml } from '../utils/commentContent';
 import { generateUUID } from '../utils/uuid';
+import { truncateHtmlByChars } from '../utils/plainTextPreview';
 import MemberSearchList from './ui/MemberSearchList';
 import { CHROME_TOOLTIP_POPOVER_CLASS, CHROME_TOOLTIP_PANEL_SURFACE_CLASS, KanbanChromeTooltip } from './KanbanChromeTooltip';
 import AgentPanel from './AgentPanel';
@@ -2110,11 +2111,26 @@ export default function ListView({
                                 </div>
                               </div>
                             ) : (
+                              <KanbanChromeTooltip
+                                content={
+                                  taskViewMode === 'shrink' && task.description ? (
+                                    <div
+                                      className="chrome-tooltip-html-preview"
+                                      dangerouslySetInnerHTML={{
+                                        __html: truncateHtmlByChars(
+                                          buildListViewDescriptionHtml(task.description, siteSettings)
+                                        ),
+                                      }}
+                                    />
+                                  ) : undefined
+                                }
+                                maxWidth={280}
+                                wrapperClassName="block min-w-0"
+                              >
                               <div 
                                 className={`text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/60 rounded px-1 py-0.5 prose prose-sm dark:prose-invert max-w-none ${
                                   taskViewMode === 'shrink' ? 'task-description-shrink line-clamp-2 overflow-hidden' : 'break-words'
                                 }`} 
-                                title={task.description ? task.description.replace(/<[^>]*>/g, '') : ''}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if ((e.target as HTMLElement).closest('a')) {
@@ -2151,6 +2167,7 @@ export default function ListView({
                                   __html: buildListViewDescriptionHtml(task.description, siteSettings),
                                 }}
                               />
+                              </KanbanChromeTooltip>
                             )
                           )}
                         </div>
