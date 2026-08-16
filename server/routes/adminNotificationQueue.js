@@ -9,7 +9,15 @@ import { ensureTagEmailChange } from '../utils/taskEmailPayload.js';
 import { getUserTimeZone } from '../utils/dateFormatter.js';
 // MIGRATED: Import sqlManager modules
 import { notificationQueue as notificationQueueQueries, users as userQueries, boards as boardQueries, helpers } from '../utils/sqlManager/index.js';
-import { parseBody, notificationIdsBodySchema } from '../utils/requestValidation.js';
+import {
+  parseBody,
+  notificationIdsBodySchema,
+} from '../utils/requestValidation.js';
+import { dispatchWebhookById } from '../services/webhookDispatcher.js';
+import {
+  getTaskNotificationChannels,
+  emailsChannelEnabled,
+} from '../utils/notificationChannels.js';
 
 const router = express.Router();
 
@@ -41,6 +49,10 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
 
       return {
         id: notif.id,
+        deliveryChannel: notif.deliveryChannel || notif.delivery_channel || 'email',
+        webhookId: notif.webhookId || notif.webhook_id || null,
+        webhookName: notif.webhookName || null,
+        webhookPlatform: notif.webhookPlatform || null,
         recipientEmail: notif.recipientEmail,
         recipientName: notif.recipientName,
         taskTitle: notif.taskTitle,
@@ -89,12 +101,8 @@ router.post('/send', authenticateToken, requireRole(['admin']), async (req, res)
     const emailService = new EmailService(db);
 
     const sendingSetting = await helpers.getSetting(db, 'TASK_EMAIL_NOTIFICATIONS_ENABLED');
-    if (sendingSetting === 'false') {
-      return res.status(400).json({
-        error: 'Task email notifications are paused. Enable them in Mail settings to send from the queue.',
-        code: 'TASK_EMAIL_NOTIFICATIONS_PAUSED',
-      });
-    }
+    const channels = await getTaskNotificationChannels(db);
+    const emailsOn = emailsChannelEnabled(channels) && sendingSetting !== 'false';
     
     let sentCount = 0;
     let failedCount = 0;
@@ -117,6 +125,27 @@ router.post('/send', authenticateToken, requireRole(['admin']), async (req, res)
           errors.push(
             `Notification ${notificationId} cannot be sent (status: ${notification.status})`
           );
+          failedCount++;
+          continue;
+        }
+
+        const channel = notification.delivery_channel || notification.deliveryChannel || 'email';
+        if (channel === 'webhook') {
+          const webhookId = notification.webhook_id || notification.webhookId;
+          if (!webhookId) {
+            errors.push(`Notification ${notificationId} has no webhook`);
+            failedCount++;
+            continue;
+          }
+          await dispatchWebhookById(db, webhookId, { queueRow: notification });
+          await notificationQueueQueries.updateNotificationQueueStatus(db, notificationId, 'sent');
+          sentCount++;
+          publishNotificationQueueUpdated(getTenantId(req)).catch(() => {});
+          continue;
+        }
+
+        if (!emailsOn) {
+          errors.push(`Notification ${notificationId} cannot be sent (emails paused)`);
           failedCount++;
           continue;
         }

@@ -4,6 +4,7 @@ import { wrapQuery } from '../utils/queryLogger.js';
 import { getStorageUsage, getStorageLimit, formatBytes } from '../utils/storageUtils.js';
 import notificationService from '../services/notificationService.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
+import { invalidateOAuthConfigCache } from '../utils/oauthConfigCache.js';
 import { settings as settingsQueries, users as userQueries, members as memberQueries } from '../utils/sqlManager/index.js';
 import { FE_PUBLIC_DEBUG_FLAG_KEYS, BULK_DEBUG_SETTING_KEYS } from '../constants/debugSettings.js';
 import { AI_PUBLIC_SETTING_KEYS } from '../constants/aiSettings.js';
@@ -139,6 +140,8 @@ router.get('/', async (req, res, next) => {
       'ALLOW_USER_SELF_DELETE',
       'SHOW_ACTIVITY_FEED',
       'APP_LANGUAGE',
+      'TASK_NOTIFICATION_CHANNELS',
+      'TASK_EMAIL_NOTIFICATIONS_ENABLED',
       ...FE_PUBLIC_DEBUG_FLAG_KEYS,
       ...AI_PUBLIC_SETTING_KEYS,
       ...KANBAN_FEATURE_PUBLIC_KEYS
@@ -452,8 +455,8 @@ router.put('/bulk', authenticateToken, requireRole(['admin']), async (req, res, 
     }
 
     // Google SSO auth routes cache OAuth settings (including debug flag)
-    if (Object.prototype.hasOwnProperty.call(applied, 'SERVER_DEBUG_GOOGLE_SSO') && global.oauthConfigCache) {
-      global.oauthConfigCache.invalidated = true;
+    if (Object.prototype.hasOwnProperty.call(applied, 'SERVER_DEBUG_GOOGLE_SSO')) {
+      invalidateOAuthConfigCache(getTenantId(req));
     }
 
     const tenantId = getTenantId(req);
@@ -602,8 +605,8 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
       safeValue = upsert.hasValue ? SECRET_SETTING_PLACEHOLDER : '';
       // Already stored encrypted — skip generic upsert below
       const dbgSettingsEarly = await serverDebug(db, 'SERVER_DEBUG_SETTINGS');
-      if (key === 'GOOGLE_CLIENT_SECRET' && global.oauthConfigCache) {
-        global.oauthConfigCache.invalidated = true;
+      if (key === 'GOOGLE_CLIENT_SECRET') {
+        invalidateOAuthConfigCache(getTenantId(req));
         if (dbgSettingsEarly) {
           console.log('✅ OAuth configuration cache invalidated after secret update');
         }
@@ -684,12 +687,10 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
     const dbgSettings = await serverDebug(db, 'SERVER_DEBUG_SETTINGS');
 
     // If this is a Google OAuth setting, reload the OAuth configuration
-    if (key === 'GOOGLE_CLIENT_ID' || key === 'GOOGLE_CALLBACK_URL') {
+    if (key === 'GOOGLE_CLIENT_ID' || key === 'GOOGLE_CALLBACK_URL' || key === 'GOOGLE_CLIENT_SECRET') {
       if (dbgSettings) console.log(`Google OAuth setting updated: ${key} - Hot reloading OAuth config...`);
-      if (global.oauthConfigCache) {
-        global.oauthConfigCache.invalidated = true;
-        if (dbgSettings) console.log('✅ OAuth configuration cache invalidated - new settings will be loaded on next OAuth request');
-      }
+      invalidateOAuthConfigCache(getTenantId(req));
+      if (dbgSettings) console.log('✅ OAuth configuration cache invalidated - new settings will be loaded on next OAuth request');
     }
 
     // Publish to Redis for real-time updates

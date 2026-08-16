@@ -82,6 +82,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
     TASK_DELETE_CONFIRM?: string;
     SHOW_ACTIVITY_FEED?: string;
     MAIL_ENABLED?: string;
+    TASK_NOTIFICATION_CHANNELS?: string;
     ALLOW_USER_SELF_DELETE?: string;
   }>({});
   const [userSettings, setUserSettings] = useState<{ showActivityFeed?: boolean }>({});
@@ -562,6 +563,8 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   };
 
   const mailEnabled = systemSettings.MAIL_ENABLED === 'true';
+  const webhooksOnly = systemSettings.TASK_NOTIFICATION_CHANNELS === 'webhooks';
+  const emailOutgoingEnabled = mailEnabled && !webhooksOnly;
 
   const setAllNotificationPrefs = (enabled: boolean) => {
     const notifications = NOTIFICATION_PREF_KEYS.reduce(
@@ -1054,7 +1057,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                     {t('profile.emailNotificationsDescription')}
                   </p>
                 </div>
-                {mailEnabled && (
+                {emailOutgoingEnabled && (
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
@@ -1083,7 +1086,16 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                 </div>
               ) : null}
 
-              <div className={`${!mailEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
+              {mailEnabled && webhooksOnly ? (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md px-3 py-2">
+                  <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200">{t('profile.emailNotificationsAdminOff')}</p>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-0.5">
+                    {t('profile.emailNotificationsAdminOffDescription')}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className={`${!emailOutgoingEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">{t('profile.notifyMeWhen')}</div>
                 <div className="divide-y divide-gray-100 dark:divide-gray-700 border border-gray-200 dark:border-gray-600 rounded-md">
                   {NOTIFICATION_PREF_KEYS.map((key) => (
@@ -1098,7 +1110,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                           checked={userPrefs.notifications?.[key] || false}
                           onChange={(e) => setNotificationPref(key, e.target.checked)}
                           className="sr-only peer"
-                          disabled={!mailEnabled}
+                          disabled={!emailOutgoingEnabled}
                         />
                         <div className="relative w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border after:border-gray-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4 peer-checked:after:border-white"></div>
                       </label>

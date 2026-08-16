@@ -1330,7 +1330,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     <>
       {showBoardToolbar ? (
         <div className="flex items-stretch gap-4 mb-1">
-          <div className="w-[160px] shrink-0 flex">
+          <div className="hidden md:flex w-[160px] shrink-0">
             <Tools 
               taskViewMode={taskViewMode}
               onTaskViewModeChange={onTaskViewModeChange}
@@ -1371,7 +1371,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               onEditOwnProfile={onEditOwnProfile}
             />
           </div>
-          <div className="w-[168px] shrink-0 flex">
+          <div className="hidden md:flex w-[168px] shrink-0">
             <BoardMetrics
               columns={columns}
               filteredColumns={getFullyFilteredColumns}
@@ -1380,7 +1380,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           </div>
         </div>
       ) : (
-        <div className="flex items-center mb-1">
+        <div className="hidden md:flex items-center mb-1">
           <button
             type="button"
             onClick={() => void handleToggleBoardToolbar()}
@@ -1395,23 +1395,25 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         </div>
       )}
 
-      {/* Search Interface */}
+      {/* Search Interface — desktop/tablet; mobile uses header search */}
       {isSearchActive && (
-        <SearchInterface
-          filters={searchFilters}
-          availablePriorities={availablePriorities}
-          onFiltersChange={onSearchFiltersChange}
-          siteSettings={siteSettings}
-          currentFilterView={currentFilterView}
-          sharedFilterViews={sharedFilterViews}
-          onFilterViewChange={onFilterViewChange}
-          columns={columns}
-          visibleColumns={visibleColumnsForCurrentBoard}
-          onColumnsChange={(visibleColumns) => selectedBoard && handleColumnVisibilityChange(selectedBoard, visibleColumns)}
-          selectedBoard={selectedBoard}
-          showAgentTasks={showAgentTasks}
-          onToggleShowAgentTasks={onToggleShowAgentTasks}
-        />
+        <div className="hidden md:block">
+          <SearchInterface
+            filters={searchFilters}
+            availablePriorities={availablePriorities}
+            onFiltersChange={onSearchFiltersChange}
+            siteSettings={siteSettings}
+            currentFilterView={currentFilterView}
+            sharedFilterViews={sharedFilterViews}
+            onFilterViewChange={onFilterViewChange}
+            columns={columns}
+            visibleColumns={visibleColumnsForCurrentBoard}
+            onColumnsChange={(visibleColumns) => selectedBoard && handleColumnVisibilityChange(selectedBoard, visibleColumns)}
+            selectedBoard={selectedBoard}
+            showAgentTasks={showAgentTasks}
+            onToggleShowAgentTasks={onToggleShowAgentTasks}
+          />
+        </div>
       )}
 
       {/* Board Tabs */}

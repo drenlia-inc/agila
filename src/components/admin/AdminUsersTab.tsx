@@ -1047,7 +1047,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
         <div className="mb-6">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 {t('users.description')}
               </p>
             </div>

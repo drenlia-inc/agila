@@ -36,6 +36,7 @@ import * as userGithubTokens from './userGithubTokens.js';
 import * as automationTokens from './automationTokens.js';
 import * as automationJournal from './automationJournal.js';
 import * as cspReports from './cspReports.js';
+import * as webhooks from './webhooks.js';
 
 // Export all domain managers
 export const sqlManager = {
@@ -65,11 +66,12 @@ export const sqlManager = {
   userGithubTokens,
   automationTokens,
   automationJournal,
-  cspReports
+  cspReports,
+  webhooks
 };
 
 // Also export individual domains for convenience
-export { tasks, helpers, boards, comments, priorities, sprints, users, reports, settings, files, activity, health, members, auth, tags, views, passwordReset, adminUsers, licenseSettings, notificationQueue, taskWork, userApiTokens, userSshKeys, userGithubTokens, automationTokens, automationJournal, cspReports };
+export { tasks, helpers, boards, comments, priorities, sprints, users, reports, settings, files, activity, health, members, auth, tags, views, passwordReset, adminUsers, licenseSettings, notificationQueue, taskWork, userApiTokens, userSshKeys, userGithubTokens, automationTokens, automationJournal, cspReports, webhooks };
 // export { users };
 // etc.
 

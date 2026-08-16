@@ -18,6 +18,7 @@ import {
   isRecentlyCreatedTask,
   ensureTagEmailChange,
 } from '../utils/taskEmailPayload.js';
+import { dispatchWebhookById } from './webhookDispatcher.js';
 
 export { formatDetailsForEmail };
 
@@ -103,6 +104,7 @@ class NotificationThrottler {
           SELECT id, change_count, first_change_time, task_data, participants_data, actor_data
           FROM notification_queue
           WHERE user_id = ? AND task_id = ? AND status = 'pending'
+            AND COALESCE(delivery_channel, 'email') = 'email'
           ORDER BY created_at ASC
           LIMIT 1
         `),
@@ -171,11 +173,11 @@ class NotificationThrottler {
           await wrapQuery(
             this.db.prepare(`
             INSERT INTO notification_queue (
-              id, user_id, task_id, notification_type, action, details,
+              id, user_id, task_id, webhook_id, delivery_channel, notification_type, action, details,
               old_value, new_value, task_data, participants_data, actor_data,
               status, scheduled_send_time, first_change_time, last_change_time,
               change_count, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, NULL, 'email', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `),
             'INSERT'
           ).run(
@@ -208,6 +210,8 @@ class NotificationThrottler {
               SELECT id, change_count, first_change_time, task_data, participants_data, actor_data
               FROM notification_queue
               WHERE user_id = ? AND task_id = ? AND status = 'pending'
+                AND COALESCE(delivery_channel, 'email') = 'email'
+            AND COALESCE(delivery_channel, 'email') = 'email'
               ORDER BY created_at DESC
               LIMIT 1
             `),
@@ -222,27 +226,220 @@ class NotificationThrottler {
     }
   }
 
+  async addWebhookNotification(webhookId, taskId, notificationData) {
+    if (process.env.DEMO_ENABLED === 'true') return Promise.resolve();
+    const delay = await this.getNotificationDelay();
+    const incomingChange = notificationData.actor?.emailChange;
+    if (
+      notificationData.action !== 'create_task' &&
+      notificationData.action !== 'delete_task' &&
+      notificationData.action !== 'restore_task' &&
+      notificationData.action !== 'copy_task' &&
+      notificationData.action !== 'create_comment' &&
+      emailChangeIsSilent(incomingChange)
+    ) {
+      return Promise.resolve();
+    }
+    if (delay === 0) {
+      return this.sendImmediateWebhook(webhookId, taskId, notificationData);
+    }
+    try {
+      const now = new Date();
+      const scheduledSendTime = new Date(now.getTime() + delay * 60 * 1000);
+      const existing = await wrapQuery(
+        this.db.prepare(`
+          SELECT id, change_count, actor_data, action
+          FROM notification_queue
+          WHERE webhook_id = ? AND task_id = ? AND status = 'pending'
+            AND delivery_channel = 'webhook'
+          ORDER BY created_at ASC
+          LIMIT 1
+        `),
+        'SELECT'
+      ).get(webhookId, taskId);
+
+      if (existing) {
+        const prevActor = JSON.parse(existing.actor_data || '{}');
+        const mergedChange = mergeEmailChange(
+          prevActor.emailChange,
+          notificationData.actor?.emailChange
+        );
+        const mergedActor = { ...notificationData.actor, emailChange: mergedChange };
+        await wrapQuery(
+          this.db.prepare(`
+            UPDATE notification_queue
+            SET action = ?, details = ?, old_value = ?, new_value = ?,
+                task_data = ?, participants_data = ?, actor_data = ?,
+                last_change_time = ?, scheduled_send_time = ?,
+                change_count = change_count + 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `),
+          'UPDATE'
+        ).run(
+          notificationData.action === 'effort' ? existing.action : notificationData.action,
+          notificationData.details,
+          notificationData.oldValue || null,
+          notificationData.newValue || null,
+          JSON.stringify(notificationData.task),
+          JSON.stringify(notificationData.participants),
+          JSON.stringify(mergedActor),
+          now.toISOString(),
+          scheduledSendTime.toISOString(),
+          existing.id
+        );
+        this.notifyQueueChanged();
+      } else {
+        const notificationId = crypto.randomUUID();
+        try {
+          await wrapQuery(
+            this.db.prepare(`
+            INSERT INTO notification_queue (
+              id, user_id, task_id, webhook_id, delivery_channel, notification_type, action, details,
+              old_value, new_value, task_data, participants_data, actor_data,
+              status, scheduled_send_time, first_change_time, last_change_time,
+              change_count, created_at, updated_at
+            ) VALUES (?, NULL, ?, ?, 'webhook', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `),
+            'INSERT'
+          ).run(
+            notificationId,
+            taskId,
+            webhookId,
+            notificationData.notificationType || 'webhook',
+            notificationData.action,
+            notificationData.details,
+            notificationData.oldValue || null,
+            notificationData.newValue || null,
+            JSON.stringify(notificationData.task || {}),
+            JSON.stringify(notificationData.participants || {}),
+            JSON.stringify(notificationData.actor || {}),
+            'pending',
+            scheduledSendTime.toISOString(),
+            now.toISOString(),
+            now.toISOString()
+          );
+          this.notifyQueueChanged();
+        } catch (insertErr) {
+          const isUnique =
+            insertErr?.code === '23505' ||
+            /unique|duplicate key/i.test(String(insertErr?.message || ''));
+          if (!isUnique) throw insertErr;
+          await this.addWebhookNotification(webhookId, taskId, notificationData);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ [THROTTLER] Failed to queue webhook ${webhookId} for task ${taskId}:`, error);
+    }
+  }
+
+  async sendWebhookGrouped(notifications) {
+    if (!notifications.length) return;
+    const base = notifications[0];
+    const ids = notifications.map((n) => n.id);
+    try {
+      await dispatchWebhookById(this.db, base.webhook_id, {
+        queueRow: base,
+        commentContent: (() => {
+          try {
+            return JSON.parse(base.actor_data || '{}').commentContent || null;
+          } catch {
+            return null;
+          }
+        })(),
+      });
+      const ph = ids.map(() => '?').join(',');
+      await wrapQuery(
+        this.db.prepare(`
+          UPDATE notification_queue
+          SET status = 'sent', sent_at = CURRENT_TIMESTAMP, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+          WHERE id IN (${ph})
+        `),
+        'UPDATE'
+      ).run(...ids);
+      this.notifyQueueChanged();
+    } catch (error) {
+      const retryCount = (base.retry_count || 0) + 1;
+      const maxRetries = 3;
+      if (retryCount >= maxRetries) {
+        const ph = ids.map(() => '?').join(',');
+        await wrapQuery(
+          this.db.prepare(`
+            UPDATE notification_queue
+            SET status = 'failed', error_message = ?, retry_count = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id IN (${ph})
+          `),
+          'UPDATE'
+        ).run(error.message, retryCount, ...ids);
+      } else {
+        const retryTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+        const ph = ids.map(() => '?').join(',');
+        await wrapQuery(
+          this.db.prepare(`
+            UPDATE notification_queue
+            SET status = 'pending', scheduled_send_time = ?, error_message = ?, retry_count = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id IN (${ph})
+          `),
+          'UPDATE'
+        ).run(retryTime, error.message, retryCount, ...ids);
+      }
+      this.notifyQueueChanged();
+    }
+  }
+
+  async sendImmediateWebhook(webhookId, taskId, notificationData) {
+    try {
+      const notificationId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      await wrapQuery(
+        this.db.prepare(`
+          INSERT INTO notification_queue (
+            id, user_id, task_id, webhook_id, delivery_channel, notification_type, action, details,
+            old_value, new_value, task_data, participants_data, actor_data,
+            status, scheduled_send_time, first_change_time, last_change_time,
+            change_count, created_at, updated_at
+          ) VALUES (?, NULL, ?, ?, 'webhook', ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `),
+        'INSERT'
+      ).run(
+        notificationId,
+        taskId,
+        webhookId,
+        notificationData.notificationType || 'webhook',
+        notificationData.action,
+        notificationData.details,
+        notificationData.oldValue || null,
+        notificationData.newValue || null,
+        JSON.stringify(notificationData.task || {}),
+        JSON.stringify(notificationData.participants || {}),
+        JSON.stringify(notificationData.actor || {}),
+        now,
+        now,
+        now
+      );
+      await this.sendWebhookGrouped([
+        {
+          id: notificationId,
+          webhook_id: webhookId,
+          task_id: taskId,
+          action: notificationData.action,
+          details: notificationData.details,
+          task_data: JSON.stringify(notificationData.task || {}),
+          participants_data: JSON.stringify(notificationData.participants || {}),
+          actor_data: JSON.stringify(notificationData.actor || {}),
+          retry_count: 0,
+        },
+      ]);
+    } catch (error) {
+      console.error(`❌ [THROTTLER] Immediate webhook failed:`, error);
+    }
+  }
+
   /**
    * Atomically claim due pending rows (multi-pod safe via FOR UPDATE SKIP LOCKED),
    * then send. Skips the cycle when this tenant's mail is not configured.
    */
   async processReadyNotifications() {
     try {
-      const mail = await new EmailService(this.db).validateEmailConfig();
-      if (!mail.valid) {
-        return;
-      }
-
-      // Pause outbound task emails but keep rows pending in the queue
-      const sendingSetting = await wrapQuery(
-        this.db.prepare(`SELECT value FROM settings WHERE key = ?`),
-        'SELECT'
-      ).get('TASK_EMAIL_NOTIFICATIONS_ENABLED');
-      if (sendingSetting && sendingSetting.value === 'false') {
-        return;
-      }
-
-      // Recover rows stuck in processing (pod crash mid-send)
       try {
         await wrapQuery(
           this.db.prepare(`
@@ -258,8 +455,6 @@ class NotificationThrottler {
       }
 
       const now = new Date().toISOString();
-
-      // Claim up to 50 due rows atomically — other pods skip locked rows
       const readyNotifications = await wrapQuery(
         this.db.prepare(`
           WITH due AS (
@@ -283,6 +478,13 @@ class NotificationThrottler {
         return;
       }
 
+      const mail = await new EmailService(this.db).validateEmailConfig();
+      const sendingSetting = await wrapQuery(
+        this.db.prepare(`SELECT value FROM settings WHERE key = ?`),
+        'SELECT'
+      ).get('TASK_EMAIL_NOTIFICATIONS_ENABLED');
+      const emailsPaused = sendingSetting && sendingSetting.value === 'false';
+
       const label = this.tenantId || 'default';
       console.log(
         `📧 [THROTTLER] [${label}] Claimed ${readyNotifications.length} notification(s)`
@@ -290,7 +492,11 @@ class NotificationThrottler {
 
       const groupedNotifications = new Map();
       for (const notification of readyNotifications) {
-        const key = `${notification.user_id}:${notification.task_id}`;
+        const channel = notification.delivery_channel || 'email';
+        const key =
+          channel === 'webhook'
+            ? `webhook:${notification.webhook_id}:${notification.task_id}`
+            : `email:${notification.user_id}:${notification.task_id}`;
         if (!groupedNotifications.has(key)) {
           groupedNotifications.set(key, []);
         }
@@ -303,6 +509,24 @@ class NotificationThrottler {
           const timeB = new Date(b.last_change_time).getTime();
           return timeB - timeA;
         });
+        const channel = notifications[0].delivery_channel || 'email';
+        if (channel === 'webhook') {
+          await this.sendWebhookGrouped(notifications);
+          continue;
+        }
+        if (!mail.valid || emailsPaused) {
+          const ids = notifications.map((n) => n.id);
+          const ph = ids.map(() => '?').join(',');
+          await wrapQuery(
+            this.db.prepare(`
+              UPDATE notification_queue
+              SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+              WHERE id IN (${ph})
+            `),
+            'UPDATE'
+          ).run(...ids);
+          continue;
+        }
         await this.sendGroupedNotification(notifications);
       }
     } catch (error) {
@@ -713,11 +937,11 @@ class NotificationThrottler {
       await wrapQuery(
         this.db.prepare(`
           INSERT INTO notification_queue (
-            id, user_id, task_id, notification_type, action, details,
+            id, user_id, task_id, webhook_id, delivery_channel, notification_type, action, details,
             old_value, new_value, task_data, participants_data, actor_data,
             status, scheduled_send_time, first_change_time, last_change_time,
             change_count, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ) VALUES (?, ?, ?, NULL, 'email', ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         `),
         'INSERT'
       ).run(
@@ -785,10 +1009,6 @@ class NotificationThrottler {
 
     try {
       const mail = await new EmailService(this.db).validateEmailConfig();
-      if (!mail.valid) {
-        console.log('📧 [THROTTLER] Skipping flush — mail not configured');
-        return;
-      }
 
       // Atomic claim so multi-pod shutdown does not double-send
       const pendingNotifications = await wrapQuery(
@@ -816,12 +1036,31 @@ class NotificationThrottler {
 
       const grouped = new Map();
       for (const notification of pendingNotifications) {
-        const key = `${notification.user_id}:${notification.task_id}`;
+        const channel = notification.delivery_channel || 'email';
+        const key =
+          channel === 'webhook'
+            ? `webhook:${notification.webhook_id}:${notification.task_id}`
+            : `email:${notification.user_id}:${notification.task_id}`;
         if (!grouped.has(key)) grouped.set(key, []);
         grouped.get(key).push(notification);
       }
       for (const [, notifications] of grouped) {
-        await this.sendGroupedNotification(notifications);
+        if ((notifications[0].delivery_channel || 'email') === 'webhook') {
+          await this.sendWebhookGrouped(notifications);
+        } else if (mail.valid) {
+          await this.sendGroupedNotification(notifications);
+        } else {
+          const ids = notifications.map((n) => n.id);
+          const ph = ids.map(() => '?').join(',');
+          await wrapQuery(
+            this.db.prepare(`
+              UPDATE notification_queue
+              SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+              WHERE id IN (${ph})
+            `),
+            'UPDATE'
+          ).run(...ids);
+        }
       }
 
       console.log('✅ All pending notifications flushed');

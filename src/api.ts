@@ -1365,6 +1365,63 @@ export const deleteNotifications = async (notificationIds: string[]) => {
   return response.data;
 };
 
+export type WebhookPlatform = 'slack' | 'mattermost' | 'teams' | 'whatsapp' | 'telegram';
+
+export type AdminWebhook = {
+  id: string;
+  name: string;
+  platform: WebhookPlatform;
+  enabled: boolean;
+  eventTypes: Record<string, boolean>;
+  projectIds: string[];
+  minPriorityId: string | null;
+  locale: string;
+  endpointUrl: string;
+  hasEndpointUrl?: boolean;
+  telegramChatId: string;
+  telegramBotToken: string;
+  hasTelegramBotToken?: boolean;
+  whatsappPhoneNumberId: string;
+  whatsappTo: string;
+  whatsappGraphVersion: string;
+  whatsappAccessToken: string;
+  hasWhatsappAccessToken?: boolean;
+};
+
+export const getAdminWebhooks = async (): Promise<AdminWebhook[]> => {
+  const response = await api.get('/admin/webhooks');
+  return response.data;
+};
+
+export const createAdminWebhook = async (body: Record<string, unknown>): Promise<AdminWebhook> => {
+  const response = await api.post('/admin/webhooks', body);
+  return response.data;
+};
+
+export const updateAdminWebhook = async (
+  id: string,
+  body: Record<string, unknown>
+): Promise<AdminWebhook> => {
+  const response = await api.put(`/admin/webhooks/${id}`, body);
+  return response.data;
+};
+
+export const patchAdminWebhookEnabled = async (
+  id: string,
+  enabled: boolean
+): Promise<AdminWebhook> => {
+  const response = await api.patch(`/admin/webhooks/${id}`, { enabled });
+  return response.data;
+};
+
+export const deleteAdminWebhook = async (id: string): Promise<void> => {
+  await api.delete(`/admin/webhooks/${id}`);
+};
+
+export const testAdminWebhook = async (id: string): Promise<void> => {
+  await api.post(`/admin/webhooks/${id}/test`);
+};
+
 // ─── AI Agent / Dev credentials ─────────────────────────────────────────────
 
 export type TaskWorkMap = Record<string, string | null | undefined>;

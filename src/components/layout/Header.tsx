@@ -584,17 +584,17 @@ const Header: React.FC<HeaderProps> = ({
           )}
         </div>
         
-        <div className="flex items-center gap-1 sm:gap-2 min-w-0 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1 justify-end">
           {/* Demo reset timer — right cluster so it never crowds the sprint selector */}
           {process.env.DEMO_ENABLED === 'true' && (
             <ResetCountdown inline={true} onReset={onLogout} />
           )}
           {currentUser && (
             <>
-              {/* Quick task search — hide under md; Tools search still available */}
+              {/* Quick task search — fills leftover header space on phones */}
               {currentPage === 'kanban' && !hideSprintSelector && onTaskSearchTextChange && (
                 <>
-                  <div className="hidden md:block">
+                  <div className="min-w-0 flex-1 max-w-[12rem] sm:max-w-[14rem] md:flex-none md:max-w-none">
                     <HeaderTaskSearch
                       value={taskSearchText}
                       onChange={onTaskSearchTextChange}
@@ -888,7 +888,7 @@ const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            <KanbanChromeTooltip label={t('navigation.help')}>
+            <KanbanChromeTooltip label={t('navigation.help')} wrapperClassName="relative hidden md:inline-flex">
               <button
                 type="button"
                 onClick={onHelpClick}
@@ -914,8 +914,8 @@ const Header: React.FC<HeaderProps> = ({
               </KanbanChromeTooltip>
             )}
 
-            {/* Mid-width overflow menu */}
-            <div className="relative lg:hidden" ref={moreMenuRef}>
+            {/* Tablet overflow menu (hidden on phones; desktop uses inline controls) */}
+            <div className="relative hidden md:block lg:hidden" ref={moreMenuRef}>
               <KanbanChromeTooltip label={t('navigation.more')}>
                 <button
                   type="button"

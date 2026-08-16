@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Smartphone, X } from 'lucide-react';
+import { useIsMobileViewport } from '../hooks/useIsMobileViewport';
 
 const STORAGE_KEY = 'agila.mobileUnoptimizedDismissed';
-/** Tailwind `md` — phones and small portrait devices. */
-const MOBILE_QUERY = '(max-width: 767px)';
 
 type Props = {
   /** Show only on the board after login. */
@@ -21,17 +20,11 @@ function readDismissed(): boolean {
 
 export default function MobileUnoptimizedBanner({ enabled }: Props) {
   const { t } = useTranslation('common');
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobileViewport();
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
     setDismissed(readDismissed());
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mq = window.matchMedia(MOBILE_QUERY);
-    const sync = () => setIsMobile(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
   }, []);
 
   const dismiss = () => {

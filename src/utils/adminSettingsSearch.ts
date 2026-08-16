@@ -26,9 +26,14 @@ function labelIn(lang: 'en' | 'fr', labelKey: string): string {
 
 /** Haystack used for matching (EN + FR labels + aliases). */
 export function buildSearchHaystack(entry: AdminSearchEntry): string {
+  const extra = (entry.extraLabelKeys || []).flatMap((key) => [
+    labelIn('en', key),
+    labelIn('fr', key),
+  ]);
   const parts = [
     labelIn('en', entry.labelKey),
     labelIn('fr', entry.labelKey),
+    ...extra,
     ...(entry.aliases || []),
     entry.settingKey || '',
     entry.tab,
@@ -254,13 +259,22 @@ function querySafeAttr(value: string): string {
   return String(value).replace(/\\/g, '').replace(/"/g, '');
 }
 
+function isElementVisible(el: HTMLElement): boolean {
+  if (!el.isConnected) return false;
+  if (el.closest('[aria-hidden="true"]')) return false;
+  if (el.closest('.hidden')) return false;
+  return el.getClientRects().length > 0;
+}
+
 /** Scroll to [data-setting-key] after the target tab has mounted. */
 export function scrollToAdminSetting(settingKey: string, attempts = 12): void {
   const tryScroll = (left: number) => {
     const safeKey = querySafeAttr(settingKey);
-    const el = document.querySelector(
+    const nodes = document.querySelectorAll(
       `[data-setting-key="${safeKey}"]`
-    ) as HTMLElement | null;
+    ) as NodeListOf<HTMLElement>;
+    const el =
+      Array.from(nodes).find((n) => isElementVisible(n)) || nodes[0] || null;
     if (el) {
       highlightAndScroll(el);
       return;

@@ -12,7 +12,10 @@ import AdminSystemSettingsTab from './admin/AdminSystemSettingsTab';
 import AdminProjectHubTab from './admin/AdminProjectHubTab';
 import AdminLicensingTab from './admin/AdminLicensingTab';
 import AdminSettingsSearch from './admin/AdminSettingsSearch';
-import { AdminUnsavedChangesBanner } from './admin/AdminUnsavedChanges';
+import {
+  AdminUnsavedChangesBanner,
+} from './admin/AdminUnsavedChanges';
+import { adminStripTabClass } from './admin/AdminSection';
 import type { AdminDraftGate } from './admin/AdminLeaveUnsavedDialog';
 import { AdminAttentionDot } from './admin/AdminFieldDraftControls';
 import websocketClient from '../services/websocketClient';
@@ -22,6 +25,8 @@ import { isMaskedApiKeyDisplay } from '../utils/maskSecret';
 import {
   adminSettingsHaveChanges,
   getDirtyAdminSettingsTabs,
+  revertAdminSettingsForHash,
+  adminHashUsesLocalDiscard,
   isLikelyDomEvent,
   isValidAdminSettingKey,
   settingValueAsString,
@@ -956,6 +961,18 @@ const Admin: React.FC<AdminProps> = ({
         if (onSettingsChanged) {
           onSettingsChanged();
         }
+
+        const oauthKeysChanged = changedKeys.some((key) =>
+          ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'].includes(key)
+        );
+        if (oauthKeysChanged) {
+          try {
+            await api.post('/auth/reload-oauth');
+          } catch (oauthErr) {
+            toast.error(t('failedToReloadOAuth'), '');
+            console.error(oauthErr);
+          }
+        }
         
         // Check if this is only UPLOAD_LIMITS_ENFORCED (which has its own toast message)
         const isOnlyUploadLimitsEnforced = changedKeys.length === 1 && changedKeys[0] === 'UPLOAD_LIMITS_ENFORCED';
@@ -1164,6 +1181,18 @@ const Admin: React.FC<AdminProps> = ({
     setSettingsDiscardNonce((n) => n + 1);
   };
 
+  /** Discard drafts for the visible Admin tab/subtab only (Escape / panel Cancel). */
+  const handleCancelActivePanel = useCallback(() => {
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    setEditingSettings((draft) => revertAdminSettingsForHash(settings, draft, hash));
+    if (adminHashUsesLocalDiscard(hash)) {
+      setSettingsDiscardNonce((n) => n + 1);
+    }
+  }, [settings]);
+
+  const handleCancelActivePanelRef = useRef(handleCancelActivePanel);
+  handleCancelActivePanelRef.current = handleCancelActivePanel;
+
   /** Local draft dirty flags for tabs that do not use shared editingSettings. */
   const [localDirtyTabs, setLocalDirtyTabs] = useState<Record<string, boolean>>({});
   const [isSavingAllDrafts, setIsSavingAllDrafts] = useState(false);
@@ -1260,6 +1289,29 @@ const Admin: React.FC<AdminProps> = ({
     (tabId: string) => dirtySettingsTabs.has(tabId as any) || Boolean(localDirtyTabs[tabId]),
     [dirtySettingsTabs, localDirtyTabs]
   );
+
+  useEffect(() => {
+    if (!isPageActive) return;
+    const isEditable = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      return el.isContentEditable;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.repeat) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      const active = document.activeElement;
+      if (isEditable(active)) {
+        (active as HTMLElement).blur();
+        e.preventDefault();
+      }
+      handleCancelActivePanelRef.current();
+      e.preventDefault();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isPageActive]);
 
   // Warn on browser refresh/close when drafts exist (Admin stays mounted across in-app page switches)
   useEffect(() => {
@@ -1484,7 +1536,7 @@ const Admin: React.FC<AdminProps> = ({
           className="sticky top-14 z-40 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700"
           data-tour-id="admin-tabs"
         >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 px-4 pt-4 pb-3 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 px-4 pt-4 pb-3">
             <div className="admin-header min-w-0 flex-1">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('adminPanel')}</h1>
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -1509,16 +1561,12 @@ const Admin: React.FC<AdminProps> = ({
               </div>
             </div>
           </div>
-          <nav className="flex space-x-8 overflow-x-auto px-4 max-w-full">
+          <nav className="flex space-x-8 overflow-x-auto px-4 pb-2.5 max-w-full">
             {ADMIN_NAV_TABS.map((tab) => (
               <button
                 key={tab}
                 onClick={() => handleTabChange(tab)}
-                className={`relative py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  activeTab === tab
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                }`}
+                className={adminStripTabClass(activeTab === tab)}
                 data-tour-id={`admin-${tab}`}
               >
                 <span className="inline-flex items-center gap-1.5">
@@ -1583,7 +1631,7 @@ const Admin: React.FC<AdminProps> = ({
                 editingSettings={editingSettings}
                 onSettingsChange={setEditingSettings}
                 onSave={handleSaveSettings}
-                onCancel={handleCancelSettings}
+                onCancel={handleCancelActivePanel}
                 onAutoSave={handleAutoSaveSetting}
               />
             </AdminTabPanel>
@@ -1596,7 +1644,7 @@ const Admin: React.FC<AdminProps> = ({
                 editingSettings={editingSettings}
                 onSettingsChange={setEditingSettings}
                 onSave={handleSaveSettings}
-                onCancel={handleCancelSettings}
+                onCancel={handleCancelActivePanel}
                 onAutoSave={handleAutoSaveSetting}
                 onSettingsReload={loadData}
                 onApplySettingsPatch={applySettingsPatch}
@@ -1662,7 +1710,7 @@ const Admin: React.FC<AdminProps> = ({
                 editingSettings={editingSettings}
                 onSettingsChange={setEditingSettings}
                 onSave={handleSaveSettings}
-                onCancel={handleCancelSettings}
+                onCancel={handleCancelActivePanel}
                 onAutoSave={handleAutoSaveSetting}
                 discardNonce={settingsDiscardNonce}
               />
@@ -1676,7 +1724,7 @@ const Admin: React.FC<AdminProps> = ({
                 editingSettings={editingSettings}
                 onSettingsChange={setEditingSettings}
                 onSave={handleSaveSettings}
-                onCancel={handleCancelSettings}
+                onCancel={handleCancelActivePanel}
                 onAutoSave={handleAutoSaveSetting}
                 onLocalDirtyChange={(dirty) =>
                   handleTabLocalDirty('project-settings', dirty)

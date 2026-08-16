@@ -67,7 +67,7 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({ value, onChange }) 
   };
 
   return (
-    <div className="relative w-40 sm:w-52 md:w-64">
+    <div className="relative w-full min-w-0 md:w-64">
       <Search
         className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
         aria-hidden

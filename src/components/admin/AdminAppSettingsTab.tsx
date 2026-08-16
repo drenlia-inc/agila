@@ -30,6 +30,8 @@ import {
   AdminPageShell,
   AdminSection,
   adminInputClass,
+  adminSubtabPanelClass,
+  adminSubNavTabClass,
 } from './AdminSection';
 import { AdminToggle, adminSettingIsEnabled } from './AdminToggle';
 import {
@@ -455,11 +457,7 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
         <nav className="flex space-x-8" aria-label="Tabs">
           <button
             onClick={() => handleSubTabChange('ui')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm inline-flex items-center gap-1.5 ${
-              activeSubTab === 'ui'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-            }`}
+            className={adminSubNavTabClass(activeSubTab === 'ui')}
           >
             {t('appSettings.userInterface')}
             <AdminDirtyDot show={dirtySubTabs.has('ui')} />
@@ -467,11 +465,7 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
           {showTroubleshootingTab && (
             <button
               onClick={() => handleSubTabChange('troubleshooting')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm inline-flex items-center gap-1.5 ${
-                activeSubTab === 'troubleshooting'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
+              className={adminSubNavTabClass(activeSubTab === 'troubleshooting')}
             >
               {t('appSettings.troubleshooting')}
               <AdminDirtyDot show={dirtySubTabs.has('troubleshooting')} />
@@ -480,6 +474,7 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
         </nav>
       </div>
 
+      <div className={adminSubtabPanelClass}>
       {/* Sub-tab panels: keep visited mounted (hidden) so drafts survive switches */}
       {visitedSubTabs.has('troubleshooting') && showTroubleshootingTab && onAutoSave && (
         <div
@@ -832,6 +827,7 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
           </AdminPageShell>
         </div>
       )}
+      </div>
     </div>
   );
 };

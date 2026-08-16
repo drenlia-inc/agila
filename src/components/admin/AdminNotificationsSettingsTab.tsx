@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '../../utils/toast';
-import { AdminPageShell, AdminSection, adminInputFullClass } from './AdminSection';
+import { getAdminWebhooks } from '../../api';
+import { AdminPageShell, AdminSection, adminInputBoundedClass } from './AdminSection';
+import {
+  AdminNotificationChannelMode,
+  ConfirmWebhooksOnlyDialog,
+  type TaskNotificationChannel,
+} from './AdminNotificationChannelMode';
 
 interface AdminNotificationsSettingsTabProps {
   settings: { [key: string]: string | undefined };
@@ -20,6 +26,31 @@ const AdminNotificationsSettingsTab: React.FC<AdminNotificationsSettingsTabProps
 }) => {
   const { t } = useTranslation('admin');
   const [notificationDefaults, setNotificationDefaults] = useState<{ [key: string]: boolean }>({});
+  const [webhookCount, setWebhookCount] = useState(0);
+  const [confirmWebhooksOnly, setConfirmWebhooksOnly] = useState(false);
+  const channelMode =
+    editingSettings.TASK_NOTIFICATION_CHANNELS || settings.TASK_NOTIFICATION_CHANNELS || 'email';
+
+  useEffect(() => {
+    void getAdminWebhooks()
+      .then((hooks) => setWebhookCount((hooks || []).length))
+      .catch(() => setWebhookCount(0));
+  }, [discardNonce]);
+
+  const persistChannel = async (value: TaskNotificationChannel) => {
+    if ((value === 'both' || value === 'webhooks') && webhookCount === 0) return;
+    const next = {
+      ...editingSettings,
+      TASK_NOTIFICATION_CHANNELS: value,
+    };
+    onSettingsChange(next);
+    try {
+      await onSave(next);
+      toast.success(t('webhooks.channelSaved'));
+    } catch {
+      toast.error(t('failedToSaveSettings'));
+    }
+  };
 
   useEffect(() => {
     const raw =
@@ -149,7 +180,23 @@ const AdminNotificationsSettingsTab: React.FC<AdminNotificationsSettingsTabProps
 
   return (
     <div data-setting-key="NOTIFICATIONS_SECTION">
-    <AdminPageShell>
+    <AdminPageShell width="full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <AdminNotificationChannelMode
+        radioName="notif-task-notification-channels"
+        channelMode={channelMode}
+        webhookCount={webhookCount}
+        extraHint={
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t('appSettings.webhooksDefaultsHint')}
+          </p>
+        }
+        onSelect={(mode) => {
+          if (mode === 'webhooks') setConfirmWebhooksOnly(true);
+          else void persistChannel(mode);
+        }}
+      />
+      <div className="space-y-3">
       <AdminSection
         title={t('appSettings.emailThrottling')}
         description={t('appSettings.notificationDelayDescription')}
@@ -166,7 +213,7 @@ const AdminNotificationsSettingsTab: React.FC<AdminNotificationsSettingsTabProps
             id="notification-delay"
             value={editingSettings.NOTIFICATION_DELAY || '30'}
             onChange={(e) => handleNotificationDelayChange(e.target.value)}
-            className={adminInputFullClass}
+            className={adminInputBoundedClass}
           >
             <option value="0">{t('appSettings.immediate')}</option>
             <option value="5">{t('appSettings.minutes5')}</option>
@@ -184,16 +231,36 @@ const AdminNotificationsSettingsTab: React.FC<AdminNotificationsSettingsTabProps
         </div>
       </AdminSection>
 
+      <AdminSection title={t('appSettings.emailSystemStatus')} dense>
+        <div className="flex items-center gap-2">
+          <div
+            className={`h-2.5 w-2.5 rounded-full ${settings.SMTP_HOST ? 'bg-green-500' : 'bg-red-500'}`}
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">
+            {settings.SMTP_HOST
+              ? t('appSettings.emailSystemConfigured')
+              : t('appSettings.emailSystemNotConfigured')}
+          </span>
+        </div>
+        {!settings.SMTP_HOST && (
+          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            {t('appSettings.emailSystemNotConfiguredHint')}
+          </p>
+        )}
+      </AdminSection>
+      </div>
+      </div>
+
       <AdminSection
         title={t('appSettings.globalNotificationDefaults')}
         description={t('appSettings.globalNotificationDefaultsDescription')}
         dense
       >
-        <div className="divide-y divide-gray-100 dark:divide-gray-800">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 divide-y divide-gray-100 dark:divide-gray-800 lg:divide-y-0">
           {notificationTypes.map((notification) => (
             <div
               key={notification.key}
-              className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
+              className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0 lg:py-2"
             >
               <div className="flex min-w-0 flex-1 items-start gap-2">
                 <div className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${notification.dotClass}`} />
@@ -223,25 +290,15 @@ const AdminNotificationsSettingsTab: React.FC<AdminNotificationsSettingsTabProps
           ))}
         </div>
       </AdminSection>
-
-      <AdminSection title={t('appSettings.emailSystemStatus')} dense>
-        <div className="flex items-center gap-2">
-          <div
-            className={`h-2.5 w-2.5 rounded-full ${settings.SMTP_HOST ? 'bg-green-500' : 'bg-red-500'}`}
-          />
-          <span className="text-sm text-gray-700 dark:text-gray-300">
-            {settings.SMTP_HOST
-              ? t('appSettings.emailSystemConfigured')
-              : t('appSettings.emailSystemNotConfigured')}
-          </span>
-        </div>
-        {!settings.SMTP_HOST && (
-          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-            {t('appSettings.emailSystemNotConfiguredHint')}
-          </p>
-        )}
-      </AdminSection>
     </AdminPageShell>
+    <ConfirmWebhooksOnlyDialog
+      open={confirmWebhooksOnly}
+      onCancel={() => setConfirmWebhooksOnly(false)}
+      onConfirm={() => {
+        setConfirmWebhooksOnly(false);
+        void persistChannel('webhooks');
+      }}
+    />
     </div>
   );
 };

@@ -19,7 +19,8 @@ import {
   AdminActionsBar,
   AdminPageShell,
   AdminSection,
-  adminInputFullClass,
+  adminInputBoundedClass,
+  adminInputShortClass,
 } from './AdminSection';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 
@@ -168,12 +169,12 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
   const isManagedEmail = editingSettings.MAIL_MANAGED === 'true';
 
   const mailFieldClass = (disabled = false) =>
-    `${adminInputFullClass}${disabled ? ' bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''}`;
+    `${adminInputBoundedClass}${disabled ? ' bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''}`;
 
   return (
     <>
       <div data-setting-key="MAIL_SECTION">
-      <AdminPageShell description={t('mail.description')}>
+      <AdminPageShell description={t('mail.description')} width="full">
         {/* Demo Mode Warning */}
         {isDemoMode && (
           <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/40 p-3">
@@ -279,7 +280,9 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
                 {t('mail.taskEmailNotificationsLabel')}
               </h4>
               <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
-                {t('mail.taskEmailNotificationsHint')}
+                {editingSettings.TASK_NOTIFICATION_CHANNELS === 'webhooks'
+                  ? t('mail.taskEmailNotificationsWebhooksOnlyHint')
+                  : t('mail.taskEmailNotificationsHint')}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -293,7 +296,9 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
                 role="switch"
                 aria-checked={editingSettings.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false'}
                 aria-label={t('mail.taskEmailNotificationsLabel')}
+                disabled={editingSettings.TASK_NOTIFICATION_CHANNELS === 'webhooks'}
                 onClick={async () => {
+                  if (editingSettings.TASK_NOTIFICATION_CHANNELS === 'webhooks') return;
                   const currentlyOn = editingSettings.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false';
                   const newValue = currentlyOn ? 'false' : 'true';
                   handleInputChange('TASK_EMAIL_NOTIFICATIONS_ENABLED', newValue);
@@ -317,10 +322,12 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
                     toast.error(t('failedToSaveSettings'), '');
                   }
                 }}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                  editingSettings.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false'
-                    ? 'bg-blue-600 dark:bg-blue-500'
-                    : 'bg-gray-200 dark:bg-gray-600'
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  editingSettings.TASK_NOTIFICATION_CHANNELS === 'webhooks'
+                    ? 'bg-gray-200 dark:bg-gray-600 cursor-not-allowed'
+                    : editingSettings.TASK_EMAIL_NOTIFICATIONS_ENABLED !== 'false'
+                    ? 'bg-blue-600 dark:bg-blue-500 cursor-pointer'
+                    : 'bg-gray-200 dark:bg-gray-600 cursor-pointer'
                 }`}
               >
                 <span
@@ -355,21 +362,6 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
                 </p>
               </div>
 
-              <div data-setting-key="SMTP_FROM_EMAIL">
-                {mailFieldLabel('SMTP_FROM_EMAIL', t('mail.fromEmail'))}
-                <input
-                  type="email"
-                  value={editingSettings.SMTP_FROM_EMAIL || ''}
-                  onChange={(e) => handleInputChange('SMTP_FROM_EMAIL', e.target.value)}
-                  disabled={isManagedEmail}
-                  className={mailFieldClass(isManagedEmail)}
-                  placeholder="admin@example.com"
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {t('mail.fromEmailDescription')}
-                </p>
-              </div>
-
               <div data-setting-key="SMTP_PORT">
                 {mailFieldLabel('SMTP_PORT', t('mail.smtpPort'))}
                 <input
@@ -391,11 +383,26 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
                     );
                   }}
                   disabled={isManagedEmail}
-                  className={`${mailFieldClass(isManagedEmail)} ${ADMIN_NUMERIC_INPUT_CLASS}`}
+                  className={`${adminInputShortClass}${isManagedEmail ? ' bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''} ${ADMIN_NUMERIC_INPUT_CLASS}`}
                   placeholder="587"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {t('mail.smtpPortDescription')} <span className="text-blue-600">{t('mail.autoFillPortHint')}</span>
+                </p>
+              </div>
+
+              <div data-setting-key="SMTP_FROM_EMAIL">
+                {mailFieldLabel('SMTP_FROM_EMAIL', t('mail.fromEmail'))}
+                <input
+                  type="email"
+                  value={editingSettings.SMTP_FROM_EMAIL || ''}
+                  onChange={(e) => handleInputChange('SMTP_FROM_EMAIL', e.target.value)}
+                  disabled={isManagedEmail}
+                  className={mailFieldClass(isManagedEmail)}
+                  placeholder="admin@example.com"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t('mail.fromEmailDescription')}
                 </p>
               </div>
 
@@ -429,24 +436,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
                 </p>
               </div>
 
-              <div data-setting-key="SMTP_SECURE">
-                {mailFieldLabel('SMTP_SECURE', t('mail.smtpSecurity'))}
-                <select
-                  value={editingSettings.SMTP_SECURE || 'tls'}
-                  onChange={(e) => handleInputChange('SMTP_SECURE', e.target.value)}
-                  disabled={isManagedEmail}
-                  className={mailFieldClass(isManagedEmail)}
-                >
-                  <option value="tls">{t('mail.tlsRecommended')}</option>
-                  <option value="ssl">{t('mail.ssl')}</option>
-                  <option value="none">{t('mail.nonePlain')}</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {t('mail.smtpSecurityDescription')}
-                </p>
-              </div>
-
-              <div data-setting-key="SMTP_PASSWORD" className="md:col-span-2">
+              <div data-setting-key="SMTP_PASSWORD">
                 <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   <span>{t('mail.smtpPassword')}</span>
                   {!isManagedEmail && (
@@ -479,6 +469,23 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {t('mail.smtpPasswordDescription')}
+                </p>
+              </div>
+
+              <div data-setting-key="SMTP_SECURE">
+                {mailFieldLabel('SMTP_SECURE', t('mail.smtpSecurity'))}
+                <select
+                  value={editingSettings.SMTP_SECURE || 'tls'}
+                  onChange={(e) => handleInputChange('SMTP_SECURE', e.target.value)}
+                  disabled={isManagedEmail}
+                  className={mailFieldClass(isManagedEmail)}
+                >
+                  <option value="tls">{t('mail.tlsRecommended')}</option>
+                  <option value="ssl">{t('mail.ssl')}</option>
+                  <option value="none">{t('mail.nonePlain')}</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t('mail.smtpSecurityDescription')}
                 </p>
               </div>
           </div>

@@ -307,6 +307,28 @@
         "consolidatedChanges": "{count} changes made to this task"
       }
     },
+    "webhooks": {
+      "testText": "Agila webhook test. If you see this, the endpoint is working.",
+      "commentLine": "Comment: {text}",
+      "by": "By {name}",
+      "fieldTitle": "Title",
+      "fieldId": "ID",
+      "fieldActor": "Actor",
+      "fieldRequester": "Requester",
+      "fieldAssignee": "Assignee",
+      "fieldOccurredAt": "Date/time",
+      "fieldProject": "Project",
+      "fieldPreviousTitle": "Previous title",
+      "fieldColumn": "Column",
+      "event": {
+        "taskCreated": "A new task was created",
+        "taskChanged": "A task was changed",
+        "taskDeleted": "A task was deleted",
+        "boardCreated": "A new board was created",
+        "boardRenamed": "A board was renamed",
+        "boardDeleted": "A board was deleted"
+      }
+    },
     "bulkTaskNotification": {
       "subject": "[{count} tasks] {summary} — {boardTitle}",
       "title": "Bulk task update",

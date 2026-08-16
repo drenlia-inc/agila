@@ -8,11 +8,14 @@ import AdminFileUploadsTab from './AdminFileUploadsTab';
 import AdminAISettingsTab from './AdminAISettingsTab';
 import AdminNotificationQueueTab from './AdminNotificationQueueTab';
 import AdminNotificationsSettingsTab from './AdminNotificationsSettingsTab';
+import AdminWebhooksTab from './AdminWebhooksTab';
+import { BetaSup } from '../HelpAssistantTitle';
 import { AdminDirtyDot } from './AdminFieldDraftControls';
 import {
   getDirtySystemSettingsSubTabs,
   type SystemSettingsSubTabId,
 } from '../../utils/adminSettingsDirty';
+import { adminSubtabPanelClass, adminSubNavTabClass } from './AdminSection';
 import api from '../../api';
 
 export type SystemSettingsSubTab = SystemSettingsSubTabId;
@@ -49,6 +52,7 @@ function subTabFromHash(hash: string): SystemSettingsSubTab {
   if (bare.endsWith('#file-uploads')) return 'file-uploads';
   if (bare.endsWith('#ai')) return 'ai';
   if (bare.endsWith('#notifications')) return 'notifications';
+  if (bare.endsWith('#webhooks')) return 'webhooks';
   if (bare.endsWith('#notification-queue')) return 'notification-queue';
   return 'sso';
 }
@@ -60,6 +64,7 @@ const HASH_BY_TAB: Record<SystemSettingsSubTab, string> = {
   'file-uploads': '#admin#system-settings#file-uploads',
   ai: '#admin#system-settings#ai',
   notifications: '#admin#system-settings#notifications',
+  webhooks: '#admin#system-settings#webhooks',
   'notification-queue': '#admin#system-settings#notification-queue',
 };
 
@@ -70,6 +75,7 @@ const TOUR_ID_BY_TAB: Record<SystemSettingsSubTab, string> = {
   'file-uploads': 'admin-file-uploads',
   ai: 'admin-ai',
   notifications: 'admin-notifications',
+  webhooks: 'admin-webhooks',
   'notification-queue': 'admin-notification-queue',
 };
 
@@ -211,17 +217,13 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const subNavBtn = (tab: SystemSettingsSubTab, label: string, icon?: React.ReactNode) => (
+  const subNavBtn = (tab: SystemSettingsSubTab, label: React.ReactNode, icon?: React.ReactNode) => (
     <button
       key={tab}
       type="button"
       onClick={() => handleSubTabChange(tab)}
       data-tour-id={TOUR_ID_BY_TAB[tab]}
-      className={`py-2 px-1 border-b-2 font-medium text-sm inline-flex items-center gap-1.5 whitespace-nowrap ${
-        activeSubTab === tab
-          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-          : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-      }`}
+      className={adminSubNavTabClass(activeSubTab === tab)}
     >
       {icon}
       {label}
@@ -231,12 +233,6 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
 
   return (
     <div className="p-6 min-w-0 max-w-full">
-      <div className="mb-3">
-        <p className="text-gray-600 dark:text-gray-400 text-sm">
-          {t('systemSettings.description')}
-        </p>
-      </div>
-
       <div className="mb-4 overflow-x-auto">
         <nav className="flex space-x-6 min-w-max" aria-label="System settings tabs">
           {subNavBtn('sso', t('tabs.sso'))}
@@ -258,10 +254,18 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
               />
             )}
           {subNavBtn('notifications', t('appSettings.notifications'))}
+          {subNavBtn(
+            'webhooks',
+            <>
+              {t('webhooks.tabLabel')}
+              <BetaSup />
+            </>
+          )}
           {subNavBtn('notification-queue', t('appSettings.notificationQueue'))}
         </nav>
       </div>
 
+      <div className={adminSubtabPanelClass}>
       {visitedSubTabs.has('sso') && (
         <div className={activeSubTab === 'sso' ? undefined : 'hidden'} aria-hidden={activeSubTab !== 'sso'}>
           <AdminSSOTab
@@ -363,6 +367,20 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
         </div>
       )}
 
+      {visitedSubTabs.has('webhooks') && (
+        <div
+          className={activeSubTab === 'webhooks' ? undefined : 'hidden'}
+          aria-hidden={activeSubTab !== 'webhooks'}
+        >
+          <AdminWebhooksTab
+            settings={settings}
+            editingSettings={editingSettings}
+            onSettingsChange={onSettingsChange}
+            onSave={onSave}
+          />
+        </div>
+      )}
+
       {visitedSubTabs.has('notification-queue') && (
         <div
           className={`min-w-0 max-w-full ${activeSubTab === 'notification-queue' ? undefined : 'hidden'}`}
@@ -375,6 +393,7 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
           />
         </div>
       )}
+      </div>
     </div>
   );
 };

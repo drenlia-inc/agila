@@ -307,6 +307,28 @@
         "consolidatedChanges": "{count} modifications apportées à cette tâche"
       }
     },
+    "webhooks": {
+      "testText": "Test de webhook Agila. Si vous voyez ceci, le point de terminaison fonctionne.",
+      "commentLine": "Commentaire : {text}",
+      "by": "Par {name}",
+      "fieldTitle": "Titre",
+      "fieldId": "ID",
+      "fieldActor": "Acteur",
+      "fieldRequester": "Demandeur",
+      "fieldAssignee": "Assigné",
+      "fieldOccurredAt": "Date/heure",
+      "fieldProject": "Projet",
+      "fieldPreviousTitle": "Titre précédent",
+      "fieldColumn": "Colonne",
+      "event": {
+        "taskCreated": "Une nouvelle tâche a été créée",
+        "taskChanged": "Une tâche a été modifiée",
+        "taskDeleted": "Une tâche a été supprimée",
+        "boardCreated": "Un nouveau tableau a été créé",
+        "boardRenamed": "Un tableau a été renommé",
+        "boardDeleted": "Un tableau a été supprimé"
+      }
+    },
     "bulkTaskNotification": {
       "subject": "[{count} tâches] {summary} — {boardTitle}",
       "title": "Mise à jour groupée de tâches",

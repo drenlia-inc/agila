@@ -466,6 +466,7 @@ app.use('/api/admin/settings', settingsRouter);
 app.use('/api/storage', settingsRouter);
 app.use('/api/admin', lazyRouteLoader('./routes/adminSystem.js'));
 app.use('/api/admin/notification-queue', lazyRouteLoader('./routes/adminNotificationQueue.js'));
+app.use('/api/admin/webhooks', lazyRouteLoader('./routes/adminWebhooks.js'));
 app.use('/api/admin/lifecycle', lazyRouteLoader('./routes/adminLifecycle.js'));
 app.use('/api/tasks', taskWorkRouter); // task_work KV + control (before param-heavy routers where possible)
 app.use('/api/tasks', taskRelationsRouter);

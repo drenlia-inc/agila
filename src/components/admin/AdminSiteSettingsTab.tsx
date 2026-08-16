@@ -13,7 +13,8 @@ import {
   AdminActionsBar,
   AdminPageShell,
   AdminSection,
-  adminInputFullClass,
+  adminInputBoundedClass,
+  adminInputWideClass,
 } from './AdminSection';
 import {
   DEFAULT_SITE_LOGO,
@@ -251,7 +252,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
               type="url"
               value={value}
               onChange={(e) => handleInputChange(settingKey, e.target.value)}
-              className={adminInputFullClass}
+              className={adminInputWideClass}
               placeholder={t('siteSettings.logoUrlPlaceholder')}
             />
             <div className="flex flex-wrap gap-2">
@@ -373,7 +374,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
 
   return (
     <div data-setting-key="SITE_SETTINGS_SECTION">
-    <AdminPageShell description={t('siteSettings.description')} className="p-6">
+    <AdminPageShell description={t('siteSettings.description')} className="p-6" width="full">
       <AdminSection dense>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div data-setting-key="SITE_NAME">
@@ -390,7 +391,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
               type="text"
               value={editingSettings.SITE_NAME ?? ''}
               onChange={(e) => handleInputChange('SITE_NAME', e.target.value)}
-              className={adminInputFullClass}
+              className={adminInputBoundedClass}
               placeholder={t('siteSettings.enterSiteName')}
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -412,7 +413,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
               type="url"
               value={editingSettings.SITE_URL || ''}
               onChange={(e) => handleInputChange('SITE_URL', e.target.value)}
-              className={adminInputFullClass}
+              className={adminInputWideClass}
               placeholder="https://example.com"
             />
           </div>
@@ -427,7 +428,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
             value={editingSettings.WEBSITE_URL || ''}
             readOnly
             disabled
-            className={`${adminInputFullClass} bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed`}
+            className={`${adminInputWideClass} bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed`}
             placeholder="https://customer-portal.example.com"
           />
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

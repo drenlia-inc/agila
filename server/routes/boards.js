@@ -8,7 +8,8 @@ import { getDefaultBoardColumns } from '../utils/defaultBoardColumns.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 // MIGRATED: Import sqlManager
 import { boards as boardQueries, tasks as taskQueries, helpers } from '../utils/sqlManager/index.js';
-import { purgeBoardCompletely, purgeTaskCompletelyAndUpdateStorage } from '../services/taskPurgeService.js';
+import { notifyBoardWebhook } from '../services/taskEmailNotificationService.js';
+import { purgeBoardCompletely } from '../services/taskPurgeService.js';
 import { serverDebug } from '../utils/serverDebug.js';
 import {
   parseBody,
@@ -297,6 +298,16 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
       board: newBoard,
       timestamp: new Date().toISOString()
     }, tenantId);
+
+    notifyBoardWebhook(
+      db,
+      {
+        event: 'boardCreated',
+        board: { id, title, project: projectIdentifier },
+        actorUserId: req.user?.id,
+      },
+      tenantId
+    ).catch((err) => console.error('Board created webhook failed:', err));
     
     res.json(newBoard);
   } catch (error) {
@@ -340,6 +351,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
     
     // MIGRATED: Update board using sqlManager
+    const existingForRename = await boardQueries.getBoardById(db, id);
     await boardQueries.updateBoard(db, id, title, finalWipLimit);
     const updated = await boardQueries.getBoardById(db, id);
     
@@ -355,6 +367,19 @@ router.put('/:id', authenticateToken, async (req, res) => {
       board: boardPayload,
       timestamp: new Date().toISOString()
     }, tenantId);
+
+    if (existingForRename && String(existingForRename.title || '') !== String(title || '')) {
+      notifyBoardWebhook(
+        db,
+        {
+          event: 'boardRenamed',
+          board: { id, title, project: updated?.project || existingForRename.project },
+          actorUserId: req.user?.id,
+          oldTitle: existingForRename.title,
+        },
+        tenantId
+      ).catch((err) => console.error('Board renamed webhook failed:', err));
+    }
     
     res.json(boardPayload);
   } catch (error) {
@@ -396,6 +421,15 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
         softDeleted: false,
         timestamp: new Date().toISOString(),
       }, tenantId);
+      notifyBoardWebhook(
+        db,
+        {
+          event: 'boardDeleted',
+          board: { id, title: board.title, project: board.project },
+          actorUserId: userId,
+        },
+        tenantId
+      ).catch((err) => console.error('Board deleted webhook failed:', err));
       return res.json({ message: 'Board permanently deleted', permanent: true });
     }
 
@@ -408,6 +442,15 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
       softDeleted: true,
       timestamp: new Date().toISOString(),
     }, tenantId);
+    notifyBoardWebhook(
+      db,
+      {
+        event: 'boardDeleted',
+        board: { id, title: board.title, project: board.project },
+        actorUserId: userId,
+      },
+      tenantId
+    ).catch((err) => console.error('Board deleted webhook failed:', err));
 
     res.json({ message: 'Board moved to trash', softDeleted: true });
   } catch (error) {
@@ -523,6 +566,15 @@ router.delete('/:id/permanent', authenticateToken, requireRole(['admin']), async
       permanent: true,
       timestamp: new Date().toISOString(),
     }, getTenantId(req));
+    notifyBoardWebhook(
+      db,
+      {
+        event: 'boardDeleted',
+        board: { id: req.params.id, title: board.title, project: board.project },
+        actorUserId: req.user?.id,
+      },
+      getTenantId(req)
+    ).catch((err) => console.error('Board deleted webhook failed:', err));
     res.json({ message: 'Board permanently deleted' });
   } catch (error) {
     console.error('Error permanently deleting board:', error);

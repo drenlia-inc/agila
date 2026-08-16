@@ -14,7 +14,7 @@ import { AdminUnsavedHint } from './AdminUnsavedChanges';
 import {
   AdminActionsBar,
   AdminSection,
-  adminInputFullClass,
+  adminInputBoundedClass,
 } from './AdminSection';
 import { isMultiTenantDeploy } from '../../utils/ownerSetup';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
@@ -199,7 +199,7 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
     editingSettings.STORAGE_TEST_OK === 'true' || settings.STORAGE_TEST_OK === 'true';
   const multiTenant = isMultiTenantDeploy();
 
-  const inputClass = adminInputFullClass;
+  const inputClass = adminInputBoundedClass;
 
   const handleCompare = async () => {
     setIsComparing(true);
@@ -776,7 +776,7 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
           )}
         </div>
 
-        <div className="max-w-3xl space-y-3">
+        <div className="w-full space-y-3">
           {/* Backend picker — large cards so Disk vs S3 is unmistakable */}
           <div data-setting-key="STORAGE_BACKEND">
             {fieldLabel('STORAGE_BACKEND', t('storage.backend'))}
@@ -1358,25 +1358,31 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
               )}
           </AdminSection>
 
-          <AdminActionsBar>
-            <button
-              type="button"
-              onClick={() => void onSave()}
-              disabled={!canSaveStorage}
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
-              title={s3ActivationBlocked ? t('storage.saveS3NeedsTest') : undefined}
-            >
-              {t('storage.save')}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCancelAll()}
-              disabled={!hasChanges && !configuringDest}
-              className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-300 disabled:opacity-50"
-            >
-              {t('storage.cancel')}
-            </button>
+          <AdminActionsBar className="justify-between">
             <AdminUnsavedHint show={hasChanges || configuringDest} />
+            <div className="flex flex-wrap gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={() => handleCancelAll()}
+                disabled={!hasChanges && !configuringDest}
+                className="px-4 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
+              >
+                {t('storage.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => void onSave()}
+                disabled={!canSaveStorage}
+                className={`px-4 py-1.5 text-sm text-white rounded-md font-medium hover:bg-blue-700 disabled:opacity-50 ${
+                  canSaveStorage
+                    ? 'bg-blue-600 ring-2 ring-amber-400 ring-offset-2'
+                    : 'bg-blue-600'
+                }`}
+                title={s3ActivationBlocked ? t('storage.saveS3NeedsTest') : undefined}
+              >
+                {t('storage.save')}
+              </button>
+            </div>
           </AdminActionsBar>
         </div>
       </div>
