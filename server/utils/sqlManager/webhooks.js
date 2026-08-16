@@ -35,6 +35,15 @@ export async function getEnabledWebhooks(db) {
   return await stmt.all();
 }
 
+export async function countWebhooks(db) {
+  const stmt = wrapQuery(
+    db.prepare(`SELECT COUNT(*)::int AS count FROM webhooks`),
+    'SELECT'
+  );
+  const row = await stmt.get();
+  return Number(row?.count) || 0;
+}
+
 export async function insertWebhook(db, row) {
   const stmt = wrapQuery(
     db.prepare(`

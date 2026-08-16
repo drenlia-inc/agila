@@ -1530,38 +1530,30 @@ const Admin: React.FC<AdminProps> = ({
           </div>
         )}
 
-        {/* Sticky header: title + search on top row, tabs below (no overlap) */}
+        {/* Sticky Admin chrome: search + primary tabs */}
         <div
           ref={tabsRef}
           className="sticky top-14 z-40 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700"
           data-tour-id="admin-tabs"
         >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 px-4 pt-4 pb-3">
-            <div className="admin-header min-w-0 flex-1">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('adminPanel')}</h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {t('adminPanelDescription')}
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-shrink-0 w-full sm:w-auto sm:pt-0.5 sm:max-w-none sm:justify-end">
-              <AdminUnsavedChangesBanner
-                visible={hasAnyUnsavedDrafts}
-                onSave={() => {
-                  void handleHeaderSaveAllDrafts();
-                }}
-                onDiscard={handleCancelSettings}
-                isSaving={isSavingAllDrafts}
+          <div className="admin-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3 px-4 pt-3 pb-2">
+            <AdminUnsavedChangesBanner
+              visible={hasAnyUnsavedDrafts}
+              onSave={() => {
+                void handleHeaderSaveAllDrafts();
+              }}
+              onDiscard={handleCancelSettings}
+              isSaving={isSavingAllDrafts}
+            />
+            <div className="w-full sm:w-auto sm:max-w-xs">
+              <AdminSettingsSearch
+                activeTab={activeTab}
+                onNavigate={handleSearchNavigate}
+                contentSources={adminSearchContentSources}
               />
-              <div className="w-full sm:w-auto sm:max-w-xs">
-                <AdminSettingsSearch
-                  activeTab={activeTab}
-                  onNavigate={handleSearchNavigate}
-                  contentSources={adminSearchContentSources}
-                />
-              </div>
             </div>
           </div>
-          <nav className="flex space-x-8 overflow-x-auto px-4 pb-2.5 max-w-full">
+          <nav className="flex gap-5 sm:gap-6 overflow-x-auto px-4 max-w-full border-b border-gray-100 dark:border-gray-700">
             {ADMIN_NAV_TABS.map((tab) => (
               <button
                 key={tab}
@@ -1569,29 +1561,27 @@ const Admin: React.FC<AdminProps> = ({
                 className={adminStripTabClass(activeTab === tab)}
                 data-tour-id={`admin-${tab}`}
               >
-                <span className="inline-flex items-center gap-1.5">
-                  {tab === 'users' && t('tabs.users')}
-                  {tab === 'site-settings' && t('tabs.siteSettings')}
-                  {tab === 'system-settings' && t('tabs.systemSettings')}
-                  {tab === 'tags' && t('tabs.tags')}
-                  {tab === 'priorities' && t('tabs.priorities')}
-                  {tab === 'app-settings' && t('tabs.appSettings')}
-                  {tab === 'project-settings' && t('tabs.projectSettings')}
-                  {tab === 'licensing' && t('tabs.licensing')}
-                  {tab === 'project-settings' && (
-                    <AdminAttentionDot
-                      show={lifecyclePendingCount > 0}
-                      label={t('lifecycle.pendingAttention')}
-                    />
-                  )}
-                  {isTabDirty(tab) && (
-                    <span
-                      className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0"
-                      title={t('unsavedChanges')}
-                      aria-label={t('unsavedChanges')}
-                    />
-                  )}
-                </span>
+                {tab === 'users' && t('tabs.users')}
+                {tab === 'site-settings' && t('tabs.siteSettings')}
+                {tab === 'system-settings' && t('tabs.systemSettings')}
+                {tab === 'tags' && t('tabs.tags')}
+                {tab === 'priorities' && t('tabs.priorities')}
+                {tab === 'app-settings' && t('tabs.appSettings')}
+                {tab === 'project-settings' && t('tabs.projectSettings')}
+                {tab === 'licensing' && t('tabs.licensing')}
+                {tab === 'project-settings' && (
+                  <AdminAttentionDot
+                    show={lifecyclePendingCount > 0}
+                    label={t('lifecycle.pendingAttention')}
+                  />
+                )}
+                {isTabDirty(tab) && (
+                  <span
+                    className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0"
+                    title={t('unsavedChanges')}
+                    aria-label={t('unsavedChanges')}
+                  />
+                )}
               </button>
             ))}
           </nav>

@@ -624,9 +624,9 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   return (
     <div className="p-6" data-owner-setup="licensing-panel">
       {/* Sub-tab Navigation */}
-      <div className="mb-6">
+      <div className="mb-4">
         <div className="flex items-center justify-between gap-4">
-          <nav className="flex space-x-8" aria-label="Tabs">
+          <nav className="flex space-x-6" aria-label="Tabs">
             <button
               onClick={() => handleSubTabChange('overview')}
               className={adminSubNavTabClass(activeSubTab === 'overview')}

@@ -174,7 +174,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
   return (
     <>
       <div data-setting-key="MAIL_SECTION">
-      <AdminPageShell description={t('mail.description')} width="full">
+      <AdminPageShell width="full">
         {/* Demo Mode Warning */}
         {isDemoMode && (
           <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/40 p-3">

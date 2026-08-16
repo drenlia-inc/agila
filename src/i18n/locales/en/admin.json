@@ -1287,6 +1287,7 @@
     "loading": "Loading…",
     "empty": "No webhooks yet.",
     "add": "Add webhook",
+    "planLimitBasic": "Basic plans allow 1 webhook. Upgrade to Pro for more.",
     "edit": "Edit webhook",
     "delete": "Delete",
     "test": "Test webhook",

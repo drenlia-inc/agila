@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Pencil, Plus, Send, Trash2 } from 'lucide-react';
-import {
+import api, {
   AdminWebhook,
   WebhookPlatform,
   createAdminWebhook,
@@ -16,6 +16,7 @@ import {
 import { toast } from '../../utils/toast';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { createPortal } from 'react-dom';
+import { isMultiTenantDeploy } from '../../utils/ownerSetup';
 import {
   AdminPageShell,
   AdminSection,
@@ -144,6 +145,26 @@ function toDraft(row?: AdminWebhook): Draft {
   };
 }
 
+/** Stable snapshot for dirty-checking the Add/Edit form. */
+function draftFingerprint(d: Draft): string {
+  return JSON.stringify({
+    name: d.name.trim(),
+    platform: d.platform,
+    enabled: d.enabled,
+    eventTypes: normalizeWebhookEventTypes(d.eventTypes),
+    projectIds: [...(d.projectIds || [])].map(String).sort(),
+    minPriorityId: d.minPriorityId || '',
+    locale: d.locale || '',
+    endpointUrl: sanitizeIncomingWebhookUrl(d.endpointUrl),
+    telegramBotToken: d.telegramBotToken || '',
+    telegramChatId: d.telegramChatId || '',
+    whatsappAccessToken: d.whatsappAccessToken || '',
+    whatsappPhoneNumberId: d.whatsappPhoneNumberId || '',
+    whatsappTo: d.whatsappTo || '',
+    whatsappGraphVersion: d.whatsappGraphVersion || 'v21.0',
+  });
+}
+
 const iconBtnClass =
   'rounded p-1.5 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50';
 
@@ -157,6 +178,10 @@ const AdminWebhooksTab: React.FC<{
   const [rows, setRows] = useState<AdminWebhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Draft | null>(null);
+  /** Fingerprint when the form was opened (edit only). Null = new webhook. */
+  const [editingBaseline, setEditingBaseline] = useState<string | null>(null);
+  /** -1 = unlimited; Basic SaaS = 1 */
+  const [webhookCreateLimit, setWebhookCreateLimit] = useState(-1);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -190,7 +215,10 @@ const AdminWebhooksTab: React.FC<{
         setConfirmWebhooksOnly(false);
         return;
       }
-      if (editing) setEditing(null);
+      if (editing) {
+        setEditing(null);
+        setEditingBaseline(null);
+      }
     },
     { enabled: Boolean(editing || confirmDelete || confirmWebhooksOnly) }
   );
@@ -201,12 +229,23 @@ const AdminWebhooksTab: React.FC<{
   const load = async () => {
     try {
       setLoading(true);
-      const [hooks, boards, pris] = await Promise.all([
+      const [hooks, boards, pris, licenseRes] = await Promise.all([
         getAdminWebhooks(),
         getBoards().catch(() => []),
         getPriorities().catch(() => []),
+        api.get('/auth/license-info').catch(() => null),
       ]);
       setRows(hooks || []);
+      const licenseInfo = licenseRes?.data;
+      if (
+        isMultiTenantDeploy() &&
+        licenseInfo?.enabled &&
+        String(licenseInfo?.limits?.SUPPORT_LEVEL || '').toLowerCase() === 'basic'
+      ) {
+        setWebhookCreateLimit(1);
+      } else {
+        setWebhookCreateLimit(-1);
+      }
       const seen = new Map<string, string[]>();
       for (const b of boards || []) {
         const id = String(b.project || '');
@@ -297,34 +336,55 @@ const AdminWebhooksTab: React.FC<{
         whatsappTo: editing.whatsappTo,
         whatsappGraphVersion: editing.whatsappGraphVersion,
       };
-      const saved = editing.id
-        ? await updateAdminWebhook(editing.id, body)
-        : await createAdminWebhook(body);
+      if (editing.id) {
+        await updateAdminWebhook(editing.id, body);
+      } else {
+        await createAdminWebhook(body);
+      }
       toast.success(t('webhooks.saved'));
-      const id = saved?.id || editing.id;
-      setEditing({
-        ...editing,
-        id,
-        name: saved?.name || editing.name,
-        hasEndpointUrl: Boolean(saved?.hasEndpointUrl || editing.hasEndpointUrl || editing.endpointUrl),
-        hasTelegramBotToken: Boolean(
-          saved?.hasTelegramBotToken || editing.hasTelegramBotToken || editing.telegramBotToken
-        ),
-        hasWhatsappAccessToken: Boolean(
-          saved?.hasWhatsappAccessToken || editing.hasWhatsappAccessToken || editing.whatsappAccessToken
-        ),
-        endpointUrl: saved?.endpointUrl || editing.endpointUrl,
-        telegramBotToken: '',
-        whatsappAccessToken: '',
-      });
       setUrlFieldFocused(false);
+      setEditing(null);
+      setEditingBaseline(null);
       await load();
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || t('webhooks.saveError'));
+      const data = e?.response?.data;
+      if (data?.limit === 'WEBHOOK_LIMIT') {
+        toast.error(t('webhooks.planLimitBasic'));
+      } else {
+        toast.error(data?.error || t('webhooks.saveError'));
+      }
     } finally {
       setSaving(false);
     }
   };
+
+  const atWebhookCreateLimit =
+    webhookCreateLimit !== -1 && rows.length >= webhookCreateLimit;
+
+  const startNewWebhook = () => {
+    if (atWebhookCreateLimit) {
+      toast.error(t('webhooks.planLimitBasic'));
+      return;
+    }
+    setUrlFieldFocused(false);
+    setEditingBaseline(null);
+    setEditing(toDraft());
+  };
+
+  const startEditWebhook = (row: AdminWebhook) => {
+    setUrlFieldFocused(false);
+    const draft = toDraft(row);
+    setEditingBaseline(draftFingerprint(draft));
+    setEditing(draft);
+  };
+
+  const draftHasChanges = useMemo(() => {
+    if (!editing) return false;
+    if (!editing.id || editingBaseline == null) {
+      return Boolean(editing.name.trim());
+    }
+    return draftFingerprint(editing) !== editingBaseline;
+  }, [editing, editingBaseline]);
 
   const toggleRowEnabled = async (row: AdminWebhook, next: boolean) => {
     if (togglingId) return;
@@ -332,7 +392,9 @@ const AdminWebhooksTab: React.FC<{
     const previous = row.enabled;
     setRows((cur) => cur.map((r) => (r.id === row.id ? { ...r, enabled: next } : r)));
     if (editing?.id === row.id) {
-      setEditing({ ...editing, enabled: next });
+      const nextDraft = { ...editing, enabled: next };
+      setEditing(nextDraft);
+      setEditingBaseline(draftFingerprint(nextDraft));
     }
     try {
       const saved = await patchAdminWebhookEnabled(row.id, next);
@@ -340,7 +402,9 @@ const AdminWebhooksTab: React.FC<{
     } catch (e: any) {
       setRows((cur) => cur.map((r) => (r.id === row.id ? { ...r, enabled: previous } : r)));
       if (editing?.id === row.id) {
-        setEditing({ ...editing, enabled: previous });
+        const reverted = { ...editing, enabled: previous };
+        setEditing(reverted);
+        setEditingBaseline(draftFingerprint(reverted));
       }
       toast.error(e?.response?.data?.error || t('webhooks.saveError'));
     } finally {
@@ -384,7 +448,7 @@ const AdminWebhooksTab: React.FC<{
 
   return (
     <div data-tour-id="admin-webhooks">
-      <AdminPageShell description={t('webhooks.pageDescription')} width="full">
+      <AdminPageShell width="full">
         <AdminNotificationChannelMode
           radioName="task-notification-channels"
           channelMode={channelMode}
@@ -408,19 +472,28 @@ const AdminWebhooksTab: React.FC<{
           ) : (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <KanbanChromeTooltip label={t('webhooks.addTooltip')}>
+                <KanbanChromeTooltip
+                  label={
+                    atWebhookCreateLimit
+                      ? t('webhooks.planLimitBasic')
+                      : t('webhooks.addTooltip')
+                  }
+                >
                   <button
                     type="button"
-                    onClick={() => {
-                      setUrlFieldFocused(false);
-                      setEditing(toDraft());
-                    }}
-                    className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                    onClick={startNewWebhook}
+                    disabled={atWebhookCreateLimit}
+                    className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Plus className="mr-1.5 h-4 w-4" />
                     {t('webhooks.add')}
                   </button>
                 </KanbanChromeTooltip>
+                {atWebhookCreateLimit ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t('webhooks.planLimitBasic')}
+                  </p>
+                ) : null}
               </div>
               {rows.length === 0 ? (
                 <p className="text-sm text-gray-500">{t('webhooks.empty')}</p>
@@ -434,10 +507,7 @@ const AdminWebhooksTab: React.FC<{
                           <button
                             type="button"
                             className={iconBtnClass}
-                            onClick={() => {
-                              setUrlFieldFocused(false);
-                              setEditing(toDraft(row));
-                            }}
+                            onClick={() => startEditWebhook(row)}
                             aria-label={t('webhooks.edit')}
                           >
                             <Pencil className="h-4 w-4" />
@@ -707,10 +777,16 @@ const AdminWebhooksTab: React.FC<{
                 {editing.id ? t('webhooks.testAfterSaveHint') : t('webhooks.testAfterSaveFirst')}
               </p>
               <div className="flex flex-wrap gap-2">
-              <KanbanChromeTooltip label={t('webhooks.saveTooltip')}>
+              <KanbanChromeTooltip
+                label={
+                  editing.id && !draftHasChanges
+                    ? t('noChangesToSave')
+                    : t('webhooks.saveTooltip')
+                }
+              >
                 <button
                   type="button"
-                  disabled={saving || !editing.name.trim()}
+                  disabled={saving || !draftHasChanges}
                   onClick={() => void saveDraft()}
                   className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                 >
@@ -733,7 +809,10 @@ const AdminWebhooksTab: React.FC<{
               <KanbanChromeTooltip label={t('webhooks.cancelTooltip')}>
                 <button
                   type="button"
-                  onClick={() => setEditing(null)}
+                  onClick={() => {
+                    setEditing(null);
+                    setEditingBaseline(null);
+                  }}
                   className="rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-gray-600"
                 >
                   {t('webhooks.cancel')}

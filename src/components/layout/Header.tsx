@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Bug, Github, HelpCircle, Lightbulb, LogOut, User, RefreshCw, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check, Eye, Shield } from 'lucide-react';
+import { Bug, Github, HelpCircle, Lightbulb, LogOut, User, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check, Eye, Shield } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CurrentUser, SiteSettings, TeamMember } from '../../types';
 import ThemeToggle from '../ThemeToggle';
@@ -78,7 +78,8 @@ interface HeaderProps {
   onProfileClick: () => void;
   onLogout: () => void;
   onPageChange: (page: 'kanban' | 'admin' | 'reports') => void;
-  onRefresh: () => Promise<void>;
+  /** Kept for callers; manual refresh control removed from the header UI. */
+  onRefresh?: () => Promise<void>;
   onHelpClick: () => void;
   onInviteUser?: (email: string) => Promise<void>;
   // Auto-refresh toggle - DISABLED (using real-time updates)
@@ -112,7 +113,6 @@ const Header: React.FC<HeaderProps> = ({
   onProfileClick,
   onLogout,
   onPageChange,
-  onRefresh,
   onHelpClick,
   onInviteUser,
   // isAutoRefreshEnabled, // Disabled - using real-time updates
@@ -319,14 +319,6 @@ const Header: React.FC<HeaderProps> = ({
       };
     });
   }, [currentUser, currentPage]);
-
-  const handleRefresh = async () => {
-    try {
-      await onRefresh();
-    } catch (error) {
-      console.error('Manual refresh failed:', error);
-    }
-  };
 
   // Close invite / more / profile menus when clicking outside
   useEffect(() => {
@@ -854,19 +846,8 @@ const Header: React.FC<HeaderProps> = ({
 
           {/* 4–5. Utilities + GitHub — one flex group so spacing stays even */}
           <div className="flex items-center gap-0.5">
-            {/* Desktop (lg+): refresh + system panel */}
+            {/* Desktop (lg+): system panel */}
             <div className="hidden lg:contents">
-              <KanbanChromeTooltip label={t('navigation.refreshDataNow')}>
-                <button
-                  type="button"
-                  onClick={handleRefresh}
-                  className="p-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  aria-label={t('navigation.refreshDataNow')}
-                >
-                  <RefreshCw size={16} />
-                </button>
-              </KanbanChromeTooltip>
-
               {isSystemPanelAvailable && currentUser?.roles?.includes('admin') && (
                 <KanbanChromeTooltip
                   label={showSystemPanel ? t('navigation.hideSystemPanel') : t('navigation.showSystemPanel')}
@@ -933,18 +914,6 @@ const Header: React.FC<HeaderProps> = ({
                   role="menu"
                   className="absolute right-0 top-full mt-2 min-w-[12rem] bg-white dark:bg-gray-800 rounded-lg shadow-lg z-[70] border border-gray-200 dark:border-gray-700 py-1"
                 >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setShowMoreMenu(false);
-                      void handleRefresh();
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
-                  >
-                    <RefreshCw size={16} />
-                    {t('navigation.refreshDataNow')}
-                  </button>
                   {isSystemPanelAvailable && currentUser?.roles?.includes('admin') && (
                     <button
                       type="button"

@@ -452,9 +452,8 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
 
   return (
     <div className="p-6">
-      {/* Sub-tab Navigation */}
-      <div className="mb-6">
-        <nav className="flex space-x-8" aria-label="Tabs">
+      <div className="mb-4 overflow-x-auto">
+        <nav className="flex space-x-6 min-w-max" aria-label="Tabs">
           <button
             onClick={() => handleSubTabChange('ui')}
             className={adminSubNavTabClass(activeSubTab === 'ui')}
@@ -494,10 +493,7 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
           className={activeSubTab === 'ui' ? undefined : 'hidden'}
           aria-hidden={activeSubTab !== 'ui'}
         >
-          <AdminPageShell
-            description={t('appSettings.userInterfaceSettingsDescription')}
-            width="full"
-          >
+          <AdminPageShell width="full">
             <AdminSection title={t('appSettings.userInterfaceSettings')} dense>
               <div className="space-y-2.5">
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-4 items-start" data-setting-key="APP_LANGUAGE">

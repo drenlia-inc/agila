@@ -383,11 +383,8 @@ const AdminSprintSettingsTab: React.FC = () => {
 
   return (
     <div>
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {t('sprintSettings.description')}
-        </p>
-        {!isCreating && (
+      {!isCreating && (
+        <div className="mb-4 flex justify-end">
           <button
             onClick={handleCreate}
             data-owner-setup="create-sprint"
@@ -396,8 +393,8 @@ const AdminSprintSettingsTab: React.FC = () => {
             <Plus className="w-4 h-4" />
             {t('sprintSettings.createSprint')}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
 
       {/* Create/Edit Form */}

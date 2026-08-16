@@ -16,18 +16,19 @@ export const adminInputWideClass = `w-full max-w-xl ${adminInputClass}`;
 /** Ports and other short numeric values. */
 export const adminInputShortClass = `w-full max-w-[7.5rem] ${adminInputClass}`;
 
-export const adminSubtabPanelClass =
-  'rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20 p-4';
+export const adminSubtabPanelClass = 'min-w-0';
 
+/** Primary Admin nav — underline accent (distinct from subtab pills). */
 export const adminStripTabClass = (active: boolean) =>
-  `relative py-1 px-2 font-medium text-sm whitespace-nowrap rounded-md transition-colors ${
+  `relative py-2 px-0.5 font-medium text-sm whitespace-nowrap transition-colors border-b-2 -mb-px inline-flex items-center gap-1.5 ${
     active
-      ? 'text-blue-700 dark:text-white bg-blue-100 dark:bg-blue-600/50'
-      : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100/90 dark:hover:bg-gray-700/40'
+      ? 'border-blue-600 text-blue-700 dark:border-blue-400 dark:text-blue-300'
+      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 hover:border-gray-300 dark:hover:border-gray-600'
   }`;
 
+/** Secondary hub subtabs — compact pills. */
 export const adminSubNavTabClass = (active: boolean) =>
-  `py-1.5 px-2.5 font-medium text-sm whitespace-nowrap rounded-md transition-colors inline-flex items-center gap-1.5 ${
+  `py-1 px-2.5 font-medium text-sm whitespace-nowrap rounded-md transition-colors inline-flex items-center gap-1.5 ${
     active
       ? 'text-blue-700 dark:text-white bg-blue-100 dark:bg-blue-600/50'
       : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100/90 dark:hover:bg-gray-700/40'

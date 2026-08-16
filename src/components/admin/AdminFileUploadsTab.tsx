@@ -291,7 +291,7 @@ const AdminFileUploadsTab: React.FC<AdminFileUploadsTabProps> = ({
 
   return (
     <div data-setting-key="UPLOADS_SECTION">
-      <AdminPageShell description={t('fileUploads.description')} width="full">
+      <AdminPageShell width="full">
         <AdminSection dense>
           <div className="flex items-start justify-between gap-3 pb-2 border-b border-gray-100 dark:border-gray-800">
             <div className="flex-1 min-w-0">

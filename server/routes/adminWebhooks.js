@@ -7,6 +7,7 @@ import { webhooks as webhookQueries } from '../utils/sqlManager/index.js';
 import { dispatchWebhook } from '../services/webhookDispatcher.js';
 import { normalizeWebhookEventTypes } from '../constants/webhookEvents.js';
 import { assertSafeHttpsUrl, looksLikeMaskedWebhookUrl, sanitizeWebhookUrlInput } from '../utils/webhookSsrf.js';
+import { getWebhookCreateLimit } from '../utils/webhookPlanLimits.js';
 
 const router = express.Router();
 
@@ -94,6 +95,21 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     if (!parsed.success) return res.status(400).json({ error: parsed.error });
     const data = parsed.data;
     const db = getRequestDatabase(req);
+
+    const maxWebhooks = await getWebhookCreateLimit(db);
+    if (maxWebhooks !== -1) {
+      const current = await webhookQueries.countWebhooks(db);
+      if (current >= maxWebhooks) {
+        return res.status(403).json({
+          error: 'License limit exceeded',
+          limit: 'WEBHOOK_LIMIT',
+          details: 'Your plan allows 1 webhook. Upgrade to Pro for unlimited webhooks.',
+          current,
+          max: maxWebhooks,
+        });
+      }
+    }
+
     const id = crypto.randomUUID();
     const endpointUrl = await resolveEndpointUrl(data.platform, data.endpointUrl, null);
     if (URL_PLATFORMS.has(data.platform) && !endpointUrl) {

@@ -68,7 +68,7 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
 
   return (
     <AdminPageShell width="full">
-      <AdminSection title={t('sso.title')} description={t('sso.description')} dense>
+      <AdminSection title={t('sso.title')} dense>
         <div className="space-y-2.5">
           <div data-setting-key="GOOGLE_CLIENT_ID">
             <label className="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

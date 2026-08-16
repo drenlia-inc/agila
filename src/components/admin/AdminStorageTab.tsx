@@ -733,10 +733,8 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
     <>
       <div data-setting-key="STORAGE_SECTION">
         <div className="mb-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">{t('storage.description')}</p>
-
           {isManaged && (
-            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg">
               <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
                 {t('storage.managedTitle')}
               </h3>

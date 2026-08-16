@@ -374,7 +374,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
 
   return (
     <div data-setting-key="SITE_SETTINGS_SECTION">
-    <AdminPageShell description={t('siteSettings.description')} className="p-6" width="full">
+    <AdminPageShell className="p-6" width="full">
       <AdminSection dense>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div data-setting-key="SITE_NAME">

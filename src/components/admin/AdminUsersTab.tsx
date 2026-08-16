@@ -1044,22 +1044,15 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   return (
     <>
       <div className="p-6">
-        <div className="mb-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('users.description')}
-              </p>
-            </div>
-            <button
-              onClick={handleAddUserClick}
-              data-owner-setup="add-user"
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
-            >
-              <UserIcon size={16} />
-              {t('users.addUser')}
-            </button>
-          </div>
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={handleAddUserClick}
+            data-owner-setup="add-user"
+            className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center gap-2"
+          >
+            <UserIcon size={16} />
+            {t('users.addUser')}
+          </button>
         </div>
 
         {/* Users table */}

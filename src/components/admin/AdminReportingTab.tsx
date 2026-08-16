@@ -337,12 +337,6 @@ const AdminReportingTab: React.FC<AdminReportingTabProps> = ({
 
   return (
     <div>
-      <div className="mb-4">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {t('reporting.description')}
-        </p>
-      </div>
-
       <div className="space-y-6">
         {/* Module Enablement */}
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">

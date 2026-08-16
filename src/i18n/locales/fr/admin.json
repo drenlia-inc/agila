@@ -1290,6 +1290,7 @@
     "loading": "Chargement…",
     "empty": "Aucun webhook pour le moment.",
     "add": "Ajouter un webhook",
+    "planLimitBasic": "Le plan Basic permet 1 webhook. Passez à Pro pour en ajouter d’autres.",
     "edit": "Modifier le webhook",
     "delete": "Supprimer",
     "test": "Tester le webhook",

@@ -501,16 +501,13 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
       <div className="mb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('notificationQueue.description')}
-            </p>
             {webhooksOnly ? (
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 leading-snug">
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
                 {t('notificationQueue.webhooksOnlyHint')}
               </p>
             ) : (
             <div
-              className="mt-2 inline-flex items-center gap-2"
+              className="inline-flex items-center gap-2"
               data-setting-key="TASK_EMAIL_NOTIFICATIONS_ENABLED"
               title={t('mail.taskEmailNotificationsHint')}
             >
