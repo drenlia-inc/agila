@@ -61,10 +61,11 @@ import TaskLinkingOverlay from './components/TaskLinkingOverlay';
 import NetworkStatusIndicator from './components/NetworkStatusIndicator';
 import VersionUpdateBanner from './components/VersionUpdateBanner';
 import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
-import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask } from './api';
+import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById } from './api';
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { applyActiveColumnFilters } from './utils/columnFilters';
+import { columnsContentFingerprint } from './utils/columnsFingerprint';
 import { userCanMutate } from './utils/permissions';
 import { isDemoModeClient } from './utils/demoReset';
 import { useLoadingState } from './hooks/useLoadingState';
@@ -163,12 +164,16 @@ function AppContent() {
   const [boards, setBoards] = useState<Board[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<string | null>(null);
   const selectedBoardRef = useRef<string | null>(null); // Initialize as null, will be set after auth
+  const columnsRef = useRef<Columns>({});
   
   // Debug: Log when selectedBoard changes and update ref
   useEffect(() => {
     selectedBoardRef.current = selectedBoard;
   }, [selectedBoard]);
   const [columns, setColumns] = useState<Columns>({});
+  useEffect(() => {
+    columnsRef.current = columns;
+  }, [columns]);
   // Use SettingsContext instead of local state
   const { systemSettings, siteSettings, isLoading: settingsLoading, refreshSettings: refreshContextSettings } = useSettings();
   const [kanbanColumnWidth, setKanbanColumnWidth] = useState<number>(300); // Default 300px
@@ -375,14 +380,18 @@ function AppContent() {
 
   const handleTaskRestoredLocally = useCallback((task: Task) => {
     recentlyDeletedTasksRef.current.delete(task.id);
+    pendingSelfTaskRestoresRef.current.add(task.id);
     const boardId = task.boardId || (task as any).boardid;
     if (boardId) {
-      taskWebSocketRef.current?.handleTaskRestored?.({
-        boardId,
-        task: clearTaskSoftDelete({
-          ...task,
-        }),
-      });
+      taskWebSocketRef.current?.handleTaskRestored?.(
+        {
+          boardId,
+          task: clearTaskSoftDelete({
+            ...task,
+          }),
+        },
+        { skipSettledRefresh: true }
+      );
     }
   }, []);
 
@@ -398,10 +407,14 @@ function AppContent() {
         requesterId: restored.requesterId || (restored as any).requesterid,
       } as Task);
       recentlyDeletedTasksRef.current.delete(selectedTask.id);
-      taskWebSocketRef.current?.handleTaskRestored?.({
-        boardId: normalized.boardId,
-        task: normalized,
-      });
+      pendingSelfTaskRestoresRef.current.add(selectedTask.id);
+      taskWebSocketRef.current?.handleTaskRestored?.(
+        {
+          boardId: normalized.boardId,
+          task: normalized,
+        },
+        { skipSettledRefresh: true }
+      );
       // Keep TaskDetails open, but switch from read-only lifecycle mode to editable
       handleSelectTask(normalized);
       const ticket = normalized.ticket || selectedTask.ticket;
@@ -1278,11 +1291,18 @@ function AppContent() {
   
   // Track pending task refreshes (to cancel fallback if WebSocket event arrives)
   const pendingTaskRefreshesRef = useRef<Set<string>>(new Set());
+  /** Board IDs we just created via HTTP — skip the WS echo's delayed force refresh. */
+  const pendingSelfBoardCreatesRef = useRef<Set<string>>(new Set());
+  /** Task IDs we just restored via HTTP — skip the WS echo's settled force refresh. */
+  const pendingSelfTaskRestoresRef = useRef<Set<string>>(new Set());
   
   // Track recently deleted tasks to prevent them from reappearing via WebSocket updates or refreshBoardData
   const recentlyDeletedTasksRef = useRef<Set<string>>(new Set());
   const taskWebSocketRef = useRef<{
-    handleTaskRestored?: (data: any) => void;
+    handleTaskRestored?: (
+      data: any,
+      options?: { skipSettledRefresh?: boolean }
+    ) => void;
   } | null>(null);
 
   // Initialize WebSocket hooks after all dependencies are available
@@ -1294,6 +1314,7 @@ function AppContent() {
     pendingTaskRefreshesRef,
     refreshBoardDataRef,
     recentlyDeletedTasksRef,
+    pendingSelfTaskRestoresRef,
     taskFilters: {
       setFilteredColumns: taskFilters.setFilteredColumns,
       viewModeRef: taskFilters.viewModeRef,
@@ -1329,6 +1350,7 @@ function AppContent() {
     onClearSelectedTask: () => handleSelectTask(null),
     selectedBoardRef,
     refreshBoardDataRef,
+    pendingSelfBoardCreatesRef,
   });
 
   const memberWebSocket = useMemberWebSocket({
@@ -2658,13 +2680,16 @@ function AppContent() {
         taskFilters.setFilteredColumns(taskFilters.applyFiltersToColumns(newColumns));
         setIsSwitchingBoard(false);
 
-        refreshBoardData({ force: true, forBoardId: boardIdBeingOpened })
-          .then(() => {
-            if (selectedBoardRef.current !== boardIdBeingOpened) return;
-          })
-          .catch(() => {
-            /* refreshBoardData already logs */
-          });
+        // Background reconcile only — paint already came from boards[] snapshot.
+        // Skip force-refresh when we were not offline; refreshBoardData also skips
+        // setColumns when the fetched snapshot matches (no flash).
+        const shouldForceReconcile = wasOfflineRef.current;
+        void refreshBoardData({
+          force: shouldForceReconcile,
+          forBoardId: boardIdBeingOpened,
+        }).catch(() => {
+          /* refreshBoardData already logs */
+        });
       } else {
         setColumns({});
         taskFilters.setFilteredColumns({});
@@ -2769,7 +2794,15 @@ function AppContent() {
                 }
               });
             }
-            setColumns(newColumns);
+            // Avoid replacing visible columns when the server snapshot matches local
+            // (board switch / reconnect often re-fetch identical data — that was the flash).
+            const sameAsVisible =
+              boardIdToHydrate === selectedBoardRef.current &&
+              columnsContentFingerprint(newColumns) ===
+                columnsContentFingerprint(columnsRef.current);
+            if (!sameAsVisible) {
+              setColumns(newColumns);
+            }
             
             // Relationships are loaded by the board selection effect above, no need to load here
           } else if (options?.forBoardId === undefined) {
@@ -2823,6 +2856,7 @@ function AppContent() {
       setBoardCreationPause(true);
       
       const boardId = generateUUID();
+      pendingSelfBoardCreatesRef.current.add(boardId);
       const newBoard: Board = {
         id: boardId,
         title: generateUniqueBoardName(
@@ -2835,11 +2869,16 @@ function AppContent() {
       };
 
       // Create the board first (backend automatically creates default columns)
-      await createBoard(newBoard);
+      try {
+        await createBoard(newBoard);
 
-      // Refresh and hydrate columns for the NEW board (forBoardId: selectedBoard is still the previous board).
-      // force: true avoids skipping while justUpdatedFromWebSocket is set after a WS batch.
-      await refreshBoardData({ force: true, forBoardId: boardId });
+        // Refresh and hydrate columns for the NEW board (forBoardId: selectedBoard is still the previous board).
+        // force: true avoids skipping while justUpdatedFromWebSocket is set after a WS batch.
+        await refreshBoardData({ force: true, forBoardId: boardId });
+      } catch (createErr) {
+        pendingSelfBoardCreatesRef.current.delete(boardId);
+        throw createErr;
+      }
 
       setSelectedBoard(boardId);
       updateCurrentUserPreference('lastSelectedBoard', boardId);
@@ -3127,30 +3166,95 @@ function AppContent() {
 
     try {
       await withLoading('tasks', async () => {
-        // Let backend handle positioning and shifting
-        await createTaskAtTop(newTask);
-        
-        // Task already visible via optimistic update - WebSocket will confirm/sync
-      });
-      
-      // ALWAYS schedule a fallback refresh to fetch ticket if WebSocket event doesn't arrive
-      // This handles WebSocket reconnection flapping after sleep/wake
-      pendingTaskRefreshesRef.current.add(newTask.id);
-      
-      setTimeout(() => {
-        const fallbackTimestamp = new Date().toISOString();
-        // Check if WebSocket event already updated the task
-        if (pendingTaskRefreshesRef.current.has(newTask.id)) {
-          // WebSocket event never arrived, force refresh to get ticket
-          if (feDebug('FE_DEBUG_APP_CORE')) console.log(`⏱️ [${fallbackTimestamp}] Fallback triggered - WebSocket event never arrived for task ${newTask.id}`);
-          pendingTaskRefreshesRef.current.delete(newTask.id);
-          if (refreshBoardDataRef.current) {
-            refreshBoardDataRef.current();
+        // Let backend handle positioning and shifting; response includes ticket + final fields.
+        const created = await createTaskAtTop(newTask);
+        const serverTask = (created || {}) as Task;
+        if (serverTask.id) {
+          const normalized: Task = {
+            ...newTask,
+            ...serverTask,
+            columnId:
+              serverTask.columnId ||
+              (serverTask as { columnid?: string; column_id?: string }).columnid ||
+              (serverTask as { column_id?: string }).column_id ||
+              newTask.columnId,
+            boardId:
+              serverTask.boardId ||
+              (serverTask as { boardid?: string; board_id?: string }).boardid ||
+              (serverTask as { board_id?: string }).board_id ||
+              newTask.boardId,
+          };
+
+          // Patch optimistic card from HTTP so we don't need a full-board refresh for ticket/sync.
+          setColumns((prev) => {
+            const targetColumn = prev[normalized.columnId];
+            if (!targetColumn?.tasks) return prev;
+            const tasks = targetColumn.tasks;
+            const idx = tasks.findIndex((t) => t.id === normalized.id);
+            if (idx === -1) return prev;
+            const nextTasks = [...tasks];
+            nextTasks[idx] = { ...tasks[idx], ...normalized };
+            return {
+              ...prev,
+              [normalized.columnId]: { ...targetColumn, tasks: nextTasks },
+            };
+          });
+          setBoards((prev) =>
+            prev.map((board) => {
+              if (board.id !== (normalized.boardId || selectedBoard)) return board;
+              const cols = { ...(board.columns || {}) };
+              const col = cols[normalized.columnId];
+              if (!col?.tasks) return board;
+              const idx = col.tasks.findIndex((t) => t.id === normalized.id);
+              if (idx === -1) return board;
+              const nextTasks = [...col.tasks];
+              nextTasks[idx] = { ...col.tasks[idx], ...normalized };
+              cols[normalized.columnId] = { ...col, tasks: nextTasks };
+              return { ...board, columns: cols };
+            })
+          );
+
+          if (normalized.ticket) {
+            // HTTP already reconciled — skip the create fallback refresh.
+            pendingTaskRefreshesRef.current.delete(normalized.id);
+            return;
           }
-        } else if (feDebug('FE_DEBUG_APP_CORE')) {
-          console.log(`✅ [${fallbackTimestamp}] Fallback skipped - WebSocket event already handled task ${newTask.id}`);
         }
-      }, 1000);
+
+        // Rare: HTTP returned without a ticket — light single-task fallback (not full board).
+        pendingTaskRefreshesRef.current.add(newTask.id);
+        setTimeout(() => {
+          void (async () => {
+            if (!pendingTaskRefreshesRef.current.has(newTask.id)) return;
+            pendingTaskRefreshesRef.current.delete(newTask.id);
+            try {
+              const fetched = await getTaskById(newTask.id);
+              if (!fetched?.id) return;
+              const columnId =
+                fetched.columnId ||
+                (fetched as { columnid?: string }).columnid ||
+                newTask.columnId;
+              setColumns((prev) => {
+                const targetColumn = prev[columnId];
+                if (!targetColumn?.tasks) return prev;
+                const idx = targetColumn.tasks.findIndex((t) => t.id === fetched.id);
+                if (idx === -1) return prev;
+                const nextTasks = [...targetColumn.tasks];
+                nextTasks[idx] = { ...targetColumn.tasks[idx], ...fetched, columnId };
+                return {
+                  ...prev,
+                  [columnId]: { ...targetColumn, tasks: nextTasks },
+                };
+              });
+            } catch (err) {
+              if (feDebug('FE_DEBUG_APP_CORE')) {
+                console.warn('Create-task single-task fallback failed; refreshing board', err);
+              }
+              refreshBoardDataRef.current?.();
+            }
+          })();
+        }, 1000);
+      });
       
       const warn = buildColumnVisibilityWarningForTask(newTask);
       if (warn) {
@@ -3337,6 +3441,8 @@ function AppContent() {
     }
     const originalPosition = task.position || 0;
     const copyTitle = `${task.title} (Copy)`;
+    const targetColumnId = task.columnId;
+    const targetBoardId = task.boardId || selectedBoard;
 
     // PAUSE POLLING to prevent race condition
     setTaskCreationPause(true);
@@ -3345,39 +3451,67 @@ function AppContent() {
       let copiedTask: Task | null = null;
       
       await withLoading('tasks', async () => {
-        // Use the dedicated copy endpoint which handles:
-        // - Generating new ticket number (incrementing)
-        // - Copying all task fields
-        // - Placing copy at originalPos - 0.5 (above original)
-        // - Copying tags, watchers, and collaborators
         copiedTask = await copyTask(task.id, task.boardId, options);
       });
-      
-      // After copy is created, renumber the column and send to backend
-      // This ensures clean integer positions (0, 1, 2, 3...)
-      if (copiedTask && task.columnId) {
-        const targetColumnId = task.columnId;
-        // Wait a brief moment for WebSocket to add the task, then renumber
-        // NOTE: renumberColumnAfterCopy gets CURRENT state internally (no stale closure issue)
-        setTimeout(async () => {
-          try {
-            await renumberColumnAfterCopy(targetColumnId, setColumns);
-            if (feDebug('FE_DEBUG_APP_CORE')) console.log('✅ Column renumbered after copy');
-          } catch (err) {
-            console.error('Failed to renumber after copy:', err);
-          }
-        }, 500); // Give WebSocket time to add the task first
-      }
-      
-      // SAFETY FALLBACK: If WebSocket was offline/reconnecting, manually refresh after delay
-      if (wasOfflineRef.current) {
-        if (feDebug('FE_DEBUG_APP_CORE')) console.log('⚠️ Copying task while WebSocket is reconnecting - will refresh board in 2s to ensure it appears');
-        setTimeout(() => {
-          if (refreshBoardDataRef.current) {
-            if (feDebug('FE_DEBUG_APP_CORE')) console.log('🔄 Safety fallback: Refreshing board after task copy (was offline)');
-            refreshBoardDataRef.current();
-          }
-        }, 2000);
+
+      if (copiedTask && targetColumnId) {
+        const serverCopy = copiedTask as Task;
+        const normalized: Task = {
+          ...serverCopy,
+          columnId:
+            serverCopy.columnId ||
+            (serverCopy as { columnid?: string }).columnid ||
+            targetColumnId,
+          boardId:
+            serverCopy.boardId ||
+            (serverCopy as { boardid?: string }).boardid ||
+            targetBoardId ||
+            undefined,
+          position:
+            typeof serverCopy.position === 'number'
+              ? serverCopy.position
+              : originalPosition - 0.5,
+          title: serverCopy.title || copyTitle,
+        };
+
+        // Optimistic insert from HTTP — do not wait for WS (important on multi-pod).
+        setColumns((prev) => {
+          const col = prev[targetColumnId];
+          if (!col) return prev;
+          const withoutDup = (col.tasks || []).filter((t) => t.id !== normalized.id);
+          const nextTasks = [...withoutDup, normalized].sort(
+            (a, b) =>
+              (typeof a.position === 'number' ? a.position : parseFloat(String(a.position)) || 0) -
+              (typeof b.position === 'number' ? b.position : parseFloat(String(b.position)) || 0)
+          );
+          return {
+            ...prev,
+            [targetColumnId]: { ...col, tasks: nextTasks },
+          };
+        });
+        setBoards((prev) =>
+          prev.map((board) => {
+            if (board.id !== (normalized.boardId || targetBoardId)) return board;
+            const cols = { ...(board.columns || {}) };
+            const col = cols[targetColumnId];
+            if (!col) return board;
+            const withoutDup = (col.tasks || []).filter((t) => t.id !== normalized.id);
+            const nextTasks = [...withoutDup, normalized].sort(
+              (a, b) =>
+                (typeof a.position === 'number' ? a.position : parseFloat(String(a.position)) || 0) -
+                (typeof b.position === 'number' ? b.position : parseFloat(String(b.position)) || 0)
+            );
+            cols[targetColumnId] = { ...col, tasks: nextTasks };
+            return { ...board, columns: cols };
+          })
+        );
+
+        // Renumber immediately from local state (WS echo will no-op / merge).
+        try {
+          await renumberColumnAfterCopy(targetColumnId, setColumns);
+        } catch (err) {
+          console.error('Failed to renumber after copy:', err);
+        }
       }
       
       // Set up pending animation - useEffect will trigger when columns update
@@ -3924,11 +4058,123 @@ function AppContent() {
         );
       }
     }
-    await moveTaskToBoard(taskId, targetBoardId, options);
-    // Force refresh: cross-board move often coincides with justUpdatedFromWebSocket; a skipped
-    // refresh leaves boards[] stale for the target board until the user switches tabs again.
-    await refreshBoardData({ force: true });
-  }, [refreshBoardData, boards, t]);
+
+    // Snapshot before HTTP so we can patch without waiting on WS (important on multi-pod).
+    let movedTask: Task | null = null;
+    let sourceBoardId: string | null = selectedBoardRef.current;
+    for (const column of Object.values(columns)) {
+      const found = column?.tasks?.find((t) => t.id === taskId);
+      if (found) {
+        movedTask = found;
+        sourceBoardId = found.boardId || sourceBoardId;
+        break;
+      }
+    }
+    if (!movedTask) {
+      for (const board of boards) {
+        for (const column of Object.values(board.columns || {})) {
+          const found = column?.tasks?.find((t) => t.id === taskId);
+          if (found) {
+            movedTask = found;
+            sourceBoardId = board.id;
+            break;
+          }
+        }
+        if (movedTask) break;
+      }
+    }
+
+    const result = await moveTaskToBoard(taskId, targetBoardId, options);
+    const targetColumnId =
+      (result as { targetColumnId?: string })?.targetColumnId || null;
+
+    if (movedTask && targetColumnId) {
+      const patched: Task = {
+        ...movedTask,
+        boardId: targetBoardId,
+        columnId: targetColumnId,
+        position: 0,
+      };
+
+      const stripTask = (cols: Columns): Columns => {
+        const next: Columns = { ...cols };
+        Object.keys(next).forEach((columnId) => {
+          const col = next[columnId];
+          if (!col?.tasks?.some((t) => t.id === taskId)) return;
+          next[columnId] = {
+            ...col,
+            tasks: (col.tasks || [])
+              .filter((t) => t.id !== taskId)
+              .sort((a, b) => (a.position || 0) - (b.position || 0))
+              .map((t, index) => ({ ...t, position: index })),
+          };
+        });
+        return next;
+      };
+
+      const insertAtTop = (cols: Columns): Columns => {
+        const next = stripTask(cols);
+        const col = next[targetColumnId];
+        if (!col) return next;
+        const withoutDup = (col.tasks || []).filter((t) => t.id !== taskId);
+        const shifted = withoutDup.map((t) => ({
+          ...t,
+          position: (typeof t.position === 'number' ? t.position : 0) + 1,
+        }));
+        next[targetColumnId] = {
+          ...col,
+          tasks: [patched, ...shifted].sort(
+            (a, b) => (a.position || 0) - (b.position || 0)
+          ),
+        };
+        return next;
+      };
+
+      if (selectedBoardRef.current === sourceBoardId) {
+        setColumns((prev) => stripTask(prev));
+      } else if (selectedBoardRef.current === targetBoardId) {
+        setColumns((prev) => insertAtTop(prev));
+      }
+
+      setBoards((prev) =>
+        prev.map((board) => {
+          if (board.id === sourceBoardId) {
+            return { ...board, columns: stripTask(board.columns || {}) };
+          }
+          if (board.id === targetBoardId) {
+            return { ...board, columns: insertAtTop(board.columns || {}) };
+          }
+          return board;
+        })
+      );
+
+      if (selectedTask?.id === taskId) {
+        // Task left this board — close details so we do not edit a stale location.
+        if (selectedBoardRef.current !== targetBoardId) {
+          handleSelectTask(null);
+        } else {
+          handleSelectTask(patched);
+        }
+      }
+
+      // Drop board-scoped links locally (server already deleted them).
+      taskLinking.setBoardRelationships(
+        (taskLinking.boardRelationships || []).filter(
+          (rel: { taskId?: string; toTaskId?: string }) =>
+            rel.taskId !== taskId && rel.toTaskId !== taskId
+        )
+      );
+    }
+
+    // Reconcile target board into boards[] without replacing the visible board's columns
+    // when we stayed on the source (avoids the old force-refresh flash).
+    void refreshBoardData({
+      force: true,
+      forBoardId: targetBoardId,
+    }).catch(() => {
+      /* refreshBoardData already logs */
+    });
+  }, [refreshBoardData, boards, columns, selectedTask, handleSelectTask, taskLinking, t]);
 
   // Handle cross-board task drop (confirms when task has parent/child/related links — server removes them on move)
   const handleTaskDropOnBoard = useCallback(
@@ -3997,9 +4243,23 @@ function AppContent() {
     onSoftDelete: handleTaskDelete,
     onRestoreTasks: async (taskIds) => {
       for (const id of taskIds) {
-        await restoreTask(id);
+        const restored = await restoreTask(id);
+        const normalized = clearTaskSoftDelete({
+          ...restored,
+          columnId: restored.columnId || (restored as { columnid?: string }).columnid,
+          boardId: restored.boardId || (restored as { boardid?: string }).boardid,
+          memberId: restored.memberId || (restored as { memberid?: string }).memberid,
+          requesterId: restored.requesterId || (restored as { requesterid?: string }).requesterid,
+        } as Task);
+        recentlyDeletedTasksRef.current.delete(id);
+        pendingSelfTaskRestoresRef.current.add(id);
+        if (normalized.boardId) {
+          taskWebSocketRef.current?.handleTaskRestored?.(
+            { boardId: normalized.boardId, task: normalized },
+            { skipSettledRefresh: true }
+          );
+        }
       }
-      await refreshBoardData({ force: true });
       notifyBoardTrashChanged(selectedBoardRef.current);
     },
     onPermanentDelete: currentUser?.roles?.includes('admin')
