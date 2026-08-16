@@ -27,6 +27,7 @@ import {
 } from '../api';
 import { generateTaskUrl } from '../utils/routingUtils';
 import { generateUUID } from '../utils/uuid';
+import { truncateHtmlByChars } from '../utils/plainTextPreview';
 import { mergeTaskTagsWithLiveData, getTagDisplayStyle } from '../utils/tagUtils';
 import { useSortable } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
@@ -308,6 +309,22 @@ const TaskCard = React.memo(function TaskCard({
     return wrap.innerHTML;
   }, [task.description, taskAttachments, attachmentsLoaded, siteSettings?.SITE_OPENS_NEW_TAB]);
 
+  const shrinkTooltipHtml = useMemo(() => {
+    if (taskViewMode !== 'shrink' || !task.description) return '';
+    return truncateHtmlByChars(cardDescriptionHtml);
+  }, [taskViewMode, task.description, cardDescriptionHtml]);
+
+  const shrinkTooltipContent = useMemo(
+    () =>
+      shrinkTooltipHtml ? (
+        <div
+          className="chrome-tooltip-html-preview"
+          dangerouslySetInnerHTML={{ __html: shrinkTooltipHtml }}
+        />
+      ) : undefined,
+    [shrinkTooltipHtml]
+  );
+
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task.title);
   const [isEditingEffort, setIsEditingEffort] = useState(false);
@@ -361,6 +378,7 @@ const TaskCard = React.memo(function TaskCard({
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
   const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
+  const cardElRef = useRef<HTMLDivElement | null>(null);
   const isInteractingWithTagRef = useRef<boolean>(false); // Track if user is interacting with tags
   const isInteractingWithDropdownRef = useRef<boolean>(false); // Track if user is interacting with dropdowns (member, sprint, etc.)
   const isSelectingRef = useRef<boolean>(false); // Track if we're in the process of selecting this task
@@ -1533,6 +1551,7 @@ const TaskCard = React.memo(function TaskCard({
         ref={(node) => {
           setNodeRef(node);
           setCardElement(node);
+          cardElRef.current = node;
         }}
         style={{ 
           ...style, 
@@ -2169,11 +2188,8 @@ const TaskCard = React.memo(function TaskCard({
                 {...(isMultiSelectDragLocked ? {} : listeners)}
               >
                 <KanbanChromeTooltip
-                  label={
-                    taskViewMode === 'shrink' && task.description
-                      ? task.description.replace(/<[^>]*>/g, '')
-                      : ''
-                  }
+                  content={shrinkTooltipContent}
+                  widthAnchorRef={cardElRef}
                   wrapperClassName="block min-w-0"
                 >
                   <FirstLineEndAnchor

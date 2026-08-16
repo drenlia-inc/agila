@@ -355,6 +355,59 @@ body {
   overflow: hidden;
 }
 
+/* Shrink-mode hover preview: keep card HTML structure inside a card-width bubble */
+.chrome-tooltip-html-preview {
+  max-height: 12rem;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.chrome-tooltip-html-preview p {
+  margin: 0.2em 0;
+}
+
+.chrome-tooltip-html-preview p:first-child {
+  margin-top: 0;
+}
+
+.chrome-tooltip-html-preview p:last-child {
+  margin-bottom: 0;
+}
+
+.chrome-tooltip-html-preview ul,
+.chrome-tooltip-html-preview ol {
+  margin: 0.2em 0;
+  padding-left: 1.25em;
+}
+
+.chrome-tooltip-html-preview li {
+  margin: 0;
+}
+
+.chrome-tooltip-html-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.25em 0;
+}
+
+.chrome-tooltip-html-preview th,
+.chrome-tooltip-html-preview td {
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  padding: 0.15em 0.35em;
+  vertical-align: top;
+}
+
+.chrome-tooltip-html-preview img {
+  max-width: 100%;
+  max-height: 48px;
+  height: auto;
+  object-fit: cover;
+  border-radius: 2px;
+  display: block;
+  margin: 0.25em 0;
+}
+
 /* Compact image mode for inline editing in TaskCards */
 .ProseMirror .tiptap-image[data-compact="true"],
 .prose .tiptap-image[data-compact="true"] {

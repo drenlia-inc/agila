@@ -95,6 +95,10 @@ type KanbanChromeTooltipProps = {
 const CHROME_TOOLTIP_WRAPPED_SURFACE_CLASS =
   `px-2 py-1.5 text-xs font-normal normal-case tracking-normal whitespace-pre-line text-left break-words leading-snug rounded shadow-lg ${CHROME_TOOLTIP_COLORS} ${CHROME_TOOLTIP_RING} pointer-events-none`;
 
+/** HTML preview (lists, breaks, tables) sized by maxWidth / widthAnchorRef. */
+const CHROME_TOOLTIP_HTML_SURFACE_CLASS =
+  `px-2 py-1.5 text-xs font-normal normal-case tracking-normal whitespace-normal text-left break-words leading-snug rounded shadow-lg ${CHROME_TOOLTIP_COLORS} ${CHROME_TOOLTIP_RING} pointer-events-none`;
+
 /**
  * App-wide chrome tooltips: inverted light/dark surface; optional delay (default ~native title).
  * Bubble is portaled to `document.body` so it is not trapped under sibling z-index.
@@ -176,11 +180,13 @@ export function KanbanChromeTooltip({
 
   // Board/column chrome often swaps label on select; leave tips open and they stick on the wrong tab.
   // Live labels (demo countdown) pass dismissOnLabelChange={false} so the bubble stays while hovering.
+  // Do not depend on `content`: callers often pass a new React node each render, which would
+  // hide the tip immediately (shrink description preview).
   useEffect(() => {
     if (!dismissOnLabelChange) return;
     hide();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: reset only when tip copy changes
-  }, [label, content, dismissOnLabelChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when string label changes
+  }, [label, dismissOnLabelChange]);
 
   useEffect(() => {
     if (!hasBody) hide();
@@ -280,12 +286,14 @@ export function KanbanChromeTooltip({
   }
 
   const wrapToWidth = maxWidth != null || widthAnchorRef != null;
-  const tooltipClassName = content
-    ? interactive
-      ? CHROME_TOOLTIP_SELECTABLE_SURFACE_CLASS
-      : CHROME_TOOLTIP_RICH_SURFACE_CLASS
-    : wrapToWidth
-      ? CHROME_TOOLTIP_WRAPPED_SURFACE_CLASS
+  const tooltipClassName = wrapToWidth
+    ? content
+      ? CHROME_TOOLTIP_HTML_SURFACE_CLASS
+      : CHROME_TOOLTIP_WRAPPED_SURFACE_CLASS
+    : content
+      ? interactive
+        ? CHROME_TOOLTIP_SELECTABLE_SURFACE_CLASS
+        : CHROME_TOOLTIP_RICH_SURFACE_CLASS
       : label.includes('\n')
         ? CHROME_TOOLTIP_MULTILINE_SURFACE_CLASS
         : CHROME_TOOLTIP_SURFACE_CLASS;
