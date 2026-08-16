@@ -76,7 +76,21 @@ export async function getAppLanguage(db) {
  */
 export function normalizeLanguage(value) {
   if (value == null) return null;
-  const v = String(value).trim().toLowerCase();
+  let raw = value;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (
+      (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+      try {
+        raw = JSON.parse(trimmed);
+      } catch {
+        raw = trimmed.slice(1, -1);
+      }
+    }
+  }
+  const v = String(raw || '').trim().toLowerCase();
   if (!v) return null;
   if (v === 'fr' || v.startsWith('fr')) return 'fr';
   if (v === 'en' || v.startsWith('en')) return 'en';

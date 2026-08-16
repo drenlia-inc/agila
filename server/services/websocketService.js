@@ -524,6 +524,14 @@ class WebSocketService {
       }
     });
 
+    postgresNotificationService.subscribeToAllTenants('notification-queue-updated', (data, tenantId) => {
+      if (tenantId) {
+        this.io?.to(`tenant-${tenantId}`).emit('notification-queue-updated', data);
+      } else {
+        this.io?.emit('notification-queue-updated', data);
+      }
+    });
+
     // Admin user management events - broadcast to tenant-specific clients
     postgresNotificationService.subscribeToAllTenants('user-created', (data, tenantId) => {
       if (tenantId) {

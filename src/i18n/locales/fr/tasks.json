@@ -466,6 +466,8 @@
     "assignment": "Affectation",
     "requestedBy": "Demandé par",
     "addWatcher": "Ajouter un observateur...",
+    "watchThisTask": "Observer cette tâche",
+    "unwatchThisTask": "Ne plus observer cette tâche",
     "addCollaborator": "Ajouter un collaborateur...",
     "noWatchers": "Aucun observateur",
     "noCollaborators": "Aucun collaborateur",

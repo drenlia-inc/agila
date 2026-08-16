@@ -80,7 +80,7 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
   onAutoSave,
 }) => {
   const { t } = useTranslation('admin');
-  const { updateSiteSettings } = useSettings();
+  const { updateSiteSettings, siteSettings } = useSettings();
   const [isSaving, setIsSaving] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<AppSettingsSubTab>(() =>
     typeof window !== 'undefined' ? subTabFromHash(window.location.hash) : 'ui'
@@ -101,7 +101,7 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
     });
   }, [activeSubTab]);
 
-  const troubleshootingGated = isTroubleshootingGatedDeployment();
+  const troubleshootingGated = isTroubleshootingGatedDeployment(siteSettings);
   const [troubleshootingUnlocked, setTroubleshootingUnlocked] = useState(
     () => !troubleshootingGated || readTroubleshootingUnlocked()
   );

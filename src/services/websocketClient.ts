@@ -477,6 +477,10 @@ class WebSocketClient {
     this.addEventListener('activity-updated', callback);
   }
 
+  onNotificationQueueUpdated(callback: (data: any) => void) {
+    this.addEventListener('notification-queue-updated', callback);
+  }
+
   onMemberCreated(callback: (data: any) => void) {
     this.addEventListener('member-created', callback);
   }
@@ -626,6 +630,10 @@ class WebSocketClient {
 
   offActivityUpdated(callback?: (data: any) => void) {
     this.removeEventListener('activity-updated', callback);
+  }
+
+  offNotificationQueueUpdated(callback?: (data: any) => void) {
+    this.removeEventListener('notification-queue-updated', callback);
   }
 
   offMemberCreated(callback?: (data: any) => void) {

@@ -289,17 +289,26 @@ router.put('/:taskId/work/control', authenticateToken, async (req, res) => {
           error: 'Task description is required before starting the agent'
         });
       }
-      updates.status = 'queued';
-      updates.control = 'resume';
       if (!workBefore.agent_owner_user_id && req.user?.id) {
         updates.agent_owner_user_id = req.user.id;
       }
-      // Clear prior automation apply state for a fresh re-run
-      if (workBefore.agent_mode === 'automation') {
-        updates.awaiting_apply = '';
-        updates.automation_pending_plan = '';
-        updates.automation_plan_hash = '';
-        updates.automation_apply_hash = '';
+      // Stop while waiting for Apply: keep the dry-run plan so Apply still works.
+      if (
+        workBefore.agent_mode === 'automation' &&
+        workBefore.automation_pending_plan
+      ) {
+        updates.status = 'waiting';
+        updates.control = 'none';
+        updates.awaiting_apply = 'true';
+      } else {
+        updates.status = 'queued';
+        updates.control = 'resume';
+        if (workBefore.agent_mode === 'automation') {
+          updates.awaiting_apply = '';
+          updates.automation_pending_plan = '';
+          updates.automation_plan_hash = '';
+          updates.automation_apply_hash = '';
+        }
       }
     } else if (control === 'stop') {
       updates.status = 'stopped';
@@ -336,7 +345,7 @@ router.put('/:taskId/work/control', authenticateToken, async (req, res) => {
     let work = await taskWorkQueries.getWorkMapByTaskId(db, req.params.taskId);
     await publishWork(req, req.params.taskId, work);
 
-    if (control === 'resume') {
+    if (control === 'resume' && work.status === 'queued') {
       const tenantId = getTenantId(req);
       try {
         await tryLaunchQueuedTasks(db, tenantId, dispatchCtx(req));

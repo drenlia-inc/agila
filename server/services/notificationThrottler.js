@@ -8,8 +8,16 @@ import {
   buildTaskEmailUrl,
 } from '../utils/emailContent.js';
 import { getUserTimeZone } from '../utils/dateFormatter.js';
-import { parseRetentionDays } from '../utils/retentionSettings.js';
-import { resolveCorrespondenceLanguage, getTranslatorForLanguage } from '../utils/i18n.js';
+import { publishNotificationQueueUpdated } from '../utils/publishNotificationQueueUpdated.js';
+import { resolveCorrespondenceLanguage } from '../utils/i18n.js';
+import {
+  refreshTaskSnapshot,
+  mergeEmailChange,
+  mergeEmailChangesFromActors,
+  emailChangeIsSilent,
+  isRecentlyCreatedTask,
+  ensureTagEmailChange,
+} from '../utils/taskEmailPayload.js';
 
 export { formatDetailsForEmail };
 
@@ -24,6 +32,10 @@ class NotificationThrottler {
   constructor(db, tenantId = null) {
     this.db = db;
     this.tenantId = tenantId;
+  }
+
+  notifyQueueChanged() {
+    publishNotificationQueueUpdated(this.tenantId).catch(() => {});
   }
 
   /**
@@ -64,6 +76,17 @@ class NotificationThrottler {
     }
     
     const delay = await this.getNotificationDelay();
+
+    const incomingChange = notificationData.actor?.emailChange;
+    if (
+      notificationData.action !== 'create_task' &&
+      notificationData.action !== 'delete_task' &&
+      notificationData.action !== 'restore_task' &&
+      notificationData.action !== 'copy_task' &&
+      emailChangeIsSilent(incomingChange)
+    ) {
+      return Promise.resolve();
+    }
     
     // If delay is 0, send immediately
     if (delay === 0) {
@@ -80,16 +103,35 @@ class NotificationThrottler {
           SELECT id, change_count, first_change_time, task_data, participants_data, actor_data
           FROM notification_queue
           WHERE user_id = ? AND task_id = ? AND status = 'pending'
+          ORDER BY created_at ASC
+          LIMIT 1
         `),
         'SELECT'
       ).get(userId, taskId);
 
       if (existing) {
-        // Update existing notification - accumulate changes
-        const taskData = JSON.parse(existing.task_data);
-        const participantsData = JSON.parse(existing.participants_data);
-        
-        // Merge changes (keep most recent actor and data)
+        const prevActor = JSON.parse(existing.actor_data || '{}');
+        const mergedChange = mergeEmailChange(
+          prevActor.emailChange,
+          notificationData.actor?.emailChange
+        );
+        if (
+          notificationData.action !== 'create_task' &&
+          notificationData.action !== 'delete_task' &&
+          notificationData.action !== 'restore_task' &&
+          notificationData.action !== 'copy_task' &&
+          emailChangeIsSilent(mergedChange) &&
+          emailChangeIsSilent(prevActor.emailChange)
+        ) {
+          return;
+        }
+        const mergedActor = {
+          ...notificationData.actor,
+          emailChange: mergedChange,
+        };
+        const nextAction =
+          notificationData.action === 'effort' ? existing.action : notificationData.action;
+
         await wrapQuery(
           this.db.prepare(`
             UPDATE notification_queue
@@ -109,25 +151,25 @@ class NotificationThrottler {
           `),
           'UPDATE'
         ).run(
-          notificationData.action,
+          nextAction,
           notificationData.details,
           notificationData.oldValue || null,
           notificationData.newValue || null,
           JSON.stringify(notificationData.task),
           JSON.stringify(notificationData.participants),
-          JSON.stringify(notificationData.actor),
+          JSON.stringify(mergedActor),
           now.toISOString(),
           scheduledSendTime.toISOString(),
           existing.id
         );
 
         console.log(`📧 [THROTTLER] Updated existing notification ${existing.id} for user ${userId}, task ${taskId}. Change count: ${existing.change_count + 1}`);
+        this.notifyQueueChanged();
       } else {
-        // Create new notification entry
         const notificationId = crypto.randomUUID();
-        
-        await wrapQuery(
-          this.db.prepare(`
+        try {
+          await wrapQuery(
+            this.db.prepare(`
             INSERT INTO notification_queue (
               id, user_id, task_id, notification_type, action, details,
               old_value, new_value, task_data, participants_data, actor_data,
@@ -135,27 +177,45 @@ class NotificationThrottler {
               change_count, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `),
-          'INSERT'
-        ).run(
-          notificationId,
-          userId,
-          taskId,
-          notificationData.notificationType,
-          notificationData.action,
-          notificationData.details,
-          notificationData.oldValue || null,
-          notificationData.newValue || null,
-          JSON.stringify(notificationData.task),
-          JSON.stringify(notificationData.participants),
-          JSON.stringify(notificationData.actor),
-          'pending',
-          scheduledSendTime.toISOString(),
-          now.toISOString(),
-          now.toISOString(),
-          1
-        );
-
-        console.log(`📧 [THROTTLER] Created notification ${notificationId} for user ${userId}, task ${taskId}. Will send at ${scheduledSendTime.toISOString()}`);
+            'INSERT'
+          ).run(
+            notificationId,
+            userId,
+            taskId,
+            notificationData.notificationType,
+            notificationData.action,
+            notificationData.details,
+            notificationData.oldValue || null,
+            notificationData.newValue || null,
+            JSON.stringify(notificationData.task),
+            JSON.stringify(notificationData.participants),
+            JSON.stringify(notificationData.actor),
+            'pending',
+            scheduledSendTime.toISOString(),
+            now.toISOString(),
+            now.toISOString(),
+            1
+          );
+          console.log(`📧 [THROTTLER] Created notification ${notificationId} for user ${userId}, task ${taskId}. Will send at ${scheduledSendTime.toISOString()}`);
+          this.notifyQueueChanged();
+        } catch (insertErr) {
+          const isUnique =
+            insertErr?.code === '23505' ||
+            /unique|duplicate key/i.test(String(insertErr?.message || ''));
+          if (!isUnique) throw insertErr;
+          const raced = await wrapQuery(
+            this.db.prepare(`
+              SELECT id, change_count, first_change_time, task_data, participants_data, actor_data
+              FROM notification_queue
+              WHERE user_id = ? AND task_id = ? AND status = 'pending'
+              ORDER BY created_at DESC
+              LIMIT 1
+            `),
+            'SELECT'
+          ).get(userId, taskId);
+          if (!raced) throw insertErr;
+          await this.addNotification(userId, taskId, notificationData);
+        }
       }
     } catch (error) {
       console.error(`❌ [THROTTLER] Failed to queue notification for user ${userId}, task ${taskId}:`, error);
@@ -265,7 +325,23 @@ class NotificationThrottler {
       // Parse stored JSON data from the most recent notification
       const task = JSON.parse(baseNotification.task_data);
       const participants = JSON.parse(baseNotification.participants_data);
-      const actor = JSON.parse(baseNotification.actor_data);
+      const actors = [...notifications]
+        .sort(
+          (a, b) =>
+            new Date(a.last_change_time || a.first_change_time || 0).getTime() -
+            new Date(b.last_change_time || b.first_change_time || 0).getTime()
+        )
+        .map((row) => {
+        try {
+          return JSON.parse(row.actor_data || '{}');
+        } catch {
+          return {};
+        }
+      });
+      const actor = {
+        ...actors[actors.length - 1],
+        emailChange: mergeEmailChangesFromActors(actors),
+      };
 
       // Get recipient user info (alias both casings for template safety)
       const recipientUser = await wrapQuery(
@@ -337,14 +413,31 @@ class NotificationThrottler {
       // Recipient language: user pref → APP_LANGUAGE → en
       const recipientId = recipientUser.id || recipientUser.userId;
       const lang = await resolveCorrespondenceLanguage(this.db, recipientId);
-      const tLang = getTranslatorForLanguage(lang);
-      const actionType = notifications.length > 1 ? 'consolidated_update' : baseNotification.action;
-      const actionDetails =
-        notifications.length > 1
-          ? tLang('emails.taskNotification.common.consolidatedChanges', {
-              count: notifications.length,
-            })
-          : formatDetailsForEmail(baseNotification.details, lang);
+      const refreshedTask = await refreshTaskSnapshot(this.db, task);
+      const emailChange = await ensureTagEmailChange(
+        this.db,
+        baseNotification.action,
+        actor?.emailChange || null,
+        baseNotification.details,
+        actor?.tagId || null
+      );
+      const visibleItems = (emailChange?.items || []).filter(
+        (i) => i && i.field !== 'effort' && i.field !== 'generic'
+      );
+      const actionType =
+        visibleItems.length > 1 ? 'consolidated_update' : baseNotification.action;
+      const actionDetails = formatDetailsForEmail(baseNotification.details, lang);
+      const firstChangeTime =
+        [...notifications]
+          .map((n) => n.first_change_time || n.last_change_time)
+          .filter(Boolean)
+          .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0] ||
+        baseNotification.last_change_time;
+      const assigneeUserId = emailChange?.newAssigneeUserId;
+      const isRecentAssignment =
+        Boolean(assigneeUserId) &&
+        String(assigneeUserId) === String(recipientId) &&
+        isRecentlyCreatedTask(refreshedTask, firstChangeTime);
 
       const boardTitle = boardInfo?.title || 'Board';
       const changedField = actor?.changedField || null;
@@ -356,7 +449,7 @@ class NotificationThrottler {
       // Create email template data
       const emailTemplateData = {
         user: recipientUser,
-        task: task,
+        task: refreshedTask,
         board: {
           id: boardInfo?.id || task.boardId || task.boardid,
           title: boardTitle,
@@ -374,6 +467,8 @@ class NotificationThrottler {
         timestamp: baseNotification.last_change_time,
         recipientTimeZone,
         lang,
+        emailChange,
+        isRecentAssignment,
         db: this.db
       };
 
@@ -403,6 +498,7 @@ class NotificationThrottler {
       ).run(...notificationIds);
 
       console.log(`✅ [THROTTLER] Grouped notification sent successfully (${notifications.length} change(s))`);
+      this.notifyQueueChanged();
 
     } catch (error) {
       console.error(`❌ [THROTTLER] Failed to send grouped notification:`, error);
@@ -483,14 +579,27 @@ class NotificationThrottler {
       // Recipient language: user pref → APP_LANGUAGE → en
       const recipientId = recipientUser.id || recipientUser.userId;
       const lang = await resolveCorrespondenceLanguage(this.db, recipientId);
-      const tLang = getTranslatorForLanguage(lang);
-      const actionType = queuedNotification.change_count > 1 ? 'consolidated_update' : queuedNotification.action;
-      const actionDetails =
-        queuedNotification.change_count > 1
-          ? tLang('emails.taskNotification.common.consolidatedChanges', {
-              count: queuedNotification.change_count,
-            })
-          : formatDetailsForEmail(queuedNotification.details, lang);
+      const refreshedTask = await refreshTaskSnapshot(this.db, task);
+      const emailChange = await ensureTagEmailChange(
+        this.db,
+        queuedNotification.action,
+        actor?.emailChange || null,
+        queuedNotification.details,
+        actor?.tagId || null
+      );
+      const visibleItems = (emailChange?.items || []).filter(
+        (i) => i && i.field !== 'effort' && i.field !== 'generic'
+      );
+      const actionType =
+        visibleItems.length > 1 ? 'consolidated_update' : queuedNotification.action;
+      const actionDetails = formatDetailsForEmail(queuedNotification.details, lang);
+      const firstChangeTime =
+        queuedNotification.first_change_time || queuedNotification.last_change_time;
+      const assigneeUserId = emailChange?.newAssigneeUserId;
+      const isRecentAssignment =
+        Boolean(assigneeUserId) &&
+        String(assigneeUserId) === String(recipientId) &&
+        isRecentlyCreatedTask(refreshedTask, firstChangeTime);
       const boardTitle = boardInfo?.title || 'Board';
       const changedField = actor?.changedField || null;
       const recipientTimeZone = await getUserTimeZone(
@@ -501,7 +610,7 @@ class NotificationThrottler {
       // Create email template data
       const emailTemplateData = {
         user: recipientUser,
-        task: task,
+        task: refreshedTask,
         board: {
           id: boardInfo?.id || task.boardId || task.boardid,
           title: boardTitle,
@@ -519,6 +628,8 @@ class NotificationThrottler {
         timestamp: queuedNotification.last_change_time,
         recipientTimeZone,
         lang,
+        emailChange,
+        isRecentAssignment,
         db: this.db
       };
 
@@ -545,6 +656,7 @@ class NotificationThrottler {
       ).run(queuedNotification.id);
 
       console.log(`✅ [THROTTLER] Notification ${queuedNotification.id} sent successfully (${queuedNotification.change_count} change(s))`);
+      this.notifyQueueChanged();
 
     } catch (error) {
       console.error(`❌ [THROTTLER] Failed to send notification ${queuedNotification.id}:`, error);

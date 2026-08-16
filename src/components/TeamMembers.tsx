@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, Check, Info, X, Minimize2, Maximize2, GripVertical } from 'lucide-react';
+import { Copy, Check, Info, X, Minimize2, Maximize2, GripVertical, Eye } from 'lucide-react';
 import {
   DndContext,
   PointerSensor,
@@ -25,6 +25,7 @@ import {
   isSystemMemberId,
   sortMembersAgentLast,
 } from '../utils/agentMemberUi';
+import { memberIsViewer } from '../utils/memberUtils';
 import {
   loadUserPreferences,
   loadUserPreferencesAsync,
@@ -221,42 +222,62 @@ function MemberContactTooltipBody({
   );
 }
 
-function memberAvatarNode(member: TeamMember, sizeClass: string, textClass = 'text-xs') {
+function memberAvatarNode(
+  member: TeamMember,
+  sizeClass: string,
+  textClass = 'text-xs',
+  viewerLabel?: string
+) {
+  let inner: ReactElement;
   if (isAgentMemberId(member.id)) {
-    return (
+    inner = (
       <img
         src={getAgentAvatarSrc(member)}
         alt=""
         className={`${sizeClass} rounded-full object-cover`}
       />
     );
-  }
-  if (member.googleAvatarUrl) {
-    return (
+  } else if (member.googleAvatarUrl) {
+    inner = (
       <img
         src={getAuthenticatedAvatarUrl(member.googleAvatarUrl)}
         alt=""
         className={`${sizeClass} rounded-full object-cover`}
       />
     );
-  }
-  if (member.avatarUrl) {
-    return (
+  } else if (member.avatarUrl) {
+    inner = (
       <img
         src={getAuthenticatedAvatarUrl(member.avatarUrl)}
         alt=""
         className={`${sizeClass} rounded-full object-cover`}
       />
     );
+  } else {
+    const initials = member.name.split(' ').map(n => n[0]).join('').toUpperCase();
+    inner = (
+      <div
+        className={`${sizeClass} rounded-full flex items-center justify-center ${textClass} font-bold text-white`}
+        style={{ backgroundColor: member.color }}
+      >
+        {initials}
+      </div>
+    );
   }
-  const initials = member.name.split(' ').map(n => n[0]).join('').toUpperCase();
+  if (!memberIsViewer(member)) return inner;
+  const compact = sizeClass.includes('w-7');
   return (
-    <div
-      className={`${sizeClass} rounded-full flex items-center justify-center ${textClass} font-bold text-white`}
-      style={{ backgroundColor: member.color }}
-    >
-      {initials}
-    </div>
+    <span className={`relative inline-flex ${sizeClass} shrink-0`} title={viewerLabel}>
+      {inner}
+      <span
+        className={`absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-sky-100 text-sky-700 ring-2 ring-white dark:bg-sky-950 dark:text-sky-300 dark:ring-gray-800 ${
+          compact ? 'h-3.5 w-3.5' : 'h-5 w-5'
+        }`}
+        aria-label={viewerLabel}
+      >
+        <Eye size={compact ? 8 : 12} strokeWidth={2.5} aria-hidden />
+      </span>
+    </span>
   );
 }
 
@@ -331,7 +352,12 @@ function MeetTheTeamCard({
         }}
       >
         <div className="rounded-full bg-white dark:bg-gray-900 p-0.5">
-          {memberAvatarNode(member, showBios ? 'w-16 h-16' : 'w-12 h-12', showBios ? 'text-lg' : 'text-sm')}
+          {memberAvatarNode(
+            member,
+            showBios ? 'w-16 h-16' : 'w-12 h-12',
+            showBios ? 'text-lg' : 'text-sm',
+            t('messages.readOnlyBadge')
+          )}
         </div>
       </div>
       <div className="mt-2.5 text-sm font-semibold text-gray-900 dark:text-gray-50 break-words w-full pointer-events-none">
@@ -938,7 +964,7 @@ export default function TeamMembers({
                   }`}
                   onClick={() => onSelectMember(member.id)}
                 >
-                  {memberAvatarNode(member, 'w-7 h-7')}
+                  {memberAvatarNode(member, 'w-7 h-7', 'text-xs', t('messages.readOnlyBadge'))}
                 </button>
               </KanbanChromeTooltip>
             );
@@ -960,7 +986,7 @@ export default function TeamMembers({
                 }}
                 onClick={() => onSelectMember(member.id)}
               >
-                {memberAvatarNode(member, 'w-7 h-7')}
+                {memberAvatarNode(member, 'w-7 h-7', 'text-xs', t('messages.readOnlyBadge'))}
                 <span
                   className={`text-xs text-gray-800 dark:text-gray-100 ${
                     isSelected ? 'font-semibold' : 'font-medium'

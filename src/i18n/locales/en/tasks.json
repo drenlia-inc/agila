@@ -466,6 +466,8 @@
     "assignment": "Assignment",
     "requestedBy": "Requested By",
     "addWatcher": "Add watcher...",
+    "watchThisTask": "Watch this task",
+    "unwatchThisTask": "Stop watching this task",
     "addCollaborator": "Add collaborator...",
     "noWatchers": "No watchers",
     "noCollaborators": "No collaborators",

@@ -1137,6 +1137,7 @@
     "someAlreadySent": "{{sendable}} sur {{total}} notifications sélectionnées peuvent être envoyées. Les notifications déjà envoyées seront ignorées.",
     "sendNow": "Envoyer maintenant",
     "sending": "Envoi...",
+    "sendingProgress": "Envoi de {{done}} sur {{total}}",
     "sendSuccess": "{{count}} notification(s) envoyée(s) avec succès",
     "sendPartial": "{{sent}} notification(s) envoyée(s) ; {{failed}} en échec",
     "sendNone": "Aucune notification n'a été envoyée. Vérifiez les paramètres SMTP ou le détail d'erreur de chaque ligne.",

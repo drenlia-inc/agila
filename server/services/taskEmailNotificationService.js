@@ -3,6 +3,7 @@ import { EmailTemplates } from './emailTemplates.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { getNotificationThrottlerForDb } from './notificationThrottler.js';
 import { activity as activityQueries, tasks as taskQueries, helpers } from '../utils/sqlManager/index.js';
+import { emailChangeIsSilent, refreshTaskSnapshot, ensureTagEmailChange } from '../utils/taskEmailPayload.js';
 import { buildTaskEmailUrl, buildEmailAuthorAvatar } from '../utils/emailContent.js';
 import { getUserTimeZone } from '../utils/dateFormatter.js';
 import { getTenantStoragePaths } from '../middleware/tenantRouting.js';
@@ -175,9 +176,12 @@ class TaskEmailNotificationService {
           memberId,
           requesterId,
           title: task.title,
+          description: task.description || '',
           ticket: task.ticket,
           boardId,
           projectId,
+          created_at: task.created_at || task.createdAt || null,
+          createdAt: task.created_at || task.createdAt || null,
         },
         projectId,
         boardTitle: board?.title || 'Board',
@@ -371,9 +375,12 @@ class TaskEmailNotificationService {
         changedField = null,
         projectIdentifier = null,
         taskTicket: activityTaskTicket = null,
+        emailChange: incomingEmailChange = null,
+        tagId = null,
       } = activityData;
       if (!userId || !taskId || !action) return;
       if (this.isDuplicateBurst(userId, action, taskId)) return;
+      if (changedField === 'effort' && !incomingEmailChange?.items?.length) return;
 
       const participants = await this.getTaskParticipants(taskId);
       if (!participants.task) return;
@@ -396,13 +403,86 @@ class TaskEmailNotificationService {
         newValue
       );
 
+      let emailChange = incomingEmailChange;
+      if (!emailChange) {
+        if (action === 'delete_task') {
+          emailChange = { items: [{ field: 'delete' }] };
+        } else if (changedField && changedField !== 'effort') {
+          emailChange = {
+            items: [
+              {
+                field: changedField,
+                oldValue: display.oldValue,
+                newValue: display.newValue,
+                oldName: display.oldValue,
+                newName: display.newValue,
+              },
+            ],
+            newAssigneeUserId: display.newAssigneeUserId,
+          };
+        } else if (action === 'associate_tag' || action === 'disassociate_tag') {
+          emailChange = { items: [] };
+        } else {
+          emailChange = { items: [{ field: 'generic' }] };
+        }
+      }
+      emailChange = await ensureTagEmailChange(
+        this.db,
+        action,
+        emailChange,
+        details,
+        tagId
+      );
+      if (
+        action !== 'create_task' &&
+        action !== 'delete_task' &&
+        action !== 'restore_task' &&
+        action !== 'copy_task' &&
+        emailChangeIsSilent(emailChange)
+      ) {
+        return;
+      }
+      emailChange = {
+        ...emailChange,
+        items: emailChange.items || [],
+        newAssigneeUserId:
+          emailChange.newAssigneeUserId || display.newAssigneeUserId || null,
+      };
+      const resolvedItems = [];
+      for (const item of emailChange.items) {
+        if (item.field === 'memberId' || item.field === 'requesterId') {
+          const names = await this.resolvePeopleDisplayValues(
+            item.field,
+            item.oldValue ?? item.oldName,
+            item.newValue ?? item.newName
+          );
+          resolvedItems.push({
+            ...item,
+            oldName: names.oldValue,
+            newName: names.newValue,
+            oldValue: names.oldValue,
+            newValue: names.newValue,
+          });
+          if (item.field === 'memberId' && names.newAssigneeUserId) {
+            emailChange.newAssigneeUserId = names.newAssigneeUserId;
+          }
+        } else {
+          resolvedItems.push(item);
+        }
+      }
+      emailChange.items = resolvedItems;
+
       const notifications = this.determineNotifications(
         action,
         participants,
         userId,
         {
-          changedField,
-          newAssigneeUserId: display.newAssigneeUserId,
+          changedField:
+            changedField ||
+            (emailChange.items || []).find((i) => i.field === 'memberId')?.field ||
+            null,
+          newAssigneeUserId:
+            emailChange.newAssigneeUserId || display.newAssigneeUserId,
         }
       );
       const throttler = getNotificationThrottlerForDb(this.db, this.tenantId);
@@ -414,6 +494,8 @@ class TaskEmailNotificationService {
       const actorWithMeta = {
         ...actor,
         changedField: changedField || null,
+        emailChange,
+        tagId: tagId || null,
       };
 
       for (const { recipientUserId, notificationType } of notifications) {
@@ -623,10 +705,11 @@ class TaskEmailNotificationService {
       const { getTranslatorForUser } = await import('../utils/i18n.js');
       const t = await getTranslatorForUser(this.db, recipientUserId);
       const actionDetails = `${t('emails.taskNotification.addedAsCollaborator.addedBy')} ${actorName}`;
+      const liveTask = await refreshTaskSnapshot(this.db, participants.task);
 
       const emailContent = await EmailTemplates.taskNotification({
         user: recipient,
-        task: participants.task,
+        task: liveTask,
         board: {
           id: participants.task.boardId,
           name: participants.boardTitle || 'Board',
@@ -716,10 +799,11 @@ class TaskEmailNotificationService {
       const { getTranslatorForUser } = await import('../utils/i18n.js');
       const t = await getTranslatorForUser(this.db, recipientUserId);
       const actionDetails = `${t('emails.taskNotification.addedAsWatcher.addedBy')} ${actorName}`;
+      const liveTask = await refreshTaskSnapshot(this.db, participants.task);
 
       const emailContent = await EmailTemplates.taskNotification({
         user: recipient,
-        task: participants.task,
+        task: liveTask,
         board: {
           id: participants.task.boardId,
           name: participants.boardTitle || 'Board',

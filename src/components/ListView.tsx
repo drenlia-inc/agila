@@ -10,13 +10,15 @@ import { getBoardColumns, addTagToTask, removeTagFromTask, createComment } from 
 import DOMPurify from 'dompurify';
 import { generateTaskUrl } from '../utils/routingUtils';
 import { mergeTaskTagsWithLiveData, getTagDisplayStyle } from '../utils/tagUtils';
-import { getAuthenticatedAvatarUrl, getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
+import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { truncateMemberName } from '../utils/memberUtils';
 import { commentTextToHtml } from '../utils/commentContent';
 import { generateUUID } from '../utils/uuid';
 import { truncateHtmlByChars } from '../utils/plainTextPreview';
 import MemberSearchList from './ui/MemberSearchList';
+import MemberAvatar from './ui/MemberAvatar';
+import { layoutMemberDropdownFromElement } from '../utils/memberDropdownLayout';
 import { CHROME_TOOLTIP_POPOVER_CLASS, CHROME_TOOLTIP_PANEL_SURFACE_CLASS, KanbanChromeTooltip } from './KanbanChromeTooltip';
 import AgentPanel from './AgentPanel';
 import type { AgentPanelView } from './AgentPanel';
@@ -26,9 +28,8 @@ import TextEditor from './TextEditor';
 import AddTagModal from './AddTagModal';
 import AddCommentModal from './AddCommentModal';
 import { putTaskWork, getTaskWork, setTaskWorkControl, type TaskWorkMap } from '../api';
-import { AGENT_MEMBER_ID, SYSTEM_MEMBER_ID } from '../constants/appConstants';
+import { AGENT_MEMBER_ID } from '../constants/appConstants';
 import {
-  getAgentAvatarSrc,
   isAgentMemberId,
   resolveTaskMember,
 } from '../utils/agentMemberUi';
@@ -670,7 +671,13 @@ export default function ListView({
   const [editValue, setEditValue] = useState<string>('');
   const [showDropdown, setShowDropdown] = useState<{taskId: string, field: string} | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<'above' | 'below'>('below');
-  const [assigneeDropdownCoords, setAssigneeDropdownCoords] = useState<{left: number; top: number; height?: number} | null>(null);
+  const [assigneeDropdownCoords, setAssigneeDropdownCoords] = useState<{
+    left: number;
+    top: number;
+    height?: number;
+    width?: number;
+    columns?: 1 | 2;
+  } | null>(null);
   const [priorityDropdownCoords, setPriorityDropdownCoords] = useState<{left: number; top: number} | null>(null);
   const [statusDropdownCoords, setStatusDropdownCoords] = useState<{left: number; top: number} | null>(null);
   const [tagsDropdownCoords, setTagsDropdownCoords] = useState<{left: number; top: number} | null>(null);
@@ -993,33 +1000,7 @@ export default function ListView({
     return (
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-1">
-          {member.id === SYSTEM_MEMBER_ID ? (
-            <div 
-              className="w-5 h-5 rounded-full flex items-center justify-center text-xs"
-              style={{ backgroundColor: member.color }}
-            >
-              🤖
-            </div>
-          ) : isAgentMemberId(member.id) ? (
-            <img
-              src={getAgentAvatarSrc(member)}
-              alt={member.name}
-              className="w-5 h-5 rounded-full object-cover"
-            />
-          ) : member.googleAvatarUrl || member.avatarUrl ? (
-            <img
-              src={getAuthenticatedAvatarUrl(member.googleAvatarUrl || member.avatarUrl)}
-              alt={member.name}
-              className="w-5 h-5 rounded-full object-cover"
-            />
-          ) : (
-            <div 
-              className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium text-white"
-              style={{ backgroundColor: member.color }}
-            >
-              {member.name.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <MemberAvatar member={member} members={members} size="sm" />
           <span className="text-xs text-gray-900 truncate">{truncateMemberName(member.name)}</span>
         </div>
         
@@ -1407,23 +1388,15 @@ export default function ListView({
     
     switch (dropdownType) {
       case 'assignee':
-        dropdownWidth = 280;
         {
-          const searchHeaderHeight = 52;
-          const memberItemHeight = 40;
-          const availableSpaceBelow = window.innerHeight - rect.bottom - 20;
-          const availableSpaceAbove = rect.top - 20;
-          const maxAvailableSpace = Math.max(availableSpaceBelow, availableSpaceAbove);
-          const maxVisibleMembers = Math.floor(
-            Math.max(80, maxAvailableSpace - searchHeaderHeight) / memberItemHeight
-          );
-          const visibleMembers = Math.max(
-            3,
-            Math.min(10, maxVisibleMembers, members?.length || 3)
-          );
-          dropdownHeight = searchHeaderHeight + visibleMembers * memberItemHeight + 16;
+          const layout = layoutMemberDropdownFromElement(element, members || [], {
+            showAgent: true,
+            excludeViewers: true,
+            selectedId: allTasks.find((t) => t.id === showDropdown?.taskId)?.memberId || null,
+            placement: 'below',
+          });
+          return layout;
         }
-        break;
       case 'priority':
         dropdownWidth = 120;
         dropdownHeight = 120;
@@ -2678,7 +2651,7 @@ export default function ListView({
           style={{
             left: `${assigneeDropdownCoords.left}px`,
             top: `${assigneeDropdownCoords.top}px`,
-            width: '280px',
+            width: `${assigneeDropdownCoords.width || 280}px`,
             height: `${assigneeDropdownCoords.height || 280}px`,
             maxHeight: `${assigneeDropdownCoords.height || 280}px`,
           }}
@@ -2689,6 +2662,8 @@ export default function ListView({
               allTasks.find((t) => t.id === showDropdown.taskId)?.memberId || null
             }
             showAgentSection
+            excludeViewers
+            columns={assigneeDropdownCoords.columns || 1}
             onSelect={(memberId) => {
               handleDropdownSelect(showDropdown.taskId, 'memberId', memberId);
             }}

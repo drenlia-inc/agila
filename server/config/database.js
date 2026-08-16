@@ -329,7 +329,7 @@ const CREATE_SCHEMA_SQL = `
       PRIMARY KEY (task_id, key)
     );
     CREATE INDEX IF NOT EXISTS idx_task_work_task_id ON task_work(task_id);
-    CREATE INDEX IF NOT EXISTS idx_task_work_key_value ON task_work(key, value);
+    CREATE INDEX IF NOT EXISTS idx_task_work_status_value ON task_work (value) WHERE key = 'status';
 
     CREATE TABLE IF NOT EXISTS user_api_tokens (
       id TEXT PRIMARY KEY,
@@ -754,6 +754,9 @@ const CREATE_SCHEMA_SQL = `
     CREATE INDEX IF NOT EXISTS idx_notification_queue_scheduled_send ON notification_queue(scheduled_send_time, status);
     CREATE INDEX IF NOT EXISTS idx_notification_queue_user_task ON notification_queue(user_id, task_id, status);
     CREATE INDEX IF NOT EXISTS idx_notification_queue_created_at ON notification_queue(created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_queue_pending_user_task
+      ON notification_queue (user_id, task_id)
+      WHERE status = 'pending';
     
     -- Migration 8: Performance indexes on tasks
     CREATE INDEX IF NOT EXISTS idx_tasks_start_date ON tasks(startdate);

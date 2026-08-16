@@ -1,9 +1,11 @@
 import express from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
-import { getRequestDatabase } from '../middleware/tenantRouting.js';
+import { getRequestDatabase, getTenantId } from '../middleware/tenantRouting.js';
+import { publishNotificationQueueUpdated } from '../utils/publishNotificationQueueUpdated.js';
 import EmailService from '../services/emailService.js';
 import { EmailTemplates } from '../services/emailTemplates.js';
 import { buildTaskEmailUrl } from '../utils/emailContent.js';
+import { ensureTagEmailChange } from '../utils/taskEmailPayload.js';
 import { getUserTimeZone } from '../utils/dateFormatter.js';
 // MIGRATED: Import sqlManager modules
 import { notificationQueue as notificationQueueQueries, users as userQueries, boards as boardQueries, helpers } from '../utils/sqlManager/index.js';
@@ -159,10 +161,20 @@ router.post('/send', authenticateToken, requireRole(['admin']), async (req, res)
         const siteName = siteNameSetting || 'Agila';
 
         // Determine action type and details
-        const actionType = notification.change_count > 1 ? 'consolidated_update' : notification.action;
+        const emailChange = await ensureTagEmailChange(
+          db,
+          notification.action,
+          actor?.emailChange || null,
+          notification.details,
+          actor?.tagId || null
+        );
+        const visibleItems = (emailChange?.items || []).filter(
+          (i) => i && i.field !== 'effort' && i.field !== 'generic'
+        );
+        const actionType =
+          visibleItems.length > 1 ? 'consolidated_update' : notification.action;
         const actionDetails = notification.details;
 
-        // Create email template data
         const recipientTimeZone = await getUserTimeZone(db, recipientUser.id);
         const emailTemplateData = {
           user: recipientUser,
@@ -175,8 +187,11 @@ router.post('/send', authenticateToken, requireRole(['admin']), async (req, res)
           siteName: siteName,
           oldValue: notification.old_value,
           newValue: notification.new_value,
+          changedField: actor?.changedField || null,
+          notificationType: notification.notification_type || notification.notificationType || null,
           timestamp: notification.last_change_time,
           recipientTimeZone,
+          emailChange,
           db: db
         };
 
@@ -195,6 +210,7 @@ router.post('/send', authenticateToken, requireRole(['admin']), async (req, res)
         await notificationQueueQueries.updateNotificationQueueStatus(db, notificationId, 'sent');
 
         sentCount++;
+        publishNotificationQueueUpdated(getTenantId(req)).catch(() => {});
       } catch (error) {
         console.error(`Failed to send notification ${notificationId}:`, error);
         errors.push(`Failed to send ${notificationId}: ${error.message}`);
@@ -230,6 +246,8 @@ router.delete('/', authenticateToken, requireRole(['admin']), async (req, res) =
     
     // MIGRATED: Delete notifications using sqlManager
     const result = await notificationQueueQueries.deleteNotificationQueueItems(db, notificationIds);
+
+    publishNotificationQueueUpdated(getTenantId(req)).catch(() => {});
 
     res.json({
       success: true,

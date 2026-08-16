@@ -4,7 +4,7 @@ import { wrapQuery } from '../utils/queryLogger.js';
 import { logTaskActivity, generateTaskUpdateDetails, logBulkTaskFieldActivity } from '../services/activityLogger.js';
 import * as reportingLogger from '../services/reportingLogger.js';
 import { TASK_ACTIONS } from '../constants/activityActions.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, requireRole, userCanMutate } from '../middleware/auth.js';
 import { checkTaskLimit } from '../middleware/licenseCheck.js';
 import notificationService from '../services/notificationService.js';
 import { getTranslator, t } from '../utils/i18n.js';
@@ -12,7 +12,7 @@ import { getRequestDatabase } from '../middleware/tenantRouting.js';
 import { serverDebug } from '../utils/serverDebug.js';
 import { dbTransaction } from '../utils/dbAsync.js';
 // MIGRATED: Import sqlManager
-import { tasks as taskQueries, boards as boardQueries, helpers, sprints as sprintQueries, taskWork as taskWorkQueries } from '../utils/sqlManager/index.js';
+import { tasks as taskQueries, boards as boardQueries, helpers, sprints as sprintQueries, taskWork as taskWorkQueries, members as memberQueries } from '../utils/sqlManager/index.js';
 import { AUTOMATION_CONFIG_KEYS } from '../constants/automation.js';
 import {
   purgeTaskCompletely,
@@ -605,6 +605,11 @@ router.post('/', authenticateToken, checkTaskLimit, async (req, res) => {
         priorityName = await helpers.getPriorityNameById(db, priorityId);
       }
     }
+
+    const tTranslator = await getTranslator(db);
+    if (task.memberId && (await memberQueries.isReadOnlyViewerMember(db, task.memberId))) {
+      return res.status(400).json({ error: tTranslator('errors.cannotAssignViewer') });
+    }
     
     // MIGRATED: Create the task using sqlManager
     await taskQueries.createTask(db, {
@@ -750,6 +755,11 @@ router.post('/add-at-top', authenticateToken, checkTaskLimit, async (req, res) =
       }
     }
     
+    const tTranslator = await getTranslator(db);
+    if (task.memberId && (await memberQueries.isReadOnlyViewerMember(db, task.memberId))) {
+      return res.status(400).json({ error: tTranslator('errors.cannotAssignViewer') });
+    }
+
     await dbTransaction(db, async () => {
       await taskQueries.incrementTaskPositions(db, task.columnId);
       await taskQueries.createTask(db, {
@@ -1253,10 +1263,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Check if sprint changed - handle separately like priority
     const currentSprintId = currentTask.sprint_id || currentTask.sprintId || null;
     const newSprintId = task.sprintId || null;
+    let oldSprintName = null;
+    let newSprintName = null;
     if (hasChanged(currentSprintId, newSprintId)) {
-      // Get sprint names for bilingual activity message
-      let oldSprintName = null;
-      let newSprintName = null;
       
       if (currentSprintId) {
         try {
@@ -1421,6 +1430,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const nextBoardId = task.boardId ?? task.boardid ?? normalizedCurrentTask.boardId;
     const nextMemberId = task.memberId ?? task.memberid ?? normalizedCurrentTask.memberId;
     const nextRequesterId = task.requesterId ?? task.requesterid ?? normalizedCurrentTask.requesterId;
+    if (
+      nextMemberId &&
+      nextMemberId !== (normalizedCurrentTask.memberId || null) &&
+      (await memberQueries.isReadOnlyViewerMember(db, nextMemberId))
+    ) {
+      return res.status(400).json({ error: tTranslator('errors.cannotAssignViewer') });
+    }
     await taskQueries.updateTask(db, id, {
       title: task.title !== undefined ? task.title : currentTask.title,
       description: task.description !== undefined ? task.description : normalizedCurrentTask.description,
@@ -1491,10 +1507,63 @@ router.put('/:id', authenticateToken, async (req, res) => {
       let oldValue;
       let newValue;
       let changedField;
+      const emailItems = [];
+      if (priorityChanged) {
+        let oldPriorityColor = null;
+        let newPriorityColor = null;
+        try {
+          if (currentPriorityId) {
+            const oldPri = await helpers.getPriorityById(db, currentPriorityId);
+            oldPriorityColor = oldPri?.color || null;
+          }
+          if (priorityId) {
+            const newPri = await helpers.getPriorityById(db, priorityId);
+            newPriorityColor = newPri?.color || null;
+          }
+        } catch {
+          /* keep names without colors */
+        }
+        emailItems.push({
+          field: 'priorityId',
+          oldName: oldPriorityLabel,
+          newName: newPriorityLabel,
+          oldColor: oldPriorityColor,
+          newColor: newPriorityColor,
+        });
+      }
+      if (hasChanged(currentSprintId, newSprintId)) {
+        emailItems.push({
+          field: 'sprintId',
+          oldName: oldSprintName,
+          newName: newSprintName,
+        });
+      }
+      for (const field of fieldsToTrack) {
+        if (field === 'effort') continue;
+        if (!hasChanged(normalizedCurrentTask[field], task[field])) continue;
+        if (field === 'columnId' && columnMoveDisplayOld != null && columnMoveDisplayNew != null) {
+          emailItems.push({
+            field: 'columnId',
+            oldValue: columnMoveDisplayOld,
+            newValue: columnMoveDisplayNew,
+          });
+          continue;
+        }
+        emailItems.push({
+          field,
+          oldValue: normalizedCurrentTask[field],
+          newValue: task[field],
+        });
+      }
+
+      const skipEmailEffortOnly = emailItems.length === 0 && hasChanged(normalizedCurrentTask.effort, task.effort);
+
       if (changes.length === 1) {
         changedField = fieldsToTrack.find((field) =>
           hasChanged(normalizedCurrentTask[field], task[field])
         );
+        if (!changedField && priorityChanged) changedField = 'priorityId';
+        if (!changedField && hasChanged(currentSprintId, newSprintId)) changedField = 'sprintId';
         if (changedField) {
           if (
             changedField === 'columnId' &&
@@ -1503,15 +1572,23 @@ router.put('/:id', authenticateToken, async (req, res) => {
           ) {
             oldValue = columnMoveDisplayOld;
             newValue = columnMoveDisplayNew;
+          } else if (changedField === 'priorityId') {
+            oldValue = oldPriorityLabel;
+            newValue = newPriorityLabel;
+          } else if (changedField === 'sprintId') {
+            oldValue = oldSprintName;
+            newValue = newSprintName;
           } else {
             oldValue = normalizedCurrentTask[changedField];
             newValue = task[changedField];
           }
         }
+      } else if (emailItems.some((i) => i.field === 'memberId')) {
+        changedField = 'memberId';
+        oldValue = normalizedCurrentTask.memberId;
+        newValue = task.memberId;
       }
-      
-      // Fire-and-forget: Don't await activity logging to avoid blocking API response
-      // Activity logging can take 500-600ms on EFS, but we don't need to wait for it
+
       logTaskActivity(
         userId,
         TASK_ACTIONS.UPDATE,
@@ -1523,6 +1600,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
           oldValue,
           newValue,
           changedField,
+          emailChange: { items: emailItems },
+          skipEmail: skipEmailEffortOnly,
           tenantId: getTenantId(req),
           authType: req.user?.authType,
           db: db
@@ -1713,6 +1792,16 @@ router.post('/batch-update', authenticateToken, async (req, res) => {
     
     if (missingTasks.length > 0) {
       return res.status(404).json({ error: tTranslator('errors.taskNotFound') + `: ${missingTasks.join(', ')}` });
+    }
+
+    for (const task of tasks) {
+      if (!task.memberId) continue;
+      const current = existingTaskMap.get(task.id);
+      const currentMemberId = current?.memberId || current?.memberid || null;
+      if (task.memberId === currentMemberId) continue;
+      if (await memberQueries.isReadOnlyViewerMember(db, task.memberId)) {
+        return res.status(400).json({ error: tTranslator('errors.cannotAssignViewer') });
+      }
     }
     
     // MIGRATED: Get all priorities for lookup
@@ -2810,6 +2899,12 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
       req.body?.skipEmail === true;
     
     const tTranslator = await getTranslator(db);
+    if (!userCanMutate(req.user)) {
+      const ownMember = await memberQueries.getMemberByUserId(db, userId);
+      if (!ownMember || ownMember.id !== memberId) {
+        return res.status(403).json({ error: tTranslator('errors.readOnly'), code: 'READ_ONLY' });
+      }
+    }
     // MIGRATED: Get task's board ID for Redis publishing
     const boardId = await taskQueries.getTaskBoardId(db, taskId);
     if (!boardId) {
@@ -2860,11 +2955,18 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
 });
 
 // Remove watcher from task
-router.delete('/:taskId/watchers/:memberId', async (req, res) => {
+router.delete('/:taskId/watchers/:memberId', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const tTranslator = await getTranslator(db);
     const { taskId, memberId } = req.params;
+    const userId = req.user?.id || 'system';
+    if (!userCanMutate(req.user)) {
+      const ownMember = await memberQueries.getMemberByUserId(db, userId);
+      if (!ownMember || ownMember.id !== memberId) {
+        return res.status(403).json({ error: tTranslator('errors.readOnly'), code: 'READ_ONLY' });
+      }
+    }
     
     // MIGRATED: Get task's board ID for Redis publishing
     const boardId = await taskQueries.getTaskBoardId(db, taskId);

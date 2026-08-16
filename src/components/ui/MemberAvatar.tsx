@@ -1,4 +1,6 @@
 import React from 'react';
+import { Eye } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { TeamMember } from '../../types';
 import { SYSTEM_MEMBER_ID } from '../../constants/appConstants';
 import { getAuthenticatedAvatarUrl } from '../../utils/authImageUrl';
@@ -7,13 +9,29 @@ import {
   isAgentMemberId,
   resolveTaskMember,
 } from '../../utils/agentMemberUi';
+import { memberIsViewer } from '../../utils/memberUtils';
 
-type AvatarSize = 'xs' | 'sm' | 'md';
+type AvatarSize = 'xs' | 'sm' | 'md' | 'lg';
 
 const SIZE_CLASS: Record<AvatarSize, string> = {
   xs: 'w-4 h-4 text-[9px]',
   sm: 'w-5 h-5 text-[10px]',
   md: 'w-7 h-7 text-xs',
+  lg: 'w-8 h-8 text-sm',
+};
+
+const BADGE_CLASS: Record<AvatarSize, string> = {
+  xs: 'h-2.5 w-2.5 -bottom-0.5 -right-0.5',
+  sm: 'h-3 w-3 -bottom-0.5 -right-0.5',
+  md: 'h-3.5 w-3.5 -bottom-0.5 -right-0.5',
+  lg: 'h-4 w-4 -bottom-0.5 -right-0.5',
+};
+
+const EYE_PX: Record<AvatarSize, number> = {
+  xs: 7,
+  sm: 8,
+  md: 9,
+  lg: 10,
 };
 
 interface MemberAvatarProps {
@@ -23,6 +41,8 @@ interface MemberAvatarProps {
   size?: AvatarSize;
   className?: string;
   title?: string;
+  /** Viewer eye overlay (default on). */
+  showViewerBadge?: boolean;
 }
 
 /**
@@ -35,7 +55,9 @@ export default function MemberAvatar({
   size = 'md',
   className = '',
   title,
+  showViewerBadge = true,
 }: MemberAvatarProps) {
+  const { t } = useTranslation('common');
   const member =
     memberProp ||
     (memberId && members ? resolveTaskMember(members, memberId) : undefined);
@@ -51,10 +73,17 @@ export default function MemberAvatar({
   }
 
   const sizeClass = SIZE_CLASS[size];
-  const label = title || member.name;
+  const viewerHint = t('messages.readOnlyBadge');
+  const label =
+    title ||
+    (showViewerBadge && memberIsViewer(member)
+      ? `${member.name} (${viewerHint})`
+      : member.name);
+
+  let inner: React.ReactElement;
 
   if (member.id === SYSTEM_MEMBER_ID) {
-    return (
+    inner = (
       <div
         className={`${sizeClass} rounded-full flex items-center justify-center shrink-0 ${className}`}
         style={{ backgroundColor: member.color || '#1E40AF' }}
@@ -63,10 +92,8 @@ export default function MemberAvatar({
         🤖
       </div>
     );
-  }
-
-  if (isAgentMemberId(member.id)) {
-    return (
+  } else if (isAgentMemberId(member.id)) {
+    inner = (
       <img
         src={getAgentAvatarSrc(member)}
         alt={member.name}
@@ -74,28 +101,40 @@ export default function MemberAvatar({
         className={`${sizeClass} rounded-full object-cover shrink-0 ${className}`}
       />
     );
-  }
-
-  const avatarSrc = member.googleAvatarUrl || member.avatarUrl;
-  if (avatarSrc) {
-    return (
+  } else {
+    const avatarSrc = member.googleAvatarUrl || member.avatarUrl;
+    inner = avatarSrc ? (
       <img
         src={getAuthenticatedAvatarUrl(avatarSrc)}
         alt={member.name}
         title={label}
         className={`${sizeClass} rounded-full object-cover shrink-0 ${className}`}
       />
+    ) : (
+      <div
+        className={`${sizeClass} rounded-full flex items-center justify-center font-medium text-white shrink-0 ${className}`}
+        style={{ backgroundColor: member.color || '#6B7280' }}
+        title={label}
+      >
+        {(member.name || '?').charAt(0).toUpperCase()}
+      </div>
     );
   }
 
+  if (!showViewerBadge || !memberIsViewer(member)) {
+    return inner;
+  }
+
   return (
-    <div
-      className={`${sizeClass} rounded-full flex items-center justify-center font-medium text-white shrink-0 ${className}`}
-      style={{ backgroundColor: member.color || '#6B7280' }}
-      title={label}
-    >
-      {(member.name || '?').charAt(0).toUpperCase()}
-    </div>
+    <span className={`relative inline-flex ${sizeClass} shrink-0`} title={label}>
+      {inner}
+      <span
+        className={`absolute flex items-center justify-center rounded-full bg-sky-100 text-sky-700 ring-1 ring-white dark:bg-sky-950 dark:text-sky-300 dark:ring-gray-800 ${BADGE_CLASS[size]}`}
+        aria-label={viewerHint}
+      >
+        <Eye size={EYE_PX[size]} strokeWidth={2.5} aria-hidden />
+      </span>
+    </span>
   );
 }
 

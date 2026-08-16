@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Send, Trash2, CheckSquare, Square, RefreshCw, ChevronDown, Search } from 'lucide-react';
+import { Send, Trash2, CheckSquare, Square, RefreshCw, ChevronDown, Search, Loader2 } from 'lucide-react';
 import { getNotificationQueue, sendNotificationsImmediately, deleteNotifications, updateSetting } from '../../api';
 import { toast } from '../../utils/toast';
 import { formatToYYYYMMDDHHmmss as formatDateTimeLocal } from '../../utils/dateUtils';
 import { ModernCheckbox } from '../ModernCheckbox';
 import { useSettings } from '../../contexts/SettingsContext';
+import websocketClient from '../../services/websocketClient';
 import {
   ADMIN_NUMERIC_INPUT_CLASS,
   ADMIN_TABLE_ROW_CLASS,
@@ -50,6 +51,12 @@ interface AdminNotificationQueueTabProps {
   discardNonce?: number;
 }
 
+function queueItemAgeMs(n: NotificationQueueItem): number {
+  const raw = n.firstChangeTime || n.createdAt || n.scheduledSendTime;
+  const t = raw ? Date.parse(raw) : NaN;
+  return Number.isFinite(t) ? t : 0;
+}
+
 /** Split `YYYY-MM-DD HH:MM:SS` into date / time for two-line table cells. */
 function splitDateTimeLocal(value: string | null | undefined): { date: string; time: string } | null {
   if (!value) return null;
@@ -74,6 +81,12 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSending, setIsSending] = useState(false);
+  const [sendProgress, setSendProgress] = useState<{
+    done: number;
+    total: number;
+    sent: number;
+    failed: number;
+  } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [displayLimit, setDisplayLimit] = useState(50);
   const [showDeleteMenu, setShowDeleteMenu] = useState(false);
@@ -94,21 +107,52 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
     onLocalDirtyChange?.(retentionDirty);
   }, [retentionDirty, onLocalDirtyChange]);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (opts?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!opts?.silent) setLoading(true);
       const data = await getNotificationQueue();
       setNotifications(data);
+      setSelectedIds((prev) => {
+        const valid = new Set(data.map((n: NotificationQueueItem) => n.id));
+        const next = new Set<string>();
+        prev.forEach((id) => {
+          if (valid.has(id)) next.add(id);
+        });
+        return next;
+      });
     } catch (error: any) {
       console.error('Failed to fetch notification queue:', error);
-      toast.error(t('notificationQueue.fetchError') || 'Failed to fetch notification queue', '');
+      if (!opts?.silent) {
+        toast.error(t('notificationQueue.fetchError') || 'Failed to fetch notification queue', '');
+      }
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   };
 
+  const liveFetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchNotificationsRef = useRef(fetchNotifications);
+  fetchNotificationsRef.current = fetchNotifications;
+
   useEffect(() => {
-    fetchNotifications();
+    void fetchNotifications();
+    const refreshSilent = () => {
+      if (liveFetchTimer.current) clearTimeout(liveFetchTimer.current);
+      liveFetchTimer.current = setTimeout(() => {
+        void fetchNotificationsRef.current({ silent: true });
+      }, 400);
+    };
+    websocketClient.onNotificationQueueUpdated(refreshSilent);
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void fetchNotificationsRef.current({ silent: true });
+      }
+    }, 10000);
+    return () => {
+      websocketClient.offNotificationQueueUpdated(refreshSilent);
+      window.clearInterval(poll);
+      if (liveFetchTimer.current) clearTimeout(liveFetchTimer.current);
+    };
   }, []);
 
   const saveRetention = async () => {
@@ -247,7 +291,10 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
 
     // Filter out sent notifications - only allow sending pending/failed notifications
     const selectedNotifications = filteredNotifications.filter(n => selectedIds.has(n.id));
-    const sendableNotifications = selectedNotifications.filter(n => n.status !== 'sent');
+    const sendableNotifications = selectedNotifications
+      .filter(n => n.status !== 'sent')
+      .slice()
+      .sort((a, b) => queueItemAgeMs(a) - queueItemAgeMs(b));
     
     if (sendableNotifications.length === 0) {
       toast.error(t('notificationQueue.noUnsentNotifications'));
@@ -266,23 +313,45 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
 
     try {
       setIsSending(true);
-      const result = await sendNotificationsImmediately(sendableNotifications.map(n => n.id));
-      
-      if (result.errors && result.errors.length > 0) {
-        console.warn('Some notifications failed to send:', result.errors);
+      const ids = sendableNotifications.map((n) => n.id);
+      const progress = { done: 0, total: ids.length, sent: 0, failed: 0 };
+      setSendProgress({ ...progress });
+      const errors: string[] = [];
+
+      for (const id of ids) {
+        try {
+          const result = await sendNotificationsImmediately([id]);
+          progress.sent += result.sentCount || 0;
+          progress.failed += result.failedCount || 0;
+          if (result.errors?.length) errors.push(...result.errors);
+        } catch (error: any) {
+          const code = error?.response?.data?.code;
+          if (code === 'TASK_EMAIL_NOTIFICATIONS_PAUSED') {
+            toast.error(t('notificationQueue.sendPaused'));
+            break;
+          }
+          progress.failed += 1;
+          errors.push(error?.response?.data?.error || String(error));
+        }
+        progress.done += 1;
+        setSendProgress({ ...progress });
       }
 
-      if (result.sentCount > 0 && result.failedCount > 0) {
+      if (errors.length > 0) {
+        console.warn('Some notifications failed to send:', errors);
+      }
+
+      if (progress.sent > 0 && progress.failed > 0) {
         toast.warning(
           t('notificationQueue.sendPartial', {
-            sent: result.sentCount,
-            failed: result.failedCount,
+            sent: progress.sent,
+            failed: progress.failed,
           }),
           ''
         );
-      } else if (result.sentCount > 0) {
+      } else if (progress.sent > 0) {
         toast.success(
-          t('notificationQueue.sendSuccess', { count: result.sentCount }),
+          t('notificationQueue.sendSuccess', { count: progress.sent }),
           ''
         );
       } else {
@@ -290,7 +359,7 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
       }
 
       setSelectedIds(new Set());
-      await fetchNotifications();
+      await fetchNotifications({ silent: true });
     } catch (error: any) {
       console.error('Failed to send notifications:', error);
       const code = error?.response?.data?.code;
@@ -302,6 +371,7 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
       }
     } finally {
       setIsSending(false);
+      setSendProgress(null);
     }
   };
 
@@ -326,7 +396,7 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
         );
         
         setSelectedIds(new Set());
-        await fetchNotifications();
+        await fetchNotifications({ silent: true });
       }
     } catch (error: any) {
       console.error('Failed to delete notifications:', error);
@@ -362,7 +432,7 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
         );
         
         setSelectedIds(new Set());
-        await fetchNotifications();
+        await fetchNotifications({ silent: true });
       }
     } catch (error: any) {
       console.error('Failed to delete all sent notifications:', error);
@@ -397,11 +467,11 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
     return translated;
   };
 
-  if (loading) {
+  if (loading && notifications.length === 0) {
     return (
       <div className="p-6 text-center">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">{t('notificationQueue.loading', 'Loading...')}</p>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">{t('notificationQueue.loading')}</p>
       </div>
     );
   }
@@ -584,8 +654,15 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
             title={!taskEmailSendingEnabled ? t('notificationQueue.sendPaused') : undefined}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
-            <Send className="w-4 h-4 mr-2" />
-            {isSending ? t('notificationQueue.sending') : t('notificationQueue.sendNow')}
+            {isSending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+            {isSending && sendProgress
+              ? t('notificationQueue.sendingProgress', {
+                  done: sendProgress.done,
+                  total: sendProgress.total,
+                })
+              : isSending
+                ? t('notificationQueue.sending')
+                : t('notificationQueue.sendNow')}
           </button>
           <div className="relative">
             <button
@@ -634,16 +711,50 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
             )}
           </div>
           <button
-            onClick={fetchNotifications}
+            onClick={() => void fetchNotifications()}
             disabled={loading || isSending || isDeleting}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            {t('notificationQueue.refresh') || 'Refresh'}
+            {t('notificationQueue.refresh')}
           </button>
           </div>
         </div>
       </div>
+
+      {sendProgress && (
+        <div
+          className="mb-4 flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">
+              {t('notificationQueue.sendingProgress', {
+                done: sendProgress.done,
+                total: sendProgress.total,
+              })}
+            </p>
+            {sendProgress.done > 0 && (
+              <p className="mt-0.5 text-xs opacity-90">
+                {t('notificationQueue.sendPartial', {
+                  sent: sendProgress.sent,
+                  failed: sendProgress.failed,
+                })}
+              </p>
+            )}
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-blue-200 dark:bg-blue-900">
+              <div
+                className="h-full bg-blue-600 transition-all dark:bg-blue-400"
+                style={{
+                  width: `${sendProgress.total ? Math.round((sendProgress.done / sendProgress.total) * 100) : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {filteredNotifications.length === 0 ? (
         <div className="text-center py-12">
