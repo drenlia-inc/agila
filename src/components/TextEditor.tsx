@@ -94,6 +94,8 @@ interface TextEditorProps {
   imageDisplayMode?: 'full' | 'compact'; // Image display size (default: 'full')
   /** When false, TipTap content is not editable (e.g. soft-deleted task details). Default true. */
   editable?: boolean;
+  /** When set, extra typing/paste that would exceed this HTML length is undone. */
+  maxLength?: number;
 }
 
 const defaultToolbarOptions: ToolbarOptions = {
@@ -174,6 +176,7 @@ export default function TextEditor({
   allowImageResize = true,
   imageDisplayMode = 'full',
   editable = true,
+  maxLength,
 }: TextEditorProps) {
   const { t } = useTranslation('common');
   const { siteSettings } = useSettings();
@@ -217,6 +220,8 @@ export default function TextEditor({
   const tableDropdownRef = React.useRef<HTMLDivElement>(null);
   // TipTap HTML after last programmatic setContent / create — used to ignore non-user updates
   const contentBaselineRef = React.useRef<string | null>(null);
+  const maxLengthRef = React.useRef<number | undefined>(maxLength);
+  maxLengthRef.current = maxLength;
 
   // Track previous existingAttachments to prevent infinite updates
   const prevExistingAttachmentsRef = React.useRef<string>('');
@@ -671,7 +676,12 @@ export default function TextEditor({
       contentBaselineRef.current = content;
       onChange(content);
     },
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor, transaction }) => {
+      const max = maxLengthRef.current;
+      if (max && transaction.docChanged && editor.getHTML().length > max) {
+        editor.commands.undo();
+        return;
+      }
       if (!onChange) return;
       const content = editor.getHTML();
       // Ignore updates that don't change content relative to the last programmatic baseline
@@ -1183,6 +1193,9 @@ export default function TextEditor({
     if (!editor) return;
     
     const content = editor.getHTML();
+    if (maxLength && content.length > maxLength) {
+      return;
+    }
     const isEmptyContent = !content || content.replace(/<[^>]*>/g, '').trim() === '';
     
     if (!isEmptyContent || (showAttachments && newAttachments.length > 0)) {

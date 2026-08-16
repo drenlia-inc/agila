@@ -7,6 +7,7 @@ import { getSprintUsage, deleteSprint } from '../../api';
 import { ModernCheckbox } from '../ModernCheckbox';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
+import { SPRINT_NAME_MAX_LENGTH, SPRINT_DESCRIPTION_MAX_LENGTH } from '../../constants/appConstants';
 
 interface PlanningPeriod {
   id: string;
@@ -416,6 +417,7 @@ const AdminSprintSettingsTab: React.FC = () => {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., Sprint 1, Q1 2025"
+                maxLength={SPRINT_NAME_MAX_LENGTH}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
               />
             </div>
@@ -452,6 +454,7 @@ const AdminSprintSettingsTab: React.FC = () => {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder={t('sprintSettings.optionalDescription')}
+                maxLength={SPRINT_DESCRIPTION_MAX_LENGTH}
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
               />

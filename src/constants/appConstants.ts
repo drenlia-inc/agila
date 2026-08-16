@@ -11,6 +11,21 @@ export const AGENT_MEMBER_ID = '00000000-0000-0000-0000-000000000011';
 export const AGENT_DEFAULT_NAME = 'Agent';
 export const AGENT_DEFAULT_COLOR = '#0F766E';
 
+/** Keep in sync with server/constants/fieldLimits.js */
+export const TASK_TITLE_MAX_LENGTH = 200;
+export const TASK_DESCRIPTION_MAX_LENGTH = 100_000;
+export const COMMENT_MAX_LENGTH = 10_000;
+export const BOARD_TITLE_MAX_LENGTH = 200;
+export const COLUMN_TITLE_MAX_LENGTH = 200;
+export const COLUMN_POLICY_MAX_LENGTH = 500;
+export const TAG_NAME_MAX_LENGTH = 30;
+export const TAG_DESCRIPTION_MAX_LENGTH = 2000;
+export const BLOCKED_REASON_MAX_LENGTH = 500;
+export const FILTER_NAME_MAX_LENGTH = 100;
+export const SPRINT_NAME_MAX_LENGTH = 30;
+export const SPRINT_DESCRIPTION_MAX_LENGTH = 5000;
+export const PRIORITY_NAME_MAX_LENGTH = 30;
+
 /** task_work.status values for agent automation */
 export const AGENT_WORK_STATUSES = {
   queued: 'queued',

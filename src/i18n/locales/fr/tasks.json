@@ -388,6 +388,7 @@
     "clickToAdd": "Cliquer pour ajouter"
   },
   "taskCard": {
+    "newTask": "Nouvelle tâche",
     "directLinkTo": "Lien direct vers {{ticket}}",
     "editTitle": "Modifier le titre",
     "editDescription": "Modifier la description",

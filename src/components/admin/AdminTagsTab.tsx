@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { Edit, Trash2 } from 'lucide-react';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
+import { TAG_NAME_MAX_LENGTH, TAG_DESCRIPTION_MAX_LENGTH } from '../../constants/appConstants';
 
 interface Tag {
   id: number;
@@ -335,6 +336,7 @@ const AdminTagsTab: React.FC<AdminTagsTabProps> = ({
                     onChange={(e) => setNewTag(prev => ({ ...prev, tag: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     placeholder={t('tags.enterTagName')}
+                    maxLength={TAG_NAME_MAX_LENGTH}
                     required
                   />
                 </div>
@@ -345,6 +347,7 @@ const AdminTagsTab: React.FC<AdminTagsTabProps> = ({
                     onChange={(e) => setNewTag(prev => ({ ...prev, description: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     placeholder={t('tags.enterTagDescription')}
+                    maxLength={TAG_DESCRIPTION_MAX_LENGTH}
                     rows={3}
                   />
                 </div>
@@ -397,6 +400,7 @@ const AdminTagsTab: React.FC<AdminTagsTabProps> = ({
                     onChange={(e) => setEditingTag(prev => prev ? { ...prev, tag: e.target.value } : null)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                     placeholder={t('tags.enterTagName')}
+                    maxLength={TAG_NAME_MAX_LENGTH}
                     required
                   />
                 </div>
@@ -407,6 +411,7 @@ const AdminTagsTab: React.FC<AdminTagsTabProps> = ({
                     onChange={(e) => setEditingTag(prev => prev ? { ...prev, description: e.target.value } : null)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                     placeholder={t('tags.enterTagDescription')}
+                    maxLength={TAG_DESCRIPTION_MAX_LENGTH}
                     rows={3}
                   />
                 </div>

@@ -15,6 +15,7 @@ import { TASK_COUNT_PILL_BASE, taskCountPillToneClass, taskCountPillWeightClass 
 import { sumTaskEffort, formatEffortDisplay, parseEffortUnit } from '../utils/taskUtils';
 import { showColumnEffort, showColumnTaskCounts } from '../utils/kanbanChromeVisibility';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
+import { COLUMN_TITLE_MAX_LENGTH, COLUMN_POLICY_MAX_LENGTH } from '../constants/appConstants';
 import { resolveTaskMember } from '../utils/agentMemberUi';
 import {
   shouldShowColumnBulkFab,
@@ -1049,6 +1050,7 @@ export default function KanbanColumn({
                 type="text"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
+                maxLength={COLUMN_TITLE_MAX_LENGTH}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 autoFocus
                 disabled={isSubmitting}
@@ -1196,7 +1198,7 @@ export default function KanbanColumn({
                   value={policyText}
                   onChange={(e) => setPolicyText(e.target.value)}
                   rows={2}
-                  maxLength={500}
+                  maxLength={COLUMN_POLICY_MAX_LENGTH}
                   placeholder={t('column.policyTextPlaceholder')}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm resize-y"
                   disabled={isSubmitting}

@@ -2,19 +2,22 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import { BOARD_TITLE_MAX_LENGTH } from '../constants/appConstants';
 
 interface RenameModalProps {
   title: string;
   currentName: string;
   onSubmit: (newName: string) => void;
   onClose: () => void;
+  maxLength?: number;
 }
 
 export default function RenameModal({
   title,
   currentName,
   onSubmit,
-  onClose
+  onClose,
+  maxLength = BOARD_TITLE_MAX_LENGTH
 }: RenameModalProps) {
   const { t } = useTranslation('common');
   const [name, setName] = React.useState(currentName);
@@ -57,6 +60,7 @@ export default function RenameModal({
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               placeholder={t('renameModal.enterName')}
+              maxLength={maxLength}
               autoFocus
             />
           </div>

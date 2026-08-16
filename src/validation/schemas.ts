@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { TASK_TITLE_MAX_LENGTH } from '../constants/appConstants';
 
 export const TaskSchema = z.object({
   id: z.string().uuid(),
-  title: z.string().min(1, "Title is required").max(200, "Title must be less than 200 characters"),
+  title: z.string().min(1, "Title is required").max(TASK_TITLE_MAX_LENGTH, "Title must be less than 200 characters"),
   description: z.string().max(5000, "Description must be less than 5000 characters"),
   columnId: z.string(),
   memberId: z.string().optional(),

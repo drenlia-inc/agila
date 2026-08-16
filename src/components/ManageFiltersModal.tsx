@@ -3,6 +3,7 @@ import { X, Edit2, Trash2, Save, XCircle, Globe, Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SavedFilterView, updateSavedFilterView, deleteSavedFilterView } from '../api';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import { FILTER_NAME_MAX_LENGTH } from '../constants/appConstants';
 
 interface ManageFiltersModalProps {
   isOpen: boolean;
@@ -199,6 +200,7 @@ export default function ManageFiltersModal({
                         onChange={(e) => setEditName(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         placeholder={t('manageFiltersModal.filterNamePlaceholder')}
+                        maxLength={FILTER_NAME_MAX_LENGTH}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && editName.trim()) {
                             handleSaveEdit();

@@ -13,6 +13,7 @@ import {
   getBoardTabDropClasses 
 } from '../utils/crossBoardDragUtils';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
+import { BOARD_TITLE_MAX_LENGTH } from '../constants/appConstants';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import {
   TASK_COUNT_PILL_BASE,
@@ -1004,6 +1005,7 @@ export default function BoardTabs({
             editingTitleRef.current = e.target.value;
           }}
           className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+          maxLength={BOARD_TITLE_MAX_LENGTH}
           autoFocus
           disabled={isSubmitting}
           aria-label={t('boardTabs.boardTitle')}

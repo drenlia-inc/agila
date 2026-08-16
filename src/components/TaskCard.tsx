@@ -45,6 +45,8 @@ import {
   AGENT_MEMBER_ID,
   SYSTEM_MEMBER_ID,
   AGENT_DRAG_BLOCKING_STATUSES,
+  TASK_TITLE_MAX_LENGTH,
+  TASK_DESCRIPTION_MAX_LENGTH,
 } from '../constants/appConstants';
 import AgentPanel from './AgentPanel';
 import type { AgentPanelView } from './AgentPanel';
@@ -2054,6 +2056,7 @@ const TaskCard = React.memo(function TaskCard({
                 className="font-medium text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-blue-400 rounded px-1 py-0.5 outline-none focus:border-blue-500 w-full text-sm"
                 onClick={(e) => e.stopPropagation()}
                 autoFocus
+                maxLength={TASK_TITLE_MAX_LENGTH}
               />
             </div>
           ) : (
@@ -2155,6 +2158,7 @@ const TaskCard = React.memo(function TaskCard({
                   }}
                   initialContent={editedDescription}
                   placeholder={t('taskCard.enterTaskDescription')}
+                  maxLength={TASK_DESCRIPTION_MAX_LENGTH}
                   compact={true}
                   showSubmitButtons={false}
                   resizable={true}

@@ -8,6 +8,7 @@ import ManageFiltersModal from './ManageFiltersModal';
 import ColumnFilterDropdown from './ColumnFilterDropdown';
 import { getAgentAvatarSrc } from '../utils/agentMemberUi';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import { FILTER_NAME_MAX_LENGTH } from '../constants/appConstants';
 
 interface SearchFilters {
   text: string;
@@ -949,6 +950,7 @@ export default function SearchInterface({
                   value={newFilterName}
                   onChange={(e) => setNewFilterName(e.target.value)}
                   placeholder={t('searchInterface.enterFilterName')}
+                  maxLength={FILTER_NAME_MAX_LENGTH}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && newFilterName.trim()) {

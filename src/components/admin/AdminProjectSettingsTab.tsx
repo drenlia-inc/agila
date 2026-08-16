@@ -22,6 +22,7 @@ import {
   uniqueNewFinishedKeywords,
   type DefaultBoardColumnRow,
 } from '../../utils/defaultBoardColumns';
+import { COLUMN_TITLE_MAX_LENGTH } from '../../constants/appConstants';
 
 interface AdminProjectSettingsTabProps {
   settings: { [key: string]: string | undefined };
@@ -242,6 +243,7 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
               onKeyDown={handleFinishedNameKeyDown}
               placeholder={t('enterColumnName')}
               className={`flex-1 ${adminInputClass}`}
+              maxLength={COLUMN_TITLE_MAX_LENGTH}
             />
             <button
               onClick={addFinishedColumnName}

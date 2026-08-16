@@ -19,6 +19,7 @@ import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { commentTextToHtml } from '../utils/commentContent';
 import { feDebug } from '../utils/clientDebug';
 import { parseEffortUnit, isTaskSoftDeleted } from '../utils/taskUtils';
+import { TASK_TITLE_MAX_LENGTH, TASK_DESCRIPTION_MAX_LENGTH, COMMENT_MAX_LENGTH, BLOCKED_REASON_MAX_LENGTH } from '../constants/appConstants';
 import { mergeTaskTagsWithLiveData } from '../utils/tagUtils';
 import { userCanMutate, userIsViewer } from '../utils/permissions';
 import MemberAvatar, { getPriorityPillStyle } from './ui/MemberAvatar';
@@ -1095,6 +1096,7 @@ export default function TaskPage({
                     : 'bg-white dark:bg-gray-700'
                 }`}
                 placeholder={t('placeholders.enterTitle')}
+                maxLength={TASK_TITLE_MAX_LENGTH}
               />
             </div>
 
@@ -1112,6 +1114,7 @@ export default function TaskPage({
                 onImageRemovalNeeded={fieldsLocked ? undefined : handleImageRemoval}
                 initialContent={editedTask.description || ''}
                 placeholder={t('placeholders.enterDescription')}
+                maxLength={TASK_DESCRIPTION_MAX_LENGTH}
                 minHeight="120px"
                 showSubmitButtons={false}
                 showAttachments={!fieldsLocked}
@@ -1218,6 +1221,7 @@ export default function TaskPage({
                     // No additional action needed here
                   }}
                   placeholder={t('taskPage.addCommentPlaceholder')}
+                  maxLength={COMMENT_MAX_LENGTH}
                   showAttachments={true}
                   submitButtonText={t('taskPage.addComment')}
                   cancelButtonText={t('buttons.cancel', { ns: 'common' })}
@@ -1294,6 +1298,7 @@ export default function TaskPage({
                           onSubmit={handleSaveEditComment}
                           onCancel={handleCancelEditComment}
                           placeholder={t('taskPage.editCommentPlaceholder')}
+                          maxLength={COMMENT_MAX_LENGTH}
                           minHeight="80px"
                           showToolbar={true}
                           showSubmitButtons={true}
@@ -1782,6 +1787,7 @@ export default function TaskPage({
                         window.setTimeout(() => saveImmediately(), 0);
                       }}
                       placeholder={t('labels.blockedReasonPlaceholder')}
+                      maxLength={BLOCKED_REASON_MAX_LENGTH}
                       className={`mt-2 w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm ${
                         fieldsLocked ? 'cursor-default' : ''
                       }`}
