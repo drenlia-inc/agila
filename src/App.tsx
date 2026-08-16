@@ -3047,7 +3047,7 @@ function AppContent() {
 
     const newTask: Task = {
       id: generateUUID(),
-      title: t('taskCard.newTask', { ns: 'common' }),
+      title: t('taskCard.newTask'),
       description: '',
       memberId: currentUserMember.id,
       startDate: taskStartDate,

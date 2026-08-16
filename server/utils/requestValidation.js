@@ -1,4 +1,19 @@
 import { z } from 'zod';
+import {
+  TASK_TITLE_MAX_LENGTH,
+  TASK_DESCRIPTION_MAX_LENGTH,
+  COMMENT_MAX_LENGTH,
+  BOARD_TITLE_MAX_LENGTH,
+  COLUMN_TITLE_MAX_LENGTH,
+  COLUMN_POLICY_MAX_LENGTH,
+  TAG_NAME_MAX_LENGTH,
+  TAG_DESCRIPTION_MAX_LENGTH,
+  BLOCKED_REASON_MAX_LENGTH,
+  FILTER_NAME_MAX_LENGTH,
+  SPRINT_NAME_MAX_LENGTH,
+  SPRINT_DESCRIPTION_MAX_LENGTH,
+  PRIORITY_NAME_MAX_LENGTH
+} from '../constants/fieldLimits.js';
 
 /**
  * Parse req.body with a Zod schema. Returns { success, data } or { success: false, error }.
@@ -60,13 +75,13 @@ const attachmentSchema = z.object({
 export const createCommentBodySchema = z.object({
   id: z.string().min(1).max(128),
   taskId: z.string().min(1).max(128),
-  text: z.string().min(1, 'Comment cannot be empty').max(10000, 'Comment must be less than 10000 characters'),
+  text: z.string().min(1, 'Comment cannot be empty').max(COMMENT_MAX_LENGTH, `Comment must be less than ${COMMENT_MAX_LENGTH} characters`),
   createdAt: z.union([z.string().min(1), z.number()]).optional(),
   attachments: z.array(attachmentSchema).max(50).optional()
 }).passthrough();
 
 export const updateCommentBodySchema = z.object({
-  text: z.string().min(1, 'Comment cannot be empty').max(10000, 'Comment must be less than 10000 characters')
+  text: z.string().min(1, 'Comment cannot be empty').max(COMMENT_MAX_LENGTH, `Comment must be less than ${COMMENT_MAX_LENGTH} characters`)
 });
 
 export const loginBodySchema = z.object({
@@ -86,14 +101,14 @@ export const passwordResetCompleteBodySchema = z.object({
 /** Task create / add-at-top — core fields required; extras passthrough for FE compatibility. */
 export const createTaskBodySchema = z.object({
   id: idSchema,
-  title: z.string().min(1, 'Title is required').max(500),
-  description: z.string().max(500_000).optional(),
+  title: z.string().min(1, 'Title is required').max(TASK_TITLE_MAX_LENGTH),
+  description: z.string().max(TASK_DESCRIPTION_MAX_LENGTH).optional(),
   memberId: optionalNullableId,
   requesterId: optionalNullableId,
   startDate: optionalDate,
   dueDate: optionalDate,
   effort: effortSchema,
-  priority: z.union([z.string().max(100), z.null()]).optional(),
+  priority: z.union([z.string().max(PRIORITY_NAME_MAX_LENGTH), z.null()]).optional(),
   priorityId: optionalNullableId,
   columnId: idSchema,
   boardId: idSchema,
@@ -104,21 +119,21 @@ export const createTaskBodySchema = z.object({
 /** Task update — partial; known fields constrained; unknown keys allowed. */
 export const updateTaskBodySchema = z.object({
   id: idSchema.optional(),
-  title: z.string().min(1).max(500).optional(),
-  description: z.union([z.string().max(500_000), z.null()]).optional(),
+  title: z.string().min(1).max(TASK_TITLE_MAX_LENGTH).optional(),
+  description: z.union([z.string().max(TASK_DESCRIPTION_MAX_LENGTH), z.null()]).optional(),
   memberId: optionalNullableId,
   requesterId: optionalNullableId,
   startDate: optionalDate,
   dueDate: optionalDate,
   effort: effortSchema,
-  priority: z.union([z.string().max(100), z.null()]).optional(),
+  priority: z.union([z.string().max(PRIORITY_NAME_MAX_LENGTH), z.null()]).optional(),
   priorityId: optionalNullableId,
   columnId: z.preprocess((v) => (v === '' ? undefined : v), idSchema.optional()),
   boardId: z.preprocess((v) => (v === '' ? undefined : v), idSchema.optional()),
   position: z.union([z.number(), z.string().max(32), z.null()]).optional(),
   sprintId: optionalNullableId,
   isBlocked: booleanish,
-  blockedReason: z.union([z.string().max(2000), z.null()]).optional(),
+  blockedReason: z.union([z.string().max(BLOCKED_REASON_MAX_LENGTH), z.null()]).optional(),
   skipActivity: z.boolean().optional()
 }).passthrough();
 
@@ -224,11 +239,11 @@ export const adminUpdateUserRoleBodySchema = z.union([
 
 export const createBoardBodySchema = z.object({
   id: idSchema,
-  title: z.string().min(1, 'Board title is required').max(200)
+  title: z.string().min(1, 'Board title is required').max(BOARD_TITLE_MAX_LENGTH)
 }).passthrough();
 
 export const updateBoardBodySchema = z.object({
-  title: z.string().min(1, 'Board title is required').max(200),
+  title: z.string().min(1, 'Board title is required').max(BOARD_TITLE_MAX_LENGTH),
   wip_limit: z.union([z.number(), z.string().max(32), z.null()]).optional()
 }).passthrough();
 
@@ -239,17 +254,17 @@ export const reorderBoardBodySchema = z.object({
 
 export const createColumnBodySchema = z.object({
   id: idSchema,
-  title: z.string().min(1, 'Column title is required').max(200),
+  title: z.string().min(1, 'Column title is required').max(COLUMN_TITLE_MAX_LENGTH),
   boardId: idSchema,
   position: z.union([z.number(), z.string().max(32), z.null()]).optional()
 }).passthrough();
 
 export const updateColumnBodySchema = z.object({
-  title: z.string().min(1, 'Column title is required').max(200),
+  title: z.string().min(1, 'Column title is required').max(COLUMN_TITLE_MAX_LENGTH),
   is_finished: booleanish,
   is_archived: booleanish,
   wip_limit: z.union([z.number(), z.string().max(32), z.null()]).optional(),
-  policy_text: z.union([z.string().max(2000), z.null()]).optional()
+  policy_text: z.union([z.string().max(COLUMN_POLICY_MAX_LENGTH), z.null()]).optional()
 }).passthrough();
 
 export const reorderColumnBodySchema = z.object({
@@ -295,15 +310,15 @@ export const updateAppUrlBodySchema = z.object({
 // —— Tags / priorities / sprints / members ——
 
 export const createTagBodySchema = z.object({
-  tag: z.string().min(1, 'Tag name is required').max(100),
-  description: z.string().max(2000).optional(),
+  tag: z.string().min(1, 'Tag name is required').max(TAG_NAME_MAX_LENGTH),
+  description: z.string().max(TAG_DESCRIPTION_MAX_LENGTH).optional(),
   color: z.string().max(32).optional()
 }).passthrough();
 
 export const updateTagBodySchema = createTagBodySchema;
 
 export const createPriorityBodySchema = z.object({
-  priority: z.string().min(1, 'Priority name is required').max(100),
+  priority: z.string().min(1, 'Priority name is required').max(PRIORITY_NAME_MAX_LENGTH),
   color: z.string().min(1, 'Color is required').max(32)
 }).passthrough();
 
@@ -323,11 +338,11 @@ export const reorderPrioritiesBodySchema = z.object({
 });
 
 export const createSprintBodySchema = z.object({
-  name: z.string().min(1, 'Sprint name is required').max(200),
+  name: z.string().min(1, 'Sprint name is required').max(SPRINT_NAME_MAX_LENGTH),
   start_date: z.string().min(1, 'Start date is required').max(64),
   end_date: z.string().min(1, 'End date is required').max(64),
   is_active: booleanish,
-  description: z.union([z.string().max(5000), z.null()]).optional()
+  description: z.union([z.string().max(SPRINT_DESCRIPTION_MAX_LENGTH), z.null()]).optional()
 }).passthrough();
 
 export const updateSprintBodySchema = createSprintBodySchema;
@@ -410,13 +425,13 @@ export const viewFiltersSchema = z
   .passthrough();
 
 export const createViewBodySchema = z.object({
-  filterName: z.string().trim().min(1, 'Filter name is required').max(200),
+  filterName: z.string().trim().min(1, 'Filter name is required').max(FILTER_NAME_MAX_LENGTH),
   filters: viewFiltersSchema,
   shared: booleanish
 }).passthrough();
 
 export const updateViewBodySchema = z.object({
-  filterName: z.string().trim().min(1).max(200).optional(),
+  filterName: z.string().trim().min(1).max(FILTER_NAME_MAX_LENGTH).optional(),
   filters: viewFiltersSchema.optional(),
   shared: booleanish
 }).passthrough();
@@ -572,7 +587,7 @@ export const agentMoveTaskBodySchema = z.object({
 }).passthrough();
 
 export const agentCommentBodySchema = z.object({
-  text: z.string().min(1).max(10000),
+  text: z.string().min(1).max(COMMENT_MAX_LENGTH),
   id: idSchema.optional(),
   markWaiting: booleanish
 }).passthrough();
@@ -594,7 +609,7 @@ export const agentAttachmentsBodySchema = z.object({
 
 export const agentPatchTaskBodySchema = z
   .object({
-    priority: z.union([z.string().max(100), z.null()]).optional(),
+    priority: z.union([z.string().max(PRIORITY_NAME_MAX_LENGTH), z.null()]).optional(),
     priorityId: optionalNullableId,
     priority_id: optionalNullableId,
     effort: effortSchema,
@@ -606,8 +621,8 @@ export const agentPatchTaskBodySchema = z
     columnid: idSchema.optional(),
     sprintId: optionalNullableId,
     sprint_id: optionalNullableId,
-    title: z.any().optional(),
-    description: z.any().optional()
+    title: z.string().max(TASK_TITLE_MAX_LENGTH).optional(),
+    description: z.union([z.string().max(TASK_DESCRIPTION_MAX_LENGTH), z.null()]).optional()
   })
   .passthrough();
 
@@ -637,7 +652,7 @@ export const agentRunnerCallbackBodySchema = z
     jobId: z.string().max(128).optional(),
     progress: z.union([z.number(), z.string().max(32)]).optional(),
     log: z.string().max(100_000).optional(),
-    comment: z.string().max(10000).optional(),
+    comment: z.string().max(COMMENT_MAX_LENGTH).optional(),
     status: z.string().max(64).optional(),
     prUrl: z.string().max(2048).optional(),
     branch: z.string().max(256).optional(),

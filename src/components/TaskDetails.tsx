@@ -56,6 +56,10 @@ import {
   AGENT_MEMBER_ID,
   SYSTEM_MEMBER_ID,
   AGENT_DRAG_BLOCKING_STATUSES,
+  TASK_TITLE_MAX_LENGTH,
+  TASK_DESCRIPTION_MAX_LENGTH,
+  COMMENT_MAX_LENGTH,
+  BLOCKED_REASON_MAX_LENGTH,
 } from '../constants/appConstants';
 import { feDebug } from '../utils/clientDebug';
 import { commentTextToHtml } from '../utils/commentContent';
@@ -1653,6 +1657,7 @@ export default function TaskDetails({
                         : 'bg-gray-50 dark:bg-gray-700'
                     }`}
                     disabled={isSubmitting || isWritersLocked}
+                    maxLength={TASK_TITLE_MAX_LENGTH}
                     readOnly={isReadOnlyMode}
                     title={
                       isWritersLocked
@@ -1773,6 +1778,7 @@ export default function TaskDetails({
                 onImageRemovalNeeded={isWritersLocked ? undefined : handleImageRemoval}
                 initialContent={editedTask.description}
                 placeholder={t('placeholders.enterDescription')}
+                maxLength={TASK_DESCRIPTION_MAX_LENGTH}
                 minHeight="120px"
                 showSubmitButtons={false}
                 showAttachments={true}
@@ -2082,6 +2088,7 @@ export default function TaskDetails({
                       });
                     }}
                     placeholder={t('labels.blockedReasonPlaceholder')}
+                    maxLength={BLOCKED_REASON_MAX_LENGTH}
                     className="mt-2 w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm"
                     disabled={isSubmitting || isWritersLocked}
                   />
@@ -2393,6 +2400,7 @@ export default function TaskDetails({
                 // No additional action needed here
               }}
               placeholder={t('comments.addComment')}
+              maxLength={COMMENT_MAX_LENGTH}
               showAttachments={true}
               submitButtonText={t('actions.addComment')}
               cancelButtonText={t('buttons.cancel', { ns: 'common' })}
@@ -2481,6 +2489,7 @@ export default function TaskDetails({
                       }}
                       onCancel={handleCancelEditComment}
                       placeholder={t('comments.editComment')}
+                      maxLength={COMMENT_MAX_LENGTH}
                       showAttachments={true}
                       submitButtonText={t('comments.saveChanges')}
                       cancelButtonText={t('buttons.cancel', { ns: 'common' })}

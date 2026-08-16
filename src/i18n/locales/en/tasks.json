@@ -388,6 +388,7 @@
     "clickToAdd": "Click to add tags"
   },
   "taskCard": {
+    "newTask": "New Task",
     "directLinkTo": "Direct link to {{ticket}}",
     "editTitle": "Edit title",
     "editDescription": "Edit description",

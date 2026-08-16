@@ -21,6 +21,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { toast } from '../../utils/toast';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
+import { COLUMN_TITLE_MAX_LENGTH } from '../../constants/appConstants';
 import { adminInputClass } from './AdminSection';
 import {
   type DefaultBoardColumnRow,
@@ -162,6 +163,7 @@ const SortableDefaultColumnRow: React.FC<{
               }}
               className={`w-full max-w-[12rem] ${adminInputClass}`}
               placeholder="To Do"
+              maxLength={COLUMN_TITLE_MAX_LENGTH}
             />
           ) : (
             <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -184,7 +186,8 @@ const SortableDefaultColumnRow: React.FC<{
               }
             }}
             className={`w-full max-w-[12rem] ${adminInputClass}`}
-            placeholder="À faire"
+              placeholder="À faire"
+              maxLength={COLUMN_TITLE_MAX_LENGTH}
           />
         ) : (
           <span className="text-sm font-medium text-slate-900 dark:text-slate-100">

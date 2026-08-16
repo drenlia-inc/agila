@@ -26,6 +26,7 @@ import {
   AUTOMATION_CAPABILITIES
 } from '../constants/automation.js';
 import { AGENT_MEMBER_ID } from '../constants/agentIdentity.js';
+import { TASK_TITLE_MAX_LENGTH, TASK_DESCRIPTION_MAX_LENGTH } from '../constants/fieldLimits.js';
 import notificationService from './notificationService.js';
 import { getDefaultBoardColumns } from '../utils/defaultBoardColumns.js';
 import { updateStorageUsage } from '../utils/storageUtils.js';
@@ -574,6 +575,12 @@ async function toolCreateTask(ctx, args, { dryRun }, allowedBoardIds) {
   if (!title || !boardId || !columnId) {
     return { error: 'title, boardId, and columnId are required' };
   }
+  if (String(title).length > TASK_TITLE_MAX_LENGTH) {
+    return { error: `title must be at most ${TASK_TITLE_MAX_LENGTH} characters` };
+  }
+  if (description != null && String(description).length > TASK_DESCRIPTION_MAX_LENGTH) {
+    return { error: `description must be at most ${TASK_DESCRIPTION_MAX_LENGTH} characters` };
+  }
   assertBoardInScope(boardId, allowedBoardIds);
 
   const column = await helpers.getColumnById(ctx.db, columnId);
@@ -662,8 +669,18 @@ async function toolUpdateTasks(ctx, args, { dryRun }, allowedBoardIds) {
   }
 
   const updates = {};
-  if (fields.title !== undefined) updates.title = fields.title;
-  if (fields.description !== undefined) updates.description = fields.description;
+  if (fields.title !== undefined) {
+    if (String(fields.title).length > TASK_TITLE_MAX_LENGTH) {
+      return { error: `title must be at most ${TASK_TITLE_MAX_LENGTH} characters` };
+    }
+    updates.title = fields.title;
+  }
+  if (fields.description !== undefined) {
+    if (fields.description != null && String(fields.description).length > TASK_DESCRIPTION_MAX_LENGTH) {
+      return { error: `description must be at most ${TASK_DESCRIPTION_MAX_LENGTH} characters` };
+    }
+    updates.description = fields.description;
+  }
   if (fields.effort !== undefined) updates.effort = fields.effort;
   if (fields.startDate !== undefined) updates.startDate = fields.startDate;
   if (fields.dueDate !== undefined) updates.dueDate = fields.dueDate;

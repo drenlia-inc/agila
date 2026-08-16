@@ -28,7 +28,7 @@ import TextEditor from './TextEditor';
 import AddTagModal from './AddTagModal';
 import AddCommentModal from './AddCommentModal';
 import { putTaskWork, getTaskWork, setTaskWorkControl, type TaskWorkMap } from '../api';
-import { AGENT_MEMBER_ID } from '../constants/appConstants';
+import { AGENT_MEMBER_ID, TASK_TITLE_MAX_LENGTH, TASK_DESCRIPTION_MAX_LENGTH } from '../constants/appConstants';
 import {
   isAgentMemberId,
   resolveTaskMember,
@@ -2010,6 +2010,7 @@ export default function ListView({
                               onKeyDown={handleKeyDown}
                               className="text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 border border-blue-400 rounded px-1 py-0.5 outline-none focus:border-blue-500 w-full"
                               onClick={(e) => e.stopPropagation()}
+                              maxLength={TASK_TITLE_MAX_LENGTH}
                             />
                           ) : (
                             <div 
@@ -2061,6 +2062,7 @@ export default function ListView({
                                   onChange={(content) => setEditValue(content)}
                                   initialContent={editValue}
                                   placeholder={t('listView.enterTaskDescription')}
+                                  maxLength={TASK_DESCRIPTION_MAX_LENGTH}
                                   compact={true}
                                   showSubmitButtons={false}
                                   resizable={false}

@@ -12,6 +12,7 @@ import {
   looksLikeNonCodingRequest,
 } from '../utils/agentTaskHints';
 import TextEditor from './TextEditor';
+import { TASK_DESCRIPTION_MAX_LENGTH } from '../constants/appConstants';
 import { ModernCheckbox } from './ModernCheckbox';
 import DOMPurify from 'dompurify';
 
@@ -686,6 +687,7 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
                   compact
                   minHeight="96px"
                   placeholder={t('agent.taskDescriptionPlaceholder')}
+                  maxLength={TASK_DESCRIPTION_MAX_LENGTH}
                   allowImagePaste={false}
                   allowImageDelete={false}
                   className="w-full border border-gray-200 dark:border-gray-600 rounded-md overflow-hidden bg-gray-50/50 dark:bg-gray-900/20"
