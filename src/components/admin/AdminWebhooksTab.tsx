@@ -94,9 +94,14 @@ function previewIncomingWebhookUrl(url: string): string {
 }
 
 function sanitizeIncomingWebhookUrl(raw: string): string {
-  return String(raw || '')
-    .trim()
-    .replace(/[\s\u0000-\u001F\u007F]+/g, '');
+  // Avoid control chars in a regex literal (eslint no-control-regex).
+  const trimmed = String(raw || '').trim().replace(/\s+/g, '');
+  let out = '';
+  for (let i = 0; i < trimmed.length; i++) {
+    const code = trimmed.charCodeAt(i);
+    if (code >= 32 && code !== 127) out += trimmed[i];
+  }
+  return out;
 }
 
 type Draft = {
