@@ -97,6 +97,14 @@ router.get("/ready", readyHandler);
 router.get('/', async (req, res) => {
   try {
     const db = getRequestDatabase(req);
+    if (!db) {
+      return res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        database: 'skipped',
+        ready: isServerReady
+      });
+    }
     // MIGRATED: Check database connection using sqlManager
     await healthQueries.checkDatabaseConnection(db);
 
