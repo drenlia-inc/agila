@@ -403,9 +403,16 @@ export async function getSetting(db, key) {
  * @returns {Promise<Object>} Settings with GOOGLE_CLIENT_*, SERVER_DEBUG_GOOGLE_SSO (legacy GOOGLE_SSO_DEBUG merged in)
  */
 export async function getOAuthSettings(db) {
+  // Schema-qualify settings: unqualified FROM settings + pooled search_path has
+  // leaked another tenant's GOOGLE_CALLBACK_URL into the OAuth cache (SSO redirect
+  // to the wrong host, e.g. drenlia → qa1).
+  const table =
+    db?.schema && typeof db.schema === 'string' && db.schema !== 'public'
+      ? `"${db.schema.replace(/"/g, '""')}".settings`
+      : 'settings';
   const query = `
     SELECT key, value 
-    FROM settings 
+    FROM ${table}
     WHERE key IN ($1, $2, $3, $4, $5)
   `;
   

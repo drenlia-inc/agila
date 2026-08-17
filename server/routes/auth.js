@@ -427,18 +427,30 @@ function debugLog(settingsObj, ...args) {
 async function getOAuthSettings(db, tenantId) {
   const cached = getCachedOAuthEntry(tenantId);
   if (cached && !cached.invalidated && cached.settings) {
-    console.log('🔄 [GOOGLE SSO] Using cached OAuth settings');
+    console.log(`🔄 [GOOGLE SSO] Using cached OAuth settings (tenant=${tenantId || 'default'})`);
     return cached.settings;
   }
 
   const settingsObj = await authQueries.getOAuthSettings(db);
+  if (
+    tenantId &&
+    settingsObj.GOOGLE_CALLBACK_URL &&
+    !String(settingsObj.GOOGLE_CALLBACK_URL).includes(`${tenantId}.`)
+  ) {
+    console.error(
+      `🔐 [GOOGLE SSO] Loaded callback URL does not match tenant "${tenantId}" (schema=${db?.schema || '?'}): ${settingsObj.GOOGLE_CALLBACK_URL}`
+    );
+  }
   setCachedOAuthSettings(tenantId, settingsObj);
   
   // Always log basic OAuth config status, detailed logs only if debug enabled
   const oauthKeys = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'];
   console.log(
     '🔄 [GOOGLE SSO] OAuth settings loaded:',
+    `tenant=${tenantId || 'default'}`,
+    `schema=${db?.schema || '?'}`,
     oauthKeys.map((k) => `${k}: ${settingsObj[k] ? '✓' : '✗'}`).join(', '),
+    `callback=${settingsObj.GOOGLE_CALLBACK_URL || 'NOT_SET'}`,
     `[DEBUG: ${isGoogleSsoDebugEnabled(settingsObj) ? 'ON' : 'OFF'}]`
   );
   debugLog(settingsObj, '🔄 [GOOGLE SSO] OAuth settings details:', {
