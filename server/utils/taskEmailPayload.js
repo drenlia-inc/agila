@@ -101,6 +101,50 @@ export function emailChangeIsSilent(emailChange) {
   return items.length === 0;
 }
 
+const WEBHOOK_ALWAYS_NOTIFY_ACTIONS = new Set([
+  'create_task',
+  'copy_task',
+  'restore_task',
+  'delete_task',
+  'create_comment',
+]);
+
+function displayValue(item, which) {
+  if (!item) return '';
+  if (which === 'old') return String(item.oldName ?? item.oldValue ?? '').trim();
+  return String(item.newName ?? item.newValue ?? '').trim();
+}
+
+function isSameColumnOnly(emailChange, changedField, oldValue, newValue) {
+  const items = emailChange?.items || [];
+  const col = items.find((i) => i && (i.field === 'columnId' || i.field === 'column'));
+  if (col) {
+    const from = displayValue(col, 'old');
+    const to = displayValue(col, 'new');
+    if (from && to && from === to) return true;
+  }
+  if (changedField === 'columnId') {
+    return String(oldValue ?? '').trim() === String(newValue ?? '').trim();
+  }
+  return false;
+}
+
+/** Same-column reorders and unknown/generic updates should not post to webhooks. */
+export function webhookShouldNotify(
+  action,
+  emailChange,
+  { changedField = null, oldValue = null, newValue = null } = {}
+) {
+  if (WEBHOOK_ALWAYS_NOTIFY_ACTIONS.has(action)) return true;
+  const items = (emailChange?.items || []).filter(
+    (i) => i && !isSilentEmailField(i.field) && i.field !== 'generic'
+  );
+  if (isSameColumnOnly(emailChange, changedField, oldValue, newValue)) {
+    return items.some((i) => i.field !== 'columnId' && i.field !== 'column');
+  }
+  return items.length > 0;
+}
+
 function firstQuotedName(text) {
   let source = text;
   if (source && typeof source === 'object') {

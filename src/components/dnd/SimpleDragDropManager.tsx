@@ -18,8 +18,14 @@ import { resetDndGlobalState } from '../../utils/globalDndState';
 import { dndLog } from '../../utils/dndDebug';
 import {
   TaskDropPlacement,
-  resolvePreviewInsertIndex
 } from '../../utils/taskReorderingUtils';
+import {
+  resolveColumnIdUnderPointer,
+  resolveInsertIndexUnderPointer,
+  getTaskDragOverlayRect,
+  findPlaceholderHitByOverlay,
+  resolveDropFromOverlay,
+} from '../../utils/dndInsertIndex';
 
 interface SimpleDragDropManagerProps {
   children: React.ReactNode;
@@ -48,211 +54,182 @@ interface SimpleDragDropManagerProps {
 
 const parsePos = (pos: any): number => (typeof pos === 'number' ? pos : parseFloat(pos) || 0);
 
-/** Before/after relative to an anchor, using order in the visible (filtered) column. */
-function placementRelativeToTask(
+function placementFromInsertIndex(
   visibleTasks: Task[],
-  draggedTask: Task,
-  targetTask: Task
+  insertIndex: number,
+  draggedTaskId?: string
 ): TaskDropPlacement {
-  const sorted = [...visibleTasks].sort((a, b) => parsePos(a.position) - parsePos(b.position));
-  const draggedIndex = sorted.findIndex(t => t.id === draggedTask.id);
-  const targetIndex = sorted.findIndex(t => t.id === targetTask.id);
-  if (targetIndex < 0) {
-    return { kind: 'end' };
-  }
-  // Cross-column or unknown dragged index: insert before target
-  if (draggedIndex < 0 || draggedTask.columnId !== targetTask.columnId) {
-    return { kind: 'before', taskId: targetTask.id };
-  }
-  // Same column: moving up → before; moving down → after
-  if (draggedIndex > targetIndex) {
-    return { kind: 'before', taskId: targetTask.id };
-  }
-  return { kind: 'after', taskId: targetTask.id };
-}
-
-function placementForColumnEnd(visibleTasks: Task[], draggedTaskId?: string): TaskDropPlacement {
   const sorted = [...visibleTasks]
-    .filter(t => t.id !== draggedTaskId)
+    .filter((t) => t.id !== draggedTaskId)
     .sort((a, b) => parsePos(a.position) - parsePos(b.position));
-  const last = sorted[sorted.length - 1];
-  if (last) {
-    return { kind: 'after', taskId: last.id };
+  if (insertIndex <= 0) return { kind: 'start' };
+  if (insertIndex >= sorted.length) {
+    const last = sorted[sorted.length - 1];
+    return last ? { kind: 'after', taskId: last.id } : { kind: 'end' };
   }
-  return { kind: 'end' };
+  return { kind: 'before', taskId: sorted[insertIndex].id };
 }
 
-// Custom collision detection that prioritizes column areas over board tabs
+// Custom collision detection: prefer pointer hits; scope work to nearby droppables on large boards.
 const customCollisionDetection = (args: any) => {
-  // Check if we're dragging a column - if so, ignore task collisions
   const activeData = args.active?.data?.current;
   const isDraggingColumn = activeData?.type === 'column';
-  
-  // Get column IDs for direct ID matching (not just data.type)
-  const columnIds = isDraggingColumn && args.droppableContainers 
-    ? args.droppableContainers
+  const pointer = args.pointerCoordinates as { x: number; y: number } | null;
+  const allContainers: any[] = args.droppableContainers || [];
+
+  // Narrow candidates before pointerWithin / closestCorners (both are O(droppables)).
+  let containers = allContainers;
+  if (pointer && allContainers.length > 40) {
+    const underPointer: any[] = [];
+    const boardTabs: any[] = [];
+    for (const container of allContainers) {
+      const data = container.data?.current;
+      if (data?.type === 'board' && data?.boardId) {
+        boardTabs.push(container);
+        continue;
+      }
+      const rect = container.rect?.current;
+      if (!rect) continue;
+      // Slight vertical padding so edges between cards still register
+      if (
+        pointer.x >= rect.left &&
+        pointer.x <= rect.right &&
+        pointer.y >= rect.top - 8 &&
+        pointer.y <= rect.bottom + 8
+      ) {
+        underPointer.push(container);
+      }
+    }
+    if (underPointer.length > 0) {
+      containers = isDraggingColumn
+        ? underPointer
+        : underPointer.concat(boardTabs);
+    }
+  }
+
+  const scopedArgs = { ...args, droppableContainers: containers };
+
+  const columnIds = isDraggingColumn
+    ? containers
         .filter((container: any) => {
           const data = container.data?.current;
-          return data?.type === 'column' || container.id && !container.id.toString().includes('-middle') && !container.id.toString().includes('-drop');
+          return (
+            data?.type === 'column' ||
+            (container.id &&
+              !container.id.toString().includes('-middle') &&
+              !container.id.toString().includes('-drop'))
+          );
         })
         .map((container: any) => container.id)
     : [];
-  
-  // Get all possible collisions
-  const pointerCollisions = pointerWithin(args);
-  const cornerCollisions = closestCorners(args);
-  
-  // CRITICAL FIX: Prioritize pointer collisions over corner collisions
-  // This prevents distant empty columns from interfering with intended targets
+
+  const pointerCollisions = pointerWithin(scopedArgs);
+
   const columnCollisions = pointerCollisions.filter((collision: any) => {
     const data = collision.data?.current;
-    // Check both data.type AND collision.id against column IDs
-    // Note: column-bottom is for tasks only, not columns
-    const isColumnType = data?.type === 'column' || 
-           data?.type === 'column-top' || 
-           data?.type === 'board-area';
+    const isColumnType =
+      data?.type === 'column' ||
+      data?.type === 'column-top' ||
+      data?.type === 'board-area';
     const isColumnId = columnIds.length > 0 && columnIds.includes(collision.id);
     return isColumnType || isColumnId || data?.type === 'task';
   });
-  
-  // If we have pointer-based column collisions, use only those (most precise)
+
   if (columnCollisions.length > 0) {
-    // CRITICAL FIX: When dragging a column, filter out task collisions
-    // Tasks should not interfere with column-to-column drag operations
     if (isDraggingColumn) {
-      // Only allow column-type collisions when dragging a column
-      // Check both data.type AND collision.id against column IDs
-      // Note: column-bottom and column-middle are for tasks only, not columns
       const columnOnlyCollisions = columnCollisions.filter((collision: any) => {
         const data = collision.data?.current;
-        const isColumnType = data?.type === 'column' || 
-               data?.type === 'column-top' || 
-               data?.type === 'board-area';
+        const isColumnType =
+          data?.type === 'column' ||
+          data?.type === 'column-top' ||
+          data?.type === 'board-area';
         const isColumnId = columnIds.length > 0 && columnIds.includes(collision.id);
-        // Explicitly exclude 'task', 'column-middle', and 'column-bottom' type collisions
         return isColumnType || isColumnId;
       });
-      
-      // If we found column collisions, use them
-      if (columnOnlyCollisions.length > 0) {
-        return columnOnlyCollisions;
-      }
-      // CRITICAL: If dragging a column and no column collisions found, return empty array
-      // This prevents tasks from being detected as drop targets
-      return [];
-    } else {
-      // When dragging a task, prioritize task collisions over empty columns
-      const taskCollisions = columnCollisions.filter((collision: any) => {
-        return collision.data?.current?.type === 'task';
-      });
-      
-      // If we have task collisions, use only those (most specific)
-      if (taskCollisions.length > 0) {
-        return taskCollisions;
-      }
+      return columnOnlyCollisions.length > 0 ? columnOnlyCollisions : [];
     }
-    
-    // Otherwise use all pointer-based collisions (only for task drags)
+
+    const taskCollisions = columnCollisions.filter(
+      (collision: any) => collision.data?.current?.type === 'task'
+    );
+    if (taskCollisions.length > 0) return taskCollisions;
     return columnCollisions;
   }
-  
-  // Fallback to corner-based collisions only if no pointer collisions
-  // Note: column-bottom is for tasks only, not columns
+
+  // Fallback: closestCorners only on the scoped set (avoid second full-board scan)
+  const cornerCollisions = closestCorners(scopedArgs);
   const cornerColumnCollisions = cornerCollisions.filter((collision: any) => {
     const data = collision.data?.current;
-    return data?.type === 'column' || 
-           data?.type === 'column-top' || 
-           data?.type === 'board-area' || 
-           data?.type === 'task';
+    return (
+      data?.type === 'column' ||
+      data?.type === 'column-top' ||
+      data?.type === 'board-area' ||
+      data?.type === 'task'
+    );
   });
-  
+
   if (cornerColumnCollisions.length > 0) {
-    // When dragging a column, filter out task collisions from corner collisions too
     if (isDraggingColumn) {
-      const cornerColumnOnlyCollisions = cornerColumnCollisions.filter((collision: any) => {
+      const cornerColumnOnly = cornerColumnCollisions.filter((collision: any) => {
         const data = collision.data?.current;
-        // Note: column-bottom and column-middle are for tasks only, not columns
-        return data?.type === 'column' || 
-               data?.type === 'column-top' || 
-               data?.type === 'board-area';
-        // Explicitly exclude 'task', 'column-middle', and 'column-bottom' type collisions
+        return (
+          data?.type === 'column' ||
+          data?.type === 'column-top' ||
+          data?.type === 'board-area'
+        );
       });
-      
-      if (cornerColumnOnlyCollisions.length > 0) {
-        return cornerColumnOnlyCollisions;
-      }
-      // CRITICAL: If dragging a column and no column collisions found, return empty array
-      // This prevents tasks from being detected as drop targets
-      return [];
-    } else {
-      // When dragging a task, prioritize task collisions
-      const cornerTaskCollisions = cornerColumnCollisions.filter((collision: any) => {
-        return collision.data?.current?.type === 'task';
-      });
-      
-      if (cornerTaskCollisions.length > 0) {
-        return cornerTaskCollisions;
-      }
+      return cornerColumnOnly.length > 0 ? cornerColumnOnly : [];
     }
-    
+    const cornerTaskCollisions = cornerColumnCollisions.filter(
+      (collision: any) => collision.data?.current?.type === 'task'
+    );
+    if (cornerTaskCollisions.length > 0) return cornerTaskCollisions;
     return cornerColumnCollisions;
   }
-  
-  // Only consider board tabs if there are absolutely NO column collisions
-  // AND we're clearly over the board tab area (not just near it)
+
   const strictBoardCollisions = pointerCollisions.filter((collision: any) => {
     const data = collision.data?.current;
-    return data?.type === 'board' && data?.boardId; // Board tabs only
+    return data?.type === 'board' && data?.boardId;
   });
-  
-  // Be EXTREMELY strict about board tab detection
-  // Only allow board tabs if:
-  // 1. It's the ONLY pointer collision AND
-  // 2. There are NO corner collisions with columns/tasks
+
   const nonBoardCornerCollisions = cornerCollisions.filter((collision: any) => {
     const data = collision.data?.current;
     return data?.type !== 'board';
   });
-  
-  // Be EXTREMELY restrictive - require exactly ONE board collision
-  if (strictBoardCollisions.length === 1 && 
-      pointerCollisions.length === 1 &&
-      nonBoardCornerCollisions.length === 0) {
+
+  if (
+    strictBoardCollisions.length === 1 &&
+    pointerCollisions.length === 1 &&
+    nonBoardCornerCollisions.length === 0
+  ) {
     return strictBoardCollisions;
   }
-  
-  // Always prefer non-board collisions
+
   if (nonBoardCornerCollisions.length > 0) {
-    // If dragging a column, filter out tasks from non-board collisions too
     if (isDraggingColumn) {
       const filteredNonBoard = nonBoardCornerCollisions.filter((collision: any) => {
         const data = collision.data?.current;
-        // Note: column-bottom and column-middle are for tasks only, not columns
-        return data?.type === 'column' || 
-               data?.type === 'column-top' || 
-               data?.type === 'board-area';
+        return (
+          data?.type === 'column' ||
+          data?.type === 'column-top' ||
+          data?.type === 'board-area'
+        );
       });
-      if (filteredNonBoard.length > 0) {
-        return filteredNonBoard;
-      }
-      return [];
+      return filteredNonBoard.length > 0 ? filteredNonBoard : [];
     }
     return nonBoardCornerCollisions;
   }
-  
-  // Last resort - return original collisions (but filter tasks if dragging column)
+
   if (isDraggingColumn) {
     const filteredCorner = cornerCollisions.filter((collision: any) => {
       const data = collision.data?.current;
-      // Note: column-bottom and column-middle are for tasks only, not columns
-      return data?.type === 'column' || 
-             data?.type === 'column-top' || 
-             data?.type === 'board-area';
+      return (
+        data?.type === 'column' ||
+        data?.type === 'column-top' ||
+        data?.type === 'board-area'
+      );
     });
-    if (filteredCorner.length > 0) {
-      return filteredCorner;
-    }
-    return [];
+    return filteredCorner.length > 0 ? filteredCorner : [];
   }
   return cornerCollisions;
 };
@@ -279,15 +256,21 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const activeBulkTaskIdsRef = useRef<string[]>([]);
   const [keyboardMoveLabel, setKeyboardMoveLabel] = useState<string | null>(null);
   
-  // Y-coordinate based tab area detection
-  const [isHoveringBoardTabDelayed, setIsHoveringBoardTabDelayed] = useState(false);
-  const [currentMouseY, setCurrentMouseY] = useState(0);
-  const [tabAreaBounds, setTabAreaBounds] = useState({ top: 0, bottom: 80 }); // Dynamic tab bounds
-  const [usingYCoordinateDetection, setUsingYCoordinateDetection] = useState(false); // Flag to prioritize Y-detection
+  // Pointer / tab-hit geometry — refs only (never setState on mousemove; that re-rendered the whole app shell)
+  const mouseYRef = useRef(0);
+  const mouseXRef = useRef(0);
+  const tabAreaBoundsRef = useRef({ top: 0, bottom: 80 });
+  const isHoveringBoardTabRef = useRef(false);
   
   // Cache for drag preview to avoid recalculating on every drag over event
   const lastPreviewRef = useRef<{ targetColumnId: string; insertIndex: number; isCrossColumn: boolean } | null>(null);
-  const lastOverIdRef = useRef<string | number | null>(null);
+  const dragOriginRef = useRef<{ columnId: string; insertIndex: number; y: number } | null>(null);
+  const overlayRectRef = useRef<DOMRect | null>(null);
+  const overlaySnapRef = useRef<{ columnId: string; insertIndex: number } | null>(null);
+  const overlayStartTopRef = useRef<number | null>(null);
+  const overlayStartLeftRef = useRef<number | null>(null);
+  const isDraggingTaskRef = useRef(false);
+  const draggedTaskIdRef = useRef<string | null>(null);
   const rafHandleRef = useRef<number | null>(null);
   const lastProcessTimeRef = useRef<number>(0);
   const THROTTLE_MS = 16; // ~60fps max
@@ -297,15 +280,65 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const dragOverSkippedCountRef = useRef<number>(0);
   const dragOverProcessedCountRef = useRef<number>(0);
 
-  // Track mouse Y position for tab area detection
+  // Track mouse for board-tab / column-top drop recovery without React re-renders
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      setCurrentMouseY(e.clientY);
+      mouseYRef.current = e.clientY;
+      mouseXRef.current = e.clientX;
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
+
+  // Window auto-scroll while dragging a task. dnd-kit's scroller latches onto
+  // `overflow-x-auto` board chrome and never moves the page, so edge-drags stall.
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (!isDraggingTaskRef.current) return;
+      const y = mouseYRef.current;
+      const x = mouseXRef.current;
+      const edge = 56;
+      const maxStep = 24;
+      if (y < edge) {
+        const t = (edge - y) / edge;
+        window.scrollBy(0, -Math.max(8, t * maxStep));
+      } else if (y > window.innerHeight - edge) {
+        const t = (y - (window.innerHeight - edge)) / edge;
+        window.scrollBy(0, Math.max(8, t * maxStep));
+      }
+      const scroller = document.querySelector('.kanban-scrollable-container');
+      if (scroller instanceof HTMLElement) {
+        const r = scroller.getBoundingClientRect();
+        if (x < r.left + 48) scroller.scrollLeft -= 18;
+        else if (x > r.right - 48) scroller.scrollLeft += 18;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => {
+    const onPointerUp = () => {
+      // Snapshot before dnd-kit unmounts the overlay on drop.
+      if (isDraggingTaskRef.current) {
+        const overlay = getTaskDragOverlayRect() || overlayRectRef.current;
+        overlayRectRef.current = overlay;
+        overlaySnapRef.current = overlay
+          ? findPlaceholderHitByOverlay(overlay, draggedTaskIdRef.current ?? undefined)
+          : null;
+      }
+      isDraggingTaskRef.current = false;
+    };
+    window.addEventListener('pointerup', onPointerUp, true);
+    window.addEventListener('pointercancel', onPointerUp, true);
+    return () => {
+      window.removeEventListener('pointerup', onPointerUp, true);
+      window.removeEventListener('pointercancel', onPointerUp, true);
     };
   }, []);
 
@@ -332,7 +365,13 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const handleDragStart = (event: DragStartEvent) => {
     // Reset preview cache on drag start
     lastPreviewRef.current = null;
-    lastOverIdRef.current = null;
+    dragOriginRef.current = null;
+    overlayRectRef.current = null;
+    overlaySnapRef.current = null;
+    overlayStartTopRef.current = null;
+    overlayStartLeftRef.current = null;
+    isDraggingTaskRef.current = false;
+    draggedTaskIdRef.current = null;
     
     // Reset counters
     dragOverCallCountRef.current = 0;
@@ -373,25 +412,25 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
           top: rect.top - 30, // Extend 30px above the tabs for more room
           bottom: rect.bottom 
         };
-        setTabAreaBounds(bounds);
+        tabAreaBoundsRef.current = bounds;
         return bounds;
       } else {
         // console.warn('⚠️ Could not find tab container, using fallback bounds');
         const fallback = { top: 0, bottom: 80 };
-        setTabAreaBounds(fallback);
+        tabAreaBoundsRef.current = fallback;
         return fallback;
       }
     };
     
     // Detect bounds at drag start
-    const bounds = detectTabBounds();
+    detectTabBounds();
     
     // Reset all states at drag start to ensure clean state
     onBoardTabHover?.(false);
     onDragPreviewChange?.(null);
     
     // Reset tab area state
-    setIsHoveringBoardTabDelayed(false);
+    isHoveringBoardTabRef.current = false;
     
     // Safety: Force reset global DND state in case it got stuck
     resetDndGlobalState();
@@ -444,6 +483,18 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       }
 
       onDraggedTaskChange?.(task);
+      isDraggingTaskRef.current = true;
+      draggedTaskIdRef.current = task.id;
+      const originTasks = columns[task.columnId]?.tasks || [];
+      const originSorted = [...originTasks].sort(
+        (a, b) => parsePos(a.position) - parsePos(b.position)
+      );
+      const originIndex = originSorted.findIndex((t) => t.id === task.id);
+      dragOriginRef.current = {
+        columnId: task.columnId,
+        insertIndex: Math.max(0, originIndex),
+        y: mouseYRef.current,
+      };
     } else if (activeData?.type === 'column') {
       const column = activeData.column as Column;
       onDraggedColumnChange?.(column);
@@ -481,131 +532,98 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       
       if (isTaskDrag) {
         // Pure Y-coordinate based detection using dynamic tab bounds
-        const isInTabArea = currentMouseY >= tabAreaBounds.top && currentMouseY <= tabAreaBounds.bottom;
+        const bounds = tabAreaBoundsRef.current;
+        const isInTabArea =
+          mouseYRef.current >= bounds.top && mouseYRef.current <= bounds.bottom;
         
-        // Set flag to indicate Y-coordinate detection is active
-        setUsingYCoordinateDetection(true);
-        
-        if (isInTabArea && !isHoveringBoardTabDelayed) {
-          setIsHoveringBoardTabDelayed(true);
+        if (isInTabArea && !isHoveringBoardTabRef.current) {
+          isHoveringBoardTabRef.current = true;
           onBoardTabHover?.(true);
           onDragPreviewChange?.(null);
-        } else if (!isInTabArea && isHoveringBoardTabDelayed) {
-          setIsHoveringBoardTabDelayed(false);
+        } else if (!isInTabArea && isHoveringBoardTabRef.current) {
+          isHoveringBoardTabRef.current = false;
           onBoardTabHover?.(false);
         }
-      } else {
-        // Reset flag when not dragging tasks
-        setUsingYCoordinateDetection(false);
       }
       
-      // If no over target, clear all states
-      if (!over) {
-        onBoardTabHover?.(false);
-        onDragPreviewChange?.(null);
+      if (isTaskDrag && isHoveringBoardTabRef.current) {
         return;
       }
-      
-      // Only detect board tab hover if we're actually dragging a task (not a column)
-      const activeData = active?.data?.current;
-      
-      // DEBUG: Only log when we detect board type (should only be tabs)
-      if (isTaskDrag && over.data?.current?.type === 'board') {
-        // NEVER process collision-based board tab detection - Y-coordinates only
-        return;
-      }
-      
-      // Update drag preview for visual feedback (only for task drags)
-      // PERFORMANCE: Skip preview calculations for column drags (they don't need preview)
-      if (isTaskDrag && over) {
-        // PERFORMANCE: Only recalculate if the over target actually changed
-        if (lastOverIdRef.current === over.id) {
-          // Same target - skip expensive calculations
+
+      const draggedTask = active.data?.current?.task as Task | undefined;
+      if (isTaskDrag && draggedTask) {
+        const overColumnId =
+          (over?.data?.current?.columnId as string | undefined) ||
+          (over?.data?.current?.task?.columnId as string | undefined) ||
+          (over?.data?.current?.column?.id as string | undefined);
+        const origin = dragOriginRef.current;
+        const overlay = getTaskDragOverlayRect();
+        if (overlay) {
+          overlayRectRef.current = overlay;
+          if (overlayStartTopRef.current == null) {
+            overlayStartTopRef.current = overlay.top;
+            overlayStartLeftRef.current = overlay.left;
+          }
+        }
+        const snap = overlay
+          ? findPlaceholderHitByOverlay(overlay, draggedTask.id)
+          : null;
+        overlaySnapRef.current = snap;
+        const overlayMoved =
+          overlay != null &&
+          overlayStartTopRef.current != null &&
+          overlayStartLeftRef.current != null &&
+          Math.hypot(
+            overlay.top - overlayStartTopRef.current,
+            overlay.left - overlayStartLeftRef.current
+          ) > 12;
+        const overlayHit =
+          overlay && overlayMoved
+            ? resolveDropFromOverlay(overlay, draggedTask.id, origin)
+            : overlay && origin && !overlayMoved
+              ? { columnId: origin.columnId, insertIndex: origin.insertIndex }
+              : overlay
+                ? resolveDropFromOverlay(overlay, draggedTask.id, origin)
+                : null;
+        const pointerColumnId =
+          resolveColumnIdUnderPointer(mouseXRef.current, mouseYRef.current) ||
+          overColumnId;
+        const columnId = snap?.columnId || overlayHit?.columnId || pointerColumnId;
+        if (!columnId || !columns[columnId]) {
           return;
         }
-        lastOverIdRef.current = over.id;
-        
-        const overData = over.data?.current;
-        const draggedTask = active.data?.current?.task;
-        
-        if (overData?.type === 'task') {
-          // Hovering over another task - before/after based on drag direction in visible list
-          const targetTask = overData.task;
-          if (targetTask && draggedTask) {
-            const targetColumn = columns[targetTask.columnId];
-            if (targetColumn) {
-              const placement = placementRelativeToTask(targetColumn.tasks, draggedTask, targetTask);
-              const insertIndex = resolvePreviewInsertIndex(
-                targetColumn.tasks,
-                placement,
-                draggedTask.id
-              );
-              const isCrossColumn = draggedTask.columnId !== targetTask.columnId;
-              const newPreview = {
-                targetColumnId: targetTask.columnId,
-                insertIndex,
-                isCrossColumn
-              };
-              if (!lastPreviewRef.current || 
-                  lastPreviewRef.current.targetColumnId !== newPreview.targetColumnId ||
-                  lastPreviewRef.current.insertIndex !== newPreview.insertIndex ||
-                  lastPreviewRef.current.isCrossColumn !== newPreview.isCrossColumn) {
-                lastPreviewRef.current = newPreview;
-                onDragPreviewChange?.(newPreview);
-              }
-            }
-          }
-        } else if (overData?.type === 'column-top') {
-          // Hovering over column top - insert at position 0
-          const isCrossColumn = draggedTask && draggedTask.columnId !== overData.columnId;
-          const newPreview = {
-            targetColumnId: overData.columnId,
-            insertIndex: 0,
-            isCrossColumn
-          };
-          if (!lastPreviewRef.current || 
-              lastPreviewRef.current.targetColumnId !== newPreview.targetColumnId ||
-              lastPreviewRef.current.insertIndex !== newPreview.insertIndex) {
-            lastPreviewRef.current = newPreview;
-            onDragPreviewChange?.(newPreview);
-          }
-        } else if (overData?.type === 'column-bottom' || overData?.type === 'column' || 
-                   overData?.type === 'column-middle' || over.id.toString().includes('-middle')) {
-          // All column drop zones - insert after last visible (or end)
-          const targetColumnId = overData?.columnId || 
-                                (over.id.toString().includes('-middle') ? over.id.toString().replace('-middle', '') : over.id as string);
-          const targetColumn = columns[targetColumnId];
-          const isCrossColumn = !!(draggedTask && draggedTask.columnId !== targetColumnId);
-          const placement = placementForColumnEnd(targetColumn?.tasks || [], draggedTask?.id);
-          const insertIndex = resolvePreviewInsertIndex(
-            targetColumn?.tasks || [],
-            placement,
-            draggedTask?.id
+        const insertIndex =
+          snap?.insertIndex ??
+          overlayHit?.insertIndex ??
+          resolveInsertIndexUnderPointer(
+            columnId,
+            mouseYRef.current,
+            draggedTask.id,
+            mouseXRef.current,
+            null,
+            origin
           );
-          
-          const newPreview = {
-            targetColumnId,
-            insertIndex,
-            isCrossColumn
-          };
-          if (!lastPreviewRef.current || 
-              lastPreviewRef.current.targetColumnId !== newPreview.targetColumnId ||
-              lastPreviewRef.current.insertIndex !== newPreview.insertIndex) {
-            lastPreviewRef.current = newPreview;
-            onDragPreviewChange?.(newPreview);
-          }
-        } else {
-          if (lastPreviewRef.current !== null) {
-            lastPreviewRef.current = null;
-            onDragPreviewChange?.(null);
-          }
+        if (insertIndex == null) return;
+        const newPreview = {
+          targetColumnId: columnId,
+          insertIndex,
+          isCrossColumn: draggedTask.columnId !== columnId,
+        };
+        if (
+          !lastPreviewRef.current ||
+          lastPreviewRef.current.targetColumnId !== newPreview.targetColumnId ||
+          lastPreviewRef.current.insertIndex !== newPreview.insertIndex ||
+          lastPreviewRef.current.isCrossColumn !== newPreview.isCrossColumn
+        ) {
+          lastPreviewRef.current = newPreview;
+          onDragPreviewChange?.(newPreview);
         }
-      } else {
-        // Column drag or no drag - clear preview
-        if (lastPreviewRef.current !== null) {
-          lastPreviewRef.current = null;
-          onDragPreviewChange?.(null);
-        }
+        return;
+      }
+
+      if (!isTaskDrag && lastPreviewRef.current !== null) {
+        lastPreviewRef.current = null;
+        onDragPreviewChange?.(null);
       }
     });
   };
@@ -629,54 +647,43 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     }
     
     const { active, over } = event;
+    const activeData = active.data?.current;
+    const previewAtEnd = lastPreviewRef.current;
 
     try {
-      if (!over) {
+      // Task drops can commit from pointer Y even when dnd-kit `over` is null
+      // (common after long virtualized scrolls). Column drags still need a target.
+      if (!over && activeData?.type !== 'task') {
         return;
       }
 
-      const activeData = active.data?.current;
-      const overData = over.data?.current;
+      const overData = over?.data?.current;
 
       dndLog('🎯 Processing drag end:', {
         activeDataType: activeData?.type,
         overDataType: overData?.type,
         activeTaskId: activeData?.task?.id,
-        overTaskId: overData?.task?.id
+        overTaskId: overData?.task?.id,
+        hasPreview: !!previewAtEnd,
+        previewInsert: previewAtEnd?.insertIndex,
       });
 
       if (activeData?.type === 'task') {
         dndLog('🎯 Entering task move logic');
-        // Handle task moves
         const task = activeData.task as Task;
         dndLog('🎯 Task data:', { taskId: task.id, taskTitle: task.title, taskColumnId: task.columnId, taskPosition: task.position });
         
         if (overData?.type === 'board' && overData.boardId !== currentBoardId) {
-          // Check if Y-coordinate detection should override collision detection
-          const isInTabAreaAtDrop = currentMouseY >= tabAreaBounds.top && currentMouseY <= tabAreaBounds.bottom;
+          const bounds = tabAreaBoundsRef.current;
+          const isInTabAreaAtDrop =
+            mouseYRef.current >= bounds.top && mouseYRef.current <= bounds.bottom;
           
           if (!isInTabAreaAtDrop) {
-            // console.log('🚫 BOARD DROP REJECTED - Y-coordinate outside tab area:', {
-            // mouseY: currentMouseY,
-            // tabTop: tabAreaBounds.top,
-            // tabBottom: tabAreaBounds.bottom,
-            // boardId: overData.boardId
-            // });
             // Don't execute cross-board move if mouse is outside tab area
             return;
           }
           
-          // Cross-board move (only if mouse is actually in tab area)
           dndLog('🔄 Cross-board move (Y-coord approved):', task.id, '→', overData.boardId);
-          dndLog('🔄 Cross-board details:', {
-            taskId: task.id,
-            targetBoardId: overData.boardId,
-            currentBoardId,
-            overDataType: overData.type,
-            mouseY: currentMouseY,
-            inTabArea: isInTabAreaAtDrop
-          });
-          // Phase C deferred: multi-select does not drag onto board tabs
           if (bulkIds.length > 1) {
             dndLog('🎯 [handleDragEnd] Multi-drag board-tab drop deferred — no-op');
             return;
@@ -684,88 +691,77 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
           await onTaskMoveToDifferentBoard(task.id, overData.boardId);
           dndLog('✅ Cross-board move completed');
         } else {
-          dndLog('🎯 Same board move - anchor-relative placement');
+          dndLog('🎯 Same board move — pointer-Y insert index');
           let targetColumnId = task.columnId;
           let placement: TaskDropPlacement | null = null;
-          const bulkSet = new Set(bulkIds);
-          
-          // Check if we're dropping on a task - either via overData.type or by checking if over.id is a task ID
-          let targetTask: Task | null = null;
-          if (overData?.type === 'task' && overData.task) {
-            targetTask = overData.task;
-          } else if (over.id) {
-            // Fallback: over.id might be a task ID when using SortableContext
-            for (const column of Object.values(columns)) {
-              const foundTask = column.tasks.find(t => t.id === over.id);
-              if (foundTask) {
-                targetTask = foundTask;
-                break;
-              }
-            }
-          }
-          
-          if (targetTask) {
-            // Dropping on yourself / another follower in the block = cancel
-            if (targetTask.id === task.id || bulkSet.has(targetTask.id)) {
-              dndLog('🎯 [handleDragEnd] Drop on self — no-op');
-              return;
-            }
-            targetColumnId = targetTask.columnId;
-            const targetColumn = columns[targetColumnId];
-            if (targetColumn) {
-              placement = placementRelativeToTask(targetColumn.tasks, task, targetTask);
-            } else {
-              placement = { kind: 'before', taskId: targetTask.id };
-            }
-          } else if (overData?.type === 'column-top') {
-            targetColumnId = overData.columnId;
-            placement = { kind: 'start' };
-          } else if (overData?.type === 'column-bottom') {
-            // Same-column bottom zone while already last → no-op; otherwise append
-            targetColumnId = overData.columnId;
-            if (targetColumnId === task.columnId) {
-              const sourceCol = columns[task.columnId];
-              const sorted = [...(sourceCol?.tasks || [])].sort(
-                (a, b) => parsePos(a.position) - parsePos(b.position)
-              );
-              if (sorted[sorted.length - 1]?.id === task.id) {
-                dndLog('🎯 [handleDragEnd] Same-column bottom while already last — no-op');
-                return;
-              }
-            }
-            const targetColumn = columns[targetColumnId];
-            placement = placementForColumnEnd(targetColumn?.tasks || [], task.id);
-          } else if (overData?.type === 'column') {
-            targetColumnId = overData.columnId || over.id as string;
-            // Same column generic column hit often means cancel / ambiguous — treat as no-op
-            if (targetColumnId === task.columnId) {
-              dndLog('🎯 [handleDragEnd] Same-column drop on column body — no-op');
-              return;
-            }
-            const targetColumn = columns[targetColumnId];
-            placement = placementForColumnEnd(targetColumn?.tasks || [], task.id);
-          } else if (overData?.type === 'column-middle' || over.id.toString().includes('-middle')) {
-            targetColumnId = overData?.columnId || over.id.toString().replace('-middle', '');
-            if (targetColumnId === task.columnId) {
-              dndLog('🎯 [handleDragEnd] Same-column middle drop — no-op');
-              return;
-            }
-            const targetColumn = columns[targetColumnId];
-            placement = placementForColumnEnd(targetColumn?.tasks || [], task.id);
-          } else if (columns[over.id as string]) {
-            targetColumnId = over.id as string;
-            if (targetColumnId === task.columnId) {
-              dndLog('🎯 [handleDragEnd] Same-column drop on column id — no-op');
-              return;
-            }
-            const targetColumn = columns[targetColumnId];
-            placement = placementForColumnEnd(targetColumn?.tasks || [], task.id);
+          const origin = dragOriginRef.current;
+          const overlay =
+            getTaskDragOverlayRect() || overlayRectRef.current;
+          const overlayMoved =
+            overlayStartTopRef.current == null ||
+            overlayStartLeftRef.current == null ||
+            (overlay != null &&
+              Math.hypot(
+                overlay.top - overlayStartTopRef.current,
+                overlay.left - overlayStartLeftRef.current
+              ) > 12);
+          const snap = overlayMoved
+            ? (overlay
+                ? findPlaceholderHitByOverlay(overlay, task.id)
+                : null) || overlaySnapRef.current
+            : null;
+          const overlayHit =
+            overlayMoved && overlay
+              ? resolveDropFromOverlay(overlay, task.id, origin)
+              : null;
+
+          const overColumnId =
+            (overData?.columnId as string | undefined) ||
+            (overData?.task?.columnId as string | undefined) ||
+            (overData?.column?.id as string | undefined);
+          const pointerColumnId =
+            resolveColumnIdUnderPointer(mouseXRef.current, mouseYRef.current) ||
+            overColumnId ||
+            previewAtEnd?.targetColumnId ||
+            origin?.columnId ||
+            null;
+          const pointerInsert =
+            pointerColumnId && columns[pointerColumnId]
+              ? resolveInsertIndexUnderPointer(
+                  pointerColumnId,
+                  mouseYRef.current,
+                  task.id,
+                  mouseXRef.current,
+                  null,
+                  origin
+                )
+              : null;
+
+          const applyYPlacement = (columnId: string, insertIndex: number) => {
+            targetColumnId = columnId;
+            placement = placementFromInsertIndex(
+              columns[columnId]?.tasks || [],
+              insertIndex,
+              task.id
+            );
+          };
+
+          // Card overlapping Drop here always wins. Otherwise place by where
+          // the overlay sits — not by a pointer that may still be in the source column.
+          if (snap && columns[snap.columnId]) {
+            applyYPlacement(snap.columnId, snap.insertIndex);
+          } else if (overlayHit && columns[overlayHit.columnId]) {
+            applyYPlacement(overlayHit.columnId, overlayHit.insertIndex);
+          } else if (pointerColumnId && pointerInsert != null && columns[pointerColumnId]) {
+            applyYPlacement(pointerColumnId, pointerInsert);
+          } else if (previewAtEnd && columns[previewAtEnd.targetColumnId]) {
+            applyYPlacement(previewAtEnd.targetColumnId, previewAtEnd.insertIndex);
           } else {
             dndLog('⚠️ [handleDragEnd] No valid drop target found:', {
-              overId: over.id,
+              overId: over?.id,
               overDataType: overData?.type,
+              pointerColumnId,
               activeTaskId: task.id,
-              activeTaskColumnId: task.columnId
             });
             return;
           }
@@ -887,12 +883,13 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       // Always clear drag UI state (preview, dragged task) — including when `over` was null
       // or when the user cancelled; otherwise insertion placeholders stay mounted and shift columns.
       lastPreviewRef.current = null;
-      lastOverIdRef.current = null;
+      dragOriginRef.current = null;
+      isDraggingTaskRef.current = false;
       onDraggedTaskChange?.(null);
       onDraggedColumnChange?.(null);
       onBoardTabHover?.(false);
       onDragPreviewChange?.(null);
-      setIsHoveringBoardTabDelayed(false);
+      isHoveringBoardTabRef.current = false;
       clearBulkDrag();
       setKeyboardMoveLabel(null);
     }
@@ -900,12 +897,13 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
 
   const handleDragCancel = () => {
     lastPreviewRef.current = null;
-    lastOverIdRef.current = null;
+    dragOriginRef.current = null;
+    isDraggingTaskRef.current = false;
     onDraggedTaskChange?.(null);
     onDraggedColumnChange?.(null);
     onBoardTabHover?.(false);
     onDragPreviewChange?.(null);
-    setIsHoveringBoardTabDelayed(false);
+    isHoveringBoardTabRef.current = false;
     activeBulkTaskIdsRef.current = [];
     onDraggedTaskIdsChange?.([]);
     setKeyboardMoveLabel(null);
@@ -919,6 +917,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       onDragCancel={handleDragCancel}
       collisionDetection={customCollisionDetection}
       sensors={sensors}
+      autoScroll={false}
     >
       {children}
       {keyboardMoveLabel != null && (

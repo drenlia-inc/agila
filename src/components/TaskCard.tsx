@@ -30,7 +30,6 @@ import { generateUUID } from '../utils/uuid';
 import { truncateHtmlByChars } from '../utils/plainTextPreview';
 import { mergeTaskTagsWithLiveData, getTagDisplayStyle } from '../utils/tagUtils';
 import { useSortable } from '@dnd-kit/sortable';
-import { useDroppable } from '@dnd-kit/core';
 import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { CSS } from '@dnd-kit/utilities';
 import { setDndGloballyDisabled, isDndGloballyDisabled } from '../utils/globalDndState';
@@ -414,9 +413,8 @@ const TaskCard = React.memo(function TaskCard({
   const {
     attributes,
     listeners: originalListeners,
-    setNodeRef: setSortableRef,
+    setNodeRef,
     transform,
-    transition,
     isDragging,
   } = useSortable({ 
     id: task.id,
@@ -465,28 +463,11 @@ const TaskCard = React.memo(function TaskCard({
     };
   }, [originalListeners]);
 
-  // @dnd-kit droppable hook for cross-column insertion
-  // CRITICAL: Disable task droppable when a column is being dragged to prevent interference
-  const { setNodeRef: setDroppableRef } = useDroppable({
-    id: `${task.id}-drop`,
-    data: {
-      type: 'task',
-      task: task,
-      columnId: task.columnId,
-      position: task.position
-    },
-    disabled: isColumnBeingDragged // Disable when column drag is active
-  });
-
-  // Combine both refs
-  const setNodeRef = (node: HTMLElement | null) => {
-    setSortableRef(node);
-    setDroppableRef(node);
-  };
-
+  // Overlay-style drag: only the active card keeps a transform; siblings stay put
+  // (insertion gap comes from Column dragPreview). Cuts O(column) layout work on large boards.
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition: transition || 'transform 200ms ease',
+    transform: isDragging ? CSS.Transform.toString(transform) : undefined,
+    transition: undefined,
     zIndex: isDragging ? 1000 : 'auto',
     // CRITICAL: Disable pointer events on tasks when a column is being dragged
     // This allows the column droppable to be detected even when tasks cover it

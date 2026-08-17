@@ -39,7 +39,8 @@
     "deleteTask": "Delete Task",
     "addComment": "Add Comment",
     "addTag": "Add Tag",
-    "attachFile": "Attach File"
+    "attachFile": "Attach File",
+    "scrollToCard": "Show this task on the board"
   },
   "errors": {
     "uploadError": "Upload error",
@@ -47,6 +48,7 @@
     "updateTaskMessage": "Your changes were not saved. Please try again.",
     "createTaskTitle": "Couldn't create task",
     "createTaskMessage": "The task could not be created. Please try again.",
+    "scrollToCardFailed": "Could not find this task on the board.",
     "createTaskShortcutTitle": "Task created",
     "createTaskShortcutMessage": "Added to \"{{column}}\" with the N shortcut. Rename it, or delete if this was accidental.",
     "copyTaskTitle": "Couldn't copy task",

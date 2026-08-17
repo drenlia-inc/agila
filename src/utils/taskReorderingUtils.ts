@@ -88,6 +88,28 @@ function renumberTasks(tasks: Task[]): Task[] {
     .map((t, index) => ({ ...t, position: index }));
 }
 
+/** Minimum gap between fractional positions before falling back to full renumber. */
+const MIN_POSITION_GAP = 0.1;
+
+/**
+ * Position between two neighbors (NUMERIC column). Returns null when a full
+ * renumber is required (collision / gap too small).
+ */
+export function computeBetweenPosition(
+  beforePos: number | null,
+  afterPos: number | null
+): number | null {
+  if (beforePos == null && afterPos == null) return 0;
+  if (beforePos == null) return afterPos! - 1;
+  if (afterPos == null) return beforePos + 1;
+  if (afterPos - beforePos < MIN_POSITION_GAP) return null;
+  return (beforePos + afterPos) / 2;
+}
+
+function sortTasksByPosition(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => parsePos(a.position) - parsePos(b.position));
+}
+
 /**
  * Remove a task from every column (invariant: one task id → at most one column).
  * Optionally renumber columns that changed.
@@ -173,11 +195,11 @@ type CrossMoveResult = {
   next: Columns;
   sourceColumnId: string;
   targetColumnId: string;
-  sourceTasks: Task[];
-  targetTasks: Task[];
+  /** Rows to send to batch-update-positions (often a single fractional write). */
+  positionUpdates: Array<{ taskId: string; position: number; columnId: string }>;
 };
 
-/** Pure: apply cross-column move against a columns snapshot. */
+/** Pure: move task into targetColumnId at targetIndex (fractional when possible). */
 export function applyCrossColumnMove(
   prev: Columns,
   taskId: string,
@@ -192,31 +214,99 @@ export function applyCrossColumnMove(
   if (!movedTaskBase) return null;
 
   const sourceColumnId = found?.columnId || movedTaskBase.columnId || '';
-  let next = stripTaskFromAllColumns(prev, taskId, { renumber: true });
 
+  // Keep neighbor positions intact so we can insert with a midpoint
+  let next = stripTaskFromAllColumns(prev, taskId, { renumber: false });
   const targetCol = next[targetColumnId];
   if (!targetCol) return null;
 
-  const targetSorted = renumberTasks(targetCol.tasks || []);
+  const targetSorted = sortTasksByPosition(targetCol.tasks || []);
   const clampedIndex = Math.max(0, Math.min(targetIndex, targetSorted.length));
+
+  // Cross-column into top: densify target like add-at-top
+  if (clampedIndex === 0) {
+    const updatedTask: Task = {
+      ...movedTaskBase,
+      columnId: targetColumnId,
+      position: 0,
+    };
+    const targetTasks = [
+      updatedTask,
+      ...targetSorted.map((t, index) => ({
+        ...t,
+        position: index + 1,
+        columnId: targetColumnId,
+      })),
+    ];
+    next = {
+      ...next,
+      [targetColumnId]: { ...targetCol, tasks: targetTasks },
+    };
+    return {
+      next,
+      sourceColumnId,
+      targetColumnId,
+      positionUpdates: targetTasks.map((t) => ({
+        taskId: t.id,
+        position: t.position as number,
+        columnId: targetColumnId,
+      })),
+    };
+  }
+
+  const beforePos =
+    clampedIndex > 0 ? parsePos(targetSorted[clampedIndex - 1].position) : null;
+  const afterPos =
+    clampedIndex < targetSorted.length
+      ? parsePos(targetSorted[clampedIndex].position)
+      : null;
+  const between = computeBetweenPosition(beforePos, afterPos);
+
+  if (between != null) {
+    const updatedTask: Task = {
+      ...movedTaskBase,
+      columnId: targetColumnId,
+      position: between,
+    };
+    const newTargetOrder = [...targetSorted];
+    newTargetOrder.splice(clampedIndex, 0, updatedTask);
+    next = {
+      ...next,
+      [targetColumnId]: { ...targetCol, tasks: newTargetOrder },
+    };
+    return {
+      next,
+      sourceColumnId,
+      targetColumnId,
+      positionUpdates: [
+        { taskId: updatedTask.id, position: between, columnId: targetColumnId },
+      ],
+    };
+  }
+
+  // Gaps too tight — renumber target only (source can keep sparse positions)
   const updatedTask: Task = { ...movedTaskBase, columnId: targetColumnId };
   const newTargetOrder = [...targetSorted];
   newTargetOrder.splice(clampedIndex, 0, updatedTask);
-  const targetTasks = newTargetOrder.map((t, index) => ({ ...t, position: index, columnId: targetColumnId }));
-
+  const targetTasks = newTargetOrder.map((t, index) => ({
+    ...t,
+    position: index,
+    columnId: targetColumnId,
+  }));
   next = {
     ...next,
     [targetColumnId]: { ...targetCol, tasks: targetTasks },
   };
 
-  const sourceTasks = (next[sourceColumnId]?.tasks || []) as Task[];
-
   return {
     next,
     sourceColumnId,
     targetColumnId,
-    sourceTasks: sourceColumnId ? sourceTasks : [],
-    targetTasks,
+    positionUpdates: targetTasks.map((t) => ({
+      taskId: t.id,
+      position: t.position as number,
+      columnId: targetColumnId,
+    })),
   };
 }
 
@@ -227,7 +317,7 @@ type SameColumnMoveResult = {
   noop: boolean;
 };
 
-/** Pure: apply same-column reorder against a columns snapshot. */
+/** Pure: apply same-column reorder against a columns snapshot (fractional when possible). */
 export function applySameColumnMove(
   prev: Columns,
   taskId: string,
@@ -241,26 +331,63 @@ export function applySameColumnMove(
   const movedTaskBase = found?.task || taskFallback;
   if (!movedTaskBase) return null;
 
-  // Strip from all columns first (clears duplicates), then insert into columnId
-  let next = stripTaskFromAllColumns(prev, taskId, { renumber: true });
-  const column = next[columnId];
-  if (!column) return null;
-
-  const sortedTasks = renumberTasks(column.tasks || []);
-  // After strip, task is absent — currentIndex for "no-op" uses found location before strip
-  const priorSorted = renumberTasks(
-    (found?.columnId === columnId ? prev[columnId]?.tasks : column.tasks) || []
+  const priorSorted = sortTasksByPosition(
+    (found?.columnId === columnId ? prev[columnId]?.tasks : prev[columnId]?.tasks) || []
   );
   const priorIndex = priorSorted.findIndex((t) => t.id === taskId);
 
+  // Strip without renumbering so neighbors keep their fractional positions
+  let next = stripTaskFromAllColumns(prev, taskId, { renumber: false });
+  const column = next[columnId];
+  if (!column) return null;
+
+  const sortedTasks = sortTasksByPosition(column.tasks || []);
   const clampedIndex = Math.max(0, Math.min(targetIndex, sortedTasks.length));
   if (found?.columnId === columnId && priorIndex === clampedIndex) {
     return { next: prev, columnId, renumberedTasks: priorSorted, noop: true };
   }
 
+  // Move to top: densify like POST /tasks/add-at-top (moved → 0, others → 1..n).
+  // Fractional "min - 1" failed when drops missed the top hit target / first card.
+  if (clampedIndex === 0) {
+    const moved: Task = { ...movedTaskBase, columnId, position: 0 };
+    const renumberedTasks = [
+      moved,
+      ...sortedTasks.map((t, index) => ({ ...t, position: index + 1, columnId })),
+    ];
+    next = {
+      ...next,
+      [columnId]: { ...column, tasks: renumberedTasks },
+    };
+    return { next, columnId, renumberedTasks, noop: false };
+  }
+
+  const beforePos =
+    clampedIndex > 0 ? parsePos(sortedTasks[clampedIndex - 1].position) : null;
+  const afterPos =
+    clampedIndex < sortedTasks.length
+      ? parsePos(sortedTasks[clampedIndex].position)
+      : null;
+  const between = computeBetweenPosition(beforePos, afterPos);
+
+  if (between != null) {
+    const moved: Task = { ...movedTaskBase, columnId, position: between };
+    const newOrder = [...sortedTasks];
+    newOrder.splice(clampedIndex, 0, moved);
+    next = {
+      ...next,
+      [columnId]: { ...column, tasks: newOrder },
+    };
+    return { next, columnId, renumberedTasks: [moved], noop: false };
+  }
+
   const newOrder = [...sortedTasks];
   newOrder.splice(clampedIndex, 0, { ...movedTaskBase, columnId });
-  const renumberedTasks = newOrder.map((t, index) => ({ ...t, position: index, columnId }));
+  const renumberedTasks = newOrder.map((t, index) => ({
+    ...t,
+    position: index,
+    columnId,
+  }));
 
   next = {
     ...next,
@@ -374,7 +501,7 @@ export function resolvePreviewInsertIndex(
 
 /**
  * Moves a task to a specific index within its column.
- * Renumbers ALL tasks to sequential integers and sends to backend.
+ * Prefer a single fractional position write; renumber the column only when gaps are too small.
  */
 export const moveTaskToIndex = async (
   task: Task,
@@ -435,7 +562,7 @@ export const moveTaskToIndex = async (
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
       (window as any).reorderingInProgress = false;
-    }, 1000);
+    }, 2000);
 
     setDragCooldown(true);
     setTimeout(() => {
@@ -460,7 +587,7 @@ export const handleSameColumnReorder = moveTaskToIndex;
 
 /**
  * Handles moving a task from one column to another.
- * Renumbers both source and target columns.
+ * Prefer a single fractional write on the moved task; renumber target only when needed.
  */
 export const handleCrossColumnMove = async (
   task: Task,
@@ -507,18 +634,7 @@ export const handleCrossColumnMove = async (
   syncFilteredAfterCrossMove(setFilteredColumns, task.id, targetColumnId, targetIndex, task);
 
   try {
-    const updates = [
-      ...applied.sourceTasks.map((t) => ({
-        taskId: t.id,
-        position: t.position as number,
-        columnId: applied!.sourceColumnId || sourceColumnId,
-      })),
-      ...applied.targetTasks.map((t) => ({
-        taskId: t.id,
-        position: t.position as number,
-        columnId: targetColumnId,
-      })),
-    ];
+    const updates = applied.positionUpdates;
 
     // If source was unknown (task only in fallback), still send target renumbers
     const dedupedUpdates = updates.filter((u) => u.columnId);
@@ -528,7 +644,7 @@ export const handleCrossColumnMove = async (
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
       (window as any).reorderingInProgress = false;
-    }, 1000);
+    }, 2000);
 
     setDragCooldown(true);
     setTimeout(() => {
@@ -602,7 +718,7 @@ export const handleBulkMoveTasks = async (
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
       (window as any).reorderingInProgress = false;
-    }, 1000);
+    }, 2000);
     setDragCooldown(true);
     setTimeout(() => setDragCooldown(false), DRAG_COOLDOWN_DURATION);
   } catch (error) {

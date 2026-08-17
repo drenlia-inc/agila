@@ -5467,6 +5467,7 @@ function AppContent() {
         members={members}
         isHoveringBoardTab={isHoveringBoardTab}
         draggedTaskIds={draggedTaskIds}
+        taskViewMode={taskFilters.taskViewMode}
       />
       </SimpleDragDropManager>
 

@@ -8,7 +8,7 @@ import {
   emailsChannelEnabled,
   webhooksChannelEnabled,
 } from '../utils/notificationChannels.js';
-import { emailChangeIsSilent, refreshTaskSnapshot, ensureTagEmailChange } from '../utils/taskEmailPayload.js';
+import { emailChangeIsSilent, refreshTaskSnapshot, ensureTagEmailChange, webhookShouldNotify } from '../utils/taskEmailPayload.js';
 import { buildTaskEmailUrl, buildEmailAuthorAvatar } from '../utils/emailContent.js';
 import { getUserTimeZone } from '../utils/dateFormatter.js';
 import { getTenantStoragePaths } from '../middleware/tenantRouting.js';
@@ -636,16 +636,24 @@ class TaskEmailNotificationService {
         tagId: tagId || null,
       };
 
-      await this.enqueueMatchingWebhooks({
-        taskId,
-        action,
-        details,
-        webhookEvent: webhookEventFromTaskAction(action),
-        participants,
-        actor: actorWithMeta,
-        oldValue: display.oldValue,
-        newValue: display.newValue,
-      });
+      if (
+        webhookShouldNotify(action, emailChange, {
+          changedField: changedField || actorWithMeta.changedField,
+          oldValue: display.oldValue,
+          newValue: display.newValue,
+        })
+      ) {
+        await this.enqueueMatchingWebhooks({
+          taskId,
+          action,
+          details,
+          webhookEvent: webhookEventFromTaskAction(action),
+          participants,
+          actor: actorWithMeta,
+          oldValue: display.oldValue,
+          newValue: display.newValue,
+        });
+      }
 
       const skipEmailSilent =
         action !== 'create_task' &&
