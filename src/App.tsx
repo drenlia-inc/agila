@@ -2870,23 +2870,55 @@ function AppContent() {
 
       // Create the board first (backend automatically creates default columns)
       try {
-        await createBoard(newBoard);
+        const created = await createBoard(newBoard);
+        const createdColumns = (created as Board)?.columns || {};
+        const hydratedColumns: Columns = {};
+        Object.keys(createdColumns).forEach((columnId) => {
+          const col = createdColumns[columnId];
+          if (!col) return;
+          hydratedColumns[columnId] = {
+            ...col,
+            id: col.id || columnId,
+            boardId: boardId,
+            tasks: Array.isArray(col.tasks) ? col.tasks : [],
+          };
+        });
 
-        // Refresh and hydrate columns for the NEW board (forBoardId: selectedBoard is still the previous board).
-        // force: true avoids skipping while justUpdatedFromWebSocket is set after a WS batch.
-        await refreshBoardData({ force: true, forBoardId: boardId });
+        const boardForState: Board = {
+          ...newBoard,
+          ...created,
+          id: boardId,
+          columns: hydratedColumns,
+        };
+
+        // Paint from HTTP immediately — do not block on a full getBoards() round-trip
+        // (that was the multi-second empty board on EKS).
+        setBoards((prev) => {
+          if (prev.some((b) => b.id === boardId)) {
+            return prev.map((b) => (b.id === boardId ? { ...b, ...boardForState } : b));
+          }
+          const next = [...prev, boardForState];
+          next.sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+          return next;
+        });
+        setColumns(hydratedColumns);
+        columnsRef.current = hydratedColumns;
+        taskFilters.setFilteredColumns(taskFilters.applyFiltersToColumns(hydratedColumns));
+
+        setSelectedBoard(boardId);
+        updateCurrentUserPreference('lastSelectedBoard', boardId);
+        queueMicrotask(() => {
+          window.location.hash = `#kanban#${boardId}`;
+        });
+
+        // Background reconcile only (fills any server-only fields); initiator skips WS echo refresh.
+        void refreshBoardData({ force: true, forBoardId: boardId }).catch(() => {
+          /* refreshBoardData already logs */
+        });
       } catch (createErr) {
         pendingSelfBoardCreatesRef.current.delete(boardId);
         throw createErr;
       }
-
-      setSelectedBoard(boardId);
-      updateCurrentUserPreference('lastSelectedBoard', boardId);
-      // Defer hash update until after React applies setBoards/setColumns from refresh (avoids hashchange
-      // seeing a stale boards list and clearing selection).
-      queueMicrotask(() => {
-        window.location.hash = `#kanban#${boardId}`;
-      });
       
       await fetchQueryLogs();
       
@@ -3048,7 +3080,7 @@ function AppContent() {
       return false;
     }
 
-    const targetColumnForWip = columns[columnId];
+    const targetColumnForWip = columnsRef.current[columnId] || columns[columnId];
     if (targetColumnForWip && isBoardWipActiveColumn(targetColumnForWip)) {
       const currentBoard = boards.find((b) => b.id === selectedBoard);
       warnIfBoardWipSoftLimit(
@@ -3816,7 +3848,7 @@ function AppContent() {
         task,
         columnId,
         newIndex,
-        columns,
+        columnsRef.current,
         setColumns,
         setDragCooldown,
         refreshBoardData,
@@ -3834,7 +3866,26 @@ function AppContent() {
         task,
         columnId,
         newPosition,
-        columns,
+        columnsRef.current,
+        setColumns,
+        setDragCooldown,
+        refreshBoardData,
+        taskFilters.setFilteredColumns
+      );
+    } catch {
+      toast.error(t('errors.moveTaskTitle'), t('errors.moveTaskMessage'));
+    }
+  };
+
+  // Wrapper for handleCrossColumnMove that provides current state
+  const handleCrossColumnMoveWrapper = async (task: Task, sourceColumnId: string, targetColumnId: string, targetIndex: number) => {
+    try {
+      await handleCrossColumnMove(
+        task,
+        sourceColumnId,
+        targetColumnId,
+        targetIndex,
+        columnsRef.current,
         setColumns,
         setDragCooldown,
         refreshBoardData,
@@ -3851,18 +3902,23 @@ function AppContent() {
     targetColumnId: string,
     placement?: TaskDropPlacement
   ) => {
+    // Always read live columns — stale closure columns caused silent no-ops under
+    // rapid DnD / create-then-move on multi-pod (EKS) when React had not re-rendered yet.
+    const liveColumns = columnsRef.current;
+    const refresh = refreshBoardDataRef.current || refreshBoardData;
+
     dndLog('🎯 handleMoveTaskToColumn called:', {
       taskId,
       targetColumnId,
       placement,
-      columnsCount: Object.keys(columns).length
+      columnsCount: Object.keys(liveColumns).length
     });
 
     // Find the task and its current column
     let sourceTask: Task | null = null;
     let sourceColumnId: string | null = null;
     
-    Object.entries(columns).forEach(([colId, column]) => {
+    Object.entries(liveColumns).forEach(([colId, column]) => {
       const task = column.tasks.find(t => t.id === taskId);
       if (task) {
         sourceTask = task;
@@ -3880,7 +3936,7 @@ function AppContent() {
       return; // Task not found
     }
 
-    const targetColumn = columns[targetColumnId];
+    const targetColumn = liveColumns[targetColumnId];
     if (!targetColumn) {
       dndLog('🎯 Target column not found:', targetColumnId);
       return;
@@ -3909,32 +3965,35 @@ function AppContent() {
       }
     }
 
-    // Check if this is a same-column reorder or cross-column move
-    if (sourceColumnId === targetColumnId) {
-      await moveTaskToPositionWrapper(sourceTask, sourceColumnId, targetIndex);
-    } else {
-      await handleCrossColumnMoveWrapper(sourceTask, sourceColumnId, targetColumnId, targetIndex);
-    }
-  }, [columns, t]);
-
-  // Wrapper for handleCrossColumnMove that provides current state
-  const handleCrossColumnMoveWrapper = async (task: Task, sourceColumnId: string, targetColumnId: string, targetIndex: number) => {
     try {
-      await handleCrossColumnMove(
-        task,
-        sourceColumnId,
-        targetColumnId,
-        targetIndex,
-        columns,
-        setColumns,
-        setDragCooldown,
-        refreshBoardData,
-        taskFilters.setFilteredColumns
-      );
+      if (sourceColumnId === targetColumnId) {
+        await moveTaskToPosition(
+          sourceTask,
+          sourceColumnId,
+          targetIndex,
+          liveColumns,
+          setColumns,
+          setDragCooldown,
+          refresh,
+          taskFilters.setFilteredColumns
+        );
+      } else {
+        await handleCrossColumnMove(
+          sourceTask,
+          sourceColumnId,
+          targetColumnId,
+          targetIndex,
+          liveColumns,
+          setColumns,
+          setDragCooldown,
+          refresh,
+          taskFilters.setFilteredColumns
+        );
+      }
     } catch {
       toast.error(t('errors.moveTaskTitle'), t('errors.moveTaskMessage'));
     }
-  };
+  }, [t, refreshBoardData, setDragCooldown, taskFilters.setFilteredColumns]);
 
 
   const handleEditColumn = async (

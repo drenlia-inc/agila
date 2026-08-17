@@ -249,6 +249,7 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
     const defaultColumns = await getDefaultBoardColumns(db);
     const tenantId = getTenantId(req);
     
+    const columnsObj = {};
     for (const [index, col] of defaultColumns.entries()) {
       const columnId = `${col.id}-${id}`;
       const isFinished = !!col.isFinished;
@@ -258,6 +259,15 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
       const existingColumn = await helpers.getColumnById(db, columnId);
       if (existingColumn) {
         console.warn(`Column ${columnId} already exists, skipping creation`);
+        columnsObj[columnId] = {
+          id: columnId,
+          title: existingColumn.title || col.title,
+          boardId: id,
+          position: existingColumn.position ?? index,
+          is_finished: existingColumn.is_finished ?? isFinished,
+          is_archived: existingColumn.is_archived ?? isArchived,
+          tasks: [],
+        };
         continue;
       }
       
@@ -268,11 +278,30 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
         // Handle duplicate key errors gracefully (race condition or retry)
         if (error.code === '23505' || error.message?.includes('duplicate key')) {
           console.warn(`Column ${columnId} already exists (duplicate key), skipping creation`);
+          columnsObj[columnId] = {
+            id: columnId,
+            title: col.title,
+            boardId: id,
+            position: index,
+            is_finished: isFinished,
+            is_archived: isArchived,
+            tasks: [],
+          };
           continue;
         }
         // Re-throw other errors
         throw error;
       }
+
+      columnsObj[columnId] = {
+        id: columnId,
+        title: col.title,
+        boardId: id,
+        position: index,
+        is_finished: isFinished,
+        is_archived: isArchived,
+        tasks: [],
+      };
       
       // Publish column creation to Redis for real-time updates
       notificationService.publish('column-created', {
@@ -290,12 +319,12 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
       }, tenantId);
     }
     
-    const newBoard = { id, title, project: projectIdentifier, position };
+    const newBoard = { id, title, project: projectIdentifier, position, columns: columnsObj };
     
     // Publish to Redis for real-time updates
     notificationService.publish('board-created', {
       boardId: id,
-      board: newBoard,
+      board: { id, title, project: projectIdentifier, position },
       timestamp: new Date().toISOString()
     }, tenantId);
 
