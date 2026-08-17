@@ -105,7 +105,7 @@ export default function TaskCardToolbar({
   relationSummary: relationSummaryProp,
   highlightLinksMode = false,
   getTaskRelationshipType,
-  onUnlinkRelatedTask,
+  onUnlinkRelatedTask: _onUnlinkRelatedTask,
   
   isEditingTitle = false,
   isEditingDescription = false,
@@ -399,11 +399,9 @@ export default function TaskCardToolbar({
             ? agentLockedLabel
             : isLinkingMode && linkingSourceTask?.id === task.id
               ? t('toolbar.sourceTaskForLinking')
-              : hasRelations && hoveredLinkTask
-                ? t('relationships.shiftClickLinkToUnlink')
-                : hasRelations
-                  ? t('toolbar.holdAndDragToLinkWithRelations')
-                  : t('toolbar.holdAndDragToLink')
+              : hasRelations
+                ? t('toolbar.holdAndDragToLinkWithRelations')
+                : t('toolbar.holdAndDragToLink')
         }
         wrapperClassName="relative inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center"
       >
@@ -412,22 +410,10 @@ export default function TaskCardToolbar({
           disabled={agentBlocking}
           onPointerDown={(e) => {
             if (agentBlocking) return;
-            // Shift+click link icon → unlink (pointerdown only — click would double-fire and 404)
-            if (e.shiftKey && e.button === 0 && onUnlinkRelatedTask && hasRelations) {
-              e.preventDefault();
-              e.stopPropagation();
-              void onUnlinkRelatedTask(task);
-              return;
-            }
             handleLinkPointerDown(e);
           }}
           onMouseDown={(e) => {
             if (agentBlocking) return;
-            if (e.shiftKey && e.button === 0 && onUnlinkRelatedTask && hasRelations) {
-              e.preventDefault();
-              e.stopPropagation();
-              return;
-            }
             handleLinkMouseDown(e);
           }}
           onClick={(e) => {
@@ -665,6 +651,7 @@ export default function TaskCardToolbar({
         >
           <button
             disabled={agentBlocking}
+            data-kanban-mod-allow="shift"
             onClick={(e) => {
               if (agentBlocking) return;
               e.preventDefault();

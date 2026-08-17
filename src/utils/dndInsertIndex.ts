@@ -11,26 +11,149 @@
  * resolve as insert N+1 (card landed one slot below the hole).
  */
 
-export function resolveColumnIdUnderPointer(x: number, y: number): string | null {
-  if (typeof document === 'undefined') return null;
+type ColumnOverlap = {
+  id: string;
+  area: number;
+  width: number;
+  height: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+function eachKanbanColumn(
+  visit: (id: string, rect: DOMRect, el: HTMLElement) => void
+): void {
+  if (typeof document === 'undefined') return;
   const roots = document.querySelectorAll('[data-kanban-column-id]');
-  let best: { id: string; area: number } | null = null;
   for (const root of roots) {
     if (!(root instanceof HTMLElement)) continue;
-    const r = root.getBoundingClientRect();
-    if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
     const id = root.getAttribute('data-kanban-column-id');
     if (!id) continue;
-    const area = r.width * r.height;
-    if (!best || area < best.area) best = { id, area };
+    visit(id, root.getBoundingClientRect(), root);
   }
-  return best?.id ?? null;
+}
+
+/** Overlay must move this far horizontally before a dest sliver counts (same-column vertical drags). */
+export const OVERLAY_SIDEWAYS_PX = 40;
+
+function overlayHasMovedSideways(
+  overlay: DOMRectReadOnly | null | undefined,
+  startLeft: number | null | undefined
+): boolean {
+  if (!overlay || startLeft == null || !Number.isFinite(startLeft)) return false;
+  return Math.abs(overlay.left - startLeft) >= OVERLAY_SIDEWAYS_PX;
+}
+
+/**
+ * Column under a point. The gutter between columns counts as the nearer
+ * column so a sideways drop does not require the cursor to fully enter dest.
+ * When the pointer sits just above/below a column (auto-scroll edge), keep
+ * the column whose horizontal lane still contains X.
+ */
+export function resolveColumnIdUnderPointer(x: number, y: number): string | null {
+  let insideId: string | null = null;
+  let insideArea = Infinity;
+  const gutter: { id: string; dx: number }[] = [];
+  const lane: { id: string; dy: number }[] = [];
+  eachKanbanColumn((id, r) => {
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+      const area = r.width * r.height;
+      if (area < insideArea) {
+        insideId = id;
+        insideArea = area;
+      }
+      return;
+    }
+    if (x >= r.left && x <= r.right) {
+      const dy = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+      if (dy > 0 && dy <= 96) lane.push({ id, dy });
+    }
+    if (y < r.top || y > r.bottom) return;
+    const dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
+    if (dx > 0 && dx <= 28) gutter.push({ id, dx });
+  });
+  if (insideId) return insideId;
+  if (gutter.length > 0) {
+    gutter.sort((a, b) => a.dx - b.dx);
+    return gutter[0].id;
+  }
+  if (lane.length === 0) return null;
+  lane.sort((a, b) => a.dy - b.dy);
+  return lane[0].id;
+}
+
+function collectColumnOverlaps(rect: DOMRectReadOnly): ColumnOverlap[] {
+  const hits: ColumnOverlap[] = [];
+  eachKanbanColumn((id, r) => {
+    const width = Math.max(0, Math.min(rect.right, r.right) - Math.max(rect.left, r.left));
+    const height = Math.max(0, Math.min(rect.bottom, r.bottom) - Math.max(rect.top, r.top));
+    if (width <= 0 || height <= 0) return;
+    hits.push({
+      id,
+      area: width * height,
+      width,
+      height,
+      left: r.left,
+      right: r.right,
+      top: r.top,
+      bottom: r.bottom,
+    });
+  });
+  hits.sort((a, b) => b.area - a.area);
+  return hits;
 }
 
 export type OverlayDropHit = {
   columnId: string;
   insertIndex: number;
 };
+
+/**
+ * The Drop here the user can see right now. Prefer this over overlay/pointer
+ * geometry: the ghost can sit on the source column while the hole is in dest.
+ */
+export function readPaintedDropPlaceholder(): OverlayDropHit | null {
+  if (typeof document === 'undefined') return null;
+  const holes = document.querySelectorAll('[data-kanban-drop-placeholder]');
+  let best: { hit: OverlayDropHit; height: number } | null = null;
+  for (const hole of holes) {
+    if (!(hole instanceof HTMLElement)) continue;
+    const hr = hole.getBoundingClientRect();
+    if (hr.height < 8 || hr.width < 8) continue;
+    const col = hole.closest('[data-kanban-column-id]');
+    const columnId = col?.getAttribute('data-kanban-column-id');
+    const insertIndex = Number(hole.dataset.insertIndex);
+    if (!columnId || !Number.isFinite(insertIndex)) continue;
+    if (!best || hr.height > best.height) {
+      best = { hit: { columnId, insertIndex }, height: hr.height };
+    }
+  }
+  return best?.hit ?? null;
+}
+
+export function overlayIntersectsColumn(
+  overlay: DOMRectReadOnly,
+  columnId: string
+): boolean {
+  if (typeof document === 'undefined') return false;
+  const root = document.querySelector(
+    `[data-kanban-column-id="${cssEscape(columnId)}"]`
+  );
+  if (!(root instanceof HTMLElement)) return false;
+  return rectIntersectionArea(overlay, root.getBoundingClientRect()) > 0;
+}
+
+function toExcludeSet(ids?: string | string[] | null): Set<string> {
+  if (ids == null || ids === '') return new Set();
+  return new Set(Array.isArray(ids) ? ids.filter(Boolean) : [ids]);
+}
+
+function rowIsExcluded(row: HTMLElement, exclude: Set<string>): boolean {
+  const id = row.dataset.taskId;
+  return !!id && exclude.has(id);
+}
 
 function rectIntersectionArea(a: DOMRectReadOnly, b: DOMRectReadOnly): number {
   const w = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
@@ -51,13 +174,14 @@ export function getTaskDragOverlayRect(): DOMRect | null {
 function maxTaskRowOverlap(
   columnRoot: ParentNode,
   overlay: DOMRectReadOnly,
-  draggedTaskId?: string
+  excludeTaskIds?: string | string[] | null
 ): number {
+  const exclude = toExcludeSet(excludeTaskIds);
   let max = 0;
   const rows = columnRoot.querySelectorAll('[data-kanban-task-row]');
   for (const row of rows) {
     if (!(row instanceof HTMLElement)) continue;
-    if (draggedTaskId && row.dataset.taskId === draggedTaskId) continue;
+    if (rowIsExcluded(row, exclude)) continue;
     const area = rectIntersectionArea(overlay, row.getBoundingClientRect());
     if (area > max) max = area;
   }
@@ -70,7 +194,7 @@ function maxTaskRowOverlap(
  */
 export function findPlaceholderHitByOverlay(
   overlay: DOMRectReadOnly,
-  draggedTaskId?: string
+  excludeTaskIds?: string | string[] | null
 ): OverlayDropHit | null {
   if (typeof document === 'undefined') return null;
   const holes = document.querySelectorAll('[data-kanban-drop-placeholder]');
@@ -85,7 +209,7 @@ export function findPlaceholderHitByOverlay(
     const columnId = col?.getAttribute('data-kanban-column-id');
     const insertIndex = Number(hole.dataset.insertIndex);
     if (!columnId || !Number.isFinite(insertIndex)) continue;
-    const cardArea = maxTaskRowOverlap(col ?? hole, overlay, draggedTaskId);
+    const cardArea = maxTaskRowOverlap(col ?? hole, overlay, excludeTaskIds);
     if (area <= cardArea) continue;
     if (!best || area > best.area) {
       best = { hit: { columnId, insertIndex }, area };
@@ -94,35 +218,78 @@ export function findPlaceholderHitByOverlay(
   return best?.hit ?? null;
 }
 
-/** Column whose box overlaps the overlay the most (where the card actually is). */
+/**
+ * Column the ghost is targeting. A sliver over dest is enough — sideways
+ * moves must not wait until the pointer is fully inside that column.
+ */
 export function resolveColumnIdUnderRect(
   rect: DOMRectReadOnly,
-  originColumnId?: string | null
+  originColumnId?: string | null,
+  overlayStartLeft?: number | null
 ): string | null {
-  if (typeof document === 'undefined') return null;
-  const roots = document.querySelectorAll('[data-kanban-column-id]');
-  const overlayArea = Math.max(1, rect.width * rect.height);
-  const hits: { id: string; area: number }[] = [];
-  for (const root of roots) {
-    if (!(root instanceof HTMLElement)) continue;
-    const r = root.getBoundingClientRect();
-    const area = rectIntersectionArea(rect, r);
-    if (area <= 0) continue;
-    const id = root.getAttribute('data-kanban-column-id');
-    if (!id) continue;
-    hits.push({ id, area });
-  }
+  const hits = collectColumnOverlaps(rect);
   if (hits.length === 0) return null;
-  hits.sort((a, b) => b.area - a.area);
-  // Crossing into another column: a modest overlap is enough so a 320px
-  // overlay still sitting mostly on the source column can target the dest.
-  if (originColumnId) {
+
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const centerCol = resolveColumnIdUnderPointer(cx, cy);
+  // Overlay center in a dest column wins. A 12px sliver on the adjacent
+  // column used to return first and trapped every later column.
+  if (centerCol && originColumnId && centerCol !== originColumnId) {
+    return centerCol;
+  }
+
+  // Dest sliver is only for a real sideways drag. Vertical scroll in origin
+  // often overlaps the next column by a few pixels and must stay in origin.
+  if (originColumnId && overlayHasMovedSideways(rect, overlayStartLeft)) {
     const crossed = hits.filter(
-      (h) => h.id !== originColumnId && h.area >= overlayArea * 0.12
+      (h) =>
+        h.id !== originColumnId &&
+        (h.width >= 12 || h.area >= 200)
     );
     if (crossed.length > 0) return crossed[0].id;
   }
+
+  if (centerCol) return centerCol;
+
+  if (originColumnId) {
+    const originHit = hits.find((h) => h.id === originColumnId);
+    if (originHit) {
+      if (rect.right > originHit.right + 4) {
+        const right = hits.find((h) => h.id !== originColumnId && h.left >= originHit.right - 8);
+        if (right) return right.id;
+      }
+      if (rect.left < originHit.left - 4) {
+        const left = hits.find((h) => h.id !== originColumnId && h.right <= originHit.left + 8);
+        if (left) return left.id;
+      }
+    }
+  }
+
   return hits[0].id;
+}
+
+type DragOrigin = { columnId: string; insertIndex: number };
+
+/**
+ * Same-column: covering a card above origin opens the hole before it (2 → top
+ * without reaching the header). Covering a card at/after origin opens the hole
+ * after it (1 → 2). Cross-column: wide top zone on the first card (~60%),
+ * otherwise the 45% split (upper half = before, lower = between 1 and 2).
+ */
+function insertIndexOnCard(
+  card: { index: number; top: number; height: number },
+  y: number,
+  columnId: string,
+  origin?: DragOrigin | null
+): number {
+  const sameCol = !!origin && origin.columnId === columnId;
+  if (sameCol && origin) {
+    if (card.index < origin.insertIndex) return card.index;
+    return card.index + 1;
+  }
+  const frac = card.index === 0 ? 0.6 : 0.45;
+  return y < card.top + card.height * frac ? card.index : card.index + 1;
 }
 
 /**
@@ -133,7 +300,7 @@ export function resolveColumnIdUnderRect(
 export function resolveInsertIndexFromOverlay(
   columnId: string,
   overlay: DOMRectReadOnly,
-  draggedTaskId?: string,
+  excludeTaskIds?: string | string[] | null,
   origin?: { columnId: string; insertIndex: number } | null
 ): number | null {
   if (typeof document === 'undefined') return null;
@@ -146,8 +313,9 @@ export function resolveInsertIndexFromOverlay(
   const outside = insertOutsideTaskList(root, overlay.top, overlay.bottom);
   if (outside != null) return outside;
 
+  const exclude = toExcludeSet(excludeTaskIds);
   const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-kanban-task-row]'))
-    .filter((row) => !draggedTaskId || row.dataset.taskId !== draggedTaskId)
+    .filter((row) => !rowIsExcluded(row, exclude))
     .map((row) => {
       const index = Number(row.dataset.layoutIndex);
       const rect = row.getBoundingClientRect();
@@ -189,20 +357,12 @@ export function resolveInsertIndexFromOverlay(
     return last.index + 1;
   }
 
-  // Same-column moving down: overlapping a card at/after the origin slot
-  // pushes it (insert after). Makes card 1 → position 2 a single overlap of
-  // the next card, without the 62% / hole-snap rules that blocked 1–2 from
-  // elsewhere (those still use the midpoint below).
-  const sameCol = !!origin && origin.columnId === columnId;
-  if (sameCol && best.index >= origin.insertIndex) {
-    return best.index + 1;
-  }
-
-  // Upper half of a card → hole before it (card 1 = position 1).
-  // Lower half → hole after it (card 1 = between position 1 and 2).
-  const split = best.top + best.height * 0.45;
-  const cy = overlay.top + overlay.height * 0.5;
-  return cy < split ? best.index : best.index + 1;
+  return insertIndexOnCard(
+    best,
+    overlay.top + overlay.height * 0.5,
+    columnId,
+    origin
+  );
 }
 
 /**
@@ -211,10 +371,10 @@ export function resolveInsertIndexFromOverlay(
  */
 export function resolveDropFromOverlay(
   overlay: DOMRectReadOnly,
-  draggedTaskId?: string,
+  excludeTaskIds?: string | string[] | null,
   origin?: { columnId: string; insertIndex: number } | null
 ): OverlayDropHit | null {
-  const snap = findPlaceholderHitByOverlay(overlay, draggedTaskId);
+  const snap = findPlaceholderHitByOverlay(overlay, excludeTaskIds);
   if (snap) return snap;
 
   const columnId =
@@ -228,11 +388,83 @@ export function resolveDropFromOverlay(
   const insertIndex = resolveInsertIndexFromOverlay(
     columnId,
     overlay,
-    draggedTaskId,
+    excludeTaskIds,
     origin
   );
   if (insertIndex == null) return null;
   return { columnId, insertIndex };
+}
+
+/**
+ * Live drop target. Overlay crossing dest wins for sideways moves — the
+ * pointer does not have to be inside that column. Pointer-in-dest still
+ * wins for precise slot choice once you are there.
+ */
+export function resolveKanbanDropTarget(args: {
+  pointerX: number;
+  pointerY: number;
+  overlay: DOMRectReadOnly | null;
+  origin: DragOrigin | null;
+  excludeTaskIds?: string | string[] | null;
+  overlayStartLeft?: number | null;
+}): OverlayDropHit | null {
+  const { pointerX, pointerY, overlay, origin, excludeTaskIds, overlayStartLeft } = args;
+  const painted = readPaintedDropPlaceholder();
+  const pointerCol = resolveColumnIdUnderPointer(pointerX, pointerY);
+  const overlayCol = overlay
+    ? resolveColumnIdUnderRect(overlay, origin?.columnId, overlayStartLeft)
+    : null;
+  const snap = overlay
+    ? findPlaceholderHitByOverlay(overlay, excludeTaskIds)
+    : null;
+  const sideways = overlayHasMovedSideways(overlay, overlayStartLeft);
+
+  let columnId: string | null = null;
+  // Pointer in a dest column always wins. Overlay dest only after a real
+  // sideways move — otherwise a 12px sliver during a long same-column scroll
+  // locks every later slot to the adjacent column.
+  if (pointerCol && origin && pointerCol !== origin.columnId) {
+    columnId = pointerCol;
+  } else if (overlayCol && origin && overlayCol !== origin.columnId && sideways) {
+    columnId = overlayCol;
+  } else if (painted && origin && painted.columnId !== origin.columnId && sideways) {
+    columnId = painted.columnId;
+  } else if (snap && sideways) {
+    columnId = snap.columnId;
+  } else {
+    columnId = pointerCol || origin?.columnId || overlayCol || null;
+  }
+  if (!columnId) return null;
+
+  if (pointerCol === columnId) {
+    const root = document.querySelector(
+      `[data-kanban-column-id="${cssEscape(columnId)}"]`
+    );
+    if (root instanceof HTMLElement) {
+      const holeInsert = placeholderInsertAtPointer(root, pointerY);
+      if (holeInsert != null) return { columnId, insertIndex: holeInsert };
+    }
+    const insertIndex = resolveInsertIndexUnderPointer(
+      columnId,
+      pointerY,
+      excludeTaskIds,
+      pointerX,
+      null,
+      origin
+    );
+    if (insertIndex != null) return { columnId, insertIndex };
+  }
+  if (overlay) {
+    const insertIndex = resolveInsertIndexFromOverlay(
+      columnId,
+      overlay,
+      excludeTaskIds,
+      origin
+    );
+    if (insertIndex != null) return { columnId, insertIndex };
+  }
+  if (painted?.columnId === columnId) return painted;
+  return { columnId, insertIndex: 0 };
 }
 
 export function pointerInColumnTopZone(
@@ -271,10 +503,10 @@ function placeholderInsertAtPointer(
 export function resolveInsertIndexUnderPointer(
   columnId: string,
   pointerY: number,
-  draggedTaskId?: string,
+  excludeTaskIds?: string | string[] | null,
   _pointerX?: number,
   _currentInsert?: number | null,
-  _origin?: { columnId: string; insertIndex: number } | null
+  origin?: { columnId: string; insertIndex: number } | null
 ): number | null {
   if (typeof document === 'undefined') return null;
 
@@ -289,8 +521,9 @@ export function resolveInsertIndexUnderPointer(
   const outside = insertOutsideTaskList(root, pointerY, pointerY);
   if (outside != null) return outside;
 
+  const exclude = toExcludeSet(excludeTaskIds);
   const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-kanban-task-row]'))
-    .filter((row) => !draggedTaskId || row.dataset.taskId !== draggedTaskId)
+    .filter((row) => !rowIsExcluded(row, exclude))
     .map((row) => {
       const index = Number(row.dataset.layoutIndex);
       const rect = row.getBoundingClientRect();
@@ -311,7 +544,6 @@ export function resolveInsertIndexUnderPointer(
   const first = rows[0];
   const last = rows[rows.length - 1];
 
-  // Header / Drop here gap above the first card → that card's insert index.
   if (pointerY < first.top) {
     return first.index;
   }
@@ -319,17 +551,21 @@ export function resolveInsertIndexUnderPointer(
     return layoutCount != null ? layoutCount : last.index + 1;
   }
 
-  // Split on the card itself (not the gap between cards).
+  for (const row of rows) {
+    const rowBottom = row.top + row.height;
+    if (pointerY >= row.top && pointerY < rowBottom) {
+      return insertIndexOnCard(row, pointerY, columnId, origin);
+    }
+  }
+
   let insert = last.index + 1;
   for (const row of rows) {
-    const split = row.top + row.height * 0.45;
-    if (pointerY < split) {
+    if (pointerY < row.top) {
       insert = row.index;
       break;
     }
     insert = row.index + 1;
   }
-
   return insert;
 }
 

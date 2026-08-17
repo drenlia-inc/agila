@@ -40,6 +40,7 @@ import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { feDebug } from '../utils/clientDebug';
 import { commentTextToHtml } from '../utils/commentContent';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import { isEditableEscapeTarget } from '../utils/escapeKeyUtils';
 import {
   AGENT_MEMBER_ID,
   SYSTEM_MEMBER_ID,
@@ -119,7 +120,7 @@ interface TaskCardProps {
 
   /** Multi-check (bulk). Distinct from TaskDetails amber selection. */
   isChecked?: boolean;
-  onToggleChecked?: () => void;
+  onToggleChecked?: (options?: { range?: boolean }) => void;
   /** True when multi-check spans multiple columns — disables this card’s DnD. */
   isMultiSelectDragLocked?: boolean;
   /** false for viewer — hide toolbar, pencil, multi-select, inline editors */
@@ -449,10 +450,12 @@ const TaskCard = React.memo(function TaskCard({
           return;
         }
 
-        // Cmd/Ctrl+click is multi-select — do not activate dnd-kit.
-        // With a low activation distance, pointerdown otherwise starts a drag and the
-        // column wrapper applies opacity-50 (looks disabled) until drag end.
-        if (e.metaKey || e.ctrlKey) {
+        // Cmd/Ctrl or Shift+click is multi-select — do not activate dnd-kit.
+        if (e.metaKey || e.ctrlKey || e.shiftKey) {
+          if (e.shiftKey) {
+            e.preventDefault();
+            window.getSelection()?.removeAllRanges();
+          }
           return;
         }
 
@@ -1550,7 +1553,7 @@ const TaskCard = React.memo(function TaskCard({
           // Prevent clicks on tag areas from reaching card
           position: 'relative'
         }}
-        className={`group task-card sortable-item cursor-pointer ${
+        className={`group task-card sortable-item cursor-pointer outline-none focus:outline-none focus-visible:outline-none ${
           isSelected ? 'bg-gray-100 dark:bg-gray-700 ring-1 ring-amber-400 dark:ring-amber-500' : 
           member.id === SYSTEM_MEMBER_ID ? 'bg-yellow-50 dark:bg-yellow-900' :
           isAgentWorkActive ? 'bg-teal-50/90 dark:bg-teal-950/40' :
@@ -1603,10 +1606,34 @@ const TaskCard = React.memo(function TaskCard({
               isInteractingWithTagRef.current = false;
             }, 500);
           }
+
+          if (isLinkingMode) return;
+          if (isEditableEscapeTarget(e.target)) return;
+          if (!toggleChecked) return;
+          if (e.shiftKey && target.closest('[data-kanban-mod-allow~="shift"]')) return;
+          if (target.closest('input[type="checkbox"]')) return;
+
+          if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            window.getSelection()?.removeAllRanges();
+            if (clickTimerRef.current) {
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+            }
+            if (e.ctrlKey || e.metaKey) toggleChecked();
+            else toggleChecked({ range: true });
+          }
         }}
         onClick={(e) => {
           // Only open task details if we're not in linking mode and not clicking interactive elements
           if (isLinkingMode) return;
+
+          if (isEditableEscapeTarget(e.target)) return;
+
+          const target = e.target as HTMLElement;
+          const isShiftDelete =
+            e.shiftKey && !!target.closest('[data-kanban-mod-allow~="shift"]');
 
           // Ctrl/Cmd+click toggles multi-select (same as the card checkbox).
           if ((e.ctrlKey || e.metaKey) && toggleChecked) {
@@ -1619,8 +1646,18 @@ const TaskCard = React.memo(function TaskCard({
             toggleChecked();
             return;
           }
-          
-          const target = e.target as HTMLElement;
+
+          // Shift+click selects the range from the last checked card (except delete).
+          if (e.shiftKey && toggleChecked && !isShiftDelete) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (clickTimerRef.current) {
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+            }
+            toggleChecked({ range: true });
+            return;
+          }
           
           // Tags only — container already stopPropagates; keep this as a safety net
           if (target.closest('[data-tag-container]')) {
@@ -2054,7 +2091,13 @@ const TaskCard = React.memo(function TaskCard({
                 <label
                   className="absolute -left-[10px] top-[19px] z-10 -translate-x-1 -translate-y-1/2 -m-1.5 flex cursor-pointer items-center p-1.5"
                   data-no-dnd="true"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (e.shiftKey && toggleChecked) {
+                      e.preventDefault();
+                      toggleChecked({ range: true });
+                    }
+                  }}
                   onKeyDown={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                 >

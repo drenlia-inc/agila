@@ -20,6 +20,7 @@ import { resolveTaskMember } from '../utils/agentMemberUi';
 import {
   shouldShowColumnBulkFab,
   shouldShowColumnBulkUndo,
+  type ToggleTaskCheckedOptions,
 } from '../utils/kanbanMultiSelect';
 import ColumnBulkUndoFab from './ColumnBulkUndoFab';
 import type { TaskRelationshipSummary } from '../utils/taskRelationshipSummary';
@@ -114,7 +115,7 @@ interface KanbanColumnProps {
 
   /** Multi-check set for this board. */
   checkedTaskIds?: Set<string>;
-  onToggleTaskChecked?: (taskId: string) => void;
+  onToggleTaskChecked?: (taskId: string, options?: ToggleTaskCheckedOptions) => void;
   onToggleColumnChecked?: (columnId: string, taskIds: string[], selectAll: boolean) => void;
   onClearAllChecked?: () => void;
   isMultiSelectDragLocked?: boolean;
@@ -695,7 +696,12 @@ function KanbanColumn({
     () =>
       [...filteredTasks]
         .filter((task) => task && task.id)
-        .sort((a, b) => (a.position || 0) - (b.position || 0)),
+        .sort((a, b) => {
+          const pa = typeof a.position === 'number' ? a.position : parseFloat(String(a.position)) || 0;
+          const pb = typeof b.position === 'number' ? b.position : parseFloat(String(b.position)) || 0;
+          if (pa !== pb) return pa - pb;
+          return String(a.id).localeCompare(String(b.id));
+        }),
     [filteredTasks]
   );
 
@@ -703,6 +709,34 @@ function KanbanColumn({
     if (!draggedTask || draggedTask.columnId !== column.id) return -1;
     return tasksToRender.findIndex((t) => t.id === draggedTask.id);
   }, [tasksToRender, draggedTask, column.id]);
+
+  const draggedLayoutIndices = useMemo(() => {
+    const set = new Set<number>();
+    if (!draggedTask || draggedTask.columnId !== column.id) return set;
+    const ids =
+      draggedTaskIds && draggedTaskIds.length > 0
+        ? draggedTaskIds
+        : [draggedTask.id];
+    const idSet = new Set(ids);
+    tasksToRender.forEach((t, i) => {
+      if (idSet.has(t.id)) set.add(i);
+    });
+    return set;
+  }, [tasksToRender, draggedTask, draggedTaskIds, column.id]);
+
+  const remappedOriginInsert = useMemo(() => {
+    if (originIndex < 0) return -1;
+    let n = 0;
+    for (let i = 0; i < originIndex; i++) {
+      if (!draggedLayoutIndices.has(i)) n++;
+    }
+    return n;
+  }, [originIndex, draggedLayoutIndices]);
+
+  const orderedVisibleTaskIds = useMemo(
+    () => tasksToRender.map((t) => t.id),
+    [tasksToRender]
+  );
 
   // Keep the dragged sortable mounted (unmounting it cancels dnd-kit after a few moves).
   const tasksForLayout = tasksToRender;
@@ -715,7 +749,7 @@ function KanbanColumn({
   // No list hole while the pointer is still in the original slot — pickup overlay only.
   const showDestPlaceholder =
     rawInsertIndex >= 0 &&
-    (draggedTask?.columnId !== column.id || rawInsertIndex !== originIndex);
+    (draggedTask?.columnId !== column.id || rawInsertIndex !== remappedOriginInsert);
 
   const insertIndex = showDestPlaceholder ? rawInsertIndex : -1;
 
@@ -726,9 +760,11 @@ function KanbanColumn({
   const draggedTaskRef = useRef(draggedTask);
   draggedTaskRef.current = draggedTask;
 
+  const MIN_CACHED_ROW_HEIGHT = 24;
+
   const reportRowHeight = useCallback((taskId: string, height: number) => {
     if (draggedTaskRef.current) return;
-    if (!taskId || !(height > 0)) return;
+    if (!taskId || height < MIN_CACHED_ROW_HEIGHT) return;
     const prev = heightCacheRef.current.get(taskId);
     if (prev != null && Math.abs(prev - height) < 4) return;
     heightCacheRef.current.set(taskId, height);
@@ -741,31 +777,49 @@ function KanbanColumn({
   }, []);
 
   useEffect(() => {
+    if (draggedTask) return;
+    let changed = false;
+    heightCacheRef.current.forEach((h, id) => {
+      if (h < MIN_CACHED_ROW_HEIGHT) {
+        heightCacheRef.current.delete(id);
+        changed = true;
+      }
+    });
+    if (changed) setHeightVersion((v) => v + 1);
+  }, [draggedTask]);
+
+  useEffect(() => {
     heightCacheRef.current.clear();
     setHeightVersion((v) => v + 1);
   }, [taskViewMode, column.id]);
 
   const remapLayoutIndex = useCallback(
     (index: number) => {
-      if (originIndex < 0) return index;
-      if (index === originIndex) return -1;
-      return index > originIndex ? index - 1 : index;
+      if (draggedLayoutIndices.size === 0) return index;
+      if (draggedLayoutIndices.has(index)) return -1;
+      let subtracted = 0;
+      draggedLayoutIndices.forEach((di) => {
+        if (di < index) subtracted++;
+      });
+      return index - subtracted;
     },
-    [originIndex]
+    [draggedLayoutIndices]
   );
 
   const withoutDraggedCount =
-    originIndex >= 0 ? Math.max(0, tasksForLayout.length - 1) : tasksForLayout.length;
+    draggedLayoutIndices.size > 0
+      ? Math.max(0, tasksForLayout.length - draggedLayoutIndices.size)
+      : tasksForLayout.length;
 
   const collapseOrigin =
-    originIndex >= 0 &&
+    draggedLayoutIndices.size > 0 &&
     !!draggedTask &&
     (showDestPlaceholder ||
       (!!dragPreview && dragPreview.targetColumnId !== column.id));
 
   const getItemSize = useCallback(
     (index: number) => {
-      if (collapseOrigin && index === originIndex) return 1;
+      if (collapseOrigin && draggedLayoutIndices.has(index)) return 1;
       const task = tasksForLayout[index];
       const cached = task?.id ? heightCacheRef.current.get(task.id) : undefined;
       let height =
@@ -784,7 +838,7 @@ function KanbanColumn({
       tasksForLayout,
       heightVersion,
       collapseOrigin,
-      originIndex,
+      draggedLayoutIndices,
       remapLayoutIndex,
     ]
   );
@@ -812,7 +866,7 @@ function KanbanColumn({
     overscan: dragOverscan,
     trailingHeight,
     pinnedIndex: pinnedTaskIndex,
-    layoutKey: `${column.id}:${tasksForLayout.length}:${taskViewMode}:${insertIndex}:${collapseOrigin ? 1 : 0}:${pinnedTaskIndex ?? ''}:${heightVersion}`,
+    layoutKey: `${column.id}:${tasksForLayout.length}:${taskViewMode}:${insertIndex}:${collapseOrigin ? 1 : 0}:${draggedLayoutIndices.size}:${pinnedTaskIndex ?? ''}:${heightVersion}`,
   });
 
   const renderTaskList = React.useCallback(() => {
@@ -867,8 +921,7 @@ function KanbanColumn({
             }
           : undefined;
 
-      const draggedLayoutIdx = originIndex;
-      const skipYRow = draggedLayoutIdx >= 0 && index === draggedLayoutIdx;
+      const skipYRow = draggedLayoutIndices.has(index);
       const layoutIndex = remapLayoutIndex(index);
       const showPlaceholderHere =
         insertIndex >= 0 && layoutIndex === insertIndex && !skipYRow;
@@ -976,7 +1029,11 @@ function KanbanColumn({
             isChecked={!!checkedTaskIds?.has(task.id)}
             onToggleChecked={
               canMutate && onToggleTaskChecked
-                ? () => onToggleTaskChecked(task.id)
+                ? (options) =>
+                    onToggleTaskChecked(task.id, {
+                      range: options?.range,
+                      orderedIds: orderedVisibleTaskIds,
+                    })
                 : undefined
             }
             isMultiSelectDragLocked={isMultiSelectDragLocked}
@@ -1040,7 +1097,7 @@ function KanbanColumn({
     }
 
     return taskElements;
-    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, column.title, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, highlightLinksMode, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, originIndex, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight]);
+    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, column.title, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, highlightLinksMode, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
 
   // Combine sortable and column droppable refs for the column container
   const columnElRef = useRef<HTMLElement | null>(null);

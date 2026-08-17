@@ -3,6 +3,7 @@ import { DndContext, DragOverlay, useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronLeft, ChevronRight, Calendar, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useKanbanModifierKeys } from '../../hooks/useKanbanModifierKeys';
 import { 
   CurrentUser, 
   TeamMember, 
@@ -18,6 +19,7 @@ import { hasConfiguredSearchFilters, clearTaskSoftDelete } from '../../utils/tas
 import {
   allTasksCheckedInColumn,
   checkedIdsInColumn,
+  type ToggleTaskCheckedOptions,
 } from '../../utils/kanbanMultiSelect';
 import { buildTaskRelationshipSummaryMap } from '../../utils/taskRelationshipSummary';
 import { ModernCheckbox } from '../ModernCheckbox';
@@ -44,7 +46,11 @@ import { toast } from '../../utils/toast';
 import websocketClient from '../../services/websocketClient';
 import {
   BOARD_TRASH_CHANGED_EVENT,
+  CLOSE_BOARD_TRASH_EVENT,
   type BoardTrashChangedDetail,
+  type CloseBoardTrashDetail,
+  readBoardTrashOpenPreference,
+  writeBoardTrashOpenPreference,
 } from '../../utils/boardTrashEvents';
 import { getTaskSprintId, taskMatchesSelectedSprint } from '../../utils/columnFilters';
 import { isArchivedColumnFlag } from '../../utils/columnUtils';
@@ -62,43 +68,8 @@ function readHighlightLinksMode(): boolean {
   }
 }
 
-const TRASH_OPEN_STORAGE_KEY = 'easyKanban.trashOpenByBoard';
-
-function readTrashOpenPreference(boardId: string | null): boolean {
-  if (!boardId || typeof sessionStorage === 'undefined') return false;
-  try {
-    const raw = sessionStorage.getItem(TRASH_OPEN_STORAGE_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as Record<string, boolean>;
-    return !!parsed?.[boardId];
-  } catch {
-    return false;
-  }
-}
-
-function writeTrashOpenPreference(boardId: string | null, open: boolean) {
-  if (!boardId || typeof sessionStorage === 'undefined') return;
-  try {
-    const raw = sessionStorage.getItem(TRASH_OPEN_STORAGE_KEY);
-    const parsed = (raw ? JSON.parse(raw) : {}) as Record<string, boolean>;
-    if (open) {
-      parsed[boardId] = true;
-    } else {
-      delete parsed[boardId];
-    }
-    if (Object.keys(parsed).length === 0) {
-      sessionStorage.removeItem(TRASH_OPEN_STORAGE_KEY);
-    } else {
-      sessionStorage.setItem(TRASH_OPEN_STORAGE_KEY, JSON.stringify(parsed));
-    }
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
 // Lazy load GanttViewV2 to reduce initial bundle size (only loads when Gantt view is selected) with retry logic
 const GanttViewV2 = lazyWithRetry(() => import('../GanttViewV2'));
-
 
 interface KanbanPageProps {
   currentUser: CurrentUser | null;
@@ -249,7 +220,7 @@ interface KanbanPageProps {
 
   // Kanban multi-select / bulk actions
   checkedTaskIds?: Set<string>;
-  onToggleTaskChecked?: (taskId: string) => void;
+  onToggleTaskChecked?: (taskId: string, options?: ToggleTaskCheckedOptions) => void;
   onToggleColumnChecked?: (columnId: string, taskIds: string[], selectAll: boolean) => void;
   onClearAllChecked?: () => void;
   isMultiSelectDragLocked?: boolean;
@@ -424,13 +395,14 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   draggedTaskIds,
 }: KanbanPageProps) => {
   const { t, i18n } = useTranslation(['tasks', 'common']);
+  useKanbanModifierKeys();
   const [showBoardToolbar, setShowBoardToolbar] = useState(() => {
     const prefs = loadUserPreferences(currentUser?.id ?? null);
     return prefs.appSettings.showBoardToolbar !== false;
   });
   const [highlightLinksMode, setHighlightLinksMode] = useState(readHighlightLinksMode);
   const [trashOpen, setTrashOpen] = useState(() =>
-    readTrashOpenPreference(selectedBoard)
+    readBoardTrashOpenPreference(selectedBoard)
   );
   const [trashCount, setTrashCount] = useState(0);
   const [trashTasks, setTrashTasks] = useState<Task[]>([]);
@@ -441,7 +413,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     (open: boolean | ((prev: boolean) => boolean)) => {
       setTrashOpen((prev) => {
         const next = typeof open === 'function' ? open(prev) : open;
-        writeTrashOpenPreference(selectedBoard, next);
+        writeBoardTrashOpenPreference(selectedBoard, next);
         return next;
       });
     },
@@ -479,7 +451,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         // Close only when the board has no trash at all (not merely none for this sprint).
         if (tasks.length === 0) {
           setTrashOpen(false);
-          writeTrashOpenPreference(boardId, false);
+          writeBoardTrashOpenPreference(boardId, false);
         }
         return;
       }
@@ -489,7 +461,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
       setTrashCount(count);
       if (count === 0) {
         setTrashOpen(false);
-        writeTrashOpenPreference(boardId, false);
+        writeBoardTrashOpenPreference(boardId, false);
         setTrashTasks([]);
       }
     } catch {
@@ -514,7 +486,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         setTrashCount(countTrashForSprint(tasks));
         if (tasks.length === 0) {
           setTrashOpen(false);
-          writeTrashOpenPreference(boardId, false);
+          writeBoardTrashOpenPreference(boardId, false);
         }
       } catch (error) {
         console.error('Failed to load trash:', error);
@@ -530,10 +502,20 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     setTrashTasks([]);
     // Clear immediately so the previous board's badge does not flash on the new board.
     setTrashCount(0);
-    const shouldOpen = readTrashOpenPreference(selectedBoard);
+    const shouldOpen = readBoardTrashOpenPreference(selectedBoard);
     setTrashOpen(shouldOpen);
     void refreshTrashCount(selectedBoard);
   }, [selectedBoard, refreshTrashCount]);
+
+  useEffect(() => {
+    const onCloseTrash = (event: Event) => {
+      const boardId = (event as CustomEvent<CloseBoardTrashDetail>).detail?.boardId;
+      if (!boardId || boardId !== selectedBoard) return;
+      setTrashOpen(false);
+    };
+    window.addEventListener(CLOSE_BOARD_TRASH_EVENT, onCloseTrash);
+    return () => window.removeEventListener(CLOSE_BOARD_TRASH_EVENT, onCloseTrash);
+  }, [selectedBoard]);
 
   // Recompute badge when sprint filter changes (trash list may already be loaded).
   useEffect(() => {
@@ -628,7 +610,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           const next = prev.filter((task) => task.id !== taskId);
           if (next.length === 0) {
             setTrashOpen(false);
-            writeTrashOpenPreference(selectedBoard, false);
+            writeBoardTrashOpenPreference(selectedBoard, false);
             setTrashCount(0);
           } else {
             setTrashCount(countTrashForSprint(next));
@@ -657,7 +639,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           const next = prev.filter((task) => task.id !== taskId);
           if (next.length === 0) {
             setTrashOpen(false);
-            writeTrashOpenPreference(selectedBoard, false);
+            writeBoardTrashOpenPreference(selectedBoard, false);
             setTrashCount(0);
           } else {
             setTrashCount(countTrashForSprint(next));
@@ -684,7 +666,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         const next = prev.filter((task) => !removed.has(task.id));
         if (next.length === 0) {
           setTrashOpen(false);
-          writeTrashOpenPreference(selectedBoard, false);
+          writeBoardTrashOpenPreference(selectedBoard, false);
           setTrashCount(0);
         } else {
           setTrashCount(countTrashForSprint(next));

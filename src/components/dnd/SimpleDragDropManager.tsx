@@ -20,11 +20,14 @@ import {
   TaskDropPlacement,
 } from '../../utils/taskReorderingUtils';
 import {
-  resolveColumnIdUnderPointer,
-  resolveInsertIndexUnderPointer,
   getTaskDragOverlayRect,
   findPlaceholderHitByOverlay,
-  resolveDropFromOverlay,
+  readPaintedDropPlaceholder,
+  resolveKanbanDropTarget,
+  resolveColumnIdUnderPointer,
+  resolveColumnIdUnderRect,
+  OVERLAY_SIDEWAYS_PX,
+  type OverlayDropHit,
 } from '../../utils/dndInsertIndex';
 
 interface SimpleDragDropManagerProps {
@@ -42,6 +45,8 @@ interface SimpleDragDropManagerProps {
     placement: TaskDropPlacement
   ) => Promise<void>;
   checkedTaskIds?: Set<string>;
+  /** Always-current selection; drag-start must not depend on a memoized render. */
+  checkedTaskIdsRef?: React.MutableRefObject<Set<string>>;
   onClearChecked?: () => void;
   onDraggedTaskIdsChange?: (taskIds: string[]) => void;
   onColumnReorder: (columnId: string, newPosition: number) => Promise<void>;
@@ -54,20 +59,76 @@ interface SimpleDragDropManagerProps {
 
 const parsePos = (pos: any): number => (typeof pos === 'number' ? pos : parseFloat(pos) || 0);
 
-function placementFromInsertIndex(
-  visibleTasks: Task[],
-  insertIndex: number,
-  draggedTaskId?: string
-): TaskDropPlacement {
-  const sorted = [...visibleTasks]
-    .filter((t) => t.id !== draggedTaskId)
-    .sort((a, b) => parsePos(a.position) - parsePos(b.position));
-  if (insertIndex <= 0) return { kind: 'start' };
-  if (insertIndex >= sorted.length) {
-    const last = sorted[sorted.length - 1];
-    return last ? { kind: 'after', taskId: last.id } : { kind: 'end' };
+function excludeIdsForDrag(leaderId: string | null | undefined, bulkIds: string[]): string[] {
+  if (bulkIds.length > 1) return bulkIds;
+  return leaderId ? [leaderId] : [];
+}
+
+function asHit(
+  preview: { targetColumnId: string; insertIndex: number } | null | undefined
+): OverlayDropHit | null {
+  if (!preview) return null;
+  return { columnId: preview.targetColumnId, insertIndex: preview.insertIndex };
+}
+
+function firstDestHit(
+  originColumnId: string | null | undefined,
+  ...hits: Array<OverlayDropHit | null | undefined>
+): OverlayDropHit | null {
+  const origin = originColumnId || null;
+  for (const hit of hits) {
+    if (hit && hit.columnId !== origin) return hit;
   }
-  return { kind: 'before', taskId: sorted[insertIndex].id };
+  return null;
+}
+
+type TaskDropLock = {
+  taskId: string;
+  originColumnId: string;
+  dest: OverlayDropHit;
+};
+
+let taskDropLock: TaskDropLock | null = null;
+let taskDropEpoch = 0;
+let taskDropMovedEpoch = -1;
+
+function setTaskDropLock(
+  taskId: string | null | undefined,
+  originColumnId: string | null | undefined,
+  dest: OverlayDropHit | null | undefined
+): void {
+  if (!taskId || !originColumnId || !dest) return;
+  if (dest.columnId === originColumnId) return;
+  taskDropLock = { taskId, originColumnId, dest };
+}
+
+function peekTaskDropLock(taskId: string): TaskDropLock | null {
+  if (taskDropLock && taskDropLock.taskId === taskId) return taskDropLock;
+  return null;
+}
+
+function clearTaskDropLock(taskId?: string): void {
+  if (!taskId || taskDropLock?.taskId === taskId) taskDropLock = null;
+}
+
+function freezeCommitAgainstOrigin(
+  originColumnId: string | null | undefined,
+  painted: OverlayDropHit | null,
+  preview: { targetColumnId: string; insertIndex: number } | null,
+  overlaySnap: OverlayDropHit | null,
+  lastDest: OverlayDropHit | null
+): OverlayDropHit | null {
+  const dest = firstDestHit(
+    originColumnId,
+    lastDest,
+    painted,
+    asHit(preview),
+    overlaySnap
+  );
+  if (dest) return dest;
+  if (painted) return painted;
+  if (preview) return asHit(preview);
+  return overlaySnap;
 }
 
 // Custom collision detection: prefer pointer hits; scope work to nearby droppables on large boards.
@@ -244,6 +305,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   onTaskMoveToDifferentBoard,
   onBulkTaskMove,
   checkedTaskIds,
+  checkedTaskIdsRef,
   onClearChecked,
   onDraggedTaskIdsChange,
   onColumnReorder,
@@ -267,29 +329,136 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const dragOriginRef = useRef<{ columnId: string; insertIndex: number; y: number } | null>(null);
   const overlayRectRef = useRef<DOMRect | null>(null);
   const overlaySnapRef = useRef<{ columnId: string; insertIndex: number } | null>(null);
+  // Frozen at pointerup while Drop here is still painted — handleDragEnd
+  // must not recompute against the origin column after the overlay unmounts.
+  const releaseDropRef = useRef<OverlayDropHit | null>(null);
+  const pendingCommitRef = useRef<OverlayDropHit | null>(null);
+  const lastDestPreviewRef = useRef<OverlayDropHit | null>(null);
+  const taskDropConsumedRef = useRef(false);
   const overlayStartTopRef = useRef<number | null>(null);
   const overlayStartLeftRef = useRef<number | null>(null);
   const isDraggingTaskRef = useRef(false);
   const draggedTaskIdRef = useRef<string | null>(null);
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
+  const liveCheckedRef = useRef(checkedTaskIds);
+  liveCheckedRef.current = checkedTaskIds;
+  const liveCheckedIds = (): Set<string> | undefined =>
+    checkedTaskIdsRef?.current ?? liveCheckedRef.current;
   const rafHandleRef = useRef<number | null>(null);
   const lastProcessTimeRef = useRef<number>(0);
   const THROTTLE_MS = 16; // ~60fps max
+
+  const capturePendingCommit = () => {
+    const origin = dragOriginRef.current;
+    const originColumnId = origin?.columnId || null;
+    const overlay = getTaskDragOverlayRect() || overlayRectRef.current;
+    overlayRectRef.current = overlay;
+    const excludeIds = excludeIdsForDrag(
+      draggedTaskIdRef.current,
+      activeBulkTaskIdsRef.current
+    );
+    overlaySnapRef.current = overlay
+      ? findPlaceholderHitByOverlay(overlay, excludeIds)
+      : overlaySnapRef.current;
+    const live = resolveKanbanDropTarget({
+      pointerX: mouseXRef.current,
+      pointerY: mouseYRef.current,
+      overlay,
+      origin,
+      excludeTaskIds: excludeIds,
+      overlayStartLeft: overlayStartLeftRef.current,
+    });
+    const painted = readPaintedDropPlaceholder();
+    const preview = lastPreviewRef.current;
+    const sideways =
+      overlay != null &&
+      overlayStartLeftRef.current != null &&
+      Math.abs(overlay.left - overlayStartLeftRef.current) >= OVERLAY_SIDEWAYS_PX;
+    const pointerCol = resolveColumnIdUnderPointer(
+      mouseXRef.current,
+      mouseYRef.current
+    );
+    const liveDest =
+      live && originColumnId && live.columnId !== originColumnId ? live : null;
+    const keepStickyDest =
+      !liveDest &&
+      !!lastDestPreviewRef.current &&
+      (sideways || (!!pointerCol && pointerCol !== originColumnId));
+    const chosen =
+      liveDest ||
+      (keepStickyDest ? lastDestPreviewRef.current : null) ||
+      live ||
+      firstDestHit(originColumnId, painted, asHit(preview), overlaySnapRef.current);
+    pendingCommitRef.current = chosen;
+    releaseDropRef.current = chosen;
+    if (chosen && originColumnId && chosen.columnId !== originColumnId) {
+      lastDestPreviewRef.current = chosen;
+      setTaskDropLock(draggedTaskIdRef.current, originColumnId, chosen);
+    }
+    return chosen;
+  };
+  const capturePendingCommitRef = useRef(capturePendingCommit);
+  capturePendingCommitRef.current = capturePendingCommit;
+
+  const commitTaskDrop = async (taskId: string, reason: string): Promise<boolean> => {
+    if (taskDropConsumedRef.current) return false;
+    const origin = dragOriginRef.current;
+    const lock = peekTaskDropLock(taskId);
+    const sourceColumnId =
+      lock?.originColumnId || origin?.columnId || '';
+    capturePendingCommit();
+    const frozen = pendingCommitRef.current;
+    if (!frozen) {
+      return false;
+    }
+    taskDropConsumedRef.current = true;
+    taskDropMovedEpoch = taskDropEpoch;
+    pendingCommitRef.current = null;
+    const placement: TaskDropPlacement = {
+      kind: 'atIndex',
+      index: frozen.insertIndex,
+    };
+    const bulkIds = activeBulkTaskIdsRef.current;
+    dndLog('🎯 [commitTaskDrop] onTaskMove', {
+      taskId,
+      targetColumnId: frozen.columnId,
+      placement,
+      sourceColumnId,
+      reason,
+      bulkCount: bulkIds.length,
+    });
+    if (bulkIds.length > 1 && onBulkTaskMove) {
+      await onBulkTaskMove(bulkIds, frozen.columnId, placement);
+    } else {
+      await onTaskMove(taskId, frozen.columnId, placement);
+    }
+    clearTaskDropLock(taskId);
+    return true;
+  };
+  const commitTaskDropRef = useRef(commitTaskDrop);
+  commitTaskDropRef.current = commitTaskDrop;
   
   // Debug: Track drag over call count
   const dragOverCallCountRef = useRef<number>(0);
   const dragOverSkippedCountRef = useRef<number>(0);
   const dragOverProcessedCountRef = useRef<number>(0);
 
-  // Track mouse for board-tab / column-top drop recovery without React re-renders
+  // Track pointer for board-tab / column-top drop recovery without React re-renders
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMove = (e: MouseEvent | PointerEvent) => {
       mouseYRef.current = e.clientY;
       mouseXRef.current = e.clientX;
+      if (!isDraggingTaskRef.current) return;
+      const overlay = getTaskDragOverlayRect();
+      if (overlay) overlayRectRef.current = overlay;
     };
 
-    document.addEventListener('mousemove', handleMouseMove, { passive: true });
+    document.addEventListener('pointermove', handleMove, { passive: true });
+    document.addEventListener('mousemove', handleMove, { passive: true });
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('mousemove', handleMove);
     };
   }, []);
 
@@ -323,22 +492,35 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   }, []);
 
   useEffect(() => {
-    const onPointerUp = () => {
-      // Snapshot before dnd-kit unmounts the overlay on drop.
+    const onRelease = (e: PointerEvent) => {
+      mouseXRef.current = e.clientX;
+      mouseYRef.current = e.clientY;
+      const isLostCapture = e.type === 'lostpointercapture';
+      if (isLostCapture && e.buttons !== 0) return;
+      const taskId = draggedTaskIdRef.current;
+      if (!isDraggingTaskRef.current && !pendingCommitRef.current && !taskId) return;
       if (isDraggingTaskRef.current) {
-        const overlay = getTaskDragOverlayRect() || overlayRectRef.current;
-        overlayRectRef.current = overlay;
-        overlaySnapRef.current = overlay
-          ? findPlaceholderHitByOverlay(overlay, draggedTaskIdRef.current ?? undefined)
-          : null;
+        capturePendingCommitRef.current();
+        if (rafHandleRef.current !== null) {
+          cancelAnimationFrame(rafHandleRef.current);
+          rafHandleRef.current = null;
+        }
       }
-      isDraggingTaskRef.current = false;
+      if (!isLostCapture) {
+        isDraggingTaskRef.current = false;
+      }
+      if (taskId) {
+        void commitTaskDropRef.current(taskId, 'destAtRelease');
+        draggedTaskIdRef.current = null;
+      }
     };
-    window.addEventListener('pointerup', onPointerUp, true);
-    window.addEventListener('pointercancel', onPointerUp, true);
+    window.addEventListener('pointerup', onRelease, true);
+    window.addEventListener('pointercancel', onRelease, true);
+    window.addEventListener('lostpointercapture', onRelease, true);
     return () => {
-      window.removeEventListener('pointerup', onPointerUp, true);
-      window.removeEventListener('pointercancel', onPointerUp, true);
+      window.removeEventListener('pointerup', onRelease, true);
+      window.removeEventListener('pointercancel', onRelease, true);
+      window.removeEventListener('lostpointercapture', onRelease, true);
     };
   }, []);
 
@@ -363,11 +545,17 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   // Removed console.log to reduce noise
 
   const handleDragStart = (event: DragStartEvent) => {
-    // Reset preview cache on drag start
     lastPreviewRef.current = null;
     dragOriginRef.current = null;
     overlayRectRef.current = null;
     overlaySnapRef.current = null;
+    releaseDropRef.current = null;
+    pendingCommitRef.current = null;
+    lastDestPreviewRef.current = null;
+    clearTaskDropLock();
+    taskDropConsumedRef.current = false;
+    taskDropEpoch += 1;
+    taskDropMovedEpoch = -1;
     overlayStartTopRef.current = null;
     overlayStartLeftRef.current = null;
     isDraggingTaskRef.current = false;
@@ -446,7 +634,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       } else {
         setKeyboardMoveLabel(null);
       }
-      const checked = checkedTaskIds;
+      const checked = liveCheckedIds();
       const isChecked = !!checked?.has(task.id);
 
       if (checked && checked.size > 0 && !isChecked) {
@@ -456,13 +644,14 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
         onDraggedTaskIdsChange?.([]);
       } else if (isChecked && checked && checked.size >= 1) {
         // Follower multi-drag only when all checked share one column
+        const liveColumns = columnsRef.current;
         const sourceColumnId = task.columnId;
-        const ordered = (columns[sourceColumnId]?.tasks || [])
+        const ordered = (liveColumns[sourceColumnId]?.tasks || [])
           .slice()
           .sort((a, b) => parsePos(a.position) - parsePos(b.position))
           .filter((t) => checked.has(t.id));
         const allSameColumn = Array.from(checked).every((id) => {
-          for (const col of Object.values(columns)) {
+          for (const col of Object.values(liveColumns)) {
             if (col.tasks?.some((t) => t.id === id)) {
               return col.id === sourceColumnId;
             }
@@ -485,14 +674,24 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       onDraggedTaskChange?.(task);
       isDraggingTaskRef.current = true;
       draggedTaskIdRef.current = task.id;
-      const originTasks = columns[task.columnId]?.tasks || [];
+      const originTasks = columnsRef.current[task.columnId]?.tasks || [];
       const originSorted = [...originTasks].sort(
         (a, b) => parsePos(a.position) - parsePos(b.position)
       );
       const originIndex = originSorted.findIndex((t) => t.id === task.id);
+      const blockIds =
+        activeBulkTaskIdsRef.current.length > 1
+          ? activeBulkTaskIdsRef.current
+          : [task.id];
+      const blockSet = new Set(blockIds);
+      let remappedOrigin = 0;
+      for (const t of originSorted) {
+        if (t.id === task.id) break;
+        if (!blockSet.has(t.id)) remappedOrigin++;
+      }
       dragOriginRef.current = {
         columnId: task.columnId,
-        insertIndex: Math.max(0, originIndex),
+        insertIndex: Math.max(0, remappedOrigin),
         y: mouseYRef.current,
       };
     } else if (activeData?.type === 'column') {
@@ -503,7 +702,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   };
 
   const handleDragOver = (event: DragOverEvent) => {
-    const { over, active } = event;
+    const { active } = event;
     
     dragOverCallCountRef.current++;
     
@@ -526,6 +725,9 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     rafHandleRef.current = requestAnimationFrame(() => {
       rafHandleRef.current = null;
       lastProcessTimeRef.current = performance.now();
+      if (!isDraggingTaskRef.current && active.data?.current?.type === 'task') {
+        return;
+      }
       
       // FIRST: Check for mouse-based tab area detection (before any other logic)
       const isTaskDrag = active.data?.current?.type === 'task';
@@ -539,6 +741,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
         if (isInTabArea && !isHoveringBoardTabRef.current) {
           isHoveringBoardTabRef.current = true;
           onBoardTabHover?.(true);
+          lastPreviewRef.current = null;
           onDragPreviewChange?.(null);
         } else if (!isInTabArea && isHoveringBoardTabRef.current) {
           isHoveringBoardTabRef.current = false;
@@ -552,11 +755,11 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
 
       const draggedTask = active.data?.current?.task as Task | undefined;
       if (isTaskDrag && draggedTask) {
-        const overColumnId =
-          (over?.data?.current?.columnId as string | undefined) ||
-          (over?.data?.current?.task?.columnId as string | undefined) ||
-          (over?.data?.current?.column?.id as string | undefined);
         const origin = dragOriginRef.current;
+        const excludeIds = excludeIdsForDrag(
+          draggedTask.id,
+          activeBulkTaskIdsRef.current
+        );
         const overlay = getTaskDragOverlayRect();
         if (overlay) {
           overlayRectRef.current = overlay;
@@ -565,49 +768,86 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
             overlayStartLeftRef.current = overlay.left;
           }
         }
-        const snap = overlay
-          ? findPlaceholderHitByOverlay(overlay, draggedTask.id)
-          : null;
-        overlaySnapRef.current = snap;
-        const overlayMoved =
-          overlay != null &&
-          overlayStartTopRef.current != null &&
-          overlayStartLeftRef.current != null &&
-          Math.hypot(
-            overlay.top - overlayStartTopRef.current,
-            overlay.left - overlayStartLeftRef.current
-          ) > 12;
-        const overlayHit =
-          overlay && overlayMoved
-            ? resolveDropFromOverlay(overlay, draggedTask.id, origin)
-            : overlay && origin && !overlayMoved
-              ? { columnId: origin.columnId, insertIndex: origin.insertIndex }
-              : overlay
-                ? resolveDropFromOverlay(overlay, draggedTask.id, origin)
-                : null;
-        const pointerColumnId =
-          resolveColumnIdUnderPointer(mouseXRef.current, mouseYRef.current) ||
-          overColumnId;
-        const columnId = snap?.columnId || overlayHit?.columnId || pointerColumnId;
-        if (!columnId || !columns[columnId]) {
+        const hit = resolveKanbanDropTarget({
+          pointerX: mouseXRef.current,
+          pointerY: mouseYRef.current,
+          overlay,
+          origin,
+          excludeTaskIds: excludeIds,
+          overlayStartLeft: overlayStartLeftRef.current,
+        });
+        const columnId = hit?.columnId || null;
+        if (!columnId || !columnsRef.current[columnId] || hit == null) {
           return;
         }
-        const insertIndex =
-          snap?.insertIndex ??
-          overlayHit?.insertIndex ??
-          resolveInsertIndexUnderPointer(
-            columnId,
-            mouseYRef.current,
-            draggedTask.id,
-            mouseXRef.current,
-            null,
-            origin
-          );
+        const insertIndex = hit.insertIndex;
         if (insertIndex == null) return;
+        const originColumnId = origin?.columnId || draggedTask.columnId;
+        let nextColumnId = columnId;
+        let nextInsert = insertIndex;
+        if (nextColumnId !== originColumnId) {
+          lastDestPreviewRef.current = { columnId: nextColumnId, insertIndex: nextInsert };
+          setTaskDropLock(draggedTask.id, originColumnId, lastDestPreviewRef.current);
+        } else if (lastDestPreviewRef.current) {
+          const last = lastDestPreviewRef.current;
+          const pointerCol = resolveColumnIdUnderPointer(
+            mouseXRef.current,
+            mouseYRef.current
+          );
+          const overlayCol = overlay
+            ? resolveColumnIdUnderRect(
+                overlay,
+                originColumnId,
+                overlayStartLeftRef.current
+              )
+            : null;
+          const sideways =
+            overlay != null &&
+            overlayStartLeftRef.current != null &&
+            Math.abs(overlay.left - overlayStartLeftRef.current) >= OVERLAY_SIDEWAYS_PX;
+          const pointerInOrigin = pointerCol === originColumnId;
+          const pointerDest =
+            pointerCol && pointerCol !== originColumnId ? pointerCol : null;
+          const overlayDest =
+            overlayCol && overlayCol !== originColumnId ? overlayCol : null;
+          if (pointerInOrigin && !sideways) {
+            lastDestPreviewRef.current = null;
+          } else if (pointerDest && pointerDest !== last.columnId) {
+            lastDestPreviewRef.current = {
+              columnId: pointerDest,
+              insertIndex: nextInsert,
+            };
+            nextColumnId = pointerDest;
+            setTaskDropLock(
+              draggedTask.id,
+              originColumnId,
+              lastDestPreviewRef.current
+            );
+          } else if (overlayDest && overlayDest !== last.columnId) {
+            lastDestPreviewRef.current = {
+              columnId: overlayDest,
+              insertIndex: nextInsert,
+            };
+            nextColumnId = overlayDest;
+            setTaskDropLock(
+              draggedTask.id,
+              originColumnId,
+              lastDestPreviewRef.current
+            );
+          } else if (!overlay) {
+            nextColumnId = last.columnId;
+            nextInsert = last.insertIndex;
+          } else if (pointerDest || overlayDest) {
+            nextColumnId = last.columnId;
+            nextInsert = last.insertIndex;
+          } else {
+            lastDestPreviewRef.current = null;
+          }
+        }
         const newPreview = {
-          targetColumnId: columnId,
-          insertIndex,
-          isCrossColumn: draggedTask.columnId !== columnId,
+          targetColumnId: nextColumnId,
+          insertIndex: nextInsert,
+          isCrossColumn: originColumnId !== nextColumnId,
         };
         if (
           !lastPreviewRef.current ||
@@ -634,6 +874,13 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       activeBulkTaskIdsRef.current = [];
       onDraggedTaskIdsChange?.([]);
     };
+
+    // Freeze the painted Drop here: a pending dragOver frame must not
+    // recompute insert after the user has already released.
+    if (rafHandleRef.current !== null) {
+      cancelAnimationFrame(rafHandleRef.current);
+      rafHandleRef.current = null;
+    }
 
     // Block drag completion when offline
     if (!isOnline) {
@@ -691,98 +938,8 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
           await onTaskMoveToDifferentBoard(task.id, overData.boardId);
           dndLog('✅ Cross-board move completed');
         } else {
-          dndLog('🎯 Same board move — pointer-Y insert index');
-          let targetColumnId = task.columnId;
-          let placement: TaskDropPlacement | null = null;
-          const origin = dragOriginRef.current;
-          const overlay =
-            getTaskDragOverlayRect() || overlayRectRef.current;
-          const overlayMoved =
-            overlayStartTopRef.current == null ||
-            overlayStartLeftRef.current == null ||
-            (overlay != null &&
-              Math.hypot(
-                overlay.top - overlayStartTopRef.current,
-                overlay.left - overlayStartLeftRef.current
-              ) > 12);
-          const snap = overlayMoved
-            ? (overlay
-                ? findPlaceholderHitByOverlay(overlay, task.id)
-                : null) || overlaySnapRef.current
-            : null;
-          const overlayHit =
-            overlayMoved && overlay
-              ? resolveDropFromOverlay(overlay, task.id, origin)
-              : null;
-
-          const overColumnId =
-            (overData?.columnId as string | undefined) ||
-            (overData?.task?.columnId as string | undefined) ||
-            (overData?.column?.id as string | undefined);
-          const pointerColumnId =
-            resolveColumnIdUnderPointer(mouseXRef.current, mouseYRef.current) ||
-            overColumnId ||
-            previewAtEnd?.targetColumnId ||
-            origin?.columnId ||
-            null;
-          const pointerInsert =
-            pointerColumnId && columns[pointerColumnId]
-              ? resolveInsertIndexUnderPointer(
-                  pointerColumnId,
-                  mouseYRef.current,
-                  task.id,
-                  mouseXRef.current,
-                  null,
-                  origin
-                )
-              : null;
-
-          const applyYPlacement = (columnId: string, insertIndex: number) => {
-            targetColumnId = columnId;
-            placement = placementFromInsertIndex(
-              columns[columnId]?.tasks || [],
-              insertIndex,
-              task.id
-            );
-          };
-
-          // Card overlapping Drop here always wins. Otherwise place by where
-          // the overlay sits — not by a pointer that may still be in the source column.
-          if (snap && columns[snap.columnId]) {
-            applyYPlacement(snap.columnId, snap.insertIndex);
-          } else if (overlayHit && columns[overlayHit.columnId]) {
-            applyYPlacement(overlayHit.columnId, overlayHit.insertIndex);
-          } else if (pointerColumnId && pointerInsert != null && columns[pointerColumnId]) {
-            applyYPlacement(pointerColumnId, pointerInsert);
-          } else if (previewAtEnd && columns[previewAtEnd.targetColumnId]) {
-            applyYPlacement(previewAtEnd.targetColumnId, previewAtEnd.insertIndex);
-          } else {
-            dndLog('⚠️ [handleDragEnd] No valid drop target found:', {
-              overId: over?.id,
-              overDataType: overData?.type,
-              pointerColumnId,
-              activeTaskId: task.id,
-            });
-            return;
-          }
-
-          if (!placement) {
-            return;
-          }
-
-          // Skip no-op: same column start when already first, etc. — App/moveTaskToIndex also guards
-          dndLog('🎯 [handleDragEnd] onTaskMove', {
-            taskId: task.id,
-            targetColumnId,
-            placement,
-            sourceColumnId: task.columnId,
-            bulkCount: bulkIds.length,
-          });
-          if (bulkIds.length > 1 && onBulkTaskMove) {
-            await onBulkTaskMove(bulkIds, targetColumnId, placement);
-          } else {
-            await onTaskMove(task.id, targetColumnId, placement);
-          }
+          dndLog('🎯 Same board move — Drop here preview first');
+          await commitTaskDrop(task.id, 'destAtRelease');
         }
       } else if (activeData?.type === 'column') {
         // Handle column reordering
@@ -884,6 +1041,8 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       // or when the user cancelled; otherwise insertion placeholders stay mounted and shift columns.
       lastPreviewRef.current = null;
       dragOriginRef.current = null;
+      releaseDropRef.current = null;
+      pendingCommitRef.current = null;
       isDraggingTaskRef.current = false;
       onDraggedTaskChange?.(null);
       onDraggedColumnChange?.(null);
@@ -896,8 +1055,11 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   };
 
   const handleDragCancel = () => {
+    const taskId = draggedTaskIdRef.current;
+    if (taskId && !taskDropConsumedRef.current) {
+      void commitTaskDropRef.current(taskId, 'destAtRelease');
+    }
     lastPreviewRef.current = null;
-    dragOriginRef.current = null;
     isDraggingTaskRef.current = false;
     onDraggedTaskChange?.(null);
     onDraggedColumnChange?.(null);
@@ -953,9 +1115,14 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     }
     // Check task counts per column
     const structureChanged = prevKeys.some(key => {
-      const prevCount = prevProps.columns[key]?.tasks?.length || 0;
-      const nextCount = nextProps.columns[key]?.tasks?.length || 0;
-      return prevCount !== nextCount;
+      const prevTasks = prevProps.columns[key]?.tasks || [];
+      const nextTasks = nextProps.columns[key]?.tasks || [];
+      if (prevTasks.length !== nextTasks.length) return true;
+      return prevTasks.some(
+        (t, i) =>
+          t.id !== nextTasks[i]?.id ||
+          String(t.position) !== String(nextTasks[i]?.position)
+      );
     });
     if (structureChanged) return false; // Re-render
   }

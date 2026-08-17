@@ -69,6 +69,27 @@ export function shouldShowColumnBulkUndo(
   return false;
 }
 
+export type ToggleTaskCheckedOptions = {
+  /** Shift+click: select every visible card from the last anchor through this one. */
+  range?: boolean;
+  /** Visible task ids in column order (same list the user sees). */
+  orderedIds?: string[];
+};
+
+/** Inclusive slice of `orderedIds` between two task ids, or null if either is missing. */
+export function taskIdsInColumnRange(
+  orderedIds: string[],
+  fromId: string,
+  toId: string
+): string[] | null {
+  const a = orderedIds.indexOf(fromId);
+  const b = orderedIds.indexOf(toId);
+  if (a < 0 || b < 0) return null;
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  return orderedIds.slice(lo, hi + 1);
+}
+
 /** Checked tasks in a column, sorted by position. */
 export function orderedCheckedTasksInColumn(
   checkedTaskIds: Set<string>,

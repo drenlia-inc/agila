@@ -10,6 +10,7 @@ import {
   ColumnVisibilityWarning
 } from '../../types';
 import { TaskViewMode, ViewMode } from '../../utils/userPreferences';
+import type { ToggleTaskCheckedOptions } from '../../utils/kanbanMultiSelect';
 import LoadingSpinner from '../LoadingSpinner';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 import type { AdminDraftGate } from '../admin/AdminLeaveUnsavedDialog';
@@ -171,7 +172,7 @@ interface MainLayoutProps {
 
   // Kanban multi-select / bulk actions
   checkedTaskIds?: Set<string>;
-  onToggleTaskChecked?: (taskId: string) => void;
+  onToggleTaskChecked?: (taskId: string, options?: ToggleTaskCheckedOptions) => void;
   onToggleColumnChecked?: (columnId: string, taskIds: string[], selectAll: boolean) => void;
   onClearAllChecked?: () => void;
   isMultiSelectDragLocked?: boolean;

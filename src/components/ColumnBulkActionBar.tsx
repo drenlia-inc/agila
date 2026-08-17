@@ -24,6 +24,7 @@ import AddTagModal from './AddTagModal';
 import MemberAvatar from './ui/MemberAvatar';
 import MemberSearchList from './ui/MemberSearchList';
 import { layoutMemberDropdownFromElement } from '../utils/memberDropdownLayout';
+import { useFixedColumnFabPosition } from '../hooks/useFixedColumnFabPosition';
 
 export type ColumnBulkActionBarProps = {
   columnId: string;

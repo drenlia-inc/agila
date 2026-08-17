@@ -83,6 +83,51 @@ function boardTaskCountTooltip(
   return t('boardTabs.taskCount');
 }
 
+const BOARD_TAB_ADMIN_CHROME_DELAY_MS = 1000;
+
+/** Delay drag handle + trash on board tabs so quick clicks select the tab; zones reveal immediately on direct hover. */
+function useBoardTabAdminChromeReveal(delayMs = BOARD_TAB_ADMIN_CHROME_DELAY_MS) {
+  const [tabHovered, setTabHovered] = useState(false);
+  const [handleHovered, setHandleHovered] = useState(false);
+  const [trashHovered, setTrashHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [delayedReveal, setDelayedReveal] = useState(false);
+
+  useEffect(() => {
+    if (!tabHovered) {
+      setDelayedReveal(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setDelayedReveal(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [tabHovered, delayMs]);
+
+  const chromeVisible = delayedReveal || focused;
+
+  return {
+    showDragHandle: handleHovered || chromeVisible,
+    showTrash: trashHovered || chromeVisible,
+    tabSurfaceProps: {
+      onMouseEnter: () => setTabHovered(true),
+      onMouseLeave: () => {
+        setTabHovered(false);
+        setHandleHovered(false);
+        setTrashHovered(false);
+      },
+      onFocus: () => setFocused(true),
+      onBlur: () => setFocused(false),
+    },
+    handleZoneProps: {
+      onMouseEnter: () => setHandleHovered(true),
+      onMouseLeave: () => setHandleHovered(false),
+    },
+    trashZoneProps: {
+      onMouseEnter: () => setTrashHovered(true),
+      onMouseLeave: () => setTrashHovered(false),
+    },
+  };
+}
+
 function renderBoardEffortPill(effort: number, siteSettings?: { [key: string]: string }, tooltipLabel?: string) {
   if (!(effort > 0)) return null;
   const display = formatEffortDisplay(effort, parseEffortUnit(siteSettings));
@@ -367,6 +412,13 @@ const SortableBoardTab: React.FC<{
 }> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete, taskCount, wipCount, effort = 0, effortTooltip, siteSettings, totalTaskCount, deleteConfirmTaskCount, showTaskCount, hasActiveFilters = false, isEditing = false }) => {
   const [deleteButtonRef, setDeleteButtonRef] = useState<HTMLButtonElement | null>(null);
   const {
+    showDragHandle,
+    showTrash,
+    tabSurfaceProps,
+    handleZoneProps,
+    trashZoneProps,
+  } = useBoardTabAdminChromeReveal();
+  const {
     attributes,
     listeners,
     setNodeRef,
@@ -376,6 +428,22 @@ const SortableBoardTab: React.FC<{
   } = useSortable({ id: board.id });
 
   const { t } = useTranslation('common');
+  const dragHandleActive = showDragHandle || isDragging;
+  const taskCountPill = showTaskCount
+    ? renderBoardTaskCountPill({
+        displayCount: taskCount ?? 0,
+        wipCount: wipCount ?? taskCount ?? 0,
+        wipLimit: board.wip_limit,
+        hasActiveFilters,
+        compact: true,
+      })
+    : null;
+  const handleTooltip =
+    dragHandleActive
+      ? t('boardTabs.dragToReorder')
+      : taskCountPill
+        ? boardTaskCountTooltip(t, taskCountPill, board.wip_limit)
+        : t('boardTabs.dragToReorder');
   // Translate only: CSS.Transform also applies dnd-kit's scaleX/scaleY, which stretches
   // the label because board tabs have different widths
   const style: React.CSSProperties = {
@@ -400,67 +468,60 @@ const SortableBoardTab: React.FC<{
             onSelect();
           }
         }}
+        {...tabSurfaceProps}
         className={`
-          group relative inline-flex shrink-0 cursor-pointer items-center gap-1 !px-1.5
+          relative inline-flex shrink-0 cursor-pointer items-center gap-1 !px-1.5
           ${isSelected ? tabTrackActive : tabTrackInactive}
           ${isEditing ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}
           ${isDragging ? 'opacity-60 shadow-lg ring-2 ring-gray-300/50 dark:ring-gray-500/40' : ''}
         `}
       >
-        {/* Task count covers the drag handle until hover reveals it. */}
-        <KanbanChromeTooltip
-          label={
-            showTaskCount && hasWipLimit(board.wip_limit)
-              ? t('boardTabs.wipMeterTooltip', {
-                  count: hasActiveFilters ? (taskCount ?? 0) : (wipCount ?? taskCount ?? 0),
-                  limit: board.wip_limit,
-                })
-              : t('boardTabs.dragToReorder')
-          }
-          wrapperClassName="relative z-[2] shrink-0"
-        >
+        {/* Task count pill until hover reveals drag handle (1s tab delay or immediate handle-zone hover). */}
+        <KanbanChromeTooltip label={handleTooltip} wrapperClassName="relative z-[2] shrink-0">
           <div
-            className="group/board-handle relative flex h-6 min-w-6 cursor-grab touch-none items-center justify-center rounded-md px-0 text-gray-400 transition-colors hover:bg-gray-200/80 hover:text-gray-600 active:cursor-grabbing dark:hover:bg-gray-600/50 dark:hover:text-gray-300"
-            {...attributes}
-            {...listeners}
-            onClick={(e) => e.stopPropagation()}
+            className={`relative flex h-6 min-w-6 items-center justify-center rounded-md px-0 text-gray-400 transition-colors ${
+              dragHandleActive
+                ? 'cursor-grab touch-none hover:bg-gray-200/80 hover:text-gray-600 active:cursor-grabbing dark:hover:bg-gray-600/50 dark:hover:text-gray-300'
+                : ''
+            }`}
+            {...handleZoneProps}
+            {...(dragHandleActive ? attributes : {})}
+            {...(dragHandleActive ? listeners : {})}
+            onClick={(e) => {
+              if (dragHandleActive) e.stopPropagation();
+            }}
           >
-            {showTaskCount && (() => {
-              const pill = renderBoardTaskCountPill({
-                displayCount: taskCount ?? 0,
-                wipCount: wipCount ?? taskCount ?? 0,
-                wipLimit: board.wip_limit,
-                hasActiveFilters,
-                compact: true,
-              });
-              if (!pill) {
-                return <GripVertical className="h-3.5 w-3.5 opacity-60" aria-hidden />;
-              }
-              return (
+            {taskCountPill ? (
               <>
-                {/* Invisible sizer so meter / multi-digit counts set width without extra tab padding */}
                 <span
                   className="invisible px-1 py-0.5 text-[0.65rem] leading-none tabular-nums font-bold whitespace-nowrap"
                   aria-hidden
                 >
-                  {pill.sizerLabel}
+                  {taskCountPill.sizerLabel}
                 </span>
                 <span
-                  className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity group-hover/board-handle:opacity-0`}
+                  className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity ${
+                    dragHandleActive ? 'opacity-0' : 'opacity-100'
+                  }`}
                 >
-                  <span className={pill.pillClass} aria-label={boardTaskCountTooltip(t, pill, board.wip_limit)}>
-                    {pill.label}
+                  <span className={taskCountPill.pillClass} aria-label={boardTaskCountTooltip(t, taskCountPill, board.wip_limit)}>
+                    {taskCountPill.label}
                   </span>
                 </span>
                 <GripVertical
-                  className="pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/board-handle:opacity-100"
+                  className={`pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 transition-opacity ${
+                    dragHandleActive ? 'opacity-100' : 'opacity-0'
+                  }`}
                   aria-hidden
                 />
               </>
-              );
-            })()}
-            {!showTaskCount && (
-              <GripVertical className="h-3.5 w-3.5 opacity-60" aria-hidden />
+            ) : (
+              <GripVertical
+                className={`h-3.5 w-3.5 transition-opacity ${
+                  dragHandleActive ? 'opacity-100' : 'opacity-0'
+                }`}
+                aria-hidden
+              />
             )}
           </div>
         </KanbanChromeTooltip>
@@ -480,24 +541,30 @@ const SortableBoardTab: React.FC<{
         {/* Effort + trash share a tight cluster (column-style density) */}
         <div className="flex shrink-0 items-center gap-0.5">
           {renderBoardEffortPill(effort, siteSettings, effortTooltip)}
-          {/* Space reserved so revealing trash on hover does not shift neighbouring tabs */}
           {canDelete && (
             <div
-              className="flex w-5 shrink-0 items-center justify-center opacity-0 transition-opacity duration-200 ease-out pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+              className="flex h-5 w-5 shrink-0 items-center justify-center"
+              {...trashZoneProps}
             >
-              <KanbanChromeTooltip label={t('boardTabs.deleteBoard')}>
-                <button
-                  type="button"
-                  ref={setDeleteButtonRef}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemove();
-                  }}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md p-0 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
-                >
-                  <Trash2 size={13} strokeWidth={2} />
-                </button>
-              </KanbanChromeTooltip>
+              <div
+                className={`flex items-center justify-center transition-opacity duration-200 ease-out ${
+                  showTrash ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+                }`}
+              >
+                <KanbanChromeTooltip label={t('boardTabs.deleteBoard')}>
+                  <button
+                    type="button"
+                    ref={setDeleteButtonRef}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemove();
+                    }}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md p-0 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+                  >
+                    <Trash2 size={13} strokeWidth={2} />
+                  </button>
+                </KanbanChromeTooltip>
+              </div>
             </div>
           )}
         </div>

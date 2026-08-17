@@ -107,6 +107,7 @@ interface TaskDetailsProps {
   onRestore?: () => Promise<void>;
   onPurge?: () => Promise<void>;
   isAdmin?: boolean;
+  onShowTaskOnBoard?: (task: Task) => void | Promise<void>;
 }
 
 export default function TaskDetails({
@@ -123,6 +124,7 @@ export default function TaskDetails({
   onRestore,
   onPurge,
   isAdmin = false,
+  onShowTaskOnBoard,
 }: TaskDetailsProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const userPrefs = loadUserPreferences();
@@ -1711,6 +1713,10 @@ export default function TaskDetails({
                         <button
                           type="button"
                           onClick={() => {
+                            if (onShowTaskOnBoard) {
+                              void onShowTaskOnBoard(task);
+                              return;
+                            }
                             const found = scrollViewportToTask(task.id);
                             if (!found) {
                               toast.warning(t('errors.scrollToCardFailed'), '');

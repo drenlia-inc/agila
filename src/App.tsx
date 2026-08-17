@@ -65,6 +65,11 @@ import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reord
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { applyActiveColumnFilters } from './utils/columnFilters';
+import { closeBoardTrashView } from './utils/boardTrashEvents';
+import {
+  findBoardIdForTask,
+  scrollViewportToTaskWhenReady,
+} from './utils/scrollViewportToTask';
 import { columnsContentFingerprint } from './utils/columnsFingerprint';
 import { applyLocalColumnReorder } from './utils/columnReorderingUtils';
 import { userCanMutate } from './utils/permissions';
@@ -132,7 +137,7 @@ import { customCollisionDetection, calculateGridStyle } from './utils/dragDropUt
 import { clearCustomCursor } from './utils/cursorUtils';
 import { generateUniqueBoardName } from './utils/boardUtils';
 import { renumberColumns, isArchivedColumnFlag } from './utils/columnUtils';
-import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveDropIndex, TaskDropPlacement } from './utils/taskReorderingUtils';
+import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveDropIndex, snapshotColumnTaskOrder, restoreColumnTaskOrders, TaskDropPlacement } from './utils/taskReorderingUtils';
 import { getTaskColumnId, orderedCheckedTasksInColumn } from './utils/kanbanMultiSelect';
 import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
 import { hasEscapeConsumingOverlay, isEditableEscapeTarget } from './utils/escapeKeyUtils';
@@ -3934,13 +3939,13 @@ function AppContent() {
 
     if (!sourceTask || !sourceColumnId) {
       dndLog('🎯 Task not found, returning early');
-      return; // Task not found
+      return false;
     }
 
     const targetColumn = liveColumns[targetColumnId];
     if (!targetColumn) {
       dndLog('🎯 Target column not found:', targetColumnId);
-      return;
+      return false;
     }
 
     // Resolve placement against FULL column (not filtered). Default: append to end (ListView).
@@ -3991,8 +3996,10 @@ function AppContent() {
           taskFilters.setFilteredColumns
         );
       }
+      return true;
     } catch {
       toast.error(t('errors.moveTaskTitle'), t('errors.moveTaskMessage'));
+      return false;
     }
   }, [t, refreshBoardData, setDragCooldown, taskFilters.setFilteredColumns]);
 
@@ -4295,6 +4302,7 @@ function AppContent() {
     selectedBoard,
     isLinkingMode: taskLinking.isLinkingMode,
     detailsOpen: !!selectedTask,
+    detailsTaskId: selectedTask?.id ?? null,
     findTask: findTaskInColumns,
     onEditTask: handleEditTask,
     onCopyTask: handleCopyTask,
@@ -4326,6 +4334,18 @@ function AppContent() {
       ? handleTaskPermanentDelete
       : undefined,
     onMoveToBoard: performCrossBoardMove,
+    onUndoColumnMove: async (previousColumnOrders) => {
+      const liveColumns = columnsRef.current;
+      const refresh = refreshBoardDataRef.current || refreshBoardData;
+      await restoreColumnTaskOrders(
+        previousColumnOrders,
+        liveColumns,
+        setColumns,
+        setDragCooldown,
+        refresh,
+        taskFilters.setFilteredColumns
+      );
+    },
     getArchiveColumnId: () => {
       const archive = Object.values(columns).find((col) => isArchivedColumnFlag(col));
       return archive?.id || null;
@@ -4363,13 +4383,17 @@ function AppContent() {
     recordColumnMoveUndo,
   } = kanbanMultiSelect;
 
+  const checkedTaskIdsRef = useRef(checkedTaskIds);
+  checkedTaskIdsRef.current = checkedTaskIds;
+
   const handleBulkMoveTaskIds = useCallback(
     async (taskIds: string[], targetColumnId: string, placement: TaskDropPlacement) => {
       if (taskIds.length === 0) return;
-      const targetColumn = columns[targetColumnId];
+      const liveColumns = columnsRef.current;
+      const targetColumn = liveColumns[targetColumnId];
       if (!targetColumn) return;
 
-      const sourceColumnId = getTaskColumnId(taskIds[0], columns);
+      const sourceColumnId = getTaskColumnId(taskIds[0], liveColumns);
       const followers = taskIds.slice(1);
       const targetIndex = resolveDropIndex(
         targetColumn.tasks,
@@ -4384,13 +4408,24 @@ function AppContent() {
 
       // Preserve relative column order for the block
       const orderedIds =
-        sourceColumnId && columns[sourceColumnId]
-          ? orderedCheckedTasksInColumn(new Set(taskIds), columns[sourceColumnId].tasks).map(
+        sourceColumnId && liveColumns[sourceColumnId]
+          ? orderedCheckedTasksInColumn(new Set(taskIds), liveColumns[sourceColumnId].tasks).map(
               (t) => t.id
             )
           : taskIds;
 
       const previousByTaskId: Record<string, Partial<Task>> = {};
+      const previousColumnOrders: Record<string, ReturnType<typeof snapshotColumnTaskOrder>> = {};
+      if (sourceColumnId && liveColumns[sourceColumnId]) {
+        previousColumnOrders[sourceColumnId] = snapshotColumnTaskOrder(
+          liveColumns[sourceColumnId].tasks
+        );
+      }
+      if (targetColumnId && liveColumns[targetColumnId] && targetColumnId !== sourceColumnId) {
+        previousColumnOrders[targetColumnId] = snapshotColumnTaskOrder(
+          liveColumns[targetColumnId].tasks
+        );
+      }
       for (const id of orderedIds) {
         const task = findTaskInColumns(id);
         if (!task) continue;
@@ -4404,24 +4439,26 @@ function AppContent() {
         orderedIds,
         targetColumnId,
         targetIndex,
-        columns,
+        liveColumns,
         setColumns,
         setDragCooldown,
         refreshBoardData,
         taskFilters.setFilteredColumns
       );
-      if (orderedIds.length >= 2 && Object.keys(previousByTaskId).length > 0) {
-        const movedAcross =
-          sourceColumnId != null && sourceColumnId !== targetColumnId;
-        if (movedAcross) {
-          recordColumnMoveUndo(orderedIds, previousByTaskId);
-        }
+      const sourceSorted = sourceColumnId
+        ? [...(liveColumns[sourceColumnId]?.tasks || [])].sort(
+            (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
+          )
+        : [];
+      const fromIndex = sourceSorted.findIndex((t) => t.id === orderedIds[0]);
+      const isNoOp = sourceColumnId === targetColumnId && fromIndex === targetIndex;
+      if (!isNoOp && Object.keys(previousByTaskId).length > 0) {
+        recordColumnMoveUndo(orderedIds, previousByTaskId, previousColumnOrders);
       }
       clearAllChecked();
       setDraggedTaskIds([]);
     },
     [
-      columns,
       clearAllChecked,
       findTaskInColumns,
       recordColumnMoveUndo,
@@ -4429,6 +4466,58 @@ function AppContent() {
       refreshBoardData,
       taskFilters.setFilteredColumns,
     ]
+  );
+
+  /** Kanban drag drops: honor Drop here, then offer the same undo FAB as bulk moves. */
+  const handleKanbanBoardTaskMove = useCallback(
+    async (taskId: string, targetColumnId: string, placement?: TaskDropPlacement) => {
+      const liveColumns = columnsRef.current;
+      let sourceTask: Task | null = null;
+      let sourceColumnId: string | null = null;
+      for (const [colId, column] of Object.entries(liveColumns)) {
+        const task = column.tasks.find((t) => t.id === taskId);
+        if (task) {
+          sourceTask = task;
+          sourceColumnId = colId;
+          break;
+        }
+      }
+      const targetColumn = liveColumns[targetColumnId];
+      if (!sourceTask || !sourceColumnId || !targetColumn) {
+        await handleMoveTaskToColumn(taskId, targetColumnId, placement);
+        return;
+      }
+
+      const resolvedPlacement: TaskDropPlacement = placement || { kind: 'end' };
+      const targetIndex = resolveDropIndex(targetColumn.tasks, resolvedPlacement, taskId);
+      const sourceSorted = [...(liveColumns[sourceColumnId]?.tasks || [])].sort(
+        (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
+      );
+      const fromIndex = sourceSorted.findIndex((t) => t.id === taskId);
+      const isNoOp = sourceColumnId === targetColumnId && fromIndex === targetIndex;
+
+      if (isNoOp) {
+        await handleMoveTaskToColumn(taskId, targetColumnId, placement);
+        return;
+      }
+
+      const previousColumnOrders: Record<string, ReturnType<typeof snapshotColumnTaskOrder>> = {
+        [sourceColumnId]: snapshotColumnTaskOrder(liveColumns[sourceColumnId].tasks),
+      };
+      if (targetColumnId !== sourceColumnId) {
+        previousColumnOrders[targetColumnId] = snapshotColumnTaskOrder(targetColumn.tasks);
+      }
+      const previousByTaskId: Record<string, Partial<Task>> = {
+        [taskId]: { columnId: sourceTask.columnId, position: sourceTask.position },
+      };
+
+      const moved = await handleMoveTaskToColumn(taskId, targetColumnId, placement);
+      if (moved) {
+        recordColumnMoveUndo([taskId], previousByTaskId, previousColumnOrders);
+        clearAllChecked();
+      }
+    },
+    [clearAllChecked, handleMoveTaskToColumn, recordColumnMoveUndo]
   );
 
   const handleColumnReorder = useCallback(async (columnId: string, newPosition: number) => {
@@ -4741,6 +4830,63 @@ function AppContent() {
     taskFilters.viewModeRef.current = mode;
     updateCurrentUserPreference('viewMode', mode);
   };
+
+  const handleShowTaskOnBoard = useCallback(
+    async (task: Task) => {
+      const boardId = findBoardIdForTask(
+        task.id,
+        task.boardId,
+        boards,
+        columns,
+        selectedBoard
+      );
+      if (!boardId) {
+        toast.warning(t('errors.scrollToCardFailed'), '');
+        return;
+      }
+
+      if (currentPage !== 'kanban') {
+        handlePageChange('kanban');
+      }
+      if (taskFilters.viewMode !== 'kanban') {
+        handleViewModeChange('kanban');
+      }
+
+      closeBoardTrashView(boardId);
+
+      const boardSwitched = selectedBoard !== boardId;
+      if (boardSwitched) {
+        handleBoardSelection(boardId);
+      }
+
+      const ok = await scrollViewportToTaskWhenReady(task.id, {
+        maxAttempts: boardSwitched ? 60 : 40,
+      });
+
+      if (boardSwitched) {
+        let liveTask: Task | null = null;
+        for (const column of Object.values(columnsRef.current)) {
+          liveTask = column?.tasks?.find((row) => row.id === task.id) ?? null;
+          if (liveTask) break;
+        }
+        handleSelectTask(liveTask ?? task);
+      }
+
+      if (!ok) {
+        toast.warning(t('errors.scrollToCardFailed'), '');
+      }
+    },
+    [
+      boards,
+      columns,
+      selectedBoard,
+      currentPage,
+      taskFilters.viewMode,
+      handleBoardSelection,
+      handleSelectTask,
+      t,
+    ]
+  );
 
   // Filter handlers are now in useTaskFilters hook (taskFilters.*)
 
@@ -5161,10 +5307,11 @@ function AppContent() {
         columns={stableFilteredColumns}
         boards={boards}
         isOnline={isOnline}
-        onTaskMove={handleMoveTaskToColumn}
+        onTaskMove={handleKanbanBoardTaskMove}
         onTaskMoveToDifferentBoard={handleTaskDropOnBoard}
         onBulkTaskMove={handleBulkMoveTaskIds}
         checkedTaskIds={checkedTaskIds}
+        checkedTaskIdsRef={checkedTaskIdsRef}
         onClearChecked={clearAllChecked}
         onDraggedTaskIdsChange={setDraggedTaskIds}
         onColumnReorder={handleColumnReorder}
@@ -5414,6 +5561,7 @@ function AppContent() {
           siteSettings={siteSettings}
           boards={boards}
           canMutate={canMutate}
+          onShowTaskOnBoard={handleShowTaskOnBoard}
         />
       </Suspense>
 

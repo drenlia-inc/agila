@@ -330,7 +330,11 @@
     "undoWatcher": "Annuler le changement d'observateur sur {{count}} tâche(s) et resélectionner",
     "undoCollaborator": "Annuler le changement de collaborateur sur {{count}} tâche(s) et resélectionner",
     "undoDelete": "Annuler la suppression — restaurer {{count}} tâche(s) depuis la corbeille et resélectionner",
+    "multiDragPreview": "Plusieurs tâches",
+    "movingSingle": "Déplacement…",
+    "movingMultiple": "Déplacement de {{count}} tâches…",
     "undoMove": "Annuler le déplacement sur {{count}} tâche(s) et resélectionner",
+    "undoMoveSingle": "Annuler le déplacement",
     "undoMoveBoard": "Annuler le changement de tableau sur {{count}} tâche(s) et resélectionner",
     "undoRestoredCount": "{{count}} tâche(s) rétablie(s)"
   },

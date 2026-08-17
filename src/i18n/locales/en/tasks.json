@@ -330,7 +330,11 @@
     "undoWatcher": "Undo watcher change on {{count}} task(s) and reselect",
     "undoCollaborator": "Undo collaborator change on {{count}} task(s) and reselect",
     "undoDelete": "Undo delete — restore {{count}} task(s) from trash and reselect",
+    "multiDragPreview": "Multiple tasks",
+    "movingSingle": "Moving…",
+    "movingMultiple": "Moving {{count}} tasks…",
     "undoMove": "Undo move on {{count}} task(s) and reselect",
+    "undoMoveSingle": "Undo move",
     "undoMoveBoard": "Undo board move on {{count}} task(s) and reselect",
     "undoRestoredCount": "Reverted {{count}} task(s)"
   },
