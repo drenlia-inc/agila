@@ -161,8 +161,8 @@ export async function runHelpAssistantChat({ db, isAdmin, language, messages }) 
         targetId: 'help:kanban-column-filter',
         answer:
           lang === 'fr'
-            ? 'Ouvrez Recherche et filtres, puis le menu Colonnes pour afficher les colonnes archivées.'
-            : 'Open Search & Filters, then the Columns menu to show archived columns.'
+            ? 'Ouvrez Filtre, puis le menu Colonnes pour afficher les colonnes archivées.'
+            : 'Open Filter, then the Columns menu to show archived columns.'
       }
     : null;
   const taskPageOverride = looksLikeTaskPageQuestion(lastUser.content)

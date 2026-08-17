@@ -642,7 +642,7 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 
 ### Board (Kanban page, when not typing / no dialog open)
 - **/** or **Ctrl/Cmd+K**: Focus header task search
-- **S**: Open or close the Tools Search & Filter panel
+- **S**: Open or close the Filter panel
 - **N**: Create a new task in the first column
 - **1 / 2 / 3**: Switch Kanban / List / Gantt view
 - **F / P / M**: Card density — Full / Preview / Minimal

@@ -28,6 +28,7 @@ import {
   showBoardTabTaskCounts,
 } from '../utils/kanbanChromeVisibility';
 import { getBoardTrashCount } from '../api';
+import { useIsMobileViewport } from '../hooks/useIsMobileViewport';
 
 function parseBoardWipLimitValue(raw: string): number | null {
   const trimmed = String(raw ?? '').trim();
@@ -626,6 +627,7 @@ export default function BoardTabs({
 }: BoardTabsProps) {
   const { t } = useTranslation('common');
   const { t: tTasks } = useTranslation('tasks');
+  const isMobile = useIsMobileViewport();
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string>('');
   const [editingWipLimit, setEditingWipLimit] = useState<string>('');
@@ -1070,9 +1072,10 @@ export default function BoardTabs({
   // Get the current board's project identifier
   const currentBoard = boards.find(board => board.id === selectedBoard);
   const currentProject = currentBoard?.project;
-  // Always keep the Progression-width slot so the tab strip does not grow/shrink
-  // when the trash icon appears or disappears.
-  const showActionColumn = Boolean(onToggleTrash);
+  const showTrashButton = trashCount > 0 && Boolean(onToggleTrash);
+  // Desktop: keep the Progression-width slot so the tab strip does not jump when trash appears.
+  // Mobile: use the full strip; only reserve space when the trash control is actually shown.
+  const showActionColumn = isMobile ? showTrashButton : Boolean(onToggleTrash);
 
   return (
     <div className="mb-6">
@@ -1263,8 +1266,12 @@ export default function BoardTabs({
 
         {/* Same width as BoardMetrics (Progression) so trash sits under that column */}
         {showActionColumn && (
-          <div className="flex w-[168px] shrink-0 items-center justify-end gap-2">
-            {trashCount > 0 && onToggleTrash && (
+          <div
+            className={`flex shrink-0 items-center justify-end gap-2 ${
+              isMobile ? '' : 'w-[168px]'
+            }`}
+          >
+            {showTrashButton && (
               <KanbanChromeTooltip label={trashOpen ? t('boardTabs.hideTrash') : t('boardTabs.showTrash')}>
                 <button
                   type="button"

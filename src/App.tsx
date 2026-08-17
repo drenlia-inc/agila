@@ -66,6 +66,7 @@ import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { applyActiveColumnFilters } from './utils/columnFilters';
 import { columnsContentFingerprint } from './utils/columnsFingerprint';
+import { applyLocalColumnReorder } from './utils/columnReorderingUtils';
 import { userCanMutate } from './utils/permissions';
 import { isDemoModeClient } from './utils/demoReset';
 import { useLoadingState } from './hooks/useLoadingState';
@@ -4431,29 +4432,35 @@ function AppContent() {
   );
 
   const handleColumnReorder = useCallback(async (columnId: string, newPosition: number) => {
+    const boardId = selectedBoard || '';
+    if (!boardId) return;
+
+    // Optimistic layout so multi-pod WS misses still show the new order (Docker
+    // usually gets column-reordered immediately; EKS often does not).
+    const optimistic = applyLocalColumnReorder(columnsRef.current, columnId, newPosition);
+    if (optimistic) {
+      columnsRef.current = optimistic;
+      setColumns(optimistic);
+      setBoards((prev) =>
+        prev.map((board) =>
+          board.id === boardId ? { ...board, columns: optimistic } : board
+        )
+      );
+    }
+
     try {
-      await reorderColumns(columnId, newPosition, selectedBoard || '');
-      await renumberColumns(selectedBoard || ''); // Ensure clean positions
-      
-      // Defer non-critical updates to avoid forced reflows during drag end
-      // Use requestAnimationFrame to batch DOM reads/writes
-      // NOTE: WebSocket update will handle the state sync completely
-      // We don't call refreshBoardData here to avoid overwriting the WebSocket update
+      await reorderColumns(columnId, newPosition, boardId);
+      await renumberColumns(boardId);
+      // WS may still refine positions for other clients; local order is already correct.
       requestAnimationFrame(() => {
-        // Defer query logs to next frame
-        // This prevents forced reflows during the drag end handler
         setTimeout(() => {
           fetchQueryLogs();
-          // WebSocket update handles state sync, so we don't refresh here
-          // If WebSocket fails, we'll refresh on error
         }, 0);
       });
     } catch (error) {
-      // console.error('Failed to reorder column:', error);
-      // Only refresh on error - WebSocket should handle success case
       await refreshBoardData();
     }
-  }, [selectedBoard, fetchQueryLogs]);
+  }, [selectedBoard, fetchQueryLogs, refreshBoardData]);
   
   // Stable callbacks for drag state - use refs to avoid triggering re-renders during drag
   const handleDraggedTaskChange = useCallback((task: Task | null) => {

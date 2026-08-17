@@ -3,6 +3,8 @@
  * Survives reload / cleared localStorage; other admins are unaffected.
  */
 
+import { updateUserSetting } from '../api';
+
 export const PERF_TESTS_USER_SETTING_KEY = 'FE_PERF_TESTS';
 
 export function isPerfTestsUserSettingEnabled(
@@ -31,4 +33,10 @@ export function subscribePerfTestsPreference(listener: Listener): () => void {
   return () => {
     listeners.delete(listener);
   };
+}
+
+/** Persist + broadcast the same preference as Admin → Troubleshooting. */
+export async function setPerfTestsUserPreference(enabled: boolean): Promise<void> {
+  await updateUserSetting(PERF_TESTS_USER_SETTING_KEY, enabled ? 'true' : 'false');
+  notifyPerfTestsPreference(enabled);
 }

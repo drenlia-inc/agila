@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, {
   getUserSettings,
-  updateUserSetting,
   getCspReports,
   clearCspReports,
   type CspReportRow,
@@ -16,8 +15,9 @@ import {
 import { useSettings } from '../../contexts/SettingsContext';
 import {
   isPerfTestsUserSettingEnabled,
-  notifyPerfTestsPreference,
   PERF_TESTS_USER_SETTING_KEY,
+  setPerfTestsUserPreference,
+  subscribePerfTestsPreference,
 } from '../../perfTests';
 import { toast } from '../../utils/toast';
 import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
@@ -113,6 +113,8 @@ const AdminTroubleshootingTab: React.FC<AdminTroubleshootingTabProps> = ({
     };
   }, []);
 
+  useEffect(() => subscribePerfTestsPreference(setPerfTestsEnabled), []);
+
   const handleClearCspReports = useCallback(async () => {
     setCspClearing(true);
     try {
@@ -153,8 +155,7 @@ const AdminTroubleshootingTab: React.FC<AdminTroubleshootingTabProps> = ({
     setPerfTestsEnabled(next);
     setSavingKey(PERF_TESTS_USER_SETTING_KEY);
     try {
-      await updateUserSetting(PERF_TESTS_USER_SETTING_KEY, next ? 'true' : 'false');
-      notifyPerfTestsPreference(next);
+      await setPerfTestsUserPreference(next);
       toast.success(t('appSettings.settingSaved'), '');
     } catch (error) {
       console.error('Failed to save perf tests preference:', error);

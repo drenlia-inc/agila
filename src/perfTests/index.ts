@@ -5,6 +5,7 @@ export {
   isPerfTestsUserSettingEnabled,
   notifyPerfTestsPreference,
   subscribePerfTestsPreference,
+  setPerfTestsUserPreference,
 } from './preference';
 
 /** True when the Performance Test Overlay should mount (this admin’s preference + admin role). */

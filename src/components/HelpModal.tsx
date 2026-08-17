@@ -272,6 +272,12 @@ const HELP_SHORTCUT_SECTIONS: { titleKey: string; rows: ShortcutRow[] }[] = [
     ],
   },
   {
+    titleKey: 'help.shortcuts.helpModal',
+    rows: [
+      { keys: '/ or Ctrl/Cmd+K', actionKey: 'help.shortcuts.helpSearch' },
+    ],
+  },
+  {
     titleKey: 'help.shortcuts.gantt',
     rows: [
       { keys: 'Escape / Enter', actionKey: 'help.shortcuts.ganttExitModes' },
@@ -783,6 +789,31 @@ export default function HelpModal({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen, minimized, minimizeHelp]);
+
+  // / and Ctrl/Cmd+K — focus Help search (same as board header / Admin settings search)
+  useEffect(() => {
+    if (!isOpen || minimized) return;
+    const onKey = (e: KeyboardEvent) => {
+      const isSlash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey;
+      const isModK =
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        (e.key === 'k' || e.key === 'K');
+      if (!isSlash && !isModK) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
+        return;
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+    // Capture so Help wins over board / Admin search listeners while the modal is open
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isOpen, minimized]);
 
   const handleHelpEscape = useCallback(() => {
     const searchEl = searchInputRef.current;

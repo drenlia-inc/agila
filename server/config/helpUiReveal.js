@@ -1,6 +1,6 @@
 /**
  * Open/reveal steps for Help Go there. Harvested selectors alone cannot open
- * closed panels (Search & Filters, column dropdown, trash, profile tabs).
+ * closed panels (Filter, column dropdown, trash, profile tabs).
  */
 export const HELP_UI_REVEAL = {
   'help:kanban-column-filter': ['boardToolbar', 'searchFilters', 'columnFilter'],

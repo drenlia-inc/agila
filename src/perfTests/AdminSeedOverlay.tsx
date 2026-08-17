@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReportModal from './ReportModal';
+import { PerfOverlayHeader } from './PerfOverlayHeader';
 import { getHistory, getLastRun, type PerfRunRecord } from './metrics';
 import { requestAdminNavigation } from '../utils/adminNavigation';
 import {
@@ -248,28 +249,19 @@ const AdminSeedOverlay: React.FC<{
     </button>
   );
 
+  const setCollapsedPreference = useCallback((next: boolean) => {
+    setCollapsed(next);
+    writeCollapsedPreference(next);
+  }, []);
+
   return (
     <>
       <div className="fixed bottom-4 right-4 z-[10050] w-80 max-w-[calc(100vw-2rem)] shadow-lg rounded-lg border border-amber-500/60 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-        <div className="flex items-center justify-between px-3 py-2 bg-amber-500/15 border-b border-amber-500/30 rounded-t-lg">
-          <span className="text-xs font-bold tracking-wide text-amber-800 dark:text-amber-200">
-            PERF TESTS · ADMIN
-            {active ? ` · ${active.toUpperCase()}` : ''}
-          </span>
-          <button
-            type="button"
-            onClick={() =>
-              setCollapsed((c) => {
-                const next = !c;
-                writeCollapsedPreference(next);
-                return next;
-              })
-            }
-            className="text-xs text-amber-800 dark:text-amber-200 hover:underline"
-          >
-            {collapsed ? 'Expand' : 'Collapse'}
-          </button>
-        </div>
+        <PerfOverlayHeader
+          title={`PERF TESTS · ADMIN${active ? ` · ${active.toUpperCase()}` : ''}`}
+          collapsed={collapsed}
+          onCollapsedChange={setCollapsedPreference}
+        />
 
         {!collapsed && (
           <div className="p-3 space-y-3 text-xs">

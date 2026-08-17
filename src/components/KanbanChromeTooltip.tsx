@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useIsMobileViewport } from '../hooks/useIsMobileViewport';
 
 /**
  * Shared inverted chrome surface — high contrast in both themes:
@@ -116,6 +117,7 @@ export function KanbanChromeTooltip({
   widthAnchorRef,
   dismissOnLabelChange = true,
 }: KanbanChromeTooltipProps) {
+  const isMobile = useIsMobileViewport();
   const [visible, setVisible] = useState(false);
   /** Positioned + ready to show (avoids off-screen → clamp jump). */
   const [portalStyle, setPortalStyle] = useState<React.CSSProperties | null>(null);
@@ -297,6 +299,11 @@ export function KanbanChromeTooltip({
       : label.includes('\n')
         ? CHROME_TOOLTIP_MULTILINE_SURFACE_CLASS
         : CHROME_TOOLTIP_SURFACE_CLASS;
+
+  // Touch / narrow viewports: taps fire mouseenter and leave sticky tips on buttons and tabs.
+  if (isMobile) {
+    return <span className={wrapperClassName}>{children}</span>;
+  }
 
   // Mount while visible so we can measure before revealing (opacity 0 until positioned)
   const portal =
