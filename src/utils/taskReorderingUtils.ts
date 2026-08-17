@@ -85,6 +85,82 @@ export function resolveDropIndex(
   return anchorIdx + 1;
 }
 
+function visibleTaskOrderMatchesFull(visibleTasks: Task[], fullTasks: Task[]): boolean {
+  const fullSorted = sortTasksByPosition(fullTasks);
+  const visibleSorted = sortTasksByPosition(visibleTasks);
+  if (visibleSorted.length !== fullSorted.length) return false;
+  return visibleSorted.every((task, index) => task.id === fullSorted[index]?.id);
+}
+
+/**
+ * Map a DnD insert index (measured on the filtered/visible card list) to an index
+ * in the full column task list. When filters hide cards, visible index N is not the
+ * same slot as full-column index N.
+ */
+export function mapVisibleInsertIndexToFullColumn(
+  fullTasks: Task[],
+  visibleTasks: Task[],
+  visibleInsertIndex: number,
+  draggedTaskId?: string,
+  additionalDraggedIds: string[] = []
+): number {
+  const excludeIds = new Set(additionalDraggedIds);
+  if (draggedTaskId) excludeIds.add(draggedTaskId);
+
+  const fullWithoutDragged = sortTasksByPosition(fullTasks).filter(
+    (task) => !excludeIds.has(task.id)
+  );
+  const visibleWithoutDragged = sortTasksByPosition(visibleTasks).filter(
+    (task) => !excludeIds.has(task.id)
+  );
+  const visibleIds = new Set(visibleWithoutDragged.map((task) => task.id));
+
+  const clampedVisible = Math.max(
+    0,
+    Math.min(visibleInsertIndex, visibleWithoutDragged.length)
+  );
+
+  if (clampedVisible >= visibleWithoutDragged.length) {
+    let lastVisibleFullIdx = -1;
+    for (let i = 0; i < fullWithoutDragged.length; i++) {
+      if (visibleIds.has(fullWithoutDragged[i].id)) {
+        lastVisibleFullIdx = i;
+      }
+    }
+    return lastVisibleFullIdx >= 0 ? lastVisibleFullIdx + 1 : fullWithoutDragged.length;
+  }
+
+  const anchor = visibleWithoutDragged[clampedVisible];
+  const fullIdx = fullWithoutDragged.findIndex((task) => task.id === anchor.id);
+  return fullIdx >= 0 ? fullIdx : fullWithoutDragged.length;
+}
+
+/**
+ * Resolve a Kanban drag drop against the full column, mapping visible layout
+ * indices when active filters hide tasks from the board.
+ */
+export function resolveKanbanDropIndex(
+  fullTasks: Task[],
+  visibleTasks: Task[],
+  placement: TaskDropPlacement,
+  draggedTaskId?: string,
+  additionalDraggedIds: string[] = []
+): number {
+  if (
+    placement.kind === 'atIndex' &&
+    !visibleTaskOrderMatchesFull(visibleTasks, fullTasks)
+  ) {
+    return mapVisibleInsertIndexToFullColumn(
+      fullTasks,
+      visibleTasks,
+      placement.index,
+      draggedTaskId,
+      additionalDraggedIds
+    );
+  }
+  return resolveDropIndex(fullTasks, placement, draggedTaskId, additionalDraggedIds);
+}
+
 function sortTasksByPosition(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const d = parsePos(a.position) - parsePos(b.position);

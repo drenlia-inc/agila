@@ -137,7 +137,7 @@ import { customCollisionDetection, calculateGridStyle } from './utils/dragDropUt
 import { clearCustomCursor } from './utils/cursorUtils';
 import { generateUniqueBoardName } from './utils/boardUtils';
 import { renumberColumns, isArchivedColumnFlag } from './utils/columnUtils';
-import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveDropIndex, snapshotColumnTaskOrder, restoreColumnTaskOrders, TaskDropPlacement } from './utils/taskReorderingUtils';
+import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveKanbanDropIndex, snapshotColumnTaskOrder, restoreColumnTaskOrders, TaskDropPlacement } from './utils/taskReorderingUtils';
 import { getTaskColumnId, orderedCheckedTasksInColumn } from './utils/kanbanMultiSelect';
 import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
 import { hasEscapeConsumingOverlay, isEditableEscapeTarget } from './utils/escapeKeyUtils';
@@ -640,6 +640,11 @@ function AppContent() {
     sprints: availableSprints,
     updateCurrentUserPreference,
   });
+
+  const filteredColumnsRef = useRef<Columns>({});
+  useEffect(() => {
+    filteredColumnsRef.current = taskFilters.filteredColumns || {};
+  }, [taskFilters.filteredColumns]);
 
   // Hide column banner when the task appears in filtered Kanban data (filters/sprint assignment changed).
   useEffect(() => {
@@ -3948,11 +3953,18 @@ function AppContent() {
       return false;
     }
 
-    // Resolve placement against FULL column (not filtered). Default: append to end (ListView).
+    // Kanban DnD uses visible layout indices; map to full column when filters hide cards.
     const resolvedPlacement: TaskDropPlacement = placement || { kind: 'end' };
-    const targetIndex = resolveDropIndex(targetColumn.tasks, resolvedPlacement, taskId);
+    const visibleTasks =
+      filteredColumnsRef.current[targetColumnId]?.tasks ?? targetColumn.tasks;
+    const targetIndex = resolveKanbanDropIndex(
+      targetColumn.tasks,
+      visibleTasks,
+      resolvedPlacement,
+      taskId
+    );
 
-    dndLog('🎯 Resolved drop index:', { resolvedPlacement, targetIndex });
+    dndLog('🎯 Resolved drop index:', { resolvedPlacement, targetIndex, visibleCount: visibleTasks.length, fullCount: targetColumn.tasks.length });
 
     // Soft WIP warning when crossing into a limited column at/over capacity
     if (sourceColumnId !== targetColumnId && hasWipLimit(targetColumn.wip_limit)) {
@@ -4395,8 +4407,11 @@ function AppContent() {
 
       const sourceColumnId = getTaskColumnId(taskIds[0], liveColumns);
       const followers = taskIds.slice(1);
-      const targetIndex = resolveDropIndex(
+      const visibleTasks =
+        filteredColumnsRef.current[targetColumnId]?.tasks ?? targetColumn.tasks;
+      const targetIndex = resolveKanbanDropIndex(
         targetColumn.tasks,
+        visibleTasks,
         placement,
         taskIds[0],
         followers
@@ -4489,7 +4504,14 @@ function AppContent() {
       }
 
       const resolvedPlacement: TaskDropPlacement = placement || { kind: 'end' };
-      const targetIndex = resolveDropIndex(targetColumn.tasks, resolvedPlacement, taskId);
+      const visibleTasks =
+        filteredColumnsRef.current[targetColumnId]?.tasks ?? targetColumn.tasks;
+      const targetIndex = resolveKanbanDropIndex(
+        targetColumn.tasks,
+        visibleTasks,
+        resolvedPlacement,
+        taskId
+      );
       const sourceSorted = [...(liveColumns[sourceColumnId]?.tasks || [])].sort(
         (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
       );
