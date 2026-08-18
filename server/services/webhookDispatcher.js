@@ -41,6 +41,7 @@ export async function dispatchWebhook(db, webhook, { queueRow = null, commentCon
     return postAllowlistedJson(`https://api.telegram.org/bot${token}/sendMessage`, {
       chat_id: chatId,
       text,
+      parse_mode: 'HTML',
       disable_web_page_preview: true,
     });
   }

@@ -14,6 +14,7 @@ import TextEditor from './TextEditor';
 import ModalManager from './layout/ModalManager';
 import Header from './layout/Header';
 import TaskFlowChart from './TaskFlowChart';
+import TaskRelationshipLinker from './TaskRelationshipLinker';
 import DOMPurify from 'dompurify';
 import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { commentTextToHtml } from '../utils/commentContent';
@@ -123,6 +124,46 @@ export default function TaskPage({
   const [childrenSearchTerm, setChildrenSearchTerm] = useState('');
   const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
   const childrenDropdownRef = useRef<HTMLDivElement>(null);
+
+  const reloadRelationships = useCallback(async () => {
+    if (!task?.id) return;
+
+    setIsLoadingRelationships(true);
+    try {
+      const relationshipsData = await getTaskRelationships(task.id);
+      setRelationships(relationshipsData);
+
+      const parent = relationshipsData.find((rel: any) => rel.relationship === 'child' && rel.task_id === task.id);
+      if (parent) {
+        setParentTask({
+          id: parent.to_task_id,
+          ticket: parent.related_task_ticket,
+          title: parent.related_task_title,
+          projectId: parent.related_task_project_id,
+        });
+      } else {
+        setParentTask(null);
+      }
+
+      const children = relationshipsData
+        .filter((rel: any) => rel.relationship === 'parent' && rel.task_id === task.id)
+        .map((rel: any) => ({
+          id: rel.to_task_id,
+          ticket: rel.related_task_ticket,
+          title: rel.related_task_title,
+          projectId: rel.related_task_project_id,
+        }));
+      setChildTasks(children);
+
+      const availableTasksData = await getAvailableTasksForRelationship(task.id);
+      setAvailableTasksForChildren(availableTasksData);
+      setFlowChartRevision((prev) => prev + 1);
+    } catch (error) {
+      console.error('Error loading task relationships:', error);
+    } finally {
+      setIsLoadingRelationships(false);
+    }
+  }, [task?.id]);
 
   // Collapsible sections state - always load from preferences if available
   const [collapsedSections, setCollapsedSections] = useState<{
@@ -277,51 +318,8 @@ export default function TaskPage({
 
   // Load task relationships
   useEffect(() => {
-    const loadRelationships = async () => {
-      if (!task?.id) return;
-      
-      setIsLoadingRelationships(true);
-      try {
-        // Load task relationships
-        const relationshipsData = await getTaskRelationships(task.id);
-        setRelationships(relationshipsData);
-        
-        // Parse parent and children from relationships
-        const parent = relationshipsData.find((rel: any) => rel.relationship === 'child' && rel.task_id === task.id);
-        if (parent) {
-          setParentTask({
-            id: parent.to_task_id,
-            ticket: parent.related_task_ticket,
-            title: parent.related_task_title,
-            projectId: parent.related_task_project_id
-          });
-        } else {
-          setParentTask(null);
-        }
-        
-        const children = relationshipsData
-          .filter((rel: any) => rel.relationship === 'parent' && rel.task_id === task.id)
-          .map((rel: any) => ({
-            id: rel.to_task_id,
-            ticket: rel.related_task_ticket,
-            title: rel.related_task_title,
-            projectId: rel.related_task_project_id
-          }));
-        setChildTasks(children);
-        
-        // Load available tasks for adding as children
-        const availableTasksData = await getAvailableTasksForRelationship(task.id);
-        setAvailableTasksForChildren(availableTasksData);
-        
-      } catch (error) {
-        console.error('Error loading task relationships:', error);
-      } finally {
-        setIsLoadingRelationships(false);
-      }
-    };
-    
-    loadRelationships();
-  }, [task?.id]);
+    void reloadRelationships();
+  }, [reloadRelationships]);
 
   // Handle clicking outside children dropdown
   useEffect(() => {
@@ -1992,6 +1990,17 @@ export default function TaskPage({
                     )}
                   </div>
                 </div>
+
+                {!isLoadingRelationships && task && (
+                  <TaskRelationshipLinker
+                    taskId={task.id}
+                    taskTicket={task.ticket}
+                    relationships={relationships}
+                    availableTasks={availableTasksForChildren}
+                    canMutate={!fieldsLocked}
+                    onRefresh={reloadRelationships}
+                  />
+                )}
               </div>
                 </div>
               )}

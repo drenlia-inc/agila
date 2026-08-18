@@ -320,6 +320,7 @@
       "fieldProject": "Projet",
       "fieldPreviousTitle": "Titre précédent",
       "fieldColumn": "Colonne",
+      "newTaskStatus": "Nouveau statut de la tâche : {status}",
       "event": {
         "taskCreated": "Une nouvelle tâche a été créée",
         "taskChanged": "Une tâche a été modifiée",

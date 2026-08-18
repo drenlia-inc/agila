@@ -1,5 +1,6 @@
 {
   "title": "Admin",
+  "chromeTitle": "Admin",
   "adminPanel": "Panneau d'administration",
   "adminPanelDescription": "Gérer les utilisateurs, les paramètres du site et la configuration de l'authentification",
   "unsavedChanges": "Modifications non enregistrées",

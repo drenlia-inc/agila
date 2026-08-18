@@ -796,7 +796,7 @@ export default function TeamMembers({
       {/* Header: title → Clear → All Roles → role chips | meet-the-team (i) */}
       <div className="flex items-start justify-between mb-3 gap-2 min-h-5 shrink-0 overflow-visible">
         <div className="flex items-center gap-3 flex-wrap min-w-0 overflow-visible">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-5 shrink-0">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-5 shrink-0 self-start">
             {t('teamMembers.title')}
           </h2>
 
@@ -902,7 +902,7 @@ export default function TeamMembers({
           <button
             type="button"
             onClick={() => setMeetTheTeamOpen(true)}
-            className="shrink-0 self-start p-1 rounded-full text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="shrink-0 p-1 rounded-full text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label={t('teamMembers.meetTheTeam')}
           >
             <Info size={16} strokeWidth={2.25} />

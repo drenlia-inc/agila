@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Columns, PriorityOption, TeamMember } from '../types';
 import type { TaskDropPlacement } from '../utils/taskReorderingUtils';
 import ReportModal from './ReportModal';
+import { PerfOverlayHeader } from './PerfOverlayHeader';
 import { getHistory, getLastRun, type PerfRunRecord } from './metrics';
 import { memberDisplayName } from './lorem';
 import {
@@ -250,28 +251,19 @@ const PerfTestOverlay: React.FC<PerfTestOverlayProps> = ({
   const inputClass =
     'w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1.5';
 
+  const setCollapsedPreference = useCallback((next: boolean) => {
+    setCollapsed(next);
+    writeCollapsedPreference(next);
+  }, []);
+
   return (
     <>
       <div className="fixed bottom-4 right-4 z-[10050] w-80 max-w-[calc(100vw-2rem)] shadow-lg rounded-lg border border-amber-500/60 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-        <div className="flex items-center justify-between px-3 py-2 bg-amber-500/15 border-b border-amber-500/30 rounded-t-lg">
-          <span className="text-xs font-bold tracking-wide text-amber-800 dark:text-amber-200">
-            PERF TESTS
-            {active ? ` · ${active.toUpperCase()}` : ''}
-          </span>
-          <button
-            type="button"
-            onClick={() =>
-              setCollapsed((c) => {
-                const next = !c;
-                writeCollapsedPreference(next);
-                return next;
-              })
-            }
-            className="text-xs text-amber-800 dark:text-amber-200 hover:underline"
-          >
-            {collapsed ? 'Expand' : 'Collapse'}
-          </button>
-        </div>
+        <PerfOverlayHeader
+          title={`PERF TESTS${active ? ` · ${active.toUpperCase()}` : ''}`}
+          collapsed={collapsed}
+          onCollapsedChange={setCollapsedPreference}
+        />
 
         {!collapsed && (
           <div className="p-3 space-y-3 text-xs">

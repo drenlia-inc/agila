@@ -15,6 +15,7 @@ import {
   mergeEmailChange,
   mergeEmailChangesFromActors,
   emailChangeIsSilent,
+  webhookShouldNotify,
   isRecentlyCreatedTask,
   ensureTagEmailChange,
 } from '../utils/taskEmailPayload.js';
@@ -231,12 +232,11 @@ class NotificationThrottler {
     const delay = await this.getNotificationDelay();
     const incomingChange = notificationData.actor?.emailChange;
     if (
-      notificationData.action !== 'create_task' &&
-      notificationData.action !== 'delete_task' &&
-      notificationData.action !== 'restore_task' &&
-      notificationData.action !== 'copy_task' &&
-      notificationData.action !== 'create_comment' &&
-      emailChangeIsSilent(incomingChange)
+      !webhookShouldNotify(notificationData.action, incomingChange, {
+        changedField: notificationData.actor?.changedField,
+        oldValue: notificationData.oldValue,
+        newValue: notificationData.newValue,
+      })
     ) {
       return Promise.resolve();
     }

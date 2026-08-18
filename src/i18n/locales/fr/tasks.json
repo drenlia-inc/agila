@@ -39,7 +39,8 @@
     "deleteTask": "Supprimer la tâche",
     "addComment": "Ajouter un commentaire",
     "addTag": "Ajouter une étiquette",
-    "attachFile": "Joindre un fichier"
+    "attachFile": "Joindre un fichier",
+    "scrollToCard": "Afficher cette tâche sur le tableau"
   },
   "errors": {
     "uploadError": "Erreur de téléversement",
@@ -47,6 +48,7 @@
     "updateTaskMessage": "Vos modifications n'ont pas été enregistrées. Veuillez réessayer.",
     "createTaskTitle": "Impossible de créer la tâche",
     "createTaskMessage": "La tâche n'a pas pu être créée. Veuillez réessayer.",
+    "scrollToCardFailed": "Impossible de trouver cette tâche sur le tableau.",
     "createTaskShortcutTitle": "Tâche créée",
     "createTaskShortcutMessage": "Ajoutée dans « {{column}} » via le raccourci N. Renommez-la, ou supprimez-la si c'était involontaire.",
     "copyTaskTitle": "Impossible de copier la tâche",
@@ -98,9 +100,10 @@
     "badgeChild": "ENFANT",
     "badgeRelated": "LIÉE",
     "markParent": "P",
-    "markChild": "E",
+    "markChild": "C",
     "markRelated": "L",
     "addChildTask": "Ajouter une tâche enfant...",
+    "addRelatedTask": "Ajouter une tâche associée...",
     "searchTasks": "Rechercher des tâches par numéro ou titre...",
     "goToParent": "Aller à la tâche parente",
     "goToChild": "Aller à la tâche enfant",
@@ -125,9 +128,22 @@
     "linkFailedTitle": "Impossible de créer la relation",
     "linkAlreadyExistsTitle": "La relation existe déjà",
     "linkingFrom": "Liaison depuis {{ticket}} — relâchez sur une tâche ou Esc pour annuler",
+    "linkingRelatedFrom": "Lien associé depuis {{ticket}} — relâchez sur une tâche (Esc pour annuler)",
     "relationshipParent": "parent",
     "relationshipChild": "enfant",
-    "relationshipRelated": "lié"
+    "relationshipRelated": "lié",
+    "relatedTasks": "Tâches associées",
+    "linkTasks": "Lier des tâches",
+    "enterLinkMode": "Lier des tâches — cliquez deux tâches ; maintenez Maj pour une association",
+    "exitLinkMode": "Quitter le mode liaison",
+    "linkModePickSource": "Cliquez la première tâche (source).",
+    "linkModePickTarget": "Cliquez la deuxième tâche (cible).",
+    "linkModeShiftHint": "Maintenez Maj en cliquant la deuxième tâche pour un lien associé au lieu de parent → enfant.",
+    "linkSourceSelected": "Source : {{ticket}} — choisissez la cible",
+    "searchTasksToLink": "Rechercher des tâches à lier…",
+    "removeRelated": "Supprimer le lien associé",
+    "noTasksFound": "Aucune tâche ne correspond à votre recherche",
+    "noAvailableTasks": "Aucune tâche disponible"
   },
   "dnd": {
     "keyboardMoveHint": "Déplacement de {{label}} — flèches pour repositionner, Entrée pour déposer, Échap pour annuler"
@@ -144,8 +160,7 @@
     "assignTo": "Assigner à :",
     "assignToAgentSection": "Agent IA",
     "sourceTaskForLinking": "Tâche source pour le lien",
-    "holdAndDragToLink": "Maintenir et glisser pour lier les tâches",
-    "holdAndDragToLinkWithRelations": "A des liens — maintenir et glisser pour en lier d'autres ; Maj+clic pour supprimer une relation mise en évidence",
+    "holdAndDragToLink": "Maintenir et glisser pour lier (parent-enfant), Maj pour associer",
     "noMoreTagsAvailable": "Aucune autre étiquette disponible",
     "disabledWhileAgent": "Indisponible pendant que l'Agent travaille sur cette tâche"
   },
@@ -214,7 +229,8 @@
     "filterTypes": {
       "searchFilters": "filtres de recherche",
       "sprintSelection": "sélection de sprint",
-      "memberFilters": "filtres de membres"
+      "memberFilters": "filtres de membres",
+      "linkedTasks": "filtre des tâches liées"
     },
     "and": "et"
   },
@@ -328,7 +344,11 @@
     "undoWatcher": "Annuler le changement d'observateur sur {{count}} tâche(s) et resélectionner",
     "undoCollaborator": "Annuler le changement de collaborateur sur {{count}} tâche(s) et resélectionner",
     "undoDelete": "Annuler la suppression — restaurer {{count}} tâche(s) depuis la corbeille et resélectionner",
+    "multiDragPreview": "Plusieurs tâches",
+    "movingSingle": "Déplacement…",
+    "movingMultiple": "Déplacement de {{count}} tâches…",
     "undoMove": "Annuler le déplacement sur {{count}} tâche(s) et resélectionner",
+    "undoMoveSingle": "Annuler le déplacement",
     "undoMoveBoard": "Annuler le changement de tableau sur {{count}} tâche(s) et resélectionner",
     "undoRestoredCount": "{{count}} tâche(s) rétablie(s)"
   },

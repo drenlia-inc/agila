@@ -2250,7 +2250,8 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
       const currentTask = taskMap.get(update.taskId);
       if (!currentTask) return;
       
-      const columnId = update.columnId || currentTask.columnId;
+      const currentColumnId = currentTask.columnId || currentTask.columnid;
+      const columnId = update.columnId || currentColumnId;
       if (!updatesByColumn.has(columnId)) {
         updatesByColumn.set(columnId, []);
       }
@@ -2263,7 +2264,7 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
         taskId: update.taskId,
         position: position, // Use parsed numeric position
         columnId: columnId,
-        previousColumnId: currentTask.columnId,
+        previousColumnId: currentColumnId,
         previousBoardId: currentTask.boardId,
         previousPosition: currentTask.position,
         title: currentTask.title
@@ -2294,7 +2295,7 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
     
     for (const columnUpdates of updatesByColumn.values()) {
       for (const update of columnUpdates) {
-        const columnChanged = update.previousColumnId !== update.columnId;
+        const columnChanged = String(update.previousColumnId || '') !== String(update.columnId || '');
         if (columnChanged) {
           batchQueries.push({
             query: crossColumnQuery,
@@ -2350,7 +2351,7 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
     const columnMoves = [];
     updatesByColumn.forEach((columnUpdates, columnId) => {
       columnUpdates.forEach(update => {
-        if (update.previousColumnId !== update.columnId) {
+        if (String(update.previousColumnId || '') !== String(update.columnId || '')) {
           columnMoves.push(update);
         }
       });
@@ -2397,6 +2398,8 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
           }, 'fr')
         });
         
+        const fromColumnName = oldColumn?.title || t('activity.unknownColumn', {}, 'en');
+        const toColumnName = newColumn?.title || t('activity.unknownColumn', {}, 'en');
         logTaskActivity(
           userId,
           TASK_ACTIONS.UPDATE,
@@ -2409,6 +2412,20 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
             authType: req.user?.authType,
             db: db,
             skipEmail: useBulkDigest,
+            changedField: 'columnId',
+            oldValue: fromColumnName,
+            newValue: toColumnName,
+            emailChange: {
+              items: [
+                {
+                  field: 'columnId',
+                  oldValue: fromColumnName,
+                  newValue: toColumnName,
+                  oldName: fromColumnName,
+                  newName: toColumnName,
+                },
+              ],
+            },
           }
         ).catch(error => {
           console.error('Background activity logging failed:', error);
@@ -3194,6 +3211,12 @@ router.post('/:taskId/relationships', authenticateToken, async (req, res) => {
         
         if (!inverseExists) {
           await taskQueries.createTaskRelationship(db, toTaskId, 'parent', taskId);
+        }
+      } else if (relationship === 'related') {
+        const inverseExists = await taskQueries.getTaskRelationship(db, toTaskId, 'related', taskId);
+
+        if (!inverseExists) {
+          await taskQueries.createTaskRelationship(db, toTaskId, 'related', taskId);
         }
       }
     });

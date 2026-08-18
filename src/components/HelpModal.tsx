@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Users, Columns, ClipboardList, MessageSquare, MessageCircle, ArrowRight, LayoutGrid, List, Calendar, Search, Eye, Settings, Play, BarChart3, Shield, Download, Bot, KeyRound, CheckSquare, AlertTriangle, Trash2, ListChecks, Keyboard, Minus, ChevronUp, Circle, HardDrive, Plus, Pencil, Copy, Paperclip, Tag, Link, Archive, GripVertical, type LucideIcon } from 'lucide-react';
+import { X, Users, Columns, ClipboardList, MessageSquare, MessageCircle, ArrowRight, LayoutGrid, List, Calendar, Search, Eye, Settings, Play, BarChart3, Shield, Download, Bot, KeyRound, CheckSquare, AlertTriangle, Trash2, ListChecks, Keyboard, Minus, ChevronUp, Circle, HardDrive, Plus, Pencil, Copy, Paperclip, Tag, GitBranch, Archive, GripVertical, type LucideIcon } from 'lucide-react';
 import { useTour } from '../contexts/TourContext';
 import { useOwnerSetupOptional } from '../contexts/OwnerSetupContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -237,7 +237,7 @@ const HELP_INLINE_ICONS: Record<string, LucideIcon> = {
   paperclip: Paperclip,
   message: MessageCircle,
   tag: Tag,
-  link: Link,
+  link: GitBranch,
   archive: Archive,
   grip: GripVertical,
 };
@@ -269,6 +269,12 @@ const HELP_SHORTCUT_SECTIONS: { titleKey: string; rows: ShortcutRow[] }[] = [
     titleKey: 'help.shortcuts.admin',
     rows: [
       { keys: '/ or Ctrl/Cmd+K', actionKey: 'help.shortcuts.adminSearch' },
+    ],
+  },
+  {
+    titleKey: 'help.shortcuts.helpModal',
+    rows: [
+      { keys: '/ or Ctrl/Cmd+K', actionKey: 'help.shortcuts.helpSearch' },
     ],
   },
   {
@@ -783,6 +789,31 @@ export default function HelpModal({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen, minimized, minimizeHelp]);
+
+  // / and Ctrl/Cmd+K — focus Help search (same as board header / Admin settings search)
+  useEffect(() => {
+    if (!isOpen || minimized) return;
+    const onKey = (e: KeyboardEvent) => {
+      const isSlash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey;
+      const isModK =
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        (e.key === 'k' || e.key === 'K');
+      if (!isSlash && !isModK) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
+        return;
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+    // Capture so Help wins over board / Admin search listeners while the modal is open
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isOpen, minimized]);
 
   const handleHelpEscape = useCallback(() => {
     const searchEl = searchInputRef.current;

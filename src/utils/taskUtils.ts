@@ -60,8 +60,14 @@ export const hasConfiguredSearchFilters = (searchFilters: SearchFilters): boolea
     searchFilters.selectedPriorities.length > 0 ||
     searchFilters.selectedTags.length > 0 ||
     searchFilters.projectId ||
-    searchFilters.taskId
+    searchFilters.taskId ||
+    searchFilters.linkedTasksOnly
   );
+};
+
+/** Search criteria excluding the linked-tasks-only toggle (handled with board relationship data). */
+export const hasNonLinkSearchFilters = (searchFilters: SearchFilters): boolean => {
+  return hasConfiguredSearchFilters({ ...searchFilters, linkedTasksOnly: false });
 };
 
 /** Minimal sprint shape for text search by sprint name. */
@@ -296,10 +302,14 @@ export const wouldTaskBeFilteredOut = (
   _isSearchActive?: boolean,
   members?: TeamMember[],
   boards?: any[],
-  sprints?: SprintSearchInfo[]
+  sprints?: SprintSearchInfo[],
+  linkedTaskIds?: Set<string>
 ): boolean => {
-  if (!hasConfiguredSearchFilters(searchFilters)) return false;
-  
+  if (searchFilters.linkedTasksOnly && linkedTaskIds !== undefined && !linkedTaskIds.has(task.id)) {
+    return true;
+  }
+  if (!hasNonLinkSearchFilters(searchFilters)) return false;
+
   const filtered = filterTasks([task], searchFilters, true, members, boards, sprints);
   return filtered.length === 0;
 };

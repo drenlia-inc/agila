@@ -1318,6 +1318,11 @@ async function toolLinkTasks(ctx, args, { dryRun }, allowedBoardIds) {
     if (!inverse) {
       await taskQueries.createTaskRelationship(ctx.db, toTaskId, 'parent', taskId);
     }
+  } else if (relationship === 'related') {
+    const inverse = await taskQueries.getTaskRelationship(ctx.db, toTaskId, 'related', taskId);
+    if (!inverse) {
+      await taskQueries.createTaskRelationship(ctx.db, toTaskId, 'related', taskId);
+    }
   }
 
   await journal(ctx, 'link_task', 'task_rel', String(relId || `${taskId}:${relationship}:${toTaskId}`), null, {

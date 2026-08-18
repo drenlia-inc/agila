@@ -26,7 +26,8 @@ export type TaskDropPlacement =
   | { kind: 'before'; taskId: string }
   | { kind: 'after'; taskId: string }
   | { kind: 'start' }
-  | { kind: 'end' };
+  | { kind: 'end' }
+  | { kind: 'atIndex'; index: number };
 
 /**
  * Resolve a drop placement to an insert index in the full column
@@ -55,6 +56,9 @@ export function resolveDropIndex(
   if (placement.kind === 'end') {
     return withoutDragged.length;
   }
+  if (placement.kind === 'atIndex') {
+    return Math.max(0, Math.min(placement.index, withoutDragged.length));
+  }
 
   // Dropping before/after yourself (common when returning to the original slot):
   // the anchor is removed with the dragged task, so findIndex fails and used to
@@ -81,11 +85,111 @@ export function resolveDropIndex(
   return anchorIdx + 1;
 }
 
+function visibleTaskOrderMatchesFull(visibleTasks: Task[], fullTasks: Task[]): boolean {
+  const fullSorted = sortTasksByPosition(fullTasks);
+  const visibleSorted = sortTasksByPosition(visibleTasks);
+  if (visibleSorted.length !== fullSorted.length) return false;
+  return visibleSorted.every((task, index) => task.id === fullSorted[index]?.id);
+}
+
+/**
+ * Map a DnD insert index (measured on the filtered/visible card list) to an index
+ * in the full column task list. When filters hide cards, visible index N is not the
+ * same slot as full-column index N.
+ */
+export function mapVisibleInsertIndexToFullColumn(
+  fullTasks: Task[],
+  visibleTasks: Task[],
+  visibleInsertIndex: number,
+  draggedTaskId?: string,
+  additionalDraggedIds: string[] = []
+): number {
+  const excludeIds = new Set(additionalDraggedIds);
+  if (draggedTaskId) excludeIds.add(draggedTaskId);
+
+  const fullWithoutDragged = sortTasksByPosition(fullTasks).filter(
+    (task) => !excludeIds.has(task.id)
+  );
+  const visibleWithoutDragged = sortTasksByPosition(visibleTasks).filter(
+    (task) => !excludeIds.has(task.id)
+  );
+  const visibleIds = new Set(visibleWithoutDragged.map((task) => task.id));
+
+  const clampedVisible = Math.max(
+    0,
+    Math.min(visibleInsertIndex, visibleWithoutDragged.length)
+  );
+
+  if (clampedVisible >= visibleWithoutDragged.length) {
+    let lastVisibleFullIdx = -1;
+    for (let i = 0; i < fullWithoutDragged.length; i++) {
+      if (visibleIds.has(fullWithoutDragged[i].id)) {
+        lastVisibleFullIdx = i;
+      }
+    }
+    return lastVisibleFullIdx >= 0 ? lastVisibleFullIdx + 1 : fullWithoutDragged.length;
+  }
+
+  const anchor = visibleWithoutDragged[clampedVisible];
+  const fullIdx = fullWithoutDragged.findIndex((task) => task.id === anchor.id);
+  return fullIdx >= 0 ? fullIdx : fullWithoutDragged.length;
+}
+
+/**
+ * Resolve a Kanban drag drop against the full column, mapping visible layout
+ * indices when active filters hide tasks from the board.
+ */
+export function resolveKanbanDropIndex(
+  fullTasks: Task[],
+  visibleTasks: Task[],
+  placement: TaskDropPlacement,
+  draggedTaskId?: string,
+  additionalDraggedIds: string[] = []
+): number {
+  if (
+    placement.kind === 'atIndex' &&
+    !visibleTaskOrderMatchesFull(visibleTasks, fullTasks)
+  ) {
+    return mapVisibleInsertIndexToFullColumn(
+      fullTasks,
+      visibleTasks,
+      placement.index,
+      draggedTaskId,
+      additionalDraggedIds
+    );
+  }
+  return resolveDropIndex(fullTasks, placement, draggedTaskId, additionalDraggedIds);
+}
+
+function sortTasksByPosition(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const d = parsePos(a.position) - parsePos(b.position);
+    if (d !== 0) return d;
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
 /** Renumber tasks in a column to sequential integer positions. */
 function renumberTasks(tasks: Task[]): Task[] {
-  return [...tasks]
-    .sort((a, b) => parsePos(a.position) - parsePos(b.position))
-    .map((t, index) => ({ ...t, position: index }));
+  return sortTasksByPosition(tasks).map((t, index) => ({ ...t, position: index }));
+}
+
+/** Minimum gap between fractional positions before falling back to full renumber. */
+const MIN_POSITION_GAP = 0.1;
+
+/**
+ * Position between two neighbors (NUMERIC column). Returns null when a full
+ * renumber is required (collision / gap too small).
+ */
+export function computeBetweenPosition(
+  beforePos: number | null,
+  afterPos: number | null
+): number | null {
+  if (beforePos == null && afterPos == null) return 0;
+  if (beforePos == null) return afterPos! - 1;
+  if (afterPos == null) return beforePos + 1;
+  if (afterPos - beforePos < MIN_POSITION_GAP) return null;
+  return (beforePos + afterPos) / 2;
 }
 
 /**
@@ -173,11 +277,11 @@ type CrossMoveResult = {
   next: Columns;
   sourceColumnId: string;
   targetColumnId: string;
-  sourceTasks: Task[];
-  targetTasks: Task[];
+  /** Rows to send to batch-update-positions (fractional single-row write when possible). */
+  positionUpdates: Array<{ taskId: string; position: number; columnId: string }>;
 };
 
-/** Pure: apply cross-column move against a columns snapshot. */
+/** Pure: move task into targetColumnId at targetIndex (fractional when possible). */
 export function applyCrossColumnMove(
   prev: Columns,
   taskId: string,
@@ -192,31 +296,101 @@ export function applyCrossColumnMove(
   if (!movedTaskBase) return null;
 
   const sourceColumnId = found?.columnId || movedTaskBase.columnId || '';
-  let next = stripTaskFromAllColumns(prev, taskId, { renumber: true });
 
+  // Keep neighbor positions intact so we can insert with a midpoint.
+  // Source holes are fine; integer-rewriting every sibling is what collided
+  // when two rows briefly shared the same position during a batch.
+  let next = stripTaskFromAllColumns(prev, taskId, { renumber: false });
   const targetCol = next[targetColumnId];
   if (!targetCol) return null;
 
-  const targetSorted = renumberTasks(targetCol.tasks || []);
+  const targetSorted = sortTasksByPosition(targetCol.tasks || []);
   const clampedIndex = Math.max(0, Math.min(targetIndex, targetSorted.length));
+
+  // Cross-column into top: densify target like add-at-top
+  if (clampedIndex === 0) {
+    const updatedTask: Task = {
+      ...movedTaskBase,
+      columnId: targetColumnId,
+      position: 0,
+    };
+    const targetTasks = [
+      updatedTask,
+      ...targetSorted.map((t, index) => ({
+        ...t,
+        position: index + 1,
+        columnId: targetColumnId,
+      })),
+    ];
+    next = {
+      ...next,
+      [targetColumnId]: { ...targetCol, tasks: targetTasks },
+    };
+    return {
+      next,
+      sourceColumnId,
+      targetColumnId,
+      positionUpdates: targetTasks.map((t) => ({
+        taskId: t.id,
+        position: t.position as number,
+        columnId: targetColumnId,
+      })),
+    };
+  }
+
+  const beforePos =
+    clampedIndex > 0 ? parsePos(targetSorted[clampedIndex - 1].position) : null;
+  const afterPos =
+    clampedIndex < targetSorted.length
+      ? parsePos(targetSorted[clampedIndex].position)
+      : null;
+  const between = computeBetweenPosition(beforePos, afterPos);
+
+  if (between != null) {
+    const updatedTask: Task = {
+      ...movedTaskBase,
+      columnId: targetColumnId,
+      position: between,
+    };
+    const newTargetOrder = [...targetSorted];
+    newTargetOrder.splice(clampedIndex, 0, updatedTask);
+    next = {
+      ...next,
+      [targetColumnId]: { ...targetCol, tasks: newTargetOrder },
+    };
+    return {
+      next,
+      sourceColumnId,
+      targetColumnId,
+      positionUpdates: [
+        { taskId: updatedTask.id, position: between, columnId: targetColumnId },
+      ],
+    };
+  }
+
+  // Gaps too tight — renumber target only (source can keep sparse positions)
   const updatedTask: Task = { ...movedTaskBase, columnId: targetColumnId };
   const newTargetOrder = [...targetSorted];
   newTargetOrder.splice(clampedIndex, 0, updatedTask);
-  const targetTasks = newTargetOrder.map((t, index) => ({ ...t, position: index, columnId: targetColumnId }));
-
+  const targetTasks = newTargetOrder.map((t, index) => ({
+    ...t,
+    position: index,
+    columnId: targetColumnId,
+  }));
   next = {
     ...next,
     [targetColumnId]: { ...targetCol, tasks: targetTasks },
   };
 
-  const sourceTasks = (next[sourceColumnId]?.tasks || []) as Task[];
-
   return {
     next,
     sourceColumnId,
     targetColumnId,
-    sourceTasks: sourceColumnId ? sourceTasks : [],
-    targetTasks,
+    positionUpdates: targetTasks.map((t) => ({
+      taskId: t.id,
+      position: t.position as number,
+      columnId: targetColumnId,
+    })),
   };
 }
 
@@ -227,7 +401,7 @@ type SameColumnMoveResult = {
   noop: boolean;
 };
 
-/** Pure: apply same-column reorder against a columns snapshot. */
+/** Pure: apply same-column reorder against a columns snapshot (fractional when possible). */
 export function applySameColumnMove(
   prev: Columns,
   taskId: string,
@@ -241,26 +415,59 @@ export function applySameColumnMove(
   const movedTaskBase = found?.task || taskFallback;
   if (!movedTaskBase) return null;
 
-  // Strip from all columns first (clears duplicates), then insert into columnId
-  let next = stripTaskFromAllColumns(prev, taskId, { renumber: true });
+  const priorSorted = sortTasksByPosition(prev[columnId]?.tasks || []);
+  const priorIndex = priorSorted.findIndex((t) => t.id === taskId);
+
+  let next = stripTaskFromAllColumns(prev, taskId, { renumber: false });
   const column = next[columnId];
   if (!column) return null;
 
-  const sortedTasks = renumberTasks(column.tasks || []);
-  // After strip, task is absent — currentIndex for "no-op" uses found location before strip
-  const priorSorted = renumberTasks(
-    (found?.columnId === columnId ? prev[columnId]?.tasks : column.tasks) || []
-  );
-  const priorIndex = priorSorted.findIndex((t) => t.id === taskId);
-
+  const sortedTasks = sortTasksByPosition(column.tasks || []);
   const clampedIndex = Math.max(0, Math.min(targetIndex, sortedTasks.length));
   if (found?.columnId === columnId && priorIndex === clampedIndex) {
     return { next: prev, columnId, renumberedTasks: priorSorted, noop: true };
   }
 
+  // Move to top: densify like POST /tasks/add-at-top (moved → 0, others → 1..n).
+  if (clampedIndex === 0) {
+    const moved: Task = { ...movedTaskBase, columnId, position: 0 };
+    const renumberedTasks = [
+      moved,
+      ...sortedTasks.map((t, index) => ({ ...t, position: index + 1, columnId })),
+    ];
+    next = {
+      ...next,
+      [columnId]: { ...column, tasks: renumberedTasks },
+    };
+    return { next, columnId, renumberedTasks, noop: false };
+  }
+
+  const beforePos =
+    clampedIndex > 0 ? parsePos(sortedTasks[clampedIndex - 1].position) : null;
+  const afterPos =
+    clampedIndex < sortedTasks.length
+      ? parsePos(sortedTasks[clampedIndex].position)
+      : null;
+  const between = computeBetweenPosition(beforePos, afterPos);
+
+  if (between != null) {
+    const moved: Task = { ...movedTaskBase, columnId, position: between };
+    const newOrder = [...sortedTasks];
+    newOrder.splice(clampedIndex, 0, moved);
+    next = {
+      ...next,
+      [columnId]: { ...column, tasks: newOrder },
+    };
+    return { next, columnId, renumberedTasks: [moved], noop: false };
+  }
+
   const newOrder = [...sortedTasks];
   newOrder.splice(clampedIndex, 0, { ...movedTaskBase, columnId });
-  const renumberedTasks = newOrder.map((t, index) => ({ ...t, position: index, columnId }));
+  const renumberedTasks = newOrder.map((t, index) => ({
+    ...t,
+    position: index,
+    columnId,
+  }));
 
   next = {
     ...next,
@@ -327,6 +534,137 @@ export function applyBulkMove(
   return { next, touchedColumnIds: Array.from(touched) };
 }
 
+export type ColumnTaskOrderSnapshot = Array<{ id: string; position: number }>;
+
+/** Capture position-sorted id+position for a column (bulk-move undo). */
+export function snapshotColumnTaskOrder(tasks: Task[] | undefined): ColumnTaskOrderSnapshot {
+  return sortTasksByPosition(tasks || []).map((t) => ({
+    id: t.id,
+    position: parsePos(t.position),
+  }));
+}
+
+/**
+ * Restore one or more columns to a prior id/position snapshot (bulk-move undo).
+ * Looks up live task objects so dest-column cards move back into source slots.
+ */
+export function applyColumnOrderSnapshots(
+  prev: Columns,
+  orders: Record<string, ColumnTaskOrderSnapshot>
+): { next: Columns; positionUpdates: Array<{ taskId: string; position: number; columnId: string }> } | null {
+  const columnIds = Object.keys(orders);
+  if (columnIds.length === 0) return null;
+
+  const taskById = new Map<string, Task>();
+  Object.values(prev).forEach((col) => {
+    (col?.tasks || []).forEach((t) => {
+      if (t?.id) taskById.set(t.id, t);
+    });
+  });
+
+  const snapshotIds = new Set<string>();
+  for (const order of Object.values(orders)) {
+    for (const row of order) snapshotIds.add(row.id);
+  }
+
+  let next: Columns = { ...prev };
+  for (const columnId of Object.keys(next)) {
+    if (orders[columnId]) continue;
+    const col = next[columnId];
+    if (!col?.tasks?.some((t) => snapshotIds.has(t.id))) continue;
+    next = {
+      ...next,
+      [columnId]: {
+        ...col,
+        tasks: col.tasks.filter((t) => !snapshotIds.has(t.id)),
+      },
+    };
+  }
+
+  const positionUpdates: Array<{ taskId: string; position: number; columnId: string }> = [];
+  for (const columnId of columnIds) {
+    const col = next[columnId];
+    if (!col) continue;
+    const tasks: Task[] = [];
+    for (const row of orders[columnId]) {
+      const live = taskById.get(row.id);
+      if (!live) continue;
+      const restored: Task = {
+        ...live,
+        columnId,
+        position: row.position,
+      };
+      tasks.push(restored);
+      positionUpdates.push({
+        taskId: restored.id,
+        position: row.position,
+        columnId,
+      });
+    }
+    next = {
+      ...next,
+      [columnId]: { ...col, tasks },
+    };
+  }
+
+  if (positionUpdates.length === 0) return null;
+  return { next, positionUpdates };
+}
+
+export const restoreColumnTaskOrders = async (
+  orders: Record<string, ColumnTaskOrderSnapshot>,
+  columns: Columns,
+  setColumns: Dispatch<SetStateAction<Columns>>,
+  setDragCooldown: (value: boolean) => void,
+  refreshBoardData: () => Promise<void>,
+  setFilteredColumns?: Dispatch<SetStateAction<Columns>>
+): Promise<void> => {
+  const preview = applyColumnOrderSnapshots(columns, orders);
+  if (!preview) return;
+
+  let applied: ReturnType<typeof applyColumnOrderSnapshots> = null;
+  const rollbackSnapshot = columns;
+
+  window.justUpdatedFromWebSocket = true;
+  (window as any).lastOptimisticUpdateTime = Date.now();
+  (window as any).reorderingInProgress = true;
+
+  setColumns((prev) => {
+    applied = applyColumnOrderSnapshots(prev, orders);
+    return applied ? applied.next : prev;
+  });
+
+  if (!applied) {
+    window.justUpdatedFromWebSocket = false;
+    (window as any).reorderingInProgress = false;
+    return;
+  }
+
+  if (setFilteredColumns) {
+    setFilteredColumns((prev) => {
+      const next = applyColumnOrderSnapshots(prev, orders);
+      return next ? next.next : prev;
+    });
+  }
+
+  try {
+    await batchUpdateTaskPositions(applied.positionUpdates);
+    setTimeout(() => {
+      window.justUpdatedFromWebSocket = false;
+      (window as any).reorderingInProgress = false;
+    }, 2000);
+    setDragCooldown(true);
+    setTimeout(() => setDragCooldown(false), DRAG_COOLDOWN_DURATION);
+  } catch (error) {
+    console.error('❌ [restoreColumnTaskOrders] Failed:', error);
+    setColumns(rollbackSnapshot);
+    window.justUpdatedFromWebSocket = false;
+    (window as any).reorderingInProgress = false;
+    refreshBoardData().catch(() => {});
+    throw error;
+  }
+};
+
 /** Keep filtered board list in lockstep with optimistic reorder (avoids post-drop flash). */
 function syncFilteredAfterCrossMove(
   setFilteredColumns: Dispatch<SetStateAction<Columns>> | undefined,
@@ -374,7 +712,7 @@ export function resolvePreviewInsertIndex(
 
 /**
  * Moves a task to a specific index within its column.
- * Renumbers ALL tasks to sequential integers and sends to backend.
+ * Prefer a single fractional position write; densify 0..n when gaps are too small or moving to top.
  */
 export const moveTaskToIndex = async (
   task: Task,
@@ -435,7 +773,7 @@ export const moveTaskToIndex = async (
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
       (window as any).reorderingInProgress = false;
-    }, 1000);
+    }, 2000);
 
     setDragCooldown(true);
     setTimeout(() => {
@@ -460,7 +798,7 @@ export const handleSameColumnReorder = moveTaskToIndex;
 
 /**
  * Handles moving a task from one column to another.
- * Renumbers both source and target columns.
+ * Prefer a single fractional write on the moved task; densify target when inserting at top or gaps are tight.
  */
 export const handleCrossColumnMove = async (
   task: Task,
@@ -507,18 +845,7 @@ export const handleCrossColumnMove = async (
   syncFilteredAfterCrossMove(setFilteredColumns, task.id, targetColumnId, targetIndex, task);
 
   try {
-    const updates = [
-      ...applied.sourceTasks.map((t) => ({
-        taskId: t.id,
-        position: t.position as number,
-        columnId: applied!.sourceColumnId || sourceColumnId,
-      })),
-      ...applied.targetTasks.map((t) => ({
-        taskId: t.id,
-        position: t.position as number,
-        columnId: targetColumnId,
-      })),
-    ];
+    const updates = applied.positionUpdates;
 
     // If source was unknown (task only in fallback), still send target renumbers
     const dedupedUpdates = updates.filter((u) => u.columnId);
@@ -528,7 +855,7 @@ export const handleCrossColumnMove = async (
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
       (window as any).reorderingInProgress = false;
-    }, 1000);
+    }, 2000);
 
     setDragCooldown(true);
     setTimeout(() => {
@@ -602,7 +929,7 @@ export const handleBulkMoveTasks = async (
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
       (window as any).reorderingInProgress = false;
-    }, 1000);
+    }, 2000);
     setDragCooldown(true);
     setTimeout(() => setDragCooldown(false), DRAG_COOLDOWN_DURATION);
   } catch (error) {

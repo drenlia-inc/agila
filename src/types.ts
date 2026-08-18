@@ -162,6 +162,7 @@ export interface ColumnVisibilityWarning {
     search: boolean;
     sprint: boolean;
     members: boolean;
+    linked: boolean;
   };
 }
 
@@ -174,6 +175,10 @@ export interface SearchFilters {
   selectedMembers: string[];
   selectedPriorities: string[];
   selectedTags: string[];
+  projectId: string;
+  taskId: string;
+  /** When true, only tasks with parent/child/related links on the current board are shown. */
+  linkedTasksOnly: boolean;
 }
 
 

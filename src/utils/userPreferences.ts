@@ -96,6 +96,7 @@ export interface UserPreferences {
     selectedTags: string[];
     projectId: string;
     taskId: string;
+    linkedTasksOnly: boolean;
   };
   appSettings: {
     taskDeleteConfirm?: boolean; // User override for system TASK_DELETE_CONFIRM setting
@@ -303,7 +304,8 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
     selectedPriorities: [],
     selectedTags: [],
     projectId: '',
-    taskId: ''
+    taskId: '',
+    linkedTasksOnly: false,
   },
   appSettings: {
     // taskDeleteConfirm: undefined - let it inherit from system setting by default
@@ -729,15 +731,28 @@ const readLocalPreferences = (userId: string | null = null): UserPreferences => 
           ...defaults.ganttScrollPositions,
           ...bulkyLocal.ganttScrollPositions
         },
-        searchFilters: {
-          ...defaults.searchFilters,
-          ...loadedPrefs.searchFilters,
-          // Ensure text is never null
-          text: loadedPrefs.searchFilters?.text || '',
-          // Ensure identifiers are never null
-          projectId: loadedPrefs.searchFilters?.projectId || '',
-          taskId: loadedPrefs.searchFilters?.taskId || ''
-        },
+        searchFilters: (() => {
+          const merged = {
+            ...defaults.searchFilters,
+            ...loadedPrefs.searchFilters,
+            text: loadedPrefs.searchFilters?.text || '',
+            projectId: loadedPrefs.searchFilters?.projectId || '',
+            taskId: loadedPrefs.searchFilters?.taskId || '',
+            linkedTasksOnly: loadedPrefs.searchFilters?.linkedTasksOnly === true,
+          };
+          try {
+            if (
+              merged.linkedTasksOnly !== true &&
+              localStorage.getItem('ek_highlight_links_mode') === 'true'
+            ) {
+              merged.linkedTasksOnly = true;
+              localStorage.removeItem('ek_highlight_links_mode');
+            }
+          } catch {
+            // ignore private mode / quota
+          }
+          return merged;
+        })(),
         appSettings: {
           ...defaults.appSettings,
           ...loadedPrefs.appSettings

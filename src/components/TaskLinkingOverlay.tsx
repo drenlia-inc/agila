@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Task } from '../types';
 
@@ -23,6 +23,7 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
   const currentMousePositionRef = useRef<{ x: number; y: number } | null>(null);
   const edgeScrollZone = 50;
   const scrollSpeed = 10;
+  const [shiftHeld, setShiftHeld] = useState(false);
 
   const findScrollableContainer = (): HTMLElement | null => {
     return document.querySelector('.kanban-scrollable-container') as HTMLElement | null;
@@ -86,6 +87,7 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
 
   useEffect(() => {
     if (!isLinkingMode || !linkingLine) {
+      setShiftHeld(false);
       return;
     }
 
@@ -108,6 +110,7 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
     };
 
     const handlePointerMove = (event: PointerEvent) => {
+      setShiftHeld(event.shiftKey);
       updateLineFromClientPoint(event.clientX, event.clientY);
     };
 
@@ -119,20 +122,32 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
       }
     };
 
-    const handleKeyPress = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onCancelLinking();
+        return;
+      }
+      if (event.key === 'Shift') {
+        setShiftHeld(true);
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        setShiftHeld(false);
       }
     };
 
     document.addEventListener('pointermove', handlePointerMove, { passive: true });
     document.addEventListener('pointerup', handlePointerUp, { capture: false });
-    document.addEventListener('keydown', handleKeyPress);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
 
     return () => {
       document.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('pointerup', handlePointerUp);
-      document.removeEventListener('keydown', handleKeyPress);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
 
       if (scrollAnimationFrameRef.current !== null) {
         cancelAnimationFrame(scrollAnimationFrameRef.current);
@@ -146,6 +161,11 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
   if (!isLinkingMode || !linkingLine || !linkingSourceTask) {
     return null;
   }
+
+  const lineColor = shiftHeld ? '#CA8A04' : '#3B82F6';
+  const bannerClass = shiftHeld
+    ? 'bg-yellow-600 text-white'
+    : 'bg-blue-600 text-white';
 
   return (
     <div
@@ -163,7 +183,7 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#3B82F6" />
+            <polygon points="0 0, 10 3.5, 0 7" fill={lineColor} />
           </marker>
         </defs>
 
@@ -172,7 +192,7 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
           y1={linkingLine.startY}
           x2={linkingLine.endX}
           y2={linkingLine.endY}
-          stroke="#3B82F6"
+          stroke={lineColor}
           strokeWidth="2"
           strokeDasharray="5,5"
           markerEnd="url(#arrowhead)"
@@ -182,17 +202,19 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
           cx={linkingLine.startX}
           cy={linkingLine.startY}
           r="4"
-          fill="#3B82F6"
+          fill={lineColor}
           stroke="white"
           strokeWidth="2"
         />
       </svg>
 
-      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium">
+      <div className={`absolute top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium ${bannerClass}`}>
         <div className="flex items-center space-x-2">
           <span>🔗</span>
           <span>
-            {t('relationships.linkingFrom', { ticket: linkingSourceTask.ticket })}
+            {shiftHeld
+              ? t('relationships.linkingRelatedFrom', { ticket: linkingSourceTask.ticket })
+              : t('relationships.linkingFrom', { ticket: linkingSourceTask.ticket })}
           </span>
         </div>
       </div>

@@ -30,7 +30,6 @@ import { generateUUID } from '../utils/uuid';
 import { truncateHtmlByChars } from '../utils/plainTextPreview';
 import { mergeTaskTagsWithLiveData, getTagDisplayStyle } from '../utils/tagUtils';
 import { useSortable } from '@dnd-kit/sortable';
-import { useDroppable } from '@dnd-kit/core';
 import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { CSS } from '@dnd-kit/utilities';
 import { setDndGloballyDisabled, isDndGloballyDisabled } from '../utils/globalDndState';
@@ -41,6 +40,7 @@ import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { feDebug } from '../utils/clientDebug';
 import { commentTextToHtml } from '../utils/commentContent';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import { isEditableEscapeTarget } from '../utils/escapeKeyUtils';
 import {
   AGENT_MEMBER_ID,
   SYSTEM_MEMBER_ID,
@@ -110,7 +110,6 @@ interface TaskCardProps {
   onLinkToolHover?: (task: Task) => void;
   onLinkToolHoverEnd?: () => void;
   getTaskRelationshipType?: (taskId: string) => 'parent' | 'child' | 'related' | null;
-  highlightLinksMode?: boolean;
   relationSummary?: TaskRelationshipSummary;
   onUnlinkRelatedTask?: (targetTask: Task) => void | Promise<void>;
   
@@ -120,7 +119,7 @@ interface TaskCardProps {
 
   /** Multi-check (bulk). Distinct from TaskDetails amber selection. */
   isChecked?: boolean;
-  onToggleChecked?: () => void;
+  onToggleChecked?: (options?: { range?: boolean }) => void;
   /** True when multi-check spans multiple columns — disables this card’s DnD. */
   isMultiSelectDragLocked?: boolean;
   /** false for viewer — hide toolbar, pencil, multi-select, inline editors */
@@ -165,7 +164,6 @@ const TaskCard = React.memo(function TaskCard({
   onLinkToolHover,
   onLinkToolHoverEnd,
   getTaskRelationshipType,
-  highlightLinksMode = false,
   relationSummary: relationSummaryProp,
   onUnlinkRelatedTask,
   
@@ -414,9 +412,8 @@ const TaskCard = React.memo(function TaskCard({
   const {
     attributes,
     listeners: originalListeners,
-    setNodeRef: setSortableRef,
+    setNodeRef,
     transform,
-    transition,
     isDragging,
   } = useSortable({ 
     id: task.id,
@@ -451,10 +448,12 @@ const TaskCard = React.memo(function TaskCard({
           return;
         }
 
-        // Cmd/Ctrl+click is multi-select — do not activate dnd-kit.
-        // With a low activation distance, pointerdown otherwise starts a drag and the
-        // column wrapper applies opacity-50 (looks disabled) until drag end.
-        if (e.metaKey || e.ctrlKey) {
+        // Cmd/Ctrl or Shift+click is multi-select — do not activate dnd-kit.
+        if (e.metaKey || e.ctrlKey || e.shiftKey) {
+          if (e.shiftKey) {
+            e.preventDefault();
+            window.getSelection()?.removeAllRanges();
+          }
           return;
         }
 
@@ -465,28 +464,11 @@ const TaskCard = React.memo(function TaskCard({
     };
   }, [originalListeners]);
 
-  // @dnd-kit droppable hook for cross-column insertion
-  // CRITICAL: Disable task droppable when a column is being dragged to prevent interference
-  const { setNodeRef: setDroppableRef } = useDroppable({
-    id: `${task.id}-drop`,
-    data: {
-      type: 'task',
-      task: task,
-      columnId: task.columnId,
-      position: task.position
-    },
-    disabled: isColumnBeingDragged // Disable when column drag is active
-  });
-
-  // Combine both refs
-  const setNodeRef = (node: HTMLElement | null) => {
-    setSortableRef(node);
-    setDroppableRef(node);
-  };
-
+  // Overlay-style drag: only the active card keeps a transform; siblings stay put
+  // (insertion gap comes from Column dragPreview). Cuts O(column) layout work on large boards.
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition: transition || 'transform 200ms ease',
+    transform: isDragging ? CSS.Transform.toString(transform) : undefined,
+    transition: undefined,
     zIndex: isDragging ? 1000 : 'auto',
     // CRITICAL: Disable pointer events on tasks when a column is being dragged
     // This allows the column droppable to be detected even when tasks cover it
@@ -1569,7 +1551,7 @@ const TaskCard = React.memo(function TaskCard({
           // Prevent clicks on tag areas from reaching card
           position: 'relative'
         }}
-        className={`group task-card sortable-item cursor-pointer ${
+        className={`group task-card sortable-item cursor-pointer outline-none focus:outline-none focus-visible:outline-none ${
           isSelected ? 'bg-gray-100 dark:bg-gray-700 ring-1 ring-amber-400 dark:ring-amber-500' : 
           member.id === SYSTEM_MEMBER_ID ? 'bg-yellow-50 dark:bg-yellow-900' :
           isAgentWorkActive ? 'bg-teal-50/90 dark:bg-teal-950/40' :
@@ -1597,12 +1579,6 @@ const TaskCard = React.memo(function TaskCard({
             }
             return '';
           })() : ''
-        } ${
-          highlightLinksMode && !relationSummary.hasAny ? 'opacity-40' : ''
-        } ${
-          highlightLinksMode && relationSummary.hasAny && hoveredLinkTask?.id === task.id
-            ? 'ring-2 ring-blue-300 dark:ring-blue-500'
-            : ''
         }`}
         {...attributes}
         {...listeners}
@@ -1622,10 +1598,34 @@ const TaskCard = React.memo(function TaskCard({
               isInteractingWithTagRef.current = false;
             }, 500);
           }
+
+          if (isLinkingMode) return;
+          if (isEditableEscapeTarget(e.target)) return;
+          if (!toggleChecked) return;
+          if (e.shiftKey && target.closest('[data-kanban-mod-allow~="shift"]')) return;
+          if (target.closest('input[type="checkbox"]')) return;
+
+          if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            window.getSelection()?.removeAllRanges();
+            if (clickTimerRef.current) {
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+            }
+            if (e.ctrlKey || e.metaKey) toggleChecked();
+            else toggleChecked({ range: true });
+          }
         }}
         onClick={(e) => {
           // Only open task details if we're not in linking mode and not clicking interactive elements
           if (isLinkingMode) return;
+
+          if (isEditableEscapeTarget(e.target)) return;
+
+          const target = e.target as HTMLElement;
+          const isShiftDelete =
+            e.shiftKey && !!target.closest('[data-kanban-mod-allow~="shift"]');
 
           // Ctrl/Cmd+click toggles multi-select (same as the card checkbox).
           if ((e.ctrlKey || e.metaKey) && toggleChecked) {
@@ -1638,8 +1638,18 @@ const TaskCard = React.memo(function TaskCard({
             toggleChecked();
             return;
           }
-          
-          const target = e.target as HTMLElement;
+
+          // Shift+click selects the range from the last checked card (except delete).
+          if (e.shiftKey && toggleChecked && !isShiftDelete) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (clickTimerRef.current) {
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+            }
+            toggleChecked({ range: true });
+            return;
+          }
           
           // Tags only — container already stopPropagates; keep this as a safety net
           if (target.closest('[data-tag-container]')) {
@@ -1867,12 +1877,6 @@ const TaskCard = React.memo(function TaskCard({
             setIsHoveringTitle(true);
             setIsHoveringDescription(true);
           }
-          if (highlightLinksMode && relationSummary.hasAny) {
-            // Switch highlight focus to this card so counterpart badges (PARENT/CHILD) update
-            onLinkToolHover?.(task);
-          } else if (highlightLinksMode && !relationSummary.hasAny) {
-            onLinkToolHoverEnd?.();
-          }
         }}
         onMouseLeave={() => {
           // Only clear hover if card is not selected (selected cards have their own styling)
@@ -1880,8 +1884,7 @@ const TaskCard = React.memo(function TaskCard({
             setIsHoveringTitle(false);
             setIsHoveringDescription(false);
           }
-          // Do not clear highlight focus on leave while highlight mode is on —
-          // column scroll would otherwise remove PARENT/CHILD badges mid-inspect.
+          // Do not clear link-tool hover focus on card leave — toolbar handles pointer lifecycle.
         }}
         onDoubleClick={(e) => {
           // Cancel pending single-click timer to prevent TaskDetails from opening/closing
@@ -1908,7 +1911,7 @@ const TaskCard = React.memo(function TaskCard({
           if (onFinishLinking) {
             if (linkingSourceTask?.id !== task.id) {
               cardLog('🔗 Creating relationship (pointer):', linkingSourceTask?.ticket, '→', task.ticket);
-              void onFinishLinking(task);
+              void onFinishLinking(task, e.shiftKey ? 'related' : 'parent');
             } else {
               cardLog('🔗 Same task - canceling linking (pointer)');
               void onFinishLinking(null);
@@ -2005,7 +2008,6 @@ const TaskCard = React.memo(function TaskCard({
           onLinkToolHover={onLinkToolHover}
           onLinkToolHoverEnd={onLinkToolHoverEnd}
           relationSummary={relationSummary}
-          highlightLinksMode={highlightLinksMode}
           getTaskRelationshipType={getTaskRelationshipType}
           onUnlinkRelatedTask={onUnlinkRelatedTask}
           
@@ -2015,6 +2017,7 @@ const TaskCard = React.memo(function TaskCard({
           isSelected={isSelected}
           isAdmin={Boolean(currentUser?.roles?.includes('admin'))}
           canMutate={allowMutations}
+          cardWidthAnchorRef={cardElRef}
         />
 
         {/* Relationship Type Indicator - when focus card highlights related ones */}
@@ -2073,7 +2076,13 @@ const TaskCard = React.memo(function TaskCard({
                 <label
                   className="absolute -left-[10px] top-[19px] z-10 -translate-x-1 -translate-y-1/2 -m-1.5 flex cursor-pointer items-center p-1.5"
                   data-no-dnd="true"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (e.shiftKey && toggleChecked) {
+                      e.preventDefault();
+                      toggleChecked({ range: true });
+                    }
+                  }}
                   onKeyDown={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
@@ -3447,10 +3456,6 @@ const TaskCard = React.memo(function TaskCard({
 
   // Relationships list may load after hover — must refresh PARENT/CHILD badges
   if (prevProps.getTaskRelationshipType !== nextProps.getTaskRelationshipType) {
-    return false;
-  }
-
-  if (prevProps.highlightLinksMode !== nextProps.highlightLinksMode) {
     return false;
   }
 

@@ -65,7 +65,13 @@ import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reord
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { applyActiveColumnFilters } from './utils/columnFilters';
+import { closeBoardTrashView } from './utils/boardTrashEvents';
+import {
+  findBoardIdForTask,
+  scrollViewportToTaskWhenReady,
+} from './utils/scrollViewportToTask';
 import { columnsContentFingerprint } from './utils/columnsFingerprint';
+import { applyLocalColumnReorder } from './utils/columnReorderingUtils';
 import { userCanMutate } from './utils/permissions';
 import { isDemoModeClient } from './utils/demoReset';
 import { useLoadingState } from './hooks/useLoadingState';
@@ -109,6 +115,7 @@ import {
   getBoardRelationshipType,
   normalizeBoardRelationshipEdge,
   pickBoardRelationshipEdgeToDelete,
+  buildLinkedTaskIdSet,
 } from './utils/taskRelationshipSummary';
 import { 
   getInitialSelectedBoard, 
@@ -131,7 +138,7 @@ import { customCollisionDetection, calculateGridStyle } from './utils/dragDropUt
 import { clearCustomCursor } from './utils/cursorUtils';
 import { generateUniqueBoardName } from './utils/boardUtils';
 import { renumberColumns, isArchivedColumnFlag } from './utils/columnUtils';
-import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveDropIndex, TaskDropPlacement } from './utils/taskReorderingUtils';
+import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveKanbanDropIndex, snapshotColumnTaskOrder, restoreColumnTaskOrders, TaskDropPlacement } from './utils/taskReorderingUtils';
 import { getTaskColumnId, orderedCheckedTasksInColumn } from './utils/kanbanMultiSelect';
 import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
 import { hasEscapeConsumingOverlay, isEditableEscapeTarget } from './utils/escapeKeyUtils';
@@ -625,15 +632,92 @@ function AppContent() {
   }, [currentUser?.id, isAdminUser]);
 
   useEffect(() => subscribePerfTestsPreference(setUserPerfTestsEnabled), []);
+
+  /** Same-board relationship edges per board — used for linked-tasks-only tab counts on non-selected boards. */
+  const relationshipsByBoardIdRef = useRef<Record<string, unknown[]>>({});
+  const pendingBoardRelationshipFetchesRef = useRef(new Set<string>());
+  const [relationshipsCacheVersion, setRelationshipsCacheVersion] = useState(0);
+
+  const setBoardRelationshipsCache = useCallback((boardId: string, relationships: unknown[]) => {
+    if (!boardId) return;
+    relationshipsByBoardIdRef.current[boardId] = Array.isArray(relationships) ? relationships : [];
+    setRelationshipsCacheVersion((v) => v + 1);
+  }, []);
+
+  const linkedTaskIdsByBoard = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const [boardId, rels] of Object.entries(relationshipsByBoardIdRef.current)) {
+      map.set(boardId, buildLinkedTaskIdSet(rels as Parameters<typeof buildLinkedTaskIdSet>[0]));
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ref content tracked via relationshipsCacheVersion
+  }, [relationshipsCacheVersion]);
+
+  useEffect(() => {
+    if (!selectedBoard) return;
+    setBoardRelationshipsCache(selectedBoard, taskLinking.boardRelationships);
+  }, [selectedBoard, taskLinking.boardRelationships, setBoardRelationshipsCache]);
   
   // Initialize Task Filters hook (requires columns, members, boards, and updateCurrentUserPreference)
+  const linkedTaskIds = useMemo(
+    () => buildLinkedTaskIdSet(taskLinking.boardRelationships),
+    [taskLinking.boardRelationships]
+  );
+
   const taskFilters = useTaskFilters({
     columns,
     members,
     boards,
     sprints: availableSprints,
+    linkedTaskIds,
     updateCurrentUserPreference,
   });
+
+  useEffect(() => {
+    if (!taskFilters.searchFilters.linkedTasksOnly || currentPage !== 'kanban') return;
+
+    let cancelled = false;
+    for (const board of boards) {
+      const boardId = board.id;
+      if (
+        relationshipsByBoardIdRef.current[boardId] !== undefined ||
+        pendingBoardRelationshipFetchesRef.current.has(boardId)
+      ) {
+        continue;
+      }
+      pendingBoardRelationshipFetchesRef.current.add(boardId);
+      void getBoardTaskRelationships(boardId)
+        .then((relationships) => {
+          if (cancelled) return;
+          pendingBoardRelationshipFetchesRef.current.delete(boardId);
+          setBoardRelationshipsCache(boardId, relationships);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          pendingBoardRelationshipFetchesRef.current.delete(boardId);
+          setBoardRelationshipsCache(boardId, []);
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    taskFilters.searchFilters.linkedTasksOnly,
+    boards,
+    currentPage,
+    setBoardRelationshipsCache,
+  ]);
+
+  useEffect(() => {
+    if (!taskFilters.searchFilters.linkedTasksOnly) return;
+    lastTaskCountsRef.current = {};
+  }, [taskFilters.searchFilters.linkedTasksOnly, relationshipsCacheVersion]);
+
+  const filteredColumnsRef = useRef<Columns>({});
+  useEffect(() => {
+    filteredColumnsRef.current = taskFilters.filteredColumns || {};
+  }, [taskFilters.filteredColumns]);
 
   // Hide column banner when the task appears in filtered Kanban data (filters/sprint assignment changed).
   useEffect(() => {
@@ -662,9 +746,12 @@ function AppContent() {
   /** After creating a task or updating sprint, recompute whether it is still hidden by filters. */
   const buildColumnVisibilityWarningForTask = useCallback(
     (task: Task): ColumnVisibilityWarning | null => {
+      const wouldBeFilteredByLinked =
+        taskFilters.searchFilters.linkedTasksOnly &&
+        !linkedTaskIds.has(task.id);
       const wouldBeFilteredBySearch = wouldTaskBeFilteredOut(
         task,
-        taskFilters.searchFilters,
+        { ...taskFilters.searchFilters, linkedTasksOnly: false },
         taskFilters.isSearchActive,
         members,
         boards,
@@ -718,7 +805,7 @@ function AppContent() {
         return !hasMatchingMember;
       })();
 
-      if (!wouldBeFilteredBySearch && !wouldBeFilteredBySprint && !wouldBeFilteredByMembers) {
+      if (!wouldBeFilteredBySearch && !wouldBeFilteredBySprint && !wouldBeFilteredByMembers && !wouldBeFilteredByLinked) {
         return null;
       }
       const sprintId = taskFilters.selectedSprintId;
@@ -728,11 +815,12 @@ function AppContent() {
         taskId: task.id,
         showSprintPrompt,
         selectedSprintId: showSprintPrompt ? sprintId : undefined,
-        showClearFilters: wouldBeFilteredBySearch || wouldBeFilteredByMembers,
+        showClearFilters: wouldBeFilteredBySearch || wouldBeFilteredByMembers || wouldBeFilteredByLinked,
         reasons: {
-          search: wouldBeFilteredBySearch,
+          search: wouldBeFilteredBySearch && !wouldBeFilteredByLinked,
           sprint: wouldBeFilteredBySprint,
           members: wouldBeFilteredByMembers,
+          linked: wouldBeFilteredByLinked,
         },
       };
     },
@@ -745,6 +833,10 @@ function AppContent() {
       taskFilters.includeCollaborators,
       taskFilters.includeRequesters,
       taskFilters.selectedMembers,
+      linkedTaskIds,
+      members,
+      boards,
+      availableSprints,
     ]
   );
   
@@ -3859,6 +3951,15 @@ function AppContent() {
     }
   };
 
+  const handleGanttReorderTask = useCallback(async (taskId: string, columnId: string, targetIndex: number) => {
+    const liveColumns = columnsRef.current;
+    const column = liveColumns[columnId];
+    if (!column) return;
+    const task = column.tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    await handleSameColumnReorderWrapper(task, columnId, targetIndex);
+  }, []);
+
   // Wrapper for moveTaskToPosition that provides current state (for position-based moves)
   const moveTaskToPositionWrapper = async (task: Task, columnId: string, newPosition: number) => {
     try {
@@ -3933,20 +4034,27 @@ function AppContent() {
 
     if (!sourceTask || !sourceColumnId) {
       dndLog('🎯 Task not found, returning early');
-      return; // Task not found
+      return false;
     }
 
     const targetColumn = liveColumns[targetColumnId];
     if (!targetColumn) {
       dndLog('🎯 Target column not found:', targetColumnId);
-      return;
+      return false;
     }
 
-    // Resolve placement against FULL column (not filtered). Default: append to end (ListView).
+    // Kanban DnD uses visible layout indices; map to full column when filters hide cards.
     const resolvedPlacement: TaskDropPlacement = placement || { kind: 'end' };
-    const targetIndex = resolveDropIndex(targetColumn.tasks, resolvedPlacement, taskId);
+    const visibleTasks =
+      filteredColumnsRef.current[targetColumnId]?.tasks ?? targetColumn.tasks;
+    const targetIndex = resolveKanbanDropIndex(
+      targetColumn.tasks,
+      visibleTasks,
+      resolvedPlacement,
+      taskId
+    );
 
-    dndLog('🎯 Resolved drop index:', { resolvedPlacement, targetIndex });
+    dndLog('🎯 Resolved drop index:', { resolvedPlacement, targetIndex, visibleCount: visibleTasks.length, fullCount: targetColumn.tasks.length });
 
     // Soft WIP warning when crossing into a limited column at/over capacity
     if (sourceColumnId !== targetColumnId && hasWipLimit(targetColumn.wip_limit)) {
@@ -3990,8 +4098,10 @@ function AppContent() {
           taskFilters.setFilteredColumns
         );
       }
+      return true;
     } catch {
       toast.error(t('errors.moveTaskTitle'), t('errors.moveTaskMessage'));
+      return false;
     }
   }, [t, refreshBoardData, setDragCooldown, taskFilters.setFilteredColumns]);
 
@@ -4294,6 +4404,7 @@ function AppContent() {
     selectedBoard,
     isLinkingMode: taskLinking.isLinkingMode,
     detailsOpen: !!selectedTask,
+    detailsTaskId: selectedTask?.id ?? null,
     findTask: findTaskInColumns,
     onEditTask: handleEditTask,
     onCopyTask: handleCopyTask,
@@ -4325,6 +4436,18 @@ function AppContent() {
       ? handleTaskPermanentDelete
       : undefined,
     onMoveToBoard: performCrossBoardMove,
+    onUndoColumnMove: async (previousColumnOrders) => {
+      const liveColumns = columnsRef.current;
+      const refresh = refreshBoardDataRef.current || refreshBoardData;
+      await restoreColumnTaskOrders(
+        previousColumnOrders,
+        liveColumns,
+        setColumns,
+        setDragCooldown,
+        refresh,
+        taskFilters.setFilteredColumns
+      );
+    },
     getArchiveColumnId: () => {
       const archive = Object.values(columns).find((col) => isArchivedColumnFlag(col));
       return archive?.id || null;
@@ -4362,16 +4485,23 @@ function AppContent() {
     recordColumnMoveUndo,
   } = kanbanMultiSelect;
 
+  const checkedTaskIdsRef = useRef(checkedTaskIds);
+  checkedTaskIdsRef.current = checkedTaskIds;
+
   const handleBulkMoveTaskIds = useCallback(
     async (taskIds: string[], targetColumnId: string, placement: TaskDropPlacement) => {
       if (taskIds.length === 0) return;
-      const targetColumn = columns[targetColumnId];
+      const liveColumns = columnsRef.current;
+      const targetColumn = liveColumns[targetColumnId];
       if (!targetColumn) return;
 
-      const sourceColumnId = getTaskColumnId(taskIds[0], columns);
+      const sourceColumnId = getTaskColumnId(taskIds[0], liveColumns);
       const followers = taskIds.slice(1);
-      const targetIndex = resolveDropIndex(
+      const visibleTasks =
+        filteredColumnsRef.current[targetColumnId]?.tasks ?? targetColumn.tasks;
+      const targetIndex = resolveKanbanDropIndex(
         targetColumn.tasks,
+        visibleTasks,
         placement,
         taskIds[0],
         followers
@@ -4383,13 +4513,24 @@ function AppContent() {
 
       // Preserve relative column order for the block
       const orderedIds =
-        sourceColumnId && columns[sourceColumnId]
-          ? orderedCheckedTasksInColumn(new Set(taskIds), columns[sourceColumnId].tasks).map(
+        sourceColumnId && liveColumns[sourceColumnId]
+          ? orderedCheckedTasksInColumn(new Set(taskIds), liveColumns[sourceColumnId].tasks).map(
               (t) => t.id
             )
           : taskIds;
 
       const previousByTaskId: Record<string, Partial<Task>> = {};
+      const previousColumnOrders: Record<string, ReturnType<typeof snapshotColumnTaskOrder>> = {};
+      if (sourceColumnId && liveColumns[sourceColumnId]) {
+        previousColumnOrders[sourceColumnId] = snapshotColumnTaskOrder(
+          liveColumns[sourceColumnId].tasks
+        );
+      }
+      if (targetColumnId && liveColumns[targetColumnId] && targetColumnId !== sourceColumnId) {
+        previousColumnOrders[targetColumnId] = snapshotColumnTaskOrder(
+          liveColumns[targetColumnId].tasks
+        );
+      }
       for (const id of orderedIds) {
         const task = findTaskInColumns(id);
         if (!task) continue;
@@ -4403,24 +4544,26 @@ function AppContent() {
         orderedIds,
         targetColumnId,
         targetIndex,
-        columns,
+        liveColumns,
         setColumns,
         setDragCooldown,
         refreshBoardData,
         taskFilters.setFilteredColumns
       );
-      if (orderedIds.length >= 2 && Object.keys(previousByTaskId).length > 0) {
-        const movedAcross =
-          sourceColumnId != null && sourceColumnId !== targetColumnId;
-        if (movedAcross) {
-          recordColumnMoveUndo(orderedIds, previousByTaskId);
-        }
+      const sourceSorted = sourceColumnId
+        ? [...(liveColumns[sourceColumnId]?.tasks || [])].sort(
+            (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
+          )
+        : [];
+      const fromIndex = sourceSorted.findIndex((t) => t.id === orderedIds[0]);
+      const isNoOp = sourceColumnId === targetColumnId && fromIndex === targetIndex;
+      if (!isNoOp && Object.keys(previousByTaskId).length > 0) {
+        recordColumnMoveUndo(orderedIds, previousByTaskId, previousColumnOrders);
       }
       clearAllChecked();
       setDraggedTaskIds([]);
     },
     [
-      columns,
       clearAllChecked,
       findTaskInColumns,
       recordColumnMoveUndo,
@@ -4430,30 +4573,95 @@ function AppContent() {
     ]
   );
 
+  /** Kanban drag drops: honor Drop here, then offer the same undo FAB as bulk moves. */
+  const handleKanbanBoardTaskMove = useCallback(
+    async (taskId: string, targetColumnId: string, placement?: TaskDropPlacement) => {
+      const liveColumns = columnsRef.current;
+      let sourceTask: Task | null = null;
+      let sourceColumnId: string | null = null;
+      for (const [colId, column] of Object.entries(liveColumns)) {
+        const task = column.tasks.find((t) => t.id === taskId);
+        if (task) {
+          sourceTask = task;
+          sourceColumnId = colId;
+          break;
+        }
+      }
+      const targetColumn = liveColumns[targetColumnId];
+      if (!sourceTask || !sourceColumnId || !targetColumn) {
+        await handleMoveTaskToColumn(taskId, targetColumnId, placement);
+        return;
+      }
+
+      const resolvedPlacement: TaskDropPlacement = placement || { kind: 'end' };
+      const visibleTasks =
+        filteredColumnsRef.current[targetColumnId]?.tasks ?? targetColumn.tasks;
+      const targetIndex = resolveKanbanDropIndex(
+        targetColumn.tasks,
+        visibleTasks,
+        resolvedPlacement,
+        taskId
+      );
+      const sourceSorted = [...(liveColumns[sourceColumnId]?.tasks || [])].sort(
+        (a, b) => (Number(a.position) || 0) - (Number(b.position) || 0)
+      );
+      const fromIndex = sourceSorted.findIndex((t) => t.id === taskId);
+      const isNoOp = sourceColumnId === targetColumnId && fromIndex === targetIndex;
+
+      if (isNoOp) {
+        await handleMoveTaskToColumn(taskId, targetColumnId, placement);
+        return;
+      }
+
+      const previousColumnOrders: Record<string, ReturnType<typeof snapshotColumnTaskOrder>> = {
+        [sourceColumnId]: snapshotColumnTaskOrder(liveColumns[sourceColumnId].tasks),
+      };
+      if (targetColumnId !== sourceColumnId) {
+        previousColumnOrders[targetColumnId] = snapshotColumnTaskOrder(targetColumn.tasks);
+      }
+      const previousByTaskId: Record<string, Partial<Task>> = {
+        [taskId]: { columnId: sourceTask.columnId, position: sourceTask.position },
+      };
+
+      const moved = await handleMoveTaskToColumn(taskId, targetColumnId, placement);
+      if (moved) {
+        recordColumnMoveUndo([taskId], previousByTaskId, previousColumnOrders);
+        clearAllChecked();
+      }
+    },
+    [clearAllChecked, handleMoveTaskToColumn, recordColumnMoveUndo]
+  );
+
   const handleColumnReorder = useCallback(async (columnId: string, newPosition: number) => {
+    const boardId = selectedBoard || '';
+    if (!boardId) return;
+
+    // Optimistic layout so multi-pod WS misses still show the new order (Docker
+    // usually gets column-reordered immediately; EKS often does not).
+    const optimistic = applyLocalColumnReorder(columnsRef.current, columnId, newPosition);
+    if (optimistic) {
+      columnsRef.current = optimistic;
+      setColumns(optimistic);
+      setBoards((prev) =>
+        prev.map((board) =>
+          board.id === boardId ? { ...board, columns: optimistic } : board
+        )
+      );
+    }
+
     try {
-      await reorderColumns(columnId, newPosition, selectedBoard || '');
-      await renumberColumns(selectedBoard || ''); // Ensure clean positions
-      
-      // Defer non-critical updates to avoid forced reflows during drag end
-      // Use requestAnimationFrame to batch DOM reads/writes
-      // NOTE: WebSocket update will handle the state sync completely
-      // We don't call refreshBoardData here to avoid overwriting the WebSocket update
+      await reorderColumns(columnId, newPosition, boardId);
+      await renumberColumns(boardId);
+      // WS may still refine positions for other clients; local order is already correct.
       requestAnimationFrame(() => {
-        // Defer query logs to next frame
-        // This prevents forced reflows during the drag end handler
         setTimeout(() => {
           fetchQueryLogs();
-          // WebSocket update handles state sync, so we don't refresh here
-          // If WebSocket fails, we'll refresh on error
         }, 0);
       });
     } catch (error) {
-      // console.error('Failed to reorder column:', error);
-      // Only refresh on error - WebSocket should handle success case
       await refreshBoardData();
     }
-  }, [selectedBoard, fetchQueryLogs]);
+  }, [selectedBoard, fetchQueryLogs, refreshBoardData]);
   
   // Stable callbacks for drag state - use refs to avoid triggering re-renders during drag
   const handleDraggedTaskChange = useCallback((task: Task | null) => {
@@ -4735,6 +4943,63 @@ function AppContent() {
     updateCurrentUserPreference('viewMode', mode);
   };
 
+  const handleShowTaskOnBoard = useCallback(
+    async (task: Task) => {
+      const boardId = findBoardIdForTask(
+        task.id,
+        task.boardId,
+        boards,
+        columns,
+        selectedBoard
+      );
+      if (!boardId) {
+        toast.warning(t('errors.scrollToCardFailed'), '');
+        return;
+      }
+
+      if (currentPage !== 'kanban') {
+        handlePageChange('kanban');
+      }
+      if (taskFilters.viewMode !== 'kanban') {
+        handleViewModeChange('kanban');
+      }
+
+      closeBoardTrashView(boardId);
+
+      const boardSwitched = selectedBoard !== boardId;
+      if (boardSwitched) {
+        handleBoardSelection(boardId);
+      }
+
+      const ok = await scrollViewportToTaskWhenReady(task.id, {
+        maxAttempts: boardSwitched ? 60 : 40,
+      });
+
+      if (boardSwitched) {
+        let liveTask: Task | null = null;
+        for (const column of Object.values(columnsRef.current)) {
+          liveTask = column?.tasks?.find((row) => row.id === task.id) ?? null;
+          if (liveTask) break;
+        }
+        handleSelectTask(liveTask ?? task);
+      }
+
+      if (!ok) {
+        toast.warning(t('errors.scrollToCardFailed'), '');
+      }
+    },
+    [
+      boards,
+      columns,
+      selectedBoard,
+      currentPage,
+      taskFilters.viewMode,
+      handleBoardSelection,
+      handleSelectTask,
+      t,
+    ]
+  );
+
   // Filter handlers are now in useTaskFilters hook (taskFilters.*)
 
   // Handle selecting all members
@@ -4912,6 +5177,9 @@ function AppContent() {
         includeCollaborators: taskFilters.includeCollaborators,
         includeRequesters: taskFilters.includeRequesters,
         showAgentTasks: siteSettings?.AI_ENABLED === 'true' ? taskFilters.showAgentTasks : true,
+        linkedTaskIds: taskFilters.searchFilters.linkedTasksOnly
+          ? linkedTaskIdsByBoard.get(board.id)
+          : undefined,
       },
       members,
       boards,
@@ -5154,10 +5422,11 @@ function AppContent() {
         columns={stableFilteredColumns}
         boards={boards}
         isOnline={isOnline}
-        onTaskMove={handleMoveTaskToColumn}
+        onTaskMove={handleKanbanBoardTaskMove}
         onTaskMoveToDifferentBoard={handleTaskDropOnBoard}
         onBulkTaskMove={handleBulkMoveTaskIds}
         checkedTaskIds={checkedTaskIds}
+        checkedTaskIdsRef={checkedTaskIdsRef}
         onClearChecked={clearAllChecked}
         onDraggedTaskIdsChange={setDraggedTaskIds}
         onColumnReorder={handleColumnReorder}
@@ -5293,6 +5562,7 @@ function AppContent() {
                                     onTagAdd={handleTagAdd}
                                     onTagRemove={handleTagRemove}
                                     onMoveTaskToColumn={handleMoveTaskToColumn}
+                                    onGanttReorderTask={handleGanttReorderTask}
                                     animateCopiedTaskId={animateCopiedTaskId}
                                     onEditColumn={handleEditColumn}
                                     onRemoveColumn={handleRemoveColumn}
@@ -5407,6 +5677,7 @@ function AppContent() {
           siteSettings={siteSettings}
           boards={boards}
           canMutate={canMutate}
+          onShowTaskOnBoard={handleShowTaskOnBoard}
         />
       </Suspense>
 
@@ -5460,6 +5731,7 @@ function AppContent() {
         members={members}
         isHoveringBoardTab={isHoveringBoardTab}
         draggedTaskIds={draggedTaskIds}
+        taskViewMode={taskFilters.taskViewMode}
       />
       </SimpleDragDropManager>
 

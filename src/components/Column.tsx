@@ -20,10 +20,18 @@ import { resolveTaskMember } from '../utils/agentMemberUi';
 import {
   shouldShowColumnBulkFab,
   shouldShowColumnBulkUndo,
+  type ToggleTaskCheckedOptions,
 } from '../utils/kanbanMultiSelect';
 import ColumnBulkUndoFab from './ColumnBulkUndoFab';
 import type { TaskRelationshipSummary } from '../utils/taskRelationshipSummary';
 import { getTaskRelationshipSummary } from '../utils/taskRelationshipSummary';
+import {
+  estimateTaskContentHeight,
+  DRAG_OVERSCAN,
+  INSERTION_PREVIEW_HEIGHT_PX,
+  TASK_ROW_GAP_PX,
+  useColumnVirtualRange,
+} from '../hooks/useColumnVirtualRange';
 
 interface KanbanColumnProps {
   column: Column;
@@ -92,7 +100,6 @@ interface KanbanColumnProps {
   onLinkToolHoverEnd?: () => void;
   getTaskRelationshipType?: (taskId: string) => 'parent' | 'child' | 'related' | null;
   onUnlinkRelatedTask?: (targetTask: Task) => void | Promise<void>;
-  highlightLinksMode?: boolean;
   relationSummaryByTaskId?: Map<string, TaskRelationshipSummary>;
   
   // Network status
@@ -107,7 +114,7 @@ interface KanbanColumnProps {
 
   /** Multi-check set for this board. */
   checkedTaskIds?: Set<string>;
-  onToggleTaskChecked?: (taskId: string) => void;
+  onToggleTaskChecked?: (taskId: string, options?: ToggleTaskCheckedOptions) => void;
   onToggleColumnChecked?: (columnId: string, taskIds: string[], selectAll: boolean) => void;
   onClearAllChecked?: () => void;
   isMultiSelectDragLocked?: boolean;
@@ -137,7 +144,7 @@ interface KanbanColumnProps {
   draggedTaskIds?: string[];
 }
 
-export default function KanbanColumn({
+function KanbanColumn({
   column,
   filteredTasks,
   members,
@@ -192,7 +199,6 @@ export default function KanbanColumn({
   onLinkToolHoverEnd,
   getTaskRelationshipType,
   onUnlinkRelatedTask,
-  highlightLinksMode = false,
   relationSummaryByTaskId,
   
   // Network status
@@ -247,11 +253,13 @@ export default function KanbanColumn({
   } | null>(null);
 
   const visibilityWarning = columnWarnings?.[column.id];
+  const taskListRef = useRef<HTMLDivElement | null>(null);
   const hiddenTaskFilterList = useMemo(() => {
     if (!visibilityWarning) return '';
     const w = visibilityWarning;
     const parts: string[] = [];
     if (w.reasons.search) parts.push(t('column.filterTypes.searchFilters'));
+    if (w.reasons.linked) parts.push(t('column.filterTypes.linkedTasks'));
     if (w.reasons.sprint) parts.push(t('column.filterTypes.sprintSelection'));
     if (w.reasons.members) parts.push(t('column.filterTypes.memberFilters'));
     const andW = t('column.and');
@@ -575,10 +583,9 @@ export default function KanbanColumn({
       type: 'column-middle',
       columnId: column.id
     },
-    // Only accept drops if it's a cross-column move OR if this column would be empty after drag
-    // This fixes the issue where single-task columns become undraggable
-    // Disable when dragging a task from this column OR when dragging a column (use column droppable instead)
-    disabled: (draggedTask?.columnId === column.id && filteredTasks.length > 1) || !!draggedColumn
+    // Keep the column body droppable during same-column task drags so dnd-kit
+    // still has a target after long scrolls. Insert index comes from pointer Y.
+    disabled: !!draggedColumn
   });
 
   // Simplified: Only one main droppable area per column
@@ -684,6 +691,183 @@ export default function KanbanColumn({
 
 
 
+  const tasksToRender = useMemo(
+    () =>
+      [...filteredTasks]
+        .filter((task) => task && task.id)
+        .sort((a, b) => {
+          const pa = typeof a.position === 'number' ? a.position : parseFloat(String(a.position)) || 0;
+          const pb = typeof b.position === 'number' ? b.position : parseFloat(String(b.position)) || 0;
+          if (pa !== pb) return pa - pb;
+          return String(a.id).localeCompare(String(b.id));
+        }),
+    [filteredTasks]
+  );
+
+  const originIndex = useMemo(() => {
+    if (!draggedTask || draggedTask.columnId !== column.id) return -1;
+    return tasksToRender.findIndex((t) => t.id === draggedTask.id);
+  }, [tasksToRender, draggedTask, column.id]);
+
+  const draggedLayoutIndices = useMemo(() => {
+    const set = new Set<number>();
+    if (!draggedTask || draggedTask.columnId !== column.id) return set;
+    const ids =
+      draggedTaskIds && draggedTaskIds.length > 0
+        ? draggedTaskIds
+        : [draggedTask.id];
+    const idSet = new Set(ids);
+    tasksToRender.forEach((t, i) => {
+      if (idSet.has(t.id)) set.add(i);
+    });
+    return set;
+  }, [tasksToRender, draggedTask, draggedTaskIds, column.id]);
+
+  const remappedOriginInsert = useMemo(() => {
+    if (originIndex < 0) return -1;
+    let n = 0;
+    for (let i = 0; i < originIndex; i++) {
+      if (!draggedLayoutIndices.has(i)) n++;
+    }
+    return n;
+  }, [originIndex, draggedLayoutIndices]);
+
+  const orderedVisibleTaskIds = useMemo(
+    () => tasksToRender.map((t) => t.id),
+    [tasksToRender]
+  );
+
+  // Keep the dragged sortable mounted (unmounting it cancels dnd-kit after a few moves).
+  const tasksForLayout = tasksToRender;
+
+  const rawInsertIndex =
+    draggedTask && dragPreview && dragPreview.targetColumnId === column.id
+      ? dragPreview.insertIndex
+      : -1;
+
+  // No list hole while the pointer is still in the original slot — pickup overlay only.
+  const showDestPlaceholder =
+    rawInsertIndex >= 0 &&
+    (draggedTask?.columnId !== column.id || rawInsertIndex !== remappedOriginInsert);
+
+  const insertIndex = showDestPlaceholder ? rawInsertIndex : -1;
+
+  const heightCacheRef = useRef<Map<string, number>>(new Map());
+  const [heightVersion, setHeightVersion] = useState(0);
+  const measureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const draggedTaskRef = useRef(draggedTask);
+  draggedTaskRef.current = draggedTask;
+
+  const MIN_CACHED_ROW_HEIGHT = 24;
+
+  const reportRowHeight = useCallback((taskId: string, height: number) => {
+    if (draggedTaskRef.current) return;
+    if (!taskId || height < MIN_CACHED_ROW_HEIGHT) return;
+    const prev = heightCacheRef.current.get(taskId);
+    if (prev != null && Math.abs(prev - height) < 4) return;
+    heightCacheRef.current.set(taskId, height);
+    if (measureTimerRef.current) clearTimeout(measureTimerRef.current);
+    // Coalesce measure updates so we don't remount every ResizeObserver tick
+    measureTimerRef.current = setTimeout(() => {
+      measureTimerRef.current = null;
+      setHeightVersion((v) => v + 1);
+    }, 50);
+  }, []);
+
+  useEffect(() => {
+    if (draggedTask) return;
+    let changed = false;
+    heightCacheRef.current.forEach((h, id) => {
+      if (h < MIN_CACHED_ROW_HEIGHT) {
+        heightCacheRef.current.delete(id);
+        changed = true;
+      }
+    });
+    if (changed) setHeightVersion((v) => v + 1);
+  }, [draggedTask]);
+
+  useEffect(() => {
+    heightCacheRef.current.clear();
+    setHeightVersion((v) => v + 1);
+  }, [taskViewMode, column.id]);
+
+  const remapLayoutIndex = useCallback(
+    (index: number) => {
+      if (draggedLayoutIndices.size === 0) return index;
+      if (draggedLayoutIndices.has(index)) return -1;
+      let subtracted = 0;
+      draggedLayoutIndices.forEach((di) => {
+        if (di < index) subtracted++;
+      });
+      return index - subtracted;
+    },
+    [draggedLayoutIndices]
+  );
+
+  const withoutDraggedCount =
+    draggedLayoutIndices.size > 0
+      ? Math.max(0, tasksForLayout.length - draggedLayoutIndices.size)
+      : tasksForLayout.length;
+
+  const collapseOrigin =
+    draggedLayoutIndices.size > 0 &&
+    !!draggedTask &&
+    (showDestPlaceholder ||
+      (!!dragPreview && dragPreview.targetColumnId !== column.id));
+
+  const getItemSize = useCallback(
+    (index: number) => {
+      if (collapseOrigin && draggedLayoutIndices.has(index)) return 1;
+      const task = tasksForLayout[index];
+      const cached = task?.id ? heightCacheRef.current.get(task.id) : undefined;
+      let height =
+        (cached ?? estimateTaskContentHeight(taskViewMode)) + TASK_ROW_GAP_PX;
+      const remapped = remapLayoutIndex(index);
+      if (insertIndex >= 0 && remapped === insertIndex) {
+        height += INSERTION_PREVIEW_HEIGHT_PX;
+      }
+      return height;
+    },
+    // heightVersion intentionally invalidates when measurements land
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      taskViewMode,
+      insertIndex,
+      tasksForLayout,
+      heightVersion,
+      collapseOrigin,
+      draggedLayoutIndices,
+      remapLayoutIndex,
+    ]
+  );
+
+  const trailingHeight =
+    insertIndex >= 0 && insertIndex >= withoutDraggedCount
+      ? INSERTION_PREVIEW_HEIGHT_PX
+      : 0;
+
+  // Extra overscan during drag keeps neighbor columns populated as the page scrolls.
+  const dragOverscan = draggedTask ? DRAG_OVERSCAN : undefined;
+
+  const pinnedTaskIndex = useMemo(() => {
+    if (!selectedTask?.id) return null;
+    const idx = tasksForLayout.findIndex((t) => t.id === selectedTask.id);
+    return idx >= 0 ? idx : null;
+  }, [tasksForLayout, selectedTask?.id]);
+
+  const virtualRange = useColumnVirtualRange({
+    itemCount: tasksForLayout.length,
+    getItemSize,
+    containerRef: taskListRef,
+    enabled: !(isDragging && draggedColumn?.id === column.id),
+    forceFullRender: false,
+    overscan: dragOverscan,
+    trailingHeight,
+    pinnedIndex: pinnedTaskIndex,
+    layoutKey: `${column.id}:${tasksForLayout.length}:${taskViewMode}:${insertIndex}:${collapseOrigin ? 1 : 0}:${draggedLayoutIndices.size}:${pinnedTaskIndex ?? ''}:${heightVersion}`,
+  });
+
   const renderTaskList = React.useCallback(() => {
     const taskElements: React.ReactNode[] = [];
     
@@ -711,18 +895,13 @@ export default function KanbanColumn({
         </div>
       ];
     }
-    
-    // Simple approach: render tasks in order with minimal changes
-    const tasksToRender = [...filteredTasks].sort((a, b) => (a.position || 0) - (b.position || 0));
-    
-    // Check if we should show insertion preview for cross-column moves
-    const shouldShowInsertionPreview = 
-      draggedTask && 
-      dragPreview && 
-      dragPreview.targetColumnId === column.id && 
-      draggedTask.columnId !== column.id; // Only for cross-column moves
-    
-    tasksToRender.forEach((task, index) => {
+
+    const { startIndex, endIndex, totalHeight, offsetForIndex, windowed } = virtualRange;
+
+    const pushTaskRow = (index: number, top: number | null) => {
+      const task = tasksForLayout[index];
+      if (!task) return;
+
       const memberList = Array.isArray(members) ? members : [];
       const member = resolveTaskMember(memberList, task.memberId);
       if (!member) return;
@@ -730,33 +909,95 @@ export default function KanbanColumn({
       const isBeingDragged =
         draggedTask?.id === task.id ||
         (!!draggedTaskIds && draggedTaskIds.includes(task.id));
-      
-      // Show insertion gap BEFORE this task if needed
-      if (shouldShowInsertionPreview && dragPreview.insertIndex === index) {
+
+      const rowStyle: React.CSSProperties | undefined =
+        windowed && top != null
+          ? {
+              position: 'absolute',
+              top,
+              left: 0,
+              right: 0,
+            }
+          : undefined;
+
+      const skipYRow = draggedLayoutIndices.has(index);
+      const layoutIndex = remapLayoutIndex(index);
+      const showPlaceholderHere =
+        insertIndex >= 0 && layoutIndex === insertIndex && !skipYRow;
+
+      if (showPlaceholderHere) {
         taskElements.push(
           <div
             key={`insertion-preview-${index}`}
-            className="transition-all duration-200 ease-out mb-3"
+            data-kanban-drop-placeholder
+            data-insert-index={insertIndex}
+            className={`${windowed ? '' : 'mb-3'} pointer-events-none`}
+            style={
+              windowed && top != null
+                ? {
+                    position: 'absolute',
+                    top,
+                    left: 0,
+                    right: 0,
+                    height: INSERTION_PREVIEW_HEIGHT_PX,
+                  }
+                : undefined
+            }
           >
-            <div className="h-16 bg-blue-100 border-2 border-dashed border-blue-300 rounded-lg flex items-center justify-center">
-              <div className="text-blue-600 text-sm font-medium flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                {t('column.dropHere')}
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              </div>
-            </div>
+            <ColumnDropHerePlaceholder label={t('column.dropHere')} />
           </div>
         );
       }
-      
+
+      const cardTop =
+        windowed && top != null
+          ? top + (showPlaceholderHere ? INSERTION_PREVIEW_HEIGHT_PX : 0)
+          : null;
+
+      const collapseThis = collapseOrigin && skipYRow;
+
       taskElements.push(
         <div
           key={task.id}
-          className={`transition-all duration-200 ease-out mb-3 ${
-            isBeingDragged 
-              ? 'opacity-50' // Simple fade when dragging - keep layout stable
-              : 'opacity-100'
-          }`}
+          {...(!skipYRow
+            ? {
+                'data-kanban-task-row': true,
+                'data-task-id': task.id,
+                'data-layout-index': layoutIndex,
+              }
+            : {})}
+          className={`${windowed || collapseThis ? '' : 'mb-3'} ${isBeingDragged ? 'opacity-0' : 'opacity-100'}`}
+          style={
+            collapseThis
+              ? {
+                  position: windowed ? 'absolute' : 'relative',
+                  top: windowed && top != null ? top : undefined,
+                  left: 0,
+                  right: 0,
+                  height: 1,
+                  overflow: 'hidden',
+                  pointerEvents: 'none',
+                  margin: 0,
+                  padding: 0,
+                }
+              : windowed && cardTop != null
+                ? {
+                    position: 'absolute',
+                    top: cardTop,
+                    left: 0,
+                    right: 0,
+                    marginBottom: 0,
+                    paddingBottom: TASK_ROW_GAP_PX,
+                    boxSizing: 'content-box',
+                  }
+                : rowStyle
+          }
+          ref={(node) => {
+            if (!node) return;
+            // Measure content only (exclude our paddingBottom gap)
+            const h = node.offsetHeight - (windowed ? TASK_ROW_GAP_PX : 0);
+            if (h > 0) reportRowHeight(task.id, h);
+          }}
         >
           <TaskCard
             task={task}
@@ -787,51 +1028,74 @@ export default function KanbanColumn({
             isChecked={!!checkedTaskIds?.has(task.id)}
             onToggleChecked={
               canMutate && onToggleTaskChecked
-                ? () => onToggleTaskChecked(task.id)
+                ? (options) =>
+                    onToggleTaskChecked(task.id, {
+                      range: options?.range,
+                      orderedIds: orderedVisibleTaskIds,
+                    })
                 : undefined
             }
             isMultiSelectDragLocked={isMultiSelectDragLocked}
             canMutate={canMutate}
-            
-            // Task linking props
             isLinkingMode={isLinkingMode}
             linkingSourceTask={linkingSourceTask}
             onStartLinking={onStartLinking}
             onFinishLinking={onFinishLinking}
-            
-            // Hover highlighting props
             hoveredLinkTask={hoveredLinkTask}
             onLinkToolHover={onLinkToolHover}
             onLinkToolHoverEnd={onLinkToolHoverEnd}
             getTaskRelationshipType={getTaskRelationshipType}
             onUnlinkRelatedTask={onUnlinkRelatedTask}
-            highlightLinksMode={highlightLinksMode}
             relationSummary={getTaskRelationshipSummary(relationSummaryByTaskId, task.id)}
           />
         </div>
       );
-    });
-    
-    // Show insertion gap at the END if needed
-    if (shouldShowInsertionPreview && dragPreview.insertIndex >= tasksToRender.length) {
-      taskElements.push(
-        <div
-          key={`insertion-preview-end`}
-          className="transition-all duration-200 ease-out mb-3"
-        >
-          <div className="h-16 bg-blue-100 border-2 border-dashed border-blue-300 rounded-lg flex items-center justify-center">
-            <div className="text-blue-600 text-sm font-medium flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              {t('column.dropHere')}
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            </div>
-          </div>
-        </div>
-      );
+    };
+
+    for (let index = startIndex; index < endIndex; index++) {
+      pushTaskRow(index, windowed ? offsetForIndex(index) : null);
     }
-    
+
+    if (insertIndex >= withoutDraggedCount) {
+      const top = windowed ? offsetForIndex(tasksForLayout.length) : null;
+      if (!windowed || (endIndex >= tasksForLayout.length && top != null)) {
+        taskElements.push(
+          <div
+            key="insertion-preview-end"
+            data-kanban-drop-placeholder
+            data-insert-index={insertIndex}
+            className={`${windowed ? '' : 'mb-3'} pointer-events-none`}
+            style={
+              windowed && top != null
+                ? {
+                    position: 'absolute',
+                    top,
+                    left: 0,
+                    right: 0,
+                    height: INSERTION_PREVIEW_HEIGHT_PX,
+                  }
+                : undefined
+            }
+          >
+            <ColumnDropHerePlaceholder label={t('column.dropHere')} />
+          </div>
+        );
+      }
+    }
+
+    if (windowed) {
+      return [
+        <div
+          key="virtual-list-root"
+          style={{ position: 'relative', height: totalHeight, width: '100%' }}
+        >
+          {taskElements}
+        </div>,
+      ];
+    }
+
     return taskElements;
-    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, column.title, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, highlightLinksMode, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds]);
+    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, column.title, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
 
   // Combine sortable and column droppable refs for the column container
   const columnElRef = useRef<HTMLElement | null>(null);
@@ -1004,6 +1268,7 @@ export default function KanbanColumn({
         ref={columnHeaderRef}
         className={`flex justify-between mb-4 ${isEditing ? 'items-start' : 'items-center'}`}
         data-column-header
+        data-kanban-column-title
       >
         <div className={`flex gap-2 flex-1 min-w-0 ${isEditing ? 'items-start' : 'items-center'}`}>
           {/* Task count pill (same chrome for all roles). Admins: hover reveals drag handle. */}
@@ -1528,7 +1793,11 @@ export default function KanbanColumn({
                   <BottomDropZone columnId={column.id} />
                 </>
               )}
-              <div>
+              <div
+                ref={taskListRef}
+                data-kanban-task-list
+                data-layout-count={withoutDraggedCount}
+              >
                 {renderTaskList()}
               </div>
             </div>
@@ -1651,6 +1920,85 @@ export default function KanbanColumn({
   );
 }
 
+/** Skip re-renders when drag preview targets another column (large boards). */
+function areKanbanColumnPropsEqual(
+  prev: KanbanColumnProps,
+  next: KanbanColumnProps
+): boolean {
+  if (prev.filteredTasks !== next.filteredTasks) return false;
+  if (prev.column !== next.column) {
+    if (
+      prev.column.id !== next.column.id ||
+      prev.column.position !== next.column.position ||
+      prev.column.title !== next.column.title ||
+      prev.column.wip_limit !== next.column.wip_limit ||
+      prev.column.policy_text !== next.column.policy_text ||
+      prev.column.is_finished !== next.column.is_finished ||
+      prev.column.is_archived !== next.column.is_archived
+    ) {
+      return false;
+    }
+  }
+  if (prev.draggedTask?.id !== next.draggedTask?.id) return false;
+  if (prev.draggedColumn?.id !== next.draggedColumn?.id) return false;
+
+  const prevPreview =
+    prev.dragPreview?.targetColumnId === prev.column.id ? prev.dragPreview : null;
+  const nextPreview =
+    next.dragPreview?.targetColumnId === next.column.id ? next.dragPreview : null;
+  if (
+    prevPreview?.insertIndex !== nextPreview?.insertIndex ||
+    !!prevPreview !== !!nextPreview
+  ) {
+    return false;
+  }
+
+  if (prev.selectedTask?.id !== next.selectedTask?.id) return false;
+  if (prev.checkedTaskIds !== next.checkedTaskIds) return false;
+  if (prev.draggedTaskIds !== next.draggedTaskIds) return false;
+  if (prev.members !== next.members) return false;
+  if (prev.columns !== next.columns) return false;
+  if (prev.taskViewMode !== next.taskViewMode) return false;
+  if (prev.canMutate !== next.canMutate) return false;
+  if (prev.isAdmin !== next.isAdmin) return false;
+  if (prev.isMultiSelectDragLocked !== next.isMultiSelectDragLocked) return false;
+  if (prev.selectedSprintId !== next.selectedSprintId) return false;
+  if (prev.isLinkingMode !== next.isLinkingMode) return false;
+  if (prev.linkingSourceTask?.id !== next.linkingSourceTask?.id) return false;
+  if (prev.hoveredLinkTask?.id !== next.hoveredLinkTask?.id) return false;
+  if (prev.relationSummaryByTaskId !== next.relationSummaryByTaskId) return false;
+  if (prev.availablePriorities !== next.availablePriorities) return false;
+  if (prev.availableTags !== next.availableTags) return false;
+  if (prev.availableSprints !== next.availableSprints) return false;
+  if (prev.boards !== next.boards) return false;
+  if (prev.siteSettings !== next.siteSettings) return false;
+  if (prev.columnWarnings !== next.columnWarnings) return false;
+  if (prev.showColumnDeleteConfirm !== next.showColumnDeleteConfirm) return false;
+  if (prev.bulkUndoTaskIds !== next.bulkUndoTaskIds) return false;
+  if (prev.bulkUndoLabelKey !== next.bulkUndoLabelKey) return false;
+  if (prev.bulkUndoAnchorColumnIds !== next.bulkUndoAnchorColumnIds) return false;
+  if (prev.bulkBusy !== next.bulkBusy) return false;
+  if (prev.currentUser !== next.currentUser) return false;
+  if (prev.selectedMembers !== next.selectedMembers) return false;
+  if (prev.selectedBoardId !== next.selectedBoardId) return false;
+
+  return true;
+}
+
+export default React.memo(KanbanColumn, areKanbanColumnPropsEqual);
+
+function ColumnDropHerePlaceholder({ label }: { label: string }) {
+  return (
+    <div className="flex h-16 items-center justify-center rounded-lg border-2 border-dashed border-blue-300 bg-blue-100 dark:border-blue-500 dark:bg-blue-900/40">
+      <div className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-300">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+        {label}
+        <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+      </div>
+    </div>
+  );
+}
+
 // Top drop zone: absolute so it does not push the first card down; only mounted during task drag
 const TaskTopDropZone: React.FC<{ columnId: string }> = ({ columnId }) => {
   const { setNodeRef } = useDroppable({
@@ -1664,7 +2012,8 @@ const TaskTopDropZone: React.FC<{ columnId: string }> = ({ columnId }) => {
   return (
     <div
       ref={setNodeRef}
-      className="pointer-events-auto absolute inset-x-0 top-0 z-10 h-14 w-full"
+      id={`${columnId}-task-top`}
+      className="pointer-events-none absolute inset-x-0 top-0 z-10 h-3 w-full"
       aria-hidden
     />
   );

@@ -35,10 +35,12 @@ import {
 } from '../api';
 import { useFileUpload, getUploadErrorMessage } from '../hooks/useFileUpload';
 import { toast } from '../utils/toast';
+import TaskRelationshipLinker from './TaskRelationshipLinker';
 import { getLocalISOString, formatToYYYYMMDDHHmmss } from '../utils/dateUtils';
 import { generateUUID } from '../utils/uuid';
 import { loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
 import { generateTaskUrl } from '../utils/routingUtils';
+import { scrollViewportToTask } from '../utils/scrollViewportToTask';
 import { mergeTaskTagsWithLiveData, getTagDisplayStyle } from '../utils/tagUtils';
 import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { truncateMemberName } from '../utils/memberUtils';
@@ -71,6 +73,25 @@ function detailsLog(...args: unknown[]) {
   if (feDebug('FE_DEBUG_TASK_DETAILS')) console.log(...args);
 }
 
+/** Mini task-card glyph (distinct from Kanban LayoutGrid in Tools). */
+function TaskCardLocateIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 20"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      className={className}
+      aria-hidden
+    >
+      <rect x="1" y="1" width="14" height="18" rx="2" strokeWidth="1.5" />
+      <line x1="3" y1="5.5" x2="13" y2="5.5" strokeWidth="2" />
+      <line x1="3" y1="9.5" x2="13" y2="9.5" strokeWidth="1.25" />
+      <line x1="3" y1="13.5" x2="8.5" y2="13.5" strokeWidth="1.25" />
+    </svg>
+  );
+}
+
 interface TaskDetailsProps {
   task: Task;
   members: TeamMember[];
@@ -87,6 +108,7 @@ interface TaskDetailsProps {
   onRestore?: () => Promise<void>;
   onPurge?: () => Promise<void>;
   isAdmin?: boolean;
+  onShowTaskOnBoard?: (task: Task) => void | Promise<void>;
 }
 
 export default function TaskDetails({
@@ -103,6 +125,7 @@ export default function TaskDetails({
   onRestore,
   onPurge,
   isAdmin = false,
+  onShowTaskOnBoard,
 }: TaskDetailsProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const userPrefs = loadUserPreferences();
@@ -263,7 +286,46 @@ export default function TaskDetails({
   const [childrenSearchTerm, setChildrenSearchTerm] = useState('');
   const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
   const childrenDropdownRef = useRef<HTMLDivElement>(null);
-  
+
+  const reloadRelationships = useCallback(async () => {
+    if (!task.id) return;
+
+    setIsLoadingRelationships(true);
+    try {
+      const relationshipsData = await getTaskRelationships(task.id);
+      setRelationships(relationshipsData);
+
+      const parent = relationshipsData.find((rel: any) => rel.relationship === 'child' && rel.task_id === task.id);
+      if (parent) {
+        setParentTask({
+          id: parent.to_task_id,
+          ticket: parent.related_task_ticket,
+          title: parent.related_task_title,
+          projectId: parent.related_task_project_id,
+        });
+      } else {
+        setParentTask(null);
+      }
+
+      const children = relationshipsData
+        .filter((rel: any) => rel.relationship === 'parent' && rel.task_id === task.id)
+        .map((rel: any) => ({
+          id: rel.to_task_id,
+          ticket: rel.related_task_ticket,
+          title: rel.related_task_title,
+          projectId: rel.related_task_project_id,
+        }));
+      setChildTasks(children);
+
+      const availableTasksData = await getAvailableTasksForRelationship(task.id);
+      setAvailableTasksForChildren(Array.isArray(availableTasksData) ? availableTasksData : []);
+    } catch (error) {
+      console.error('Error loading task relationships:', error);
+    } finally {
+      setIsLoadingRelationships(false);
+    }
+  }, [task.id]);
+
   // Task attachments state with logging
   const [taskAttachments, setTaskAttachmentsInternal] = useState<Array<{
     id: string;
@@ -437,51 +499,8 @@ export default function TaskDetails({
 
   // Load task relationships
   useEffect(() => {
-    const loadRelationships = async () => {
-      if (!task.id) return;
-      
-      setIsLoadingRelationships(true);
-      try {
-        // Load task relationships
-        const relationshipsData = await getTaskRelationships(task.id);
-        setRelationships(relationshipsData);
-        
-        // Parse parent and children from relationships
-        const parent = relationshipsData.find((rel: any) => rel.relationship === 'child' && rel.task_id === task.id);
-        if (parent) {
-          setParentTask({
-            id: parent.to_task_id,
-            ticket: parent.related_task_ticket,
-            title: parent.related_task_title,
-            projectId: parent.related_task_project_id
-          });
-        } else {
-          setParentTask(null);
-        }
-        
-        const children = relationshipsData
-          .filter((rel: any) => rel.relationship === 'parent' && rel.task_id === task.id)
-          .map((rel: any) => ({
-            id: rel.to_task_id,
-            ticket: rel.related_task_ticket,
-            title: rel.related_task_title,
-            projectId: rel.related_task_project_id
-          }));
-        setChildTasks(children);
-        
-        // Load available tasks for adding as children
-        const availableTasksData = await getAvailableTasksForRelationship(task.id);
-        setAvailableTasksForChildren(Array.isArray(availableTasksData) ? availableTasksData : []);
-        
-      } catch (error) {
-        console.error('Error loading task relationships:', error);
-      } finally {
-        setIsLoadingRelationships(false);
-      }
-    };
-    
-    loadRelationships();
-  }, [task.id]);
+    void reloadRelationships();
+  }, [reloadRelationships]);
 
   // Helper function to calculate optimal dropdown position
   const calculateDropdownPosition = (buttonRef: React.RefObject<HTMLButtonElement>): 'above' | 'below' => {
@@ -1679,14 +1698,34 @@ export default function TaskDetails({
                       </span>
                     )}
                     {task.ticket && (
-                      <a 
-                        href={generateTaskUrl(task.ticket, getProjectIdentifier())}
-                        className="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                        data-help-target="task-page-link"
-                        title={`Direct link to ${task.ticket}`}
-                      >
-                        {task.ticket}
-                      </a>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <a 
+                          href={generateTaskUrl(task.ticket, getProjectIdentifier())}
+                          className="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                          data-help-target="task-page-link"
+                          title={t('taskCard.directLinkTo', { ticket: task.ticket })}
+                        >
+                          {task.ticket}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onShowTaskOnBoard) {
+                              void onShowTaskOnBoard(task);
+                              return;
+                            }
+                            const found = scrollViewportToTask(task.id);
+                            if (!found) {
+                              toast.warning(t('errors.scrollToCardFailed'), '');
+                            }
+                          }}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-blue-50 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
+                          title={t('actions.scrollToCard')}
+                          aria-label={t('actions.scrollToCard')}
+                        >
+                          <TaskCardLocateIcon className="h-[15px] w-3" />
+                        </button>
+                      </div>
                     )}
                     {isSavingText && !isReadOnlyMode && (
                       <div className="text-xs text-gray-500 flex items-center gap-1">
@@ -2370,6 +2409,17 @@ export default function TaskDetails({
                   )}
                 </div>
               </div>
+
+              {!isLoadingRelationships && (
+                <TaskRelationshipLinker
+                  taskId={task.id}
+                  taskTicket={task.ticket}
+                  relationships={relationships}
+                  availableTasks={availableTasksForChildren}
+                  canMutate={!isWritersLocked}
+                  onRefresh={reloadRelationships}
+                />
+              )}
             </div>
           </div>
         </div>

@@ -563,6 +563,24 @@ body {
   animation: demo-guide-fields-flash 0.85s ease-out;
 }
 
+/*
+ * Ctrl/Cmd = card multi-select, Shift = range select. Disable card chrome so
+ * archive/copy/link cannot steal the click. Delete stays clickable on Shift.
+ */
+body.kanban-mod-ctrl .task-card button:not([data-kanban-mod-allow~="ctrl"]),
+body.kanban-mod-ctrl .task-card a {
+  pointer-events: none !important;
+}
+body.kanban-mod-shift .task-card button:not([data-kanban-mod-allow~="shift"]),
+body.kanban-mod-shift .task-card a {
+  pointer-events: none !important;
+}
+body.kanban-mod-ctrl .task-card,
+body.kanban-mod-shift .task-card {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .demo-guide-target,
   .demo-guide-cue,

@@ -28,6 +28,7 @@ import {
   showBoardTabTaskCounts,
 } from '../utils/kanbanChromeVisibility';
 import { getBoardTrashCount } from '../api';
+import { useIsMobileViewport } from '../hooks/useIsMobileViewport';
 
 function parseBoardWipLimitValue(raw: string): number | null {
   const trimmed = String(raw ?? '').trim();
@@ -80,6 +81,76 @@ function boardTaskCountTooltip(
     });
   }
   return t('boardTabs.taskCount');
+}
+
+const BOARD_TAB_ADMIN_CHROME_DELAY_MS = 1000;
+
+/** Delay drag handle + trash on board tabs so quick clicks select the tab. */
+function useBoardTabAdminChromeReveal(
+  stripHovered: boolean,
+  isEditing: boolean,
+  delayMs = BOARD_TAB_ADMIN_CHROME_DELAY_MS
+) {
+  const [tabHovered, setTabHovered] = useState(false);
+  const [delayedReveal, setDelayedReveal] = useState(false);
+  const [pinnedReveal, setPinnedReveal] = useState(false);
+
+  const dismissChrome = () => {
+    setTabHovered(false);
+    setDelayedReveal(false);
+    setPinnedReveal(false);
+  };
+
+  const dismissChromeUnlessEditing = () => {
+    if (isEditing) return;
+    dismissChrome();
+  };
+
+  useEffect(() => {
+    if (!stripHovered && !isEditing) {
+      dismissChrome();
+    }
+  }, [stripHovered, isEditing]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    setPinnedReveal(true);
+  }, [isEditing]);
+
+  useEffect(() => {
+    if (isEditing) return;
+    if (!stripHovered || !tabHovered) {
+      setDelayedReveal(false);
+      setPinnedReveal(false);
+      if (!stripHovered) {
+        setTabHovered(false);
+      }
+    }
+  }, [isEditing, stripHovered, tabHovered]);
+
+  useEffect(() => {
+    if (!stripHovered || !tabHovered || pinnedReveal || isEditing) {
+      if (!pinnedReveal && !isEditing) {
+        setDelayedReveal(false);
+      }
+      return;
+    }
+    const timer = window.setTimeout(() => setDelayedReveal(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [stripHovered, tabHovered, pinnedReveal, isEditing, delayMs]);
+
+  const adminChromeVisible =
+    isEditing || (stripHovered && tabHovered && (delayedReveal || pinnedReveal));
+
+  return {
+    showDragHandle: adminChromeVisible,
+    showTrash: adminChromeVisible,
+    revealChrome: () => setPinnedReveal(true),
+    tabSurfaceProps: {
+      onMouseEnter: () => setTabHovered(true),
+      onMouseLeave: dismissChromeUnlessEditing,
+    },
+  };
 }
 
 function renderBoardEffortPill(effort: number, siteSettings?: { [key: string]: string }, tooltipLabel?: string) {
@@ -363,8 +434,15 @@ const SortableBoardTab: React.FC<{
   hasActiveFilters?: boolean;
   /** Visual cue while the edit dropdown is open for this tab. */
   isEditing?: boolean;
-}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete, taskCount, wipCount, effort = 0, effortTooltip, siteSettings, totalTaskCount, deleteConfirmTaskCount, showTaskCount, hasActiveFilters = false, isEditing = false }) => {
+  boardTabsStripHovered?: boolean;
+}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete, taskCount, wipCount, effort = 0, effortTooltip, siteSettings, totalTaskCount, deleteConfirmTaskCount, showTaskCount, hasActiveFilters = false, isEditing = false, boardTabsStripHovered = false }) => {
   const [deleteButtonRef, setDeleteButtonRef] = useState<HTMLButtonElement | null>(null);
+  const {
+    showDragHandle,
+    showTrash,
+    revealChrome,
+    tabSurfaceProps,
+  } = useBoardTabAdminChromeReveal(boardTabsStripHovered, isEditing);
   const {
     attributes,
     listeners,
@@ -375,6 +453,22 @@ const SortableBoardTab: React.FC<{
   } = useSortable({ id: board.id });
 
   const { t } = useTranslation('common');
+  const dragHandleActive = showDragHandle || isDragging;
+  const taskCountPill = showTaskCount
+    ? renderBoardTaskCountPill({
+        displayCount: taskCount ?? 0,
+        wipCount: wipCount ?? taskCount ?? 0,
+        wipLimit: board.wip_limit,
+        hasActiveFilters,
+        compact: true,
+      })
+    : null;
+  const handleTooltip =
+    dragHandleActive
+      ? t('boardTabs.dragToReorder')
+      : taskCountPill
+        ? boardTaskCountTooltip(t, taskCountPill, board.wip_limit)
+        : t('boardTabs.dragToReorder');
   // Translate only: CSS.Transform also applies dnd-kit's scaleX/scaleY, which stretches
   // the label because board tabs have different widths
   const style: React.CSSProperties = {
@@ -392,74 +486,73 @@ const SortableBoardTab: React.FC<{
         tabIndex={0}
         data-board-tab-id={board.id}
         onClick={onSelect}
-        onDoubleClick={onEdit}
+        onDoubleClick={() => {
+          revealChrome();
+          onEdit();
+        }}
+        onMouseDown={(e) => {
+          // Selecting a tab must not leave keyboard focus stuck on it (that kept admin chrome visible).
+          if (e.button === 0) e.preventDefault();
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             onSelect();
           }
         }}
+        {...tabSurfaceProps}
         className={`
-          group relative inline-flex shrink-0 cursor-pointer items-center gap-1 !px-1.5
+          relative inline-flex shrink-0 cursor-pointer items-center gap-1 !px-1.5
           ${isSelected ? tabTrackActive : tabTrackInactive}
           ${isEditing ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}
           ${isDragging ? 'opacity-60 shadow-lg ring-2 ring-gray-300/50 dark:ring-gray-500/40' : ''}
         `}
       >
-        {/* Task count covers the drag handle until hover reveals it. */}
-        <KanbanChromeTooltip
-          label={
-            showTaskCount && hasWipLimit(board.wip_limit)
-              ? t('boardTabs.wipMeterTooltip', {
-                  count: hasActiveFilters ? (taskCount ?? 0) : (wipCount ?? taskCount ?? 0),
-                  limit: board.wip_limit,
-                })
-              : t('boardTabs.dragToReorder')
-          }
-          wrapperClassName="relative z-[2] shrink-0"
-        >
+        {/* Task count pill until 1s tab hover reveals drag handle + trash. */}
+        <KanbanChromeTooltip label={handleTooltip} wrapperClassName="relative z-[2] shrink-0">
           <div
-            className="group/board-handle relative flex h-6 min-w-6 cursor-grab touch-none items-center justify-center rounded-md px-0 text-gray-400 transition-colors hover:bg-gray-200/80 hover:text-gray-600 active:cursor-grabbing dark:hover:bg-gray-600/50 dark:hover:text-gray-300"
-            {...attributes}
-            {...listeners}
-            onClick={(e) => e.stopPropagation()}
+            className={`relative flex h-6 min-w-6 items-center justify-center rounded-md px-0 text-gray-400 transition-colors ${
+              dragHandleActive
+                ? 'cursor-grab touch-none hover:bg-gray-200/80 hover:text-gray-600 active:cursor-grabbing dark:hover:bg-gray-600/50 dark:hover:text-gray-300'
+                : 'pointer-events-none'
+            }`}
+            {...(dragHandleActive ? attributes : {})}
+            {...(dragHandleActive ? listeners : {})}
+            onClick={(e) => {
+              if (dragHandleActive) e.stopPropagation();
+            }}
           >
-            {showTaskCount && (() => {
-              const pill = renderBoardTaskCountPill({
-                displayCount: taskCount ?? 0,
-                wipCount: wipCount ?? taskCount ?? 0,
-                wipLimit: board.wip_limit,
-                hasActiveFilters,
-                compact: true,
-              });
-              if (!pill) {
-                return <GripVertical className="h-3.5 w-3.5 opacity-60" aria-hidden />;
-              }
-              return (
+            {taskCountPill ? (
               <>
-                {/* Invisible sizer so meter / multi-digit counts set width without extra tab padding */}
                 <span
                   className="invisible px-1 py-0.5 text-[0.65rem] leading-none tabular-nums font-bold whitespace-nowrap"
                   aria-hidden
                 >
-                  {pill.sizerLabel}
+                  {taskCountPill.sizerLabel}
                 </span>
                 <span
-                  className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity group-hover/board-handle:opacity-0`}
+                  className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity ${
+                    dragHandleActive ? 'opacity-0' : 'opacity-100'
+                  }`}
                 >
-                  <span className={pill.pillClass} aria-label={boardTaskCountTooltip(t, pill, board.wip_limit)}>
-                    {pill.label}
+                  <span className={taskCountPill.pillClass} aria-label={boardTaskCountTooltip(t, taskCountPill, board.wip_limit)}>
+                    {taskCountPill.label}
                   </span>
                 </span>
                 <GripVertical
-                  className="pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/board-handle:opacity-100"
+                  className={`pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 transition-opacity ${
+                    dragHandleActive ? 'opacity-100' : 'opacity-0'
+                  }`}
                   aria-hidden
                 />
               </>
-              );
-            })()}
-            {!showTaskCount && (
-              <GripVertical className="h-3.5 w-3.5 opacity-60" aria-hidden />
+            ) : (
+              <GripVertical
+                className={`h-3.5 w-3.5 transition-opacity ${
+                  dragHandleActive ? 'opacity-100' : 'opacity-0'
+                }`}
+                aria-hidden
+              />
             )}
           </div>
         </KanbanChromeTooltip>
@@ -479,24 +572,31 @@ const SortableBoardTab: React.FC<{
         {/* Effort + trash share a tight cluster (column-style density) */}
         <div className="flex shrink-0 items-center gap-0.5">
           {renderBoardEffortPill(effort, siteSettings, effortTooltip)}
-          {/* Space reserved so revealing trash on hover does not shift neighbouring tabs */}
           {canDelete && (
             <div
-              className="flex w-5 shrink-0 items-center justify-center opacity-0 transition-opacity duration-200 ease-out pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+              className={`flex h-5 w-5 shrink-0 items-center justify-center ${
+                showTrash ? '' : 'pointer-events-none'
+              }`}
             >
-              <KanbanChromeTooltip label={t('boardTabs.deleteBoard')}>
-                <button
-                  type="button"
-                  ref={setDeleteButtonRef}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemove();
-                  }}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md p-0 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
-                >
-                  <Trash2 size={13} strokeWidth={2} />
-                </button>
-              </KanbanChromeTooltip>
+              <div
+                className={`flex items-center justify-center transition-opacity duration-200 ease-out ${
+                  showTrash ? 'opacity-100' : 'pointer-events-none opacity-0'
+                }`}
+              >
+                <KanbanChromeTooltip label={t('boardTabs.deleteBoard')}>
+                  <button
+                    type="button"
+                    ref={setDeleteButtonRef}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemove();
+                    }}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md p-0 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+                  >
+                    <Trash2 size={13} strokeWidth={2} />
+                  </button>
+                </KanbanChromeTooltip>
+              </div>
             </div>
           )}
         </div>
@@ -626,6 +726,7 @@ export default function BoardTabs({
 }: BoardTabsProps) {
   const { t } = useTranslation('common');
   const { t: tTasks } = useTranslation('tasks');
+  const isMobile = useIsMobileViewport();
   const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string>('');
   const [editingWipLimit, setEditingWipLimit] = useState<string>('');
@@ -642,6 +743,7 @@ export default function BoardTabs({
   const [canScrollRight, setCanScrollRight] = useState(false);
   /** When true, both chevron slots stay mounted so show/hide never resizes the track. */
   const [tabsOverflow, setTabsOverflow] = useState(false);
+  const [boardTabsStripHovered, setBoardTabsStripHovered] = useState(false);
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   
   // Cross-board drag state
@@ -1070,15 +1172,21 @@ export default function BoardTabs({
   // Get the current board's project identifier
   const currentBoard = boards.find(board => board.id === selectedBoard);
   const currentProject = currentBoard?.project;
-  // Always keep the Progression-width slot so the tab strip does not grow/shrink
-  // when the trash icon appears or disappears.
-  const showActionColumn = Boolean(onToggleTrash);
+  const showTrashButton = trashCount > 0 && Boolean(onToggleTrash);
+  // Desktop: keep the Progression-width slot so the tab strip does not jump when trash appears.
+  // Mobile: use the full strip; only reserve space when the trash control is actually shown.
+  const showActionColumn = isMobile ? showTrashButton : Boolean(onToggleTrash);
 
   return (
     <div className="mb-6">
       {/* Match Kanban toolbar columns: tab strip = Tools + Team Members; actions = Progression width */}
       <div className="flex items-center gap-4">
-        <div className="flex min-w-0 flex-1 items-center gap-1" data-tour-id="board-tabs">
+        <div
+          className="flex min-w-0 flex-1 items-center gap-1"
+          data-tour-id="board-tabs"
+          onMouseEnter={() => setBoardTabsStripHovered(true)}
+          onMouseLeave={() => setBoardTabsStripHovered(false)}
+        >
           {/* Reserve both chevron slots whenever tabs overflow — toggling arrows must not change track width */}
           {tabsOverflow && (
             <KanbanChromeTooltip label={t('boardTabs.scrollLeft')}>
@@ -1170,6 +1278,7 @@ export default function BoardTabs({
                         showTaskCount={allowBoardTabTaskCounts}
                         hasActiveFilters={hasActiveFilters}
                         isEditing={editingBoardId === board.id}
+                        boardTabsStripHovered={boardTabsStripHovered}
                       />
                     )}
                   </div>
@@ -1263,8 +1372,12 @@ export default function BoardTabs({
 
         {/* Same width as BoardMetrics (Progression) so trash sits under that column */}
         {showActionColumn && (
-          <div className="flex w-[168px] shrink-0 items-center justify-end gap-2">
-            {trashCount > 0 && onToggleTrash && (
+          <div
+            className={`flex shrink-0 items-center justify-end gap-2 ${
+              isMobile ? '' : 'w-[168px]'
+            }`}
+          >
+            {showTrashButton && (
               <KanbanChromeTooltip label={trashOpen ? t('boardTabs.hideTrash') : t('boardTabs.showTrash')}>
                 <button
                   type="button"

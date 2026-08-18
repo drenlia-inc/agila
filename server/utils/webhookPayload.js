@@ -33,6 +33,34 @@ function plainChangeValue(value) {
   return stripHtmlForEmail(value).slice(0, 500);
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** Bold a status name using each chat platform's markup. */
+export function formatWebhookBold(text, platform) {
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+  const p = String(platform || '').toLowerCase();
+  if (p === 'slack' || p === 'whatsapp') return `*${raw}*`;
+  if (p === 'telegram' || p === 'teams') return `<b>${escapeHtml(raw)}</b>`;
+  // Mattermost (and generic incoming webhooks) use Markdown
+  return `**${raw}**`;
+}
+
+function columnChangeItem(items) {
+  return (items || []).find((i) => i && (i.field === 'columnId' || i.field === 'column')) || null;
+}
+
+function columnChangeName(item, queueRow) {
+  const fromItem = plainChangeValue(item?.newName ?? item?.newValue ?? '');
+  if (fromItem) return fromItem;
+  return plainChangeValue(queueRow?.new_value || queueRow?.newValue || '');
+}
+
 export async function buildWebhookText({
   db,
   webhook,
@@ -75,12 +103,25 @@ export async function buildWebhookText({
     queueRow.details,
     actor?.tagId || null
   );
+  const platform = String(webhook?.platform || '').toLowerCase();
+  const statusItem = columnChangeItem(emailChange?.items);
+  const newStatusName = columnChangeName(statusItem, queueRow);
+  const previousStatusName = plainChangeValue(
+    statusItem?.oldName ?? statusItem?.oldValue ?? queueRow?.old_value ?? queueRow?.oldValue ?? ''
+  );
+  const isStatusChange = Boolean(
+    eventKeyEarly === 'taskChanged' &&
+      (statusItem || actor?.changedField === 'columnId' || queueRow.action === 'move_task') &&
+      newStatusName &&
+      previousStatusName !== newStatusName
+  );
   const visibleItems = (emailChange?.items || []).filter(
     (i) =>
       i &&
       i.field !== 'effort' &&
       i.field !== 'generic' &&
-      i.field !== 'description'
+      i.field !== 'description' &&
+      !(isStatusChange && (i.field === 'columnId' || i.field === 'column'))
   );
 
   const appUrlSetting = await wrapQuery(
@@ -107,7 +148,13 @@ export async function buildWebhookText({
   const lines = [];
   const headingKey = `emails.webhooks.event.${eventKey}`;
   const heading = eventKey ? t(headingKey) : '';
-  if (heading && heading !== headingKey) {
+  if (isStatusChange) {
+    lines.push(
+      t('emails.webhooks.newTaskStatus', {
+        status: formatWebhookBold(newStatusName, platform),
+      })
+    );
+  } else if (heading && heading !== headingKey) {
     lines.push(heading);
   }
   if (eventKey.startsWith('board')) {
@@ -158,5 +205,9 @@ export async function buildWebhookText({
     }
   }
   if (taskUrl && !eventKey.startsWith('board')) lines.push(taskUrl);
-  return lines.filter(Boolean).join('\n');
+  const joined = lines.filter(Boolean);
+  if (platform !== 'telegram') return joined.join('\n');
+  return joined
+    .map((line) => (line.includes('<b>') ? line : escapeHtml(line)))
+    .join('\n');
 }

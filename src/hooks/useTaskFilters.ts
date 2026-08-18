@@ -24,6 +24,8 @@ interface UseTaskFiltersProps {
   boards: Board[];
   /** Used so header/text search can match sprint names. */
   sprints?: Array<{ id: string; name: string }>;
+  /** Task ids with same-board links; omit on boards without relationship data. */
+  linkedTaskIds?: Set<string>;
   updateCurrentUserPreference: <K extends keyof import('../utils/userPreferences').UserPreferences>(
     key: K,
     value: import('../utils/userPreferences').UserPreferences[K]
@@ -35,6 +37,7 @@ export const useTaskFilters = ({
   members,
   boards,
   sprints = [],
+  linkedTaskIds,
   updateCurrentUserPreference,
 }: UseTaskFiltersProps) => {
   // Load user preferences from cookies
@@ -91,6 +94,7 @@ export const useTaskFilters = ({
       includeCollaborators,
       includeRequesters,
       showAgentTasks,
+      linkedTaskIds,
     }),
     [
       selectedSprintId,
@@ -101,6 +105,7 @@ export const useTaskFilters = ({
       includeCollaborators,
       includeRequesters,
       showAgentTasks,
+      linkedTaskIds,
     ]
   );
 
@@ -152,6 +157,7 @@ export const useTaskFilters = ({
     searchFilters.selectedTags,
     searchFilters.projectId,
     searchFilters.taskId,
+    searchFilters.linkedTasksOnly,
     selectedMembers,
     includeAssignees,
     includeWatchers,
@@ -162,6 +168,7 @@ export const useTaskFilters = ({
     boards,
     showAgentTasks,
     applyFiltersToColumns,
+    linkedTaskIds,
   ]);
 
   // Helper function to quickly check if a task should be included (synchronous checks only for WebSocket updates)
@@ -173,6 +180,10 @@ export const useTaskFilters = ({
 
     // Hide Agent-assigned tasks when the Search & Filter Agent toggle is off
     if (!showAgentTasks && isAgentMemberId(task.memberId)) {
+      return false;
+    }
+
+    if (searchFilters.linkedTasksOnly && linkedTaskIds !== undefined && !linkedTaskIds.has(task.id)) {
       return false;
     }
 
@@ -234,7 +245,7 @@ export const useTaskFilters = ({
     }
 
     return true;
-  }, [searchFilters, selectedMembers, includeAssignees, includeWatchers, includeCollaborators, includeRequesters, members, boards, sprints, selectedSprintId, showAgentTasks]);
+  }, [searchFilters, selectedMembers, includeAssignees, includeWatchers, includeCollaborators, includeRequesters, members, boards, sprints, selectedSprintId, showAgentTasks, linkedTaskIds]);
 
   // Keep shouldIncludeTaskRef in sync for WebSocket handlers
 
@@ -335,6 +346,7 @@ export const useTaskFilters = ({
       selectedTags: [] as string[],
       projectId: '',
       taskId: '',
+      linkedTasksOnly: false,
     };
     setSearchFilters(emptyFilters);
     setIsSearchActive(false);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { TaskJumpDropdown } from './TaskJumpDropdown';
 
 interface GanttTask {
@@ -78,8 +78,21 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
   canMutate = true,
 }) => {
   const { t } = useTranslation('common');
+
+  const showModeHint = isRelationshipMode || isMultiSelectMode;
+
+  const modeHintContent = isRelationshipMode
+    ? selectedParentTask
+      ? t('gantt.linkModeHintPickTarget')
+      : t('gantt.linkModeHintPickSource')
+    : isMultiSelectMode
+      ? selectedTasks.length > 0
+        ? 'move'
+        : t('gantt.selectModeHint')
+      : null;
+
   return (
-    <div className="border-b border-gray-200 p-4">
+    <div className="border-b border-gray-200 dark:border-gray-700 p-4 pb-5 relative">
       <div className="flex items-center justify-between gap-4">
         {/* Title and Description */}
         <div className="w-[130px] flex-shrink-0 mr-6">
@@ -98,6 +111,8 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
         
         {/* Navigation Controls */}
         <div className="flex items-center gap-4 flex-shrink-0">
+          {/* Select / Link — hint overlays fixed slot below (pb-5), no layout shift */}
+          <div className="relative flex items-center gap-2">
           {/* Multi-Select Mode Toggle */}
               <button
                 disabled={!canMutate}
@@ -197,6 +212,34 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
             </svg>
             {isRelationshipMode ? t('gantt.exit') : t('gantt.link')}
           </button>
+            <div className="absolute left-1/2 top-full -translate-x-1/2 mt-0.5 h-4 w-max max-w-lg flex items-center justify-center pointer-events-none">
+              <p
+                className={`text-xs leading-none text-gray-600 dark:text-gray-400 truncate whitespace-nowrap text-center ${
+                  showModeHint ? '' : 'opacity-0'
+                }`}
+                aria-live="polite"
+                aria-hidden={!showModeHint}
+              >
+                {showModeHint ? (
+                  modeHintContent === 'move' ? (
+                    <span className="text-gray-500 dark:text-gray-500">
+                      <Trans
+                        i18nKey="gantt.selectModeHintMove"
+                        ns="common"
+                        components={{
+                          bold: <span className="font-semibold text-gray-700 dark:text-gray-300" />,
+                        }}
+                      />
+                    </span>
+                  ) : (
+                    <span className="opacity-75">{modeHintContent}</span>
+                  )
+                ) : (
+                  '\u00a0'
+                )}
+              </p>
+            </div>
+          </div>
           
           {/* Task Navigation: < Task > */}
           <div className="flex items-center gap-1">

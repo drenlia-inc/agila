@@ -7,7 +7,11 @@ export function isEditableEscapeTarget(target: EventTarget | null): boolean {
   const tag = target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   if (target.isContentEditable) return true;
-  return !!target.closest('[contenteditable="true"]');
+  return !!(
+    target.closest('[contenteditable="true"]') ||
+    target.closest('.ProseMirror') ||
+    target.closest('.tiptap')
+  );
 }
 
 /** True when a modal/menu/confirm should consume Escape before board-level handlers. */

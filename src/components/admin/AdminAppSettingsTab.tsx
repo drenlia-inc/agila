@@ -32,7 +32,9 @@ import {
   adminInputClass,
   adminSubtabPanelClass,
   adminSubNavTabClass,
+  adminHubSubnavShellClass,
 } from './AdminSection';
+import { AdminHubSubnavPortal } from './AdminHubSubnavPortal';
 import { AdminToggle, adminSettingIsEnabled } from './AdminToggle';
 import {
   TROUBLESHOOTING_UNLOCK_KEY,
@@ -43,6 +45,7 @@ import {
 } from '../../utils/troubleshootingAccess';
 
 interface AdminAppSettingsTabProps {
+  panelActive?: boolean;
   settings: { [key: string]: string | undefined };
   editingSettings: { [key: string]: string | undefined };
   onSettingsChange: (settings: { [key: string]: string | undefined }) => void;
@@ -74,6 +77,7 @@ function subTabFromHash(hash: string): AppSettingsSubTab {
 }
 
 const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
+  panelActive = true,
   settings,
   editingSettings,
   onSettingsChange,
@@ -452,26 +456,30 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
 
   return (
     <div className="p-6">
-      <div className="mb-4 overflow-x-auto">
-        <nav className="flex space-x-6 min-w-max" aria-label="Tabs">
-          <button
-            onClick={() => handleSubTabChange('ui')}
-            className={adminSubNavTabClass(activeSubTab === 'ui')}
-          >
-            {t('appSettings.userInterface')}
-            <AdminDirtyDot show={dirtySubTabs.has('ui')} />
-          </button>
-          {showTroubleshootingTab && (
-            <button
-              onClick={() => handleSubTabChange('troubleshooting')}
-              className={adminSubNavTabClass(activeSubTab === 'troubleshooting')}
-            >
-              {t('appSettings.troubleshooting')}
-              <AdminDirtyDot show={dirtySubTabs.has('troubleshooting')} />
-            </button>
-          )}
-        </nav>
-      </div>
+      {panelActive ? (
+        <AdminHubSubnavPortal>
+          <div className={adminHubSubnavShellClass}>
+            <nav className="flex space-x-6 min-w-max" aria-label="Tabs">
+              <button
+                onClick={() => handleSubTabChange('ui')}
+                className={adminSubNavTabClass(activeSubTab === 'ui')}
+              >
+                {t('appSettings.userInterface')}
+                <AdminDirtyDot show={dirtySubTabs.has('ui')} />
+              </button>
+              {showTroubleshootingTab && (
+                <button
+                  onClick={() => handleSubTabChange('troubleshooting')}
+                  className={adminSubNavTabClass(activeSubTab === 'troubleshooting')}
+                >
+                  {t('appSettings.troubleshooting')}
+                  <AdminDirtyDot show={dirtySubTabs.has('troubleshooting')} />
+                </button>
+              )}
+            </nav>
+          </div>
+        </AdminHubSubnavPortal>
+      ) : null}
 
       <div className={adminSubtabPanelClass}>
       {/* Sub-tab panels: keep visited mounted (hidden) so drafts survive switches */}

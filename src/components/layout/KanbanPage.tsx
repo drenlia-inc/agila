@@ -3,6 +3,7 @@ import { DndContext, DragOverlay, useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronLeft, ChevronRight, Calendar, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useKanbanModifierKeys } from '../../hooks/useKanbanModifierKeys';
 import { 
   CurrentUser, 
   TeamMember, 
@@ -14,10 +15,11 @@ import {
   ColumnVisibilityWarning
 } from '../../types';
 import { TaskViewMode, ViewMode, loadUserPreferences, loadUserPreferencesAsync, updateAppSettingsPreference } from '../../utils/userPreferences';
-import { hasConfiguredSearchFilters, clearTaskSoftDelete } from '../../utils/taskUtils';
+import { hasConfiguredSearchFilters, hasNonLinkSearchFilters, clearTaskSoftDelete } from '../../utils/taskUtils';
 import {
   allTasksCheckedInColumn,
   checkedIdsInColumn,
+  type ToggleTaskCheckedOptions,
 } from '../../utils/kanbanMultiSelect';
 import { buildTaskRelationshipSummaryMap } from '../../utils/taskRelationshipSummary';
 import { ModernCheckbox } from '../ModernCheckbox';
@@ -44,7 +46,11 @@ import { toast } from '../../utils/toast';
 import websocketClient from '../../services/websocketClient';
 import {
   BOARD_TRASH_CHANGED_EVENT,
+  CLOSE_BOARD_TRASH_EVENT,
   type BoardTrashChangedDetail,
+  type CloseBoardTrashDetail,
+  readBoardTrashOpenPreference,
+  writeBoardTrashOpenPreference,
 } from '../../utils/boardTrashEvents';
 import { getTaskSprintId, taskMatchesSelectedSprint } from '../../utils/columnFilters';
 import { isArchivedColumnFlag } from '../../utils/columnUtils';
@@ -52,53 +58,8 @@ import { onHelpReveal, takeHelpReveal } from '../../utils/helpGoThere';
 
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const HIGHLIGHT_LINKS_STORAGE_KEY = 'ek_highlight_links_mode';
-
-function readHighlightLinksMode(): boolean {
-  try {
-    return localStorage.getItem(HIGHLIGHT_LINKS_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-const TRASH_OPEN_STORAGE_KEY = 'easyKanban.trashOpenByBoard';
-
-function readTrashOpenPreference(boardId: string | null): boolean {
-  if (!boardId || typeof sessionStorage === 'undefined') return false;
-  try {
-    const raw = sessionStorage.getItem(TRASH_OPEN_STORAGE_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as Record<string, boolean>;
-    return !!parsed?.[boardId];
-  } catch {
-    return false;
-  }
-}
-
-function writeTrashOpenPreference(boardId: string | null, open: boolean) {
-  if (!boardId || typeof sessionStorage === 'undefined') return;
-  try {
-    const raw = sessionStorage.getItem(TRASH_OPEN_STORAGE_KEY);
-    const parsed = (raw ? JSON.parse(raw) : {}) as Record<string, boolean>;
-    if (open) {
-      parsed[boardId] = true;
-    } else {
-      delete parsed[boardId];
-    }
-    if (Object.keys(parsed).length === 0) {
-      sessionStorage.removeItem(TRASH_OPEN_STORAGE_KEY);
-    } else {
-      sessionStorage.setItem(TRASH_OPEN_STORAGE_KEY, JSON.stringify(parsed));
-    }
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
 // Lazy load GanttViewV2 to reduce initial bundle size (only loads when Gantt view is selected) with retry logic
 const GanttViewV2 = lazyWithRetry(() => import('../GanttViewV2'));
-
 
 interface KanbanPageProps {
   currentUser: CurrentUser | null;
@@ -189,6 +150,7 @@ interface KanbanPageProps {
   onTagAdd: (taskId: string) => (tagId: string) => Promise<void>;
   onTagRemove: (taskId: string) => (tagId: string) => Promise<void>;
   onMoveTaskToColumn: (taskId: string, targetColumnId: string) => Promise<void>;
+  onGanttReorderTask?: (taskId: string, columnId: string, targetIndex: number) => Promise<void>;
   animateCopiedTaskId?: string | null;
   onEditColumn: (
     columnId: string,
@@ -249,7 +211,7 @@ interface KanbanPageProps {
 
   // Kanban multi-select / bulk actions
   checkedTaskIds?: Set<string>;
-  onToggleTaskChecked?: (taskId: string) => void;
+  onToggleTaskChecked?: (taskId: string, options?: ToggleTaskCheckedOptions) => void;
   onToggleColumnChecked?: (columnId: string, taskIds: string[], selectAll: boolean) => void;
   onClearAllChecked?: () => void;
   isMultiSelectDragLocked?: boolean;
@@ -349,6 +311,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   onTagAdd,
   onTagRemove,
   onMoveTaskToColumn,
+  onGanttReorderTask,
   animateCopiedTaskId,
   onEditColumn,
   onRemoveColumn,
@@ -424,13 +387,13 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   draggedTaskIds,
 }: KanbanPageProps) => {
   const { t, i18n } = useTranslation(['tasks', 'common']);
+  useKanbanModifierKeys();
   const [showBoardToolbar, setShowBoardToolbar] = useState(() => {
     const prefs = loadUserPreferences(currentUser?.id ?? null);
     return prefs.appSettings.showBoardToolbar !== false;
   });
-  const [highlightLinksMode, setHighlightLinksMode] = useState(readHighlightLinksMode);
   const [trashOpen, setTrashOpen] = useState(() =>
-    readTrashOpenPreference(selectedBoard)
+    readBoardTrashOpenPreference(selectedBoard)
   );
   const [trashCount, setTrashCount] = useState(0);
   const [trashTasks, setTrashTasks] = useState<Task[]>([]);
@@ -441,7 +404,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     (open: boolean | ((prev: boolean) => boolean)) => {
       setTrashOpen((prev) => {
         const next = typeof open === 'function' ? open(prev) : open;
-        writeTrashOpenPreference(selectedBoard, next);
+        writeBoardTrashOpenPreference(selectedBoard, next);
         return next;
       });
     },
@@ -479,7 +442,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         // Close only when the board has no trash at all (not merely none for this sprint).
         if (tasks.length === 0) {
           setTrashOpen(false);
-          writeTrashOpenPreference(boardId, false);
+          writeBoardTrashOpenPreference(boardId, false);
         }
         return;
       }
@@ -489,7 +452,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
       setTrashCount(count);
       if (count === 0) {
         setTrashOpen(false);
-        writeTrashOpenPreference(boardId, false);
+        writeBoardTrashOpenPreference(boardId, false);
         setTrashTasks([]);
       }
     } catch {
@@ -514,7 +477,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         setTrashCount(countTrashForSprint(tasks));
         if (tasks.length === 0) {
           setTrashOpen(false);
-          writeTrashOpenPreference(boardId, false);
+          writeBoardTrashOpenPreference(boardId, false);
         }
       } catch (error) {
         console.error('Failed to load trash:', error);
@@ -530,10 +493,20 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     setTrashTasks([]);
     // Clear immediately so the previous board's badge does not flash on the new board.
     setTrashCount(0);
-    const shouldOpen = readTrashOpenPreference(selectedBoard);
+    const shouldOpen = readBoardTrashOpenPreference(selectedBoard);
     setTrashOpen(shouldOpen);
     void refreshTrashCount(selectedBoard);
   }, [selectedBoard, refreshTrashCount]);
+
+  useEffect(() => {
+    const onCloseTrash = (event: Event) => {
+      const boardId = (event as CustomEvent<CloseBoardTrashDetail>).detail?.boardId;
+      if (!boardId || boardId !== selectedBoard) return;
+      setTrashOpen(false);
+    };
+    window.addEventListener(CLOSE_BOARD_TRASH_EVENT, onCloseTrash);
+    return () => window.removeEventListener(CLOSE_BOARD_TRASH_EVENT, onCloseTrash);
+  }, [selectedBoard]);
 
   // Recompute badge when sprint filter changes (trash list may already be loaded).
   useEffect(() => {
@@ -628,7 +601,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           const next = prev.filter((task) => task.id !== taskId);
           if (next.length === 0) {
             setTrashOpen(false);
-            writeTrashOpenPreference(selectedBoard, false);
+            writeBoardTrashOpenPreference(selectedBoard, false);
             setTrashCount(0);
           } else {
             setTrashCount(countTrashForSprint(next));
@@ -657,7 +630,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           const next = prev.filter((task) => task.id !== taskId);
           if (next.length === 0) {
             setTrashOpen(false);
-            writeTrashOpenPreference(selectedBoard, false);
+            writeBoardTrashOpenPreference(selectedBoard, false);
             setTrashCount(0);
           } else {
             setTrashCount(countTrashForSprint(next));
@@ -684,7 +657,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         const next = prev.filter((task) => !removed.has(task.id));
         if (next.length === 0) {
           setTrashOpen(false);
-          writeTrashOpenPreference(selectedBoard, false);
+          writeBoardTrashOpenPreference(selectedBoard, false);
           setTrashCount(0);
         } else {
           setTrashCount(countTrashForSprint(next));
@@ -860,25 +833,11 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     return onHelpReveal(applyHelpReveal);
   }, [currentUser?.id, setTrashOpenPersisted]);
 
-  const handleToggleHighlightLinks = useCallback(() => {
-    setHighlightLinksMode((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(HIGHLIGHT_LINKS_STORAGE_KEY, next ? 'true' : 'false');
-      } catch {
-        // ignore quota / private mode
-      }
-      return next;
-    });
-  }, []);
-
   const relationSummaryByTaskId = useMemo(
     () => buildTaskRelationshipSummaryMap(boardRelationships),
     [boardRelationships]
   );
   const hasBoardRelationships = boardRelationships.length > 0;
-  /** Don't dim the board when there is nothing to highlight (e.g. stale localStorage). */
-  const effectiveHighlightLinksMode = highlightLinksMode && hasBoardRelationships;
 
   // Column filtering logic - memoized to prevent unnecessary re-renders
   const visibleColumnsForCurrentBoard = useMemo(() => {
@@ -896,7 +855,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   }, [selectedBoard, columns, boardColumnVisibility]);
 
   const activeFilterTooltip = useMemo(() => {
-    const hasSearchCriteria = hasConfiguredSearchFilters(searchFilters);
+    const hasSearchCriteria = hasNonLinkSearchFilters(searchFilters);
 
     let hasHiddenColumns = false;
     const allColumns = Object.values(columns);
@@ -916,11 +875,14 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     const agentHidden =
       siteSettings?.AI_ENABLED === 'true' && !showAgentTasks;
 
+    const linkedTasksOnly = !!searchFilters.linkedTasksOnly;
+
     // Member selection + role chips live in Team Members — do not badge Search for them.
     const badgeActive =
       hasSearchCriteria ||
       hasHiddenColumns ||
-      agentHidden;
+      agentHidden ||
+      linkedTasksOnly;
 
     if (!badgeActive) return '';
 
@@ -933,6 +895,9 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     }
     if (agentHidden) {
       reasons.push(t('tools.filterReasonAgentHidden', { ns: 'common' }));
+    }
+    if (linkedTasksOnly) {
+      reasons.push(t('tools.filterReasonLinkedTasks', { ns: 'common' }));
     }
 
     if (reasons.length === 0) {
@@ -1341,9 +1306,6 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               hasActiveFilters={showSearchFilterBadge}
               activeFilterTooltip={activeFilterTooltip}
               onHideToolbar={() => void handleToggleBoardToolbar()}
-              highlightLinksMode={effectiveHighlightLinksMode}
-              onToggleHighlightLinks={handleToggleHighlightLinks}
-              hasBoardRelationships={hasBoardRelationships}
             />
           </div>
           <div className="min-w-0 flex-1 flex">
@@ -1412,6 +1374,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
             selectedBoard={selectedBoard}
             showAgentTasks={showAgentTasks}
             onToggleShowAgentTasks={onToggleShowAgentTasks}
+            hasBoardRelationships={hasBoardRelationships}
           />
         </div>
       )}
@@ -1542,6 +1505,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 onRemoveTask={onRemoveTask}
                 siteSettings={siteSettings}
                 canMutate={canMutate}
+                onMoveTaskToColumn={onMoveTaskToColumn}
+                onReorderTaskInColumn={onGanttReorderTask}
               />
             </Suspense>
           ) : (
@@ -1694,7 +1659,6 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                             onLinkToolHoverEnd={onLinkToolHoverEnd}
                             getTaskRelationshipType={getTaskRelationshipType}
                             onUnlinkRelatedTask={onUnlinkRelatedTask}
-                            highlightLinksMode={effectiveHighlightLinksMode}
                             relationSummaryByTaskId={relationSummaryByTaskId}
                             
                             // Network status
@@ -1803,7 +1767,6 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                       onLinkToolHoverEnd={onLinkToolHoverEnd}
                       getTaskRelationshipType={getTaskRelationshipType}
                       onUnlinkRelatedTask={onUnlinkRelatedTask}
-                      highlightLinksMode={effectiveHighlightLinksMode}
                       relationSummaryByTaskId={relationSummaryByTaskId}
                       
                       // Network status

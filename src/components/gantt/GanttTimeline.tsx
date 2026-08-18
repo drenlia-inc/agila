@@ -5,6 +5,7 @@ import { Task } from '../../types';
 import { TaskHandle } from './TaskHandle';
 import { MoveHandle } from './MoveHandle';
 import { DRAG_TYPES, GanttDragItem } from './types';
+import { ganttRowBoxStyle } from './ganttLayout';
 import TaskDependencyArrows from './TaskDependencyArrows';
 import { TaskBarTooltip } from './TaskBarTooltip';
 import { ModernCheckbox } from '../ModernCheckbox';
@@ -46,7 +47,7 @@ interface GanttTimelineProps {
   getTaskBarGridPosition: (task: any) => { startDayIndex: number; endDayIndex: number } | null;
   onSelectTask: (task: Task) => void;
   onTaskSelect: (taskId: string) => void;
-  onRelationshipClick: (taskId: string) => void;
+  onRelationshipClick: (taskId: string, shiftKey?: boolean) => void;
   onTaskCreationMouseDown: (e: React.MouseEvent, dateString: string) => void;
   onTaskCreationMouseEnter: (e: React.MouseEvent, dateString: string) => void;
   onTaskCreationMouseUp: (e: React.MouseEvent) => void;
@@ -210,7 +211,7 @@ const TaskBar = ({
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isRelationshipMode) {
-      onRelationshipClick(task.id);
+      onRelationshipClick(task.id, e.shiftKey);
     } else if (isMultiSelectMode) {
       onTaskSelect(task.id);
     }
@@ -225,7 +226,7 @@ const TaskBar = ({
     >
       <div
         className={`absolute h-6 rounded ${
-          isDragging ? 'opacity-50' : 
+          isDragging ? 'opacity-0' :
           isSelected ? 'opacity-100 ring-2 ring-green-400 shadow-lg' :
           'opacity-80 hover:opacity-100'
         } ${
@@ -242,43 +243,48 @@ const TaskBar = ({
         }}
         onClick={handleClick}
       >
-      {/* Resize handles */}
-      {taskViewMode !== 'shrink' && (
-        <>
-          <TaskHandle
-            taskId={task.id}
-            task={{
-              ...task,
-              dueDate: task.endDate ? formatLocalDate(task.endDate) : ''
-            } as any}
-            handleType="start"
-            onDateChange={() => {}}
-            taskColor={{ backgroundColor: getPriorityColor((task as any).priorityName || task.priority), color: '#FFFFFF' }}
-          />
-          <TaskHandle
-            taskId={task.id}
-            task={{
-              ...task,
-              dueDate: task.endDate ? formatLocalDate(task.endDate) : ''
-            } as any}
-            handleType="end"
-            onDateChange={() => {}}
-            taskColor={{ backgroundColor: getPriorityColor((task as any).priorityName || task.priority), color: '#FFFFFF' }}
-          />
-        </>
-      )}
+      {/* Move handle — center grip; single-day bars have no side room for a narrow grip zone */}
+      {task.startDate && task.endDate && (() => {
+        const isSingleDay = formatLocalDate(task.startDate) === formatLocalDate(task.endDate);
+        return (
+          <div
+            className={`absolute h-full z-10 ${
+              isSingleDay ? 'left-3 right-3' : 'left-3 w-7'
+            }`}
+          >
+            <MoveHandle
+              taskId={task.id}
+              task={{
+                ...task,
+                dueDate: task.endDate ? formatLocalDate(task.endDate) : ''
+              } as any}
+              onTaskMove={() => {}}
+            />
+          </div>
+        );
+      })()}
 
-      {/* Move handle - only in the first cell */}
-      <div className="absolute left-0 w-10 h-full">
-        <MoveHandle
-          taskId={task.id}
-          task={{
-            ...task,
-            dueDate: task.endDate ? formatLocalDate(task.endDate) : ''
-          } as any}
-          onTaskMove={() => {}}
-        />
-      </div>
+      {/* Resize handles */}
+      <TaskHandle
+        taskId={task.id}
+        task={{
+          ...task,
+          dueDate: task.endDate ? formatLocalDate(task.endDate) : ''
+        } as any}
+        handleType="start"
+        onDateChange={() => {}}
+        taskColor={{ backgroundColor: getPriorityColor((task as any).priorityName || task.priority), color: '#FFFFFF' }}
+      />
+      <TaskHandle
+        taskId={task.id}
+        task={{
+          ...task,
+          dueDate: task.endDate ? formatLocalDate(task.endDate) : ''
+        } as any}
+        handleType="end"
+        onDateChange={() => {}}
+        taskColor={{ backgroundColor: getPriorityColor((task as any).priorityName || task.priority), color: '#FFFFFF' }}
+      />
 
       {/* Task content - Empty (no text on bars) */}
       <div className="flex-1 min-w-0 px-2">
@@ -304,17 +310,7 @@ const TaskBar = ({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              
-              if (!selectedParentTask) {
-                // First click - select as parent
-                onRelationshipClick(task.id);
-              } else if (selectedParentTask === task.id) {
-                // Clicking same task - deselect
-                onRelationshipClick(task.id);
-              } else {
-                // Second click - create relationship
-                onRelationshipClick(task.id);
-              }
+              onRelationshipClick(task.id, e.shiftKey);
             }}
             className={`relative z-40 p-1 ml-1 mr-2 rounded transition-colors ${
               selectedParentTask === task.id 
@@ -538,12 +534,10 @@ const GanttTimeline = ({
                   <div 
                     key={`timeline-task-${task.id}-${columnId}-${taskIndex}`} 
                     data-task-id={task.id}
-                    className={`relative border-b border-gray-200 dark:border-gray-600 ${
+                    style={ganttRowBoxStyle(taskViewMode)}
+                    className={`relative shrink-0 border-b border-gray-200 dark:border-gray-600 ${
                       taskIndex % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'
-                    } hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors ${
-                      taskViewMode === 'compact' ? 'h-12' : 
-                      taskViewMode === 'shrink' ? 'h-14' : 'h-20'
-                    }`}
+                    } hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors`}
                   >
                     {/* Background grid - Always visible */}
                     <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${dateRange.length}, 40px)` }}>

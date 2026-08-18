@@ -17,7 +17,9 @@ import {
   pruneCheckedTaskIds,
   readKanbanMultiSelectSession,
   selectionSpansMultipleColumns as spansMultipleColumns,
+  taskIdsInColumnRange,
   writeKanbanMultiSelectSession,
+  type ToggleTaskCheckedOptions,
 } from '../utils/kanbanMultiSelect';
 import { hasEscapeConsumingOverlay, isEditableEscapeTarget } from '../utils/escapeKeyUtils';
 
@@ -56,6 +58,8 @@ export type BulkUndoSnapshot = {
   anchorColumnIds?: string[];
   /** Optional feed / email digest for the reverse operation */
   activity?: BulkUndoActivity;
+  /** Full column id/position snapshots for bulk-move undo (source + dest). */
+  previousColumnOrders?: Record<string, Array<{ id: string; position: number }>>;
 };
 
 type UseKanbanMultiSelectArgs = {
@@ -64,6 +68,8 @@ type UseKanbanMultiSelectArgs = {
   isLinkingMode?: boolean;
   /** When TaskDetails is open, Escape closes details first (does not clear checks). */
   detailsOpen?: boolean;
+  /** Open TaskDetails card — Shift+click range-selects from this card when in the same column. */
+  detailsTaskId?: string | null;
   findTask: (taskId: string) => Task | null;
   onEditTask: (task: Task, options?: EditTaskOptions) => Promise<void>;
   onCopyTask: (task: Task, options?: { skipEmail?: boolean }) => Promise<Task | void | null>;
@@ -79,6 +85,10 @@ type UseKanbanMultiSelectArgs = {
     boardId: string,
     options?: { skipEmail?: boolean }
   ) => Promise<void>;
+  /** Restore source+dest column orders after a multi-select drag. */
+  onUndoColumnMove?: (
+    previousColumnOrders: Record<string, Array<{ id: string; position: number }>>
+  ) => Promise<void>;
   getArchiveColumnId: () => string | null;
   availablePriorities: Array<{ id: number; priority: string; color: string }>;
   availableSprints?: Array<{ id: string; name: string }>;
@@ -92,6 +102,7 @@ export function useKanbanMultiSelect({
   selectedBoard,
   isLinkingMode = false,
   detailsOpen = false,
+  detailsTaskId = null,
   findTask,
   onEditTask,
   onCopyTask,
@@ -101,6 +112,7 @@ export function useKanbanMultiSelect({
   onRestoreTasks,
   onPermanentDelete,
   onMoveToBoard,
+  onUndoColumnMove,
   getArchiveColumnId,
   availablePriorities,
   availableSprints = [],
@@ -110,10 +122,14 @@ export function useKanbanMultiSelect({
   const [checkedTaskIds, setCheckedTaskIds] = useState<Set<string>>(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkUndo, setBulkUndo] = useState<BulkUndoSnapshot | null>(null);
+  const lastAnchorIdRef = useRef<string | null>(null);
+  const detailsTaskIdRef = useRef<string | null>(detailsTaskId);
+  detailsTaskIdRef.current = detailsTaskId;
   const previousBoardRef = useRef<string | null | undefined>(undefined);
   const skipFirstSelectionPersistRef = useRef(true);
 
   const clearAllChecked = useCallback(() => {
+    lastAnchorIdRef.current = null;
     setCheckedTaskIds(new Set());
   }, []);
 
@@ -143,6 +159,7 @@ export function useKanbanMultiSelect({
 
     if (prev !== selectedBoard) {
       previousBoardRef.current = selectedBoard;
+      lastAnchorIdRef.current = null;
       setCheckedTaskIds(new Set());
       setBulkUndo(null);
       writeKanbanMultiSelectSession(null, new Set());
@@ -161,6 +178,7 @@ export function useKanbanMultiSelect({
   // Clear while linking
   useEffect(() => {
     if (isLinkingMode) {
+      lastAnchorIdRef.current = null;
       setCheckedTaskIds(new Set());
       setBulkUndo(null);
     }
@@ -188,6 +206,7 @@ export function useKanbanMultiSelect({
       if (isEditableEscapeTarget(e.target)) return;
       if (hasEscapeConsumingOverlay()) return;
       e.preventDefault();
+      lastAnchorIdRef.current = null;
       setCheckedTaskIds(new Set());
     };
     window.addEventListener('keydown', onKey);
@@ -201,8 +220,33 @@ export function useKanbanMultiSelect({
 
   const isMultiSelectDragLocked = selectionSpansMultipleColumns;
 
-  const toggleTaskChecked = useCallback((taskId: string) => {
+  const toggleTaskChecked = useCallback((
+    taskId: string,
+    options?: ToggleTaskCheckedOptions
+  ) => {
     setBulkUndo(null);
+    if (options?.range && options.orderedIds && options.orderedIds.length > 0) {
+      const ids = options.orderedIds;
+      const last = lastAnchorIdRef.current;
+      const detailsId = detailsTaskIdRef.current;
+      const anchorFromDetails =
+        detailsId && ids.includes(detailsId) ? detailsId : null;
+      const anchorFromLast = last && ids.includes(last) ? last : null;
+      const anchor = anchorFromDetails || anchorFromLast;
+      const range =
+        anchor && anchor !== taskId
+          ? taskIdsInColumnRange(ids, anchor, taskId)
+          : null;
+      if (range && range.length > 0) {
+        setCheckedTaskIds((prev) => {
+          const next = new Set(prev);
+          range.forEach((id) => next.add(id));
+          return next;
+        });
+        return;
+      }
+    }
+    lastAnchorIdRef.current = taskId;
     setCheckedTaskIds((prev) => {
       const next = new Set(prev);
       if (next.has(taskId)) next.delete(taskId);
@@ -214,6 +258,9 @@ export function useKanbanMultiSelect({
   const toggleColumnChecked = useCallback(
     (_columnId: string, taskIds: string[], selectAll: boolean) => {
       setBulkUndo(null);
+      if (selectAll && taskIds.length > 0) {
+        lastAnchorIdRef.current = taskIds[taskIds.length - 1];
+      }
       setCheckedTaskIds((prev) => {
         const next = new Set(prev);
         if (selectAll) {
@@ -762,14 +809,20 @@ export function useKanbanMultiSelect({
     [findTask, offerBulkUndo, runBulk]
   );
 
-  /** Record undo after a multi-select drag between columns (called from App). */
+  /** Record undo after a kanban drag (single or multi) that actually moved. */
   const recordColumnMoveUndo = useCallback(
-    (taskIds: string[], previousByTaskId: Record<string, Partial<Task>>) => {
-      if (taskIds.length < 2) return;
+    (
+      taskIds: string[],
+      previousByTaskId: Record<string, Partial<Task>>,
+      previousColumnOrders?: Record<string, Array<{ id: string; position: number }>>
+    ) => {
+      if (taskIds.length < 1) return;
       offerBulkUndo({
         taskIds,
         previousByTaskId,
-        labelKey: 'kanbanSelect.undoMove',
+        previousColumnOrders,
+        labelKey:
+          taskIds.length === 1 ? 'kanbanSelect.undoMoveSingle' : 'kanbanSelect.undoMove',
         kind: 'fields',
         activity: { type: 'column', reason: 'move' },
       });
@@ -896,6 +949,19 @@ export function useKanbanMultiSelect({
             failed += 1;
           }
         }
+      } else if (
+        snapshot.activity?.type === 'column' &&
+        snapshot.activity.reason === 'move' &&
+        snapshot.previousColumnOrders &&
+        onUndoColumnMove
+      ) {
+        try {
+          await onUndoColumnMove(snapshot.previousColumnOrders);
+          ok = snapshot.taskIds.length;
+          succeededIds.push(...snapshot.taskIds);
+        } catch {
+          failed = snapshot.taskIds.length;
+        }
       } else {
         for (const id of snapshot.taskIds) {
           try {
@@ -924,7 +990,11 @@ export function useKanbanMultiSelect({
         toast.warning(t('kanbanSelect.partialFailed', { ok, failed }), '');
       }
       if (kind !== 'moveBoard' || ok > 0) {
-        setCheckedTaskIds(new Set(snapshot.taskIds));
+        const skipReselect =
+          snapshot.taskIds.length === 1 &&
+          snapshot.activity?.type === 'column' &&
+          snapshot.activity.reason === 'move';
+        setCheckedTaskIds(skipReselect ? new Set() : new Set(snapshot.taskIds));
       }
     } finally {
       setBulkBusy(false);
@@ -939,6 +1009,7 @@ export function useKanbanMultiSelect({
     onRestoreTasks,
     onTagAdd,
     onTagRemove,
+    onUndoColumnMove,
     t,
   ]);
 

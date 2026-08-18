@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, ChevronDown, Check, ChevronUp, Save, Settings, RefreshCw } from 'lucide-react';
+import { X, ChevronDown, Check, ChevronUp, Save, Settings, RefreshCw, GitBranch } from 'lucide-react';
 import { Priority, PriorityOption, Tag, Columns } from '../types';
 import { getAllTags, getSavedFilterViews, getSharedFilterViews, createSavedFilterView, updateSavedFilterView, SavedFilterView } from '../api';
 import { loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
@@ -21,6 +21,7 @@ interface SearchFilters {
   selectedTags: string[];
   projectId: string;
   taskId: string;
+  linkedTasksOnly: boolean;
 }
 
 interface SearchInterfaceProps {
@@ -39,6 +40,8 @@ interface SearchInterfaceProps {
   /** Show tasks assigned to AI Agent (default true). Does not change member chip selection. */
   showAgentTasks?: boolean;
   onToggleShowAgentTasks?: (show: boolean) => void;
+  /** When false, linked-tasks filter toggle is disabled (no relationships on this board). */
+  hasBoardRelationships?: boolean;
 }
 
 export default function SearchInterface({
@@ -55,6 +58,7 @@ export default function SearchInterface({
   selectedBoard,
   showAgentTasks = true,
   onToggleShowAgentTasks,
+  hasBoardRelationships = false,
 }: SearchInterfaceProps) {
   const { t } = useTranslation('common');
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
@@ -233,6 +237,7 @@ export default function SearchInterface({
       selectedTags: view.tagFilters || [],
       projectId: view.projectFilter || '',
       taskId: view.taskFilter || '',
+      linkedTasksOnly: false,
     };
   };
 
@@ -261,7 +266,8 @@ export default function SearchInterface({
       selectedPriorities: [],
       selectedTags: [],
       projectId: '',
-      taskId: ''
+      taskId: '',
+      linkedTasksOnly: false,
     });
     onFilterViewChange?.(null); // Reset to "None"
     // Re-show Agent tasks — treated as an active filter when hidden
@@ -336,8 +342,9 @@ export default function SearchInterface({
       filters.dueDateTo || 
       filters.selectedPriorities.length > 0 || 
       filters.selectedTags.length > 0 || 
-      filters.projectId || 
-      filters.taskId
+      filters.projectId ||
+      filters.taskId ||
+      filters.linkedTasksOnly
     );
   };
 
@@ -357,7 +364,8 @@ export default function SearchInterface({
       siteSettings?.AI_ENABLED === 'true' &&
       !!onToggleShowAgentTasks &&
       !showAgentTasks;
-    return !!(hasColumnFilters || hasAgentHidden);
+    const hasLinkedFilter = filters.linkedTasksOnly;
+    return !!(hasColumnFilters || hasAgentHidden || hasLinkedFilter);
   };
 
   /**
@@ -417,11 +425,13 @@ export default function SearchInterface({
         handleFilterEscape(e);
       }}
     >
-      {/* Header with Collapse Toggle */}
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide">{t('searchInterface.title')}</h2>
+      {/* Title | fields — shared column so search / start-from / due-from inputs stay left-aligned */}
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 items-center">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-5 self-center shrink-0">
+          {t('searchInterface.title')}
+        </h2>
+        <div className="flex items-center justify-between min-w-0 gap-2">
+        <div className="flex items-center gap-3 min-w-0 flex-wrap">
           <div className="relative">
             <input
               type="text"
@@ -501,6 +511,38 @@ export default function SearchInterface({
                 </button>
               )}
             </div>
+          </div>
+
+          <div className="flex items-center">
+            <button
+              type="button"
+              disabled={!hasBoardRelationships}
+              onClick={() => updateFilter('linkedTasksOnly', !filters.linkedTasksOnly)}
+              className={`rounded p-1 transition-colors ${
+                !hasBoardRelationships
+                  ? 'cursor-not-allowed text-gray-400 opacity-40'
+                  : filters.linkedTasksOnly
+                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
+                    : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200'
+              }`}
+              title={
+                !hasBoardRelationships
+                  ? t('searchInterface.linkedTasksOnlyDisabled')
+                  : filters.linkedTasksOnly
+                    ? t('searchInterface.linkedTasksOnlyOn')
+                    : t('searchInterface.linkedTasksOnlyOff')
+              }
+              aria-label={
+                !hasBoardRelationships
+                  ? t('searchInterface.linkedTasksOnlyDisabled')
+                  : filters.linkedTasksOnly
+                    ? t('searchInterface.linkedTasksOnlyOn')
+                    : t('searchInterface.linkedTasksOnlyOff')
+              }
+              aria-pressed={filters.linkedTasksOnly}
+            >
+              <GitBranch size={14} />
+            </button>
           </div>
           
           {/* Saved Filters Section */}
@@ -628,7 +670,7 @@ export default function SearchInterface({
           
           {/* Clear All Filters Button */}
           {(() => {
-            const hasSearchFilters = filters.text || filters.dateFrom || filters.dateTo || filters.dueDateFrom || filters.dueDateTo || filters.selectedPriorities.length > 0 || filters.selectedTags.length > 0 || filters.projectId || filters.taskId;
+            const hasSearchFilters = filters.text || filters.dateFrom || filters.dateTo || filters.dueDateFrom || filters.dueDateTo || filters.selectedPriorities.length > 0 || filters.selectedTags.length > 0 || filters.projectId || filters.taskId || filters.linkedTasksOnly;
             
             // Check if any non-archived columns are hidden (archived columns are hidden by default)
             const hasColumnFilters = columns && visibleColumns && (() => {
@@ -702,22 +744,28 @@ export default function SearchInterface({
       </div>
 
       {!isCollapsed && (
-        <div className="space-y-3">
-          {/* Row 1: Start Dates — pl aligns input left edge with header search field */}
-          <div className="flex items-center gap-2 pl-[9px]">
-            <div className="relative">
-              <label className="text-xs font-medium text-gray-700 dark:text-gray-300 absolute left-[60px] top-1/2 -translate-y-1/2">{t('searchInterface.startFrom')}:</label>
+        <>
+          {/* Row 1: Start Dates — inputs share the same column as the search field */}
+          <label
+            htmlFor="filter-start-from"
+            className="text-xs font-medium text-gray-700 dark:text-gray-300 justify-self-end whitespace-nowrap leading-5"
+          >
+            {t('searchInterface.startFrom')}:
+          </label>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="relative shrink-0">
               <input
+                id="filter-start-from"
                 type="date"
                 value={filters.dateFrom}
                 onChange={(e) => updateFilter('dateFrom', e.target.value)}
                 onKeyDown={(e) => handleFilterEscape(e, 'dateFrom')}
-                className={`w-[140px] ml-[128px] ${getInputClassName(!!filters.dateFrom)}`}
+                className={`w-[140px] ${getInputClassName(!!filters.dateFrom)}`}
               />
               {filters.dateFrom && (
                 <button
                   onClick={() => updateFilter('dateFrom', '')}
-                  className="absolute right-[30px] top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
                   title={t('searchInterface.clearStartFrom')}
                 >
                   <X size={8} className="text-gray-400 hover:text-gray-600" />
@@ -725,9 +773,15 @@ export default function SearchInterface({
               )}
             </div>
 
-            <div className="relative">
-              <label className="text-xs font-medium text-gray-700 dark:text-gray-300 absolute left-[5px] top-1/2 -translate-y-1/2">{t('searchInterface.startTo')}:</label>
+            <div className="relative shrink-0">
+              <label
+                htmlFor="filter-start-to"
+                className="pointer-events-none absolute left-0 top-1/2 z-[1] w-[56px] -translate-y-1/2 text-right text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap"
+              >
+                {t('searchInterface.startTo')}:
+              </label>
               <input
+                id="filter-start-to"
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => updateFilter('dateTo', e.target.value)}
@@ -737,7 +791,7 @@ export default function SearchInterface({
               {filters.dateTo && (
                 <button
                   onClick={() => updateFilter('dateTo', '')}
-                  className="absolute right-[30px] top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
                   title={t('searchInterface.clearStartTo')}
                 >
                   <X size={8} className="text-gray-400 hover:text-gray-600" />
@@ -817,21 +871,26 @@ export default function SearchInterface({
 
           </div>
 
-          {/* Row 2: Due Dates — same pl as start-date row for vertical input alignment */}
-          <div className="flex items-center gap-2 pl-[9px]">
-            <div className="relative">
-              <label className="text-xs font-medium text-gray-700 dark:text-gray-300 absolute left-[64px] top-1/2 -translate-y-1/2">{t('searchInterface.dueFrom')}:</label>
+          <label
+            htmlFor="filter-due-from"
+            className="text-xs font-medium text-gray-700 dark:text-gray-300 justify-self-end whitespace-nowrap leading-5"
+          >
+            {t('searchInterface.dueFrom')}:
+          </label>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="relative shrink-0">
               <input
+                id="filter-due-from"
                 type="date"
                 value={filters.dueDateFrom}
                 onChange={(e) => updateFilter('dueDateFrom', e.target.value)}
                 onKeyDown={(e) => handleFilterEscape(e, 'dueDateFrom')}
-                className={`w-[140px] ml-[128px] ${getInputClassName(!!filters.dueDateFrom)}`}
+                className={`w-[140px] ${getInputClassName(!!filters.dueDateFrom)}`}
               />
               {filters.dueDateFrom && (
                 <button
                   onClick={() => updateFilter('dueDateFrom', '')}
-                  className="absolute right-[30px] top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
                   title={t('searchInterface.clearDueFrom')}
                 >
                   <X size={8} className="text-gray-400 hover:text-gray-600" />
@@ -839,9 +898,15 @@ export default function SearchInterface({
               )}
             </div>
 
-            <div className="relative">
-              <label className="text-xs font-medium text-gray-700 dark:text-gray-300 absolute left-[10px] top-1/2 -translate-y-1/2">{t('searchInterface.dueTo')}:</label>
+            <div className="relative shrink-0">
+              <label
+                htmlFor="filter-due-to"
+                className="pointer-events-none absolute left-0 top-1/2 z-[1] w-[56px] -translate-y-1/2 text-right text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap"
+              >
+                {t('searchInterface.dueTo')}:
+              </label>
               <input
+                id="filter-due-to"
                 type="date"
                 value={filters.dueDateTo}
                 onChange={(e) => updateFilter('dueDateTo', e.target.value)}
@@ -851,7 +916,7 @@ export default function SearchInterface({
               {filters.dueDateTo && (
                 <button
                   onClick={() => updateFilter('dueDateTo', '')}
-                  className="absolute right-[30px] top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
                   title={t('searchInterface.clearDueTo')}
                 >
                   <X size={8} className="text-gray-400 hover:text-gray-600" />
@@ -931,9 +996,9 @@ export default function SearchInterface({
             </div>
 
           </div>
-
-        </div>
+        </>
       )}
+      </div>
 
       {/* Save Filter Dialog */}
       {showSaveDialog && (

@@ -1,5 +1,6 @@
 {
   "title": "Administration",
+  "chromeTitle": "Admin",
   "adminPanel": "Admin Panel",
   "adminPanelDescription": "Manage users, site settings, and authentication configuration",
   "unsavedChanges": "Unsaved changes",

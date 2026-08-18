@@ -1,9 +1,11 @@
 import React from 'react';
 import { DragOverlay as DndKitDragOverlay } from '@dnd-kit/core';
+import { useTranslation } from 'react-i18next';
 import { FileText } from 'lucide-react';
 import { Task, TeamMember } from '../../types';
 import DOMPurify from 'dompurify';
 import { getAuthenticatedAttachmentUrl } from '../../utils/authImageUrl';
+import type { TaskViewMode } from '../../utils/userPreferences';
 
 import { Column } from '../../types';
 
@@ -13,6 +15,7 @@ interface SimpleDragOverlayProps {
   members: TeamMember[];
   isHoveringBoardTab?: boolean;
   draggedTaskIds?: string[];
+  taskViewMode?: TaskViewMode;
 }
 
 export const SimpleDragOverlay: React.FC<SimpleDragOverlayProps> = ({ 
@@ -21,12 +24,14 @@ export const SimpleDragOverlay: React.FC<SimpleDragOverlayProps> = ({
   members, 
   isHoveringBoardTab = false,
   draggedTaskIds = [],
+  taskViewMode = 'expand',
 }) => {
   const multiCount = draggedTaskIds.length > 1 ? draggedTaskIds.length : 0;
 
   return (
     <DndKitDragOverlay 
       dropAnimation={null}
+      style={{ pointerEvents: 'none' }}
     >
       {draggedColumn ? (
         // Column drag preview
@@ -40,11 +45,11 @@ export const SimpleDragOverlay: React.FC<SimpleDragOverlayProps> = ({
             count={multiCount || 1}
           />
         ) : (
-          // Full task preview when dragging normally
           <TaskDragPreview
             task={draggedTask}
             member={members.find(m => m.id === draggedTask.assignedTo)}
             stackCount={multiCount}
+            compact={taskViewMode === 'compact'}
           />
         )
       ) : null}
@@ -86,8 +91,59 @@ const TaskDragPreview: React.FC<{
   task: Task;
   member?: TeamMember;
   stackCount?: number;
-}> = ({ task, member, stackCount = 0 }) => {
+  compact?: boolean;
+}> = ({ task, member, stackCount = 0, compact = false }) => {
+  const { t } = useTranslation('tasks');
   const layers = stackCount > 1 ? Math.min(stackCount, 3) : 1;
+  const isMultiDrag = stackCount > 1;
+  const previewTitle = isMultiDrag
+    ? t('kanbanSelect.multiDragPreview')
+    : task.title;
+  const previewTicket = isMultiDrag ? null : task.ticket;
+
+  if (compact) {
+    return (
+      <div className="relative w-80 pointer-events-none">
+        {layers > 1 &&
+          Array.from({ length: layers - 1 }).map((_, i) => {
+            const depth = layers - 1 - i;
+            return (
+              <div
+                key={`stack-${i}`}
+                className="absolute inset-0 h-[72px] rounded-lg border border-gray-200 bg-white shadow-md"
+                style={{
+                  transform: `translate(${depth * 4}px, ${depth * 4}px)`,
+                  opacity: 0.55 - i * 0.1,
+                  zIndex: i,
+                }}
+              />
+            );
+          })}
+        <div
+          data-kanban-drag-overlay
+          className="relative z-10 flex h-[72px] min-w-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 shadow-2xl ring-2 ring-blue-400 opacity-90"
+        >
+          {isMultiDrag && (
+            <div className="absolute -top-2 -right-2 z-20 flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-bold text-white shadow">
+              {stackCount}
+            </div>
+          )}
+          {previewTicket ? (
+            <span className="shrink-0 font-mono text-[11px] font-bold text-gray-500 dark:text-gray-400">
+              {previewTicket}
+            </span>
+          ) : null}
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">{previewTitle}</span>
+          {member ? (
+            <span
+              className="ml-auto h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: member.color || '#3B82F6' }}
+            />
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-80 pointer-events-none">
@@ -107,22 +163,23 @@ const TaskDragPreview: React.FC<{
           );
         })}
       <div
+        data-kanban-drag-overlay
         className="relative z-10 bg-white rounded-lg shadow-2xl border border-gray-200 p-4 w-80 transform rotate-3 scale-105 opacity-90 ring-2 ring-blue-400"
       >
-        {stackCount > 1 && (
-          <div className="absolute -top-2 -right-2 z-20 min-w-[1.5rem] h-6 px-1.5 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shadow">
+        {isMultiDrag && (
+          <div className="absolute -top-2 -right-2 z-20 flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-bold text-white shadow">
             {stackCount}
           </div>
         )}
         <div className="flex items-center justify-between mb-2">
-          <h4 className="font-semibold text-gray-900 truncate">{task.title}</h4>
+          <h4 className="truncate font-semibold text-gray-900">{previewTitle}</h4>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 bg-blue-500 rounded-full opacity-75"></div>
             <div className="w-3 h-3 bg-blue-400 rounded-full opacity-50"></div>
             <div className="w-3 h-3 bg-blue-300 rounded-full opacity-25"></div>
           </div>
         </div>
-        {task.description && (
+        {task.description && !isMultiDrag && (
           <div
             className="text-sm text-gray-600 line-clamp-2 mb-2 prose prose-sm max-w-none"
             dangerouslySetInnerHTML={{
@@ -145,7 +202,11 @@ const TaskDragPreview: React.FC<{
           />
         )}
         <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>{stackCount > 1 ? `Moving ${stackCount}…` : 'Moving...'}</span>
+          <span>
+            {isMultiDrag
+              ? t('kanbanSelect.movingMultiple', { count: stackCount })
+              : t('kanbanSelect.movingSingle')}
+          </span>
           {member && <span>@{member.name}</span>}
         </div>
       </div>

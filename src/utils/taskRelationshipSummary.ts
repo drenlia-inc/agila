@@ -85,6 +85,18 @@ export function getTaskRelationshipSummary(
   return map?.get(taskId) ?? EMPTY_SUMMARY;
 }
 
+/** Task ids that participate in at least one same-board relationship edge. */
+export function buildLinkedTaskIdSet(
+  relationships: BoardRelationshipEdge[] | null | undefined
+): Set<string> {
+  const map = buildTaskRelationshipSummaryMap(relationships);
+  const ids = new Set<string>();
+  for (const [taskId, summary] of map.entries()) {
+    if (summary.hasAny) ids.add(taskId);
+  }
+  return ids;
+}
+
 /** Normalize board / API relationship row keys (camelCase or snake_case). */
 export function normalizeBoardRelationshipEdge(
   rel: BoardRelationshipEdge | Record<string, unknown> | null | undefined
