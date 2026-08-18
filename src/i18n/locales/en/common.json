@@ -1447,6 +1447,7 @@
     "noTasksAvailable": "No tasks available",
     "weekends": "Weekends",
     "priority": "Priority",
+    "legendAriaLabel": "Gantt chart legend",
     "tasks": "Tasks",
     "dragToResizeColumn": "Drag to resize task column",
     "unknownError": "Unknown error",

@@ -15,7 +15,8 @@ import AdminSettingsSearch from './admin/AdminSettingsSearch';
 import {
   AdminUnsavedChangesBanner,
 } from './admin/AdminUnsavedChanges';
-import { adminStripTabClass } from './admin/AdminSection';
+import { adminStripTabClass, adminChromeTitleClass } from './admin/AdminSection';
+import { AdminHubSubnavSlotProvider } from './admin/AdminHubSubnavPortal';
 import type { AdminDraftGate } from './admin/AdminLeaveUnsavedDialog';
 import { AdminAttentionDot } from './admin/AdminFieldDraftControls';
 import websocketClient from '../services/websocketClient';
@@ -1424,6 +1425,7 @@ const Admin: React.FC<AdminProps> = ({
   };
 
   const tabsRef = useRef<HTMLDivElement>(null);
+  const hubSubnavSlotRef = useRef<HTMLDivElement>(null);
   const pinTabsOnNextTabChangeRef = useRef(false);
 
   const handleTabChange = (tab: string) => {
@@ -1536,21 +1538,24 @@ const Admin: React.FC<AdminProps> = ({
           className="sticky top-14 z-40 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700"
           data-tour-id="admin-tabs"
         >
-          <div className="admin-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3 px-4 pt-3 pb-2">
-            <AdminUnsavedChangesBanner
-              visible={hasAnyUnsavedDrafts}
-              onSave={() => {
-                void handleHeaderSaveAllDrafts();
-              }}
-              onDiscard={handleCancelSettings}
-              isSaving={isSavingAllDrafts}
-            />
-            <div className="w-full sm:w-auto sm:max-w-xs">
-              <AdminSettingsSearch
-                activeTab={activeTab}
-                onNavigate={handleSearchNavigate}
-                contentSources={adminSearchContentSources}
+          <div className="admin-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 px-4 pt-3 pb-2">
+            <h2 className={adminChromeTitleClass}>{t('chromeTitle')}</h2>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3 min-w-0">
+              <AdminUnsavedChangesBanner
+                visible={hasAnyUnsavedDrafts}
+                onSave={() => {
+                  void handleHeaderSaveAllDrafts();
+                }}
+                onDiscard={handleCancelSettings}
+                isSaving={isSavingAllDrafts}
               />
+              <div className="w-full sm:w-auto sm:max-w-xs">
+                <AdminSettingsSearch
+                  activeTab={activeTab}
+                  onNavigate={handleSearchNavigate}
+                  contentSources={adminSearchContentSources}
+                />
+              </div>
             </div>
           </div>
           <nav className="flex gap-5 sm:gap-6 overflow-x-auto px-4 max-w-full border-b border-gray-100 dark:border-gray-700">
@@ -1585,9 +1590,11 @@ const Admin: React.FC<AdminProps> = ({
               </button>
             ))}
           </nav>
+          <div ref={hubSubnavSlotRef} className="min-h-0 empty:hidden" />
         </div>
 
         {/* Tabs + content share a tall parent so sticky header works while scrolling content. */}
+        <AdminHubSubnavSlotProvider slotRef={hubSubnavSlotRef}>
         <div className="flex min-w-0 flex-col gap-4">
           {/* Tab Content — visited panels stay mounted (hidden) to retain drafts */}
           <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-100 dark:border-gray-700 min-h-[calc(100vh-8.5rem)] min-w-0">
@@ -1630,6 +1637,7 @@ const Admin: React.FC<AdminProps> = ({
           {visitedTabs.has('system-settings') && (
             <AdminTabPanel active={activeTab === 'system-settings'}>
               <AdminSystemSettingsTab
+                panelActive={activeTab === 'system-settings'}
                 settings={settings}
                 editingSettings={editingSettings}
                 onSettingsChange={setEditingSettings}
@@ -1696,6 +1704,7 @@ const Admin: React.FC<AdminProps> = ({
           {visitedTabs.has('app-settings') && (
             <AdminTabPanel active={activeTab === 'app-settings'}>
               <AdminAppSettingsTab
+                panelActive={activeTab === 'app-settings'}
                 settings={settings}
                 editingSettings={editingSettings}
                 onSettingsChange={setEditingSettings}
@@ -1740,6 +1749,7 @@ const Admin: React.FC<AdminProps> = ({
           )}
           </div>
         </div>
+        </AdminHubSubnavSlotProvider>
     </div>
   );
 };

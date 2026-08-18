@@ -226,7 +226,7 @@ const TaskBar = ({
     >
       <div
         className={`absolute h-6 rounded ${
-          isDragging ? 'opacity-50' : 
+          isDragging ? 'opacity-0' :
           isSelected ? 'opacity-100 ring-2 ring-green-400 shadow-lg' :
           'opacity-80 hover:opacity-100'
         } ${

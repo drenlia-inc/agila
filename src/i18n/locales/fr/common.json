@@ -1447,6 +1447,7 @@
     "noTasksAvailable": "Aucune tâche disponible",
     "weekends": "Week-ends",
     "priority": "Priorité",
+    "legendAriaLabel": "Légende du diagramme de Gantt",
     "tasks": "Tâches",
     "dragToResizeColumn": "Glisser pour redimensionner la colonne des tâches",
     "unknownError": "Erreur inconnue",

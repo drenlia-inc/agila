@@ -10,7 +10,8 @@ import {
   getDirtyProjectHubSubTabs,
   type ProjectHubSubTabId,
 } from '../../utils/adminSettingsDirty';
-import { adminSubtabPanelClass, adminSubNavTabClass } from './AdminSection';
+import { adminSubtabPanelClass, adminSubNavTabClass, adminHubSubnavShellClass } from './AdminSection';
+import { AdminHubSubnavPortal } from './AdminHubSubnavPortal';
 
 export type ProjectHubSubTab = ProjectHubSubTabId;
 
@@ -168,15 +169,19 @@ const AdminProjectHubTab: React.FC<AdminProjectHubTabProps> = ({
 
   return (
     <div className="p-6">
-      <div className="mb-4 overflow-x-auto">
-        <nav className="flex space-x-6 min-w-max" aria-label="Project settings tabs">
-          {subNavBtn('project', t('projectHub.projectSubtab'))}
-          {subNavBtn('features', t('projectHub.featuresSubtab'))}
-          {subNavBtn('sprint-settings', t('tabs.sprintSettings'))}
-          {subNavBtn('reporting', t('tabs.reporting'))}
-          {subNavBtn('lifecycle', t('tabs.lifecycle'))}
-        </nav>
-      </div>
+      {isActive ? (
+        <AdminHubSubnavPortal>
+          <div className={adminHubSubnavShellClass}>
+            <nav className="flex space-x-6 min-w-max" aria-label="Project settings tabs">
+              {subNavBtn('project', t('projectHub.projectSubtab'))}
+              {subNavBtn('features', t('projectHub.featuresSubtab'))}
+              {subNavBtn('sprint-settings', t('tabs.sprintSettings'))}
+              {subNavBtn('reporting', t('tabs.reporting'))}
+              {subNavBtn('lifecycle', t('tabs.lifecycle'))}
+            </nav>
+          </div>
+        </AdminHubSubnavPortal>
+      ) : null}
 
       <div className={adminSubtabPanelClass}>
       {visitedSubTabs.has('project') && (

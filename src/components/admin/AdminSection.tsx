@@ -18,6 +18,13 @@ export const adminInputShortClass = `w-full max-w-[7.5rem] ${adminInputClass}`;
 
 export const adminSubtabPanelClass = 'min-w-0';
 
+/** Hub sub-nav row mounted in the sticky Admin chrome via portal. */
+export const adminHubSubnavShellClass =
+  'px-4 py-2 overflow-x-auto bg-white dark:bg-gray-800';
+
+export const adminChromeTitleClass =
+  'text-sm font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide leading-5 shrink-0';
+
 /** Primary Admin nav — underline accent (distinct from subtab pills). */
 export const adminStripTabClass = (active: boolean) =>
   `relative py-2 px-0.5 font-medium text-sm whitespace-nowrap transition-colors border-b-2 -mb-px inline-flex items-center gap-1.5 ${

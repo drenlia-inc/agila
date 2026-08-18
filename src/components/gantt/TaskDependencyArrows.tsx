@@ -72,6 +72,59 @@ const LANE_Y_STEP = 10;
 const TYPE_Y_OFFSET = 8;
 const TRUNK_Y_TOLERANCE = 6;
 const BAR_PADDING_INSET = 4;
+const PATH_CORNER_RADIUS = 5;
+
+/** Orthogonal path with slightly rounded corners (quadratic beziers at each bend). */
+const roundedOrthogonalPath = (
+  points: Array<{ x: number; y: number }>,
+  radius = PATH_CORNER_RADIUS
+): string => {
+  if (points.length < 2) return '';
+  if (points.length === 2) {
+    return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+  }
+
+  const cornerRadius = (index: number): number => {
+    const prev = points[index - 1];
+    const curr = points[index];
+    const next = points[index + 1];
+    const lenIn = Math.hypot(curr.x - prev.x, curr.y - prev.y);
+    const lenOut = Math.hypot(next.x - curr.x, next.y - curr.y);
+    if (lenIn === 0 || lenOut === 0) return 0;
+    return Math.min(radius, lenIn / 2, lenOut / 2);
+  };
+
+  const last = points.length - 1;
+  const rStart = cornerRadius(1);
+  const p0 = points[0];
+  const p1 = points[1];
+  const dx01 = p1.x - p0.x;
+  const dy01 = p1.y - p0.y;
+  const len01 = Math.hypot(dx01, dy01) || 1;
+
+  let path = `M ${p0.x} ${p0.y} L ${p1.x - (dx01 / len01) * rStart} ${p1.y - (dy01 / len01) * rStart}`;
+
+  for (let i = 1; i < last; i++) {
+    const curr = points[i];
+    const next = points[i + 1];
+    const ri = cornerRadius(i);
+    const dxOut = next.x - curr.x;
+    const dyOut = next.y - curr.y;
+    const lenOut = Math.hypot(dxOut, dyOut) || 1;
+    const outX = curr.x + (dxOut / lenOut) * ri;
+    const outY = curr.y + (dyOut / lenOut) * ri;
+
+    path += ` Q ${curr.x} ${curr.y} ${outX} ${outY}`;
+
+    if (i < last - 1) {
+      const riNext = cornerRadius(i + 1);
+      path += ` L ${next.x - (dxOut / lenOut) * riNext} ${next.y - (dyOut / lenOut) * riNext}`;
+    }
+  }
+
+  path += ` L ${points[last].x} ${points[last].y}`;
+  return path;
+};
 
 const getBarBounds = (pos: { y: number; height: number }) => {
   const barTop = pos.y + Math.max(0, (pos.height - BAR_HEIGHT) / 2);
@@ -292,8 +345,14 @@ const buildArrowPathFromDraft = (draft: RouteDraft, trunkBump = 0): string => {
   const goingDown = toY >= fromY;
   const routeY = clampRouteY(draft.routeY + trunkBump, arrow, goingDown);
 
-  // Finish-to-start: out right → down/up once in gutter → across → drop to child start
-  return `M ${fromX} ${fromY} L ${stepOutX} ${fromY} L ${stepOutX} ${routeY} L ${approachX} ${routeY} L ${approachX} ${toY} L ${toX} ${toY}`;
+  return roundedOrthogonalPath([
+    { x: fromX, y: fromY },
+    { x: stepOutX, y: fromY },
+    { x: stepOutX, y: routeY },
+    { x: approachX, y: routeY },
+    { x: approachX, y: toY },
+    { x: toX, y: toY },
+  ]);
 };
 
 const TaskDependencyArrows: React.FC<TaskDependencyArrowsProps> = ({

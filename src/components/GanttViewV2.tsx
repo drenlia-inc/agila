@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import TaskDependencyArrows from './gantt/TaskDependencyArrows';
 import { DRAG_TYPES, GanttDragItem } from './gantt/types';
 import { GanttHeader } from './gantt/GanttHeader';
+import { GanttHeaderLegendPortal } from './gantt/GanttHeaderLegendPortal';
 import { getAllPriorities, addTaskRelationship, removeTaskRelationship, getUserSettings, batchUpdateTasks } from '../api';
 import websocketClient from '../services/websocketClient';
 import { loadUserPreferencesAsync, saveUserPreferences, loadUserPreferences } from '../utils/userPreferences';
@@ -276,6 +277,7 @@ const GanttViewV2 = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const ganttStickyHeaderRef = useRef<HTMLDivElement>(null);
 
   // Date range (simplified for now)
   const [dateRange, setDateRange] = useState<any[]>([]);
@@ -1779,7 +1781,8 @@ const GanttViewV2 = ({
       )}
 
       {/* Gantt Header - sticky under page header */}
-      <div className="sticky top-16 z-50 bg-white dark:bg-gray-800">
+      <div ref={ganttStickyHeaderRef} className="sticky top-16 z-50 bg-white dark:bg-gray-800 relative">
+        <GanttHeaderLegendPortal containerRef={ganttStickyHeaderRef} priorities={priorities} />
         <GanttHeader
           dateRange={dateRange}
           formatDate={(date: Date) => {
@@ -2002,6 +2005,14 @@ const GanttViewV2 = ({
       </div>
 
       {/* Main content */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        modifiers={[restrictToHorizontalAxis]}
+        onDragStart={handleTimelineDragStart}
+        onDragOver={handleTimelineDragOver}
+        onDragEnd={handleTimelineDragEnd}
+      >
       <div ref={mainContentRef} className="relative flex">
         {/* Task list — vertical reorder within status + status dropdown */}
         <GanttTaskList
@@ -2028,14 +2039,6 @@ const GanttViewV2 = ({
         />
 
         {/* Timeline (horizontal date move / resize only) */}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[restrictToHorizontalAxis]}
-          onDragStart={handleTimelineDragStart}
-          onDragOver={handleTimelineDragOver}
-          onDragEnd={handleTimelineDragEnd}
-        >
           <GanttTimeline
             groupedTasks={groupedTasks}
             dateRange={dateRange}
@@ -2067,9 +2070,46 @@ const GanttViewV2 = ({
             columns={columns}
             siteSettings={siteSettings}
           />
-          <DragOverlay dropAnimation={null} />
-        </DndContext>
       </div>
+      <DragOverlay dropAnimation={null} zIndex={100}>
+        {activeDragItem && localDragState.isDragging && (() => {
+          const taskId = localDragState.draggedTaskId ?? activeDragItem.taskId;
+          const task = ganttTasks.find((item) => item.id === taskId);
+          const localDates = localDragState.localTaskData[taskId];
+          if (!task || !localDates?.startDate || !localDates?.dueDate) return null;
+
+          const startIdx = dateRange.findIndex(
+            (col) => formatLocalDate(col.date) === localDates.startDate
+          );
+          const endIdx = dateRange.findIndex(
+            (col) => formatLocalDate(col.date) === localDates.dueDate
+          );
+
+          let overlayWidth = 40;
+          if (startIdx >= 0 && endIdx >= 0) {
+            overlayWidth = (endIdx - startIdx + 1) * 40;
+          } else {
+            const startMs = new Date(`${localDates.startDate}T00:00:00`).getTime();
+            const endMs = new Date(`${localDates.dueDate}T00:00:00`).getTime();
+            const daySpan = Math.max(1, Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) + 1);
+            overlayWidth = daySpan * 40;
+          }
+
+          const priorityName =
+            (task as { priorityName?: string }).priorityName || task.priority;
+
+          return (
+            <div
+              className="h-6 rounded shadow-lg ring-2 ring-blue-400 opacity-95 cursor-grabbing"
+              style={{
+                width: overlayWidth,
+                backgroundColor: getPriorityColor(priorityName),
+              }}
+            />
+          );
+        })()}
+      </DragOverlay>
+      </DndContext>
 
     </div>
     
@@ -2126,32 +2166,6 @@ const GanttViewV2 = ({
       document.body
     )}
     
-    {/* Legend */}
-    <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-800">
-      <div className="flex items-center gap-6 text-xs text-gray-600 dark:text-gray-400">
-        <div className="flex items-center gap-2">
-          <span className="text-blue-600 dark:text-blue-400 font-semibold">{t('gantt.today')}</span>
-          <div className="w-4 h-3 bg-blue-100 dark:bg-blue-900 border border-blue-200 dark:border-blue-700"></div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span>{t('gantt.weekends')}</span>
-          <div className="w-4 h-3 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600"></div>
-        </div>
-        <div className="flex items-center gap-4">
-          <span>{t('gantt.priority')}:</span>
-          {priorities.map((priority) => (
-            <div key={priority.id} className="flex items-center gap-1">
-              <div 
-                className="w-3 h-3 rounded" 
-                style={{ backgroundColor: priority.color }}
-              ></div>
-              <span className="capitalize">{priority.priority}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-
     </>
   );
 };

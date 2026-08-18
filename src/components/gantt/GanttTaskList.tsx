@@ -106,7 +106,7 @@ const SortableTaskRow = memo(({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition: isDragging ? undefined : transition,
-    zIndex: isDragging ? 50 : undefined,
+    zIndex: isDragging ? 60 : undefined,
     position: isDragging ? 'relative' : undefined,
   };
 
@@ -162,7 +162,7 @@ const SortableTaskRow = memo(({
       ${taskIndex % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}
       hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors duration-200 ease-out ${
         isRelationshipMode ? 'cursor-default' : ''
-      } ${isDragging ? 'shadow-2xl ring-2 ring-blue-400 bg-white dark:bg-gray-800 scale-[1.01] z-10' : ''}`}
+      } ${isDragging ? 'shadow-2xl ring-2 ring-blue-400 bg-white dark:bg-gray-800 scale-[1.01] z-[60]' : ''}`}
       title={isRelationshipMode ? t('gantt.linkUseTaskBars') : undefined}
       onClick={handleClick}
     >

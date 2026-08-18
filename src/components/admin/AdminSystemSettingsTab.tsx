@@ -15,12 +15,14 @@ import {
   getDirtySystemSettingsSubTabs,
   type SystemSettingsSubTabId,
 } from '../../utils/adminSettingsDirty';
-import { adminSubtabPanelClass, adminSubNavTabClass } from './AdminSection';
+import { adminSubtabPanelClass, adminSubNavTabClass, adminHubSubnavShellClass } from './AdminSection';
+import { AdminHubSubnavPortal } from './AdminHubSubnavPortal';
 import api from '../../api';
 
 export type SystemSettingsSubTab = SystemSettingsSubTabId;
 
 interface AdminSystemSettingsTabProps {
+  panelActive?: boolean;
   settings: { [key: string]: string | undefined };
   editingSettings: { [key: string]: string | undefined };
   onSettingsChange: (settings: { [key: string]: string | undefined }) => void;
@@ -80,6 +82,7 @@ const TOUR_ID_BY_TAB: Record<SystemSettingsSubTab, string> = {
 };
 
 const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
+  panelActive = true,
   settings,
   editingSettings,
   onSettingsChange,
@@ -233,37 +236,41 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
 
   return (
     <div className="p-6 min-w-0 max-w-full">
-      <div className="mb-4 overflow-x-auto">
-        <nav className="flex space-x-6 min-w-max" aria-label="System settings tabs">
-          {subNavBtn('sso', t('tabs.sso'))}
-          {subNavBtn('mail-server', t('tabs.mailServer'))}
-          {subNavBtn('storage', t('tabs.storage'))}
-          {subNavBtn('file-uploads', t('appSettings.fileUploads'))}
-          {aiAllowedByPlan &&
-            subNavBtn(
-              'ai',
-              t('appSettings.ai'),
-              <Sparkles
-                size={14}
-                className={
-                  activeSubTab === 'ai'
-                    ? 'text-teal-600 dark:text-teal-400'
-                    : 'text-teal-500/80 dark:text-teal-400/80'
-                }
-                aria-hidden
-              />
-            )}
-          {subNavBtn('notifications', t('appSettings.notifications'))}
-          {subNavBtn(
-            'webhooks',
-            <>
-              {t('webhooks.tabLabel')}
-              <BetaSup />
-            </>
-          )}
-          {subNavBtn('notification-queue', t('appSettings.notificationQueue'))}
-        </nav>
-      </div>
+      {panelActive ? (
+        <AdminHubSubnavPortal>
+          <div className={adminHubSubnavShellClass}>
+            <nav className="flex space-x-6 min-w-max" aria-label="System settings tabs">
+              {subNavBtn('sso', t('tabs.sso'))}
+              {subNavBtn('mail-server', t('tabs.mailServer'))}
+              {subNavBtn('storage', t('tabs.storage'))}
+              {subNavBtn('file-uploads', t('appSettings.fileUploads'))}
+              {aiAllowedByPlan &&
+                subNavBtn(
+                  'ai',
+                  t('appSettings.ai'),
+                  <Sparkles
+                    size={14}
+                    className={
+                      activeSubTab === 'ai'
+                        ? 'text-teal-600 dark:text-teal-400'
+                        : 'text-teal-500/80 dark:text-teal-400/80'
+                    }
+                    aria-hidden
+                  />
+                )}
+              {subNavBtn('notifications', t('appSettings.notifications'))}
+              {subNavBtn(
+                'webhooks',
+                <>
+                  {t('webhooks.tabLabel')}
+                  <BetaSup />
+                </>
+              )}
+              {subNavBtn('notification-queue', t('appSettings.notificationQueue'))}
+            </nav>
+          </div>
+        </AdminHubSubnavPortal>
+      ) : null}
 
       <div className={adminSubtabPanelClass}>
       {visitedSubTabs.has('sso') && (
