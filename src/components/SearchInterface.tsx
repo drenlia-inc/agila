@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, ChevronDown, Check, ChevronUp, Save, Settings, RefreshCw } from 'lucide-react';
+import { X, ChevronDown, Check, ChevronUp, Save, Settings, RefreshCw, GitBranch } from 'lucide-react';
 import { Priority, PriorityOption, Tag, Columns } from '../types';
 import { getAllTags, getSavedFilterViews, getSharedFilterViews, createSavedFilterView, updateSavedFilterView, SavedFilterView } from '../api';
 import { loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
@@ -21,6 +21,7 @@ interface SearchFilters {
   selectedTags: string[];
   projectId: string;
   taskId: string;
+  linkedTasksOnly: boolean;
 }
 
 interface SearchInterfaceProps {
@@ -39,6 +40,8 @@ interface SearchInterfaceProps {
   /** Show tasks assigned to AI Agent (default true). Does not change member chip selection. */
   showAgentTasks?: boolean;
   onToggleShowAgentTasks?: (show: boolean) => void;
+  /** When false, linked-tasks filter toggle is disabled (no relationships on this board). */
+  hasBoardRelationships?: boolean;
 }
 
 export default function SearchInterface({
@@ -55,6 +58,7 @@ export default function SearchInterface({
   selectedBoard,
   showAgentTasks = true,
   onToggleShowAgentTasks,
+  hasBoardRelationships = false,
 }: SearchInterfaceProps) {
   const { t } = useTranslation('common');
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
@@ -233,6 +237,7 @@ export default function SearchInterface({
       selectedTags: view.tagFilters || [],
       projectId: view.projectFilter || '',
       taskId: view.taskFilter || '',
+      linkedTasksOnly: false,
     };
   };
 
@@ -261,7 +266,8 @@ export default function SearchInterface({
       selectedPriorities: [],
       selectedTags: [],
       projectId: '',
-      taskId: ''
+      taskId: '',
+      linkedTasksOnly: false,
     });
     onFilterViewChange?.(null); // Reset to "None"
     // Re-show Agent tasks — treated as an active filter when hidden
@@ -336,8 +342,9 @@ export default function SearchInterface({
       filters.dueDateTo || 
       filters.selectedPriorities.length > 0 || 
       filters.selectedTags.length > 0 || 
-      filters.projectId || 
-      filters.taskId
+      filters.projectId ||
+      filters.taskId ||
+      filters.linkedTasksOnly
     );
   };
 
@@ -357,7 +364,8 @@ export default function SearchInterface({
       siteSettings?.AI_ENABLED === 'true' &&
       !!onToggleShowAgentTasks &&
       !showAgentTasks;
-    return !!(hasColumnFilters || hasAgentHidden);
+    const hasLinkedFilter = filters.linkedTasksOnly;
+    return !!(hasColumnFilters || hasAgentHidden || hasLinkedFilter);
   };
 
   /**
@@ -504,6 +512,38 @@ export default function SearchInterface({
               )}
             </div>
           </div>
+
+          <div className="flex items-center">
+            <button
+              type="button"
+              disabled={!hasBoardRelationships}
+              onClick={() => updateFilter('linkedTasksOnly', !filters.linkedTasksOnly)}
+              className={`rounded p-1 transition-colors ${
+                !hasBoardRelationships
+                  ? 'cursor-not-allowed text-gray-400 opacity-40'
+                  : filters.linkedTasksOnly
+                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
+                    : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200'
+              }`}
+              title={
+                !hasBoardRelationships
+                  ? t('searchInterface.linkedTasksOnlyDisabled')
+                  : filters.linkedTasksOnly
+                    ? t('searchInterface.linkedTasksOnlyOn')
+                    : t('searchInterface.linkedTasksOnlyOff')
+              }
+              aria-label={
+                !hasBoardRelationships
+                  ? t('searchInterface.linkedTasksOnlyDisabled')
+                  : filters.linkedTasksOnly
+                    ? t('searchInterface.linkedTasksOnlyOn')
+                    : t('searchInterface.linkedTasksOnlyOff')
+              }
+              aria-pressed={filters.linkedTasksOnly}
+            >
+              <GitBranch size={14} />
+            </button>
+          </div>
           
           {/* Saved Filters Section */}
           <div className="flex items-center gap-2">
@@ -630,7 +670,7 @@ export default function SearchInterface({
           
           {/* Clear All Filters Button */}
           {(() => {
-            const hasSearchFilters = filters.text || filters.dateFrom || filters.dateTo || filters.dueDateFrom || filters.dueDateTo || filters.selectedPriorities.length > 0 || filters.selectedTags.length > 0 || filters.projectId || filters.taskId;
+            const hasSearchFilters = filters.text || filters.dateFrom || filters.dateTo || filters.dueDateFrom || filters.dueDateTo || filters.selectedPriorities.length > 0 || filters.selectedTags.length > 0 || filters.projectId || filters.taskId || filters.linkedTasksOnly;
             
             // Check if any non-archived columns are hidden (archived columns are hidden by default)
             const hasColumnFilters = columns && visibleColumns && (() => {

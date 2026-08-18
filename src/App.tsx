@@ -115,6 +115,7 @@ import {
   getBoardRelationshipType,
   normalizeBoardRelationshipEdge,
   pickBoardRelationshipEdgeToDelete,
+  buildLinkedTaskIdSet,
 } from './utils/taskRelationshipSummary';
 import { 
   getInitialSelectedBoard, 
@@ -631,15 +632,87 @@ function AppContent() {
   }, [currentUser?.id, isAdminUser]);
 
   useEffect(() => subscribePerfTestsPreference(setUserPerfTestsEnabled), []);
+
+  /** Same-board relationship edges per board — used for linked-tasks-only tab counts on non-selected boards. */
+  const relationshipsByBoardIdRef = useRef<Record<string, unknown[]>>({});
+  const pendingBoardRelationshipFetchesRef = useRef(new Set<string>());
+  const [relationshipsCacheVersion, setRelationshipsCacheVersion] = useState(0);
+
+  const setBoardRelationshipsCache = useCallback((boardId: string, relationships: unknown[]) => {
+    if (!boardId) return;
+    relationshipsByBoardIdRef.current[boardId] = Array.isArray(relationships) ? relationships : [];
+    setRelationshipsCacheVersion((v) => v + 1);
+  }, []);
+
+  const linkedTaskIdsByBoard = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const [boardId, rels] of Object.entries(relationshipsByBoardIdRef.current)) {
+      map.set(boardId, buildLinkedTaskIdSet(rels as Parameters<typeof buildLinkedTaskIdSet>[0]));
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ref content tracked via relationshipsCacheVersion
+  }, [relationshipsCacheVersion]);
+
+  useEffect(() => {
+    if (!selectedBoard) return;
+    setBoardRelationshipsCache(selectedBoard, taskLinking.boardRelationships);
+  }, [selectedBoard, taskLinking.boardRelationships, setBoardRelationshipsCache]);
   
   // Initialize Task Filters hook (requires columns, members, boards, and updateCurrentUserPreference)
+  const linkedTaskIds = useMemo(
+    () => buildLinkedTaskIdSet(taskLinking.boardRelationships),
+    [taskLinking.boardRelationships]
+  );
+
   const taskFilters = useTaskFilters({
     columns,
     members,
     boards,
     sprints: availableSprints,
+    linkedTaskIds,
     updateCurrentUserPreference,
   });
+
+  useEffect(() => {
+    if (!taskFilters.searchFilters.linkedTasksOnly || currentPage !== 'kanban') return;
+
+    let cancelled = false;
+    for (const board of boards) {
+      const boardId = board.id;
+      if (
+        relationshipsByBoardIdRef.current[boardId] !== undefined ||
+        pendingBoardRelationshipFetchesRef.current.has(boardId)
+      ) {
+        continue;
+      }
+      pendingBoardRelationshipFetchesRef.current.add(boardId);
+      void getBoardTaskRelationships(boardId)
+        .then((relationships) => {
+          if (cancelled) return;
+          pendingBoardRelationshipFetchesRef.current.delete(boardId);
+          setBoardRelationshipsCache(boardId, relationships);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          pendingBoardRelationshipFetchesRef.current.delete(boardId);
+          setBoardRelationshipsCache(boardId, []);
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    taskFilters.searchFilters.linkedTasksOnly,
+    boards,
+    currentPage,
+    setBoardRelationshipsCache,
+  ]);
+
+  useEffect(() => {
+    if (!taskFilters.searchFilters.linkedTasksOnly) return;
+    lastTaskCountsRef.current = {};
+  }, [taskFilters.searchFilters.linkedTasksOnly, relationshipsCacheVersion]);
 
   const filteredColumnsRef = useRef<Columns>({});
   useEffect(() => {
@@ -673,9 +746,12 @@ function AppContent() {
   /** After creating a task or updating sprint, recompute whether it is still hidden by filters. */
   const buildColumnVisibilityWarningForTask = useCallback(
     (task: Task): ColumnVisibilityWarning | null => {
+      const wouldBeFilteredByLinked =
+        taskFilters.searchFilters.linkedTasksOnly &&
+        !linkedTaskIds.has(task.id);
       const wouldBeFilteredBySearch = wouldTaskBeFilteredOut(
         task,
-        taskFilters.searchFilters,
+        { ...taskFilters.searchFilters, linkedTasksOnly: false },
         taskFilters.isSearchActive,
         members,
         boards,
@@ -729,7 +805,7 @@ function AppContent() {
         return !hasMatchingMember;
       })();
 
-      if (!wouldBeFilteredBySearch && !wouldBeFilteredBySprint && !wouldBeFilteredByMembers) {
+      if (!wouldBeFilteredBySearch && !wouldBeFilteredBySprint && !wouldBeFilteredByMembers && !wouldBeFilteredByLinked) {
         return null;
       }
       const sprintId = taskFilters.selectedSprintId;
@@ -739,11 +815,12 @@ function AppContent() {
         taskId: task.id,
         showSprintPrompt,
         selectedSprintId: showSprintPrompt ? sprintId : undefined,
-        showClearFilters: wouldBeFilteredBySearch || wouldBeFilteredByMembers,
+        showClearFilters: wouldBeFilteredBySearch || wouldBeFilteredByMembers || wouldBeFilteredByLinked,
         reasons: {
-          search: wouldBeFilteredBySearch,
+          search: wouldBeFilteredBySearch && !wouldBeFilteredByLinked,
           sprint: wouldBeFilteredBySprint,
           members: wouldBeFilteredByMembers,
+          linked: wouldBeFilteredByLinked,
         },
       };
     },
@@ -756,6 +833,10 @@ function AppContent() {
       taskFilters.includeCollaborators,
       taskFilters.includeRequesters,
       taskFilters.selectedMembers,
+      linkedTaskIds,
+      members,
+      boards,
+      availableSprints,
     ]
   );
   
@@ -3870,6 +3951,15 @@ function AppContent() {
     }
   };
 
+  const handleGanttReorderTask = useCallback(async (taskId: string, columnId: string, targetIndex: number) => {
+    const liveColumns = columnsRef.current;
+    const column = liveColumns[columnId];
+    if (!column) return;
+    const task = column.tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    await handleSameColumnReorderWrapper(task, columnId, targetIndex);
+  }, []);
+
   // Wrapper for moveTaskToPosition that provides current state (for position-based moves)
   const moveTaskToPositionWrapper = async (task: Task, columnId: string, newPosition: number) => {
     try {
@@ -5087,6 +5177,9 @@ function AppContent() {
         includeCollaborators: taskFilters.includeCollaborators,
         includeRequesters: taskFilters.includeRequesters,
         showAgentTasks: siteSettings?.AI_ENABLED === 'true' ? taskFilters.showAgentTasks : true,
+        linkedTaskIds: taskFilters.searchFilters.linkedTasksOnly
+          ? linkedTaskIdsByBoard.get(board.id)
+          : undefined,
       },
       members,
       boards,
@@ -5469,6 +5562,7 @@ function AppContent() {
                                     onTagAdd={handleTagAdd}
                                     onTagRemove={handleTagRemove}
                                     onMoveTaskToColumn={handleMoveTaskToColumn}
+                                    onGanttReorderTask={handleGanttReorderTask}
                                     animateCopiedTaskId={animateCopiedTaskId}
                                     onEditColumn={handleEditColumn}
                                     onRemoveColumn={handleRemoveColumn}

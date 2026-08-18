@@ -34,6 +34,8 @@ interface GanttViewV2Props {
   siteSettings?: { [key: string]: string };
   /** false for viewer — disable timeline drag / create / mutation actions */
   canMutate?: boolean;
+  onMoveTaskToColumn?: (taskId: string, targetColumnId: string) => Promise<void>;
+  onReorderTaskInColumn?: (taskId: string, columnId: string, targetIndex: number) => Promise<void>;
 }
 
 // Parse date helper
@@ -83,6 +85,8 @@ const GanttViewV2 = ({
   onRemoveTask,
   siteSettings,
   canMutate = true,
+  onMoveTaskToColumn,
+  onReorderTaskInColumn,
 }: GanttViewV2Props) => {
   const { t } = useTranslation('common');
   const onUpdateTask = (task: Task) => {
@@ -108,10 +112,41 @@ const GanttViewV2 = ({
   const [isRelationshipMode, setIsRelationshipMode] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [selectedParentTask, setSelectedParentTask] = useState<string | null>(null);
-  
+  const selectedParentTaskRef = useRef<string | null>(null);
+  const shiftHeldInLinkModeRef = useRef(false);
+
   // Local relationships state for optimistic updates
   const [localRelationships, setLocalRelationships] = useState<any[]>([]);
   const lastRelationshipClickRef = useRef<number>(0);
+
+  useEffect(() => {
+    selectedParentTaskRef.current = selectedParentTask;
+  }, [selectedParentTask]);
+
+  useEffect(() => {
+    if (!isRelationshipMode) {
+      shiftHeldInLinkModeRef.current = false;
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        shiftHeldInLinkModeRef.current = true;
+      }
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') {
+        shiftHeldInLinkModeRef.current = false;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isRelationshipMode]);
   
   // Sync relationships from props, but preserve optimistic updates
   useEffect(() => {
@@ -1208,22 +1243,20 @@ const GanttViewV2 = ({
     const positions = new Map<string, {x: number, y: number, width: number, height: number}>();
     
     ganttTasks.forEach(task => {
-      // Find the task element in the DOM
       const taskElement = document.querySelector(`[data-task-id="${task.id}"]`);
       if (taskElement && task.startDate && task.endDate) {
         const rect = taskElement.getBoundingClientRect();
         const container = scrollContainerRef.current;
         if (container) {
           const containerRect = container.getBoundingClientRect();
-          
-          // Calculate position based on date indices
-          const startIndex = dateRange.findIndex(d => 
+
+          const startIndex = dateRange.findIndex(d =>
             d.date.toDateString() === task.startDate.toDateString()
           );
-          const endIndex = dateRange.findIndex(d => 
+          const endIndex = dateRange.findIndex(d =>
             d.date.toDateString() === task.endDate.toDateString()
           );
-          
+
           if (startIndex >= 0 && endIndex >= 0) {
             positions.set(task.id, {
               x: startIndex * 40,
@@ -1348,7 +1381,11 @@ const GanttViewV2 = ({
   }, []);
 
   // Handle relationship creation with optimistic updates
-  const handleCreateRelationship = useCallback(async (parentTaskId: string, childTaskId: string) => {
+  const handleCreateRelationship = useCallback(async (
+    sourceTaskId: string,
+    targetTaskId: string,
+    relationshipType: 'parent' | 'related' = 'parent'
+  ) => {
     if (!canMutate) return;
     // Debounce rapid clicks (prevent multiple clicks within 500ms)
     const now = Date.now();
@@ -1362,7 +1399,13 @@ const GanttViewV2 = ({
     const existingRelationship = localRelationships.find(rel => {
       const taskId = rel.taskId || rel.task_id;
       const toTaskId = rel.toTaskId || rel.to_task_id;
-      return taskId === parentTaskId && toTaskId === childTaskId;
+      if (relationshipType === 'parent') {
+        return taskId === sourceTaskId && toTaskId === targetTaskId && rel.relationship === 'parent';
+      }
+      return rel.relationship === 'related' && (
+        (taskId === sourceTaskId && toTaskId === targetTaskId) ||
+        (taskId === targetTaskId && toTaskId === sourceTaskId)
+      );
     });
     
     if (existingRelationship) {
@@ -1372,9 +1415,9 @@ const GanttViewV2 = ({
     // Create optimistic relationship object (matching TaskDependencyArrows interface)
     const optimisticRelationship = {
       id: `temp-${Date.now()}`, // Temporary ID for optimistic update
-      task_id: parentTaskId,
-      to_task_id: childTaskId,
-      relationship: 'parent' as const,
+      task_id: sourceTaskId,
+      to_task_id: targetTaskId,
+      relationship: relationshipType,
       task_ticket: '', // Will be filled by the component
       related_task_ticket: '', // Will be filled by the component
       createdAt: new Date().toISOString()
@@ -1384,8 +1427,7 @@ const GanttViewV2 = ({
     setLocalRelationships(prev => [...prev, optimisticRelationship]);
     
     try {
-      // Create parent relationship (parent -> child) in background
-      const createdRelationship = await addTaskRelationship(parentTaskId, 'parent', childTaskId);
+      const createdRelationship = await addTaskRelationship(sourceTaskId, relationshipType, targetTaskId);
       
       // Mark optimistic relationship as confirmed (keep it, just change the ID)
       // The WebSocket event will eventually replace it with the real relationship from server
@@ -1457,20 +1499,29 @@ const GanttViewV2 = ({
     }
   }, [localRelationships, canMutate, t]);
 
-  // Relationship click
-  const handleRelationshipClick = useCallback((taskId: string) => {
+  // Relationship click — ref avoids missing the second click before state re-renders
+  const handleRelationshipClick = useCallback((taskId: string, shiftKey = false) => {
     if (!canMutate) return;
-    if (!selectedParentTask) {
+
+    const sourceId = selectedParentTaskRef.current;
+    const wantRelated = shiftKey || shiftHeldInLinkModeRef.current;
+
+    if (!sourceId) {
+      selectedParentTaskRef.current = taskId;
       setSelectedParentTask(taskId);
-    } else if (selectedParentTask === taskId) {
-      setSelectedParentTask(null);
-    } else {
-      // Create relationship
-      handleCreateRelationship(selectedParentTask, taskId);
-      setSelectedParentTask(null);
-      // Don't exit relationship mode - allow continuous creation
+      return;
     }
-  }, [selectedParentTask, handleCreateRelationship, canMutate]);
+
+    if (sourceId === taskId) {
+      selectedParentTaskRef.current = null;
+      setSelectedParentTask(null);
+      return;
+    }
+
+    selectedParentTaskRef.current = null;
+    setSelectedParentTask(null);
+    void handleCreateRelationship(sourceId, taskId, wantRelated ? 'related' : 'parent');
+  }, [handleCreateRelationship, canMutate]);
 
   // Task creation handlers
   const handleTaskCreationMouseDown = useCallback((e: React.MouseEvent, dateString: string) => {
@@ -1575,8 +1626,9 @@ const GanttViewV2 = ({
   }, [ganttTasks, columns, onTaskDragStart, canMutate]);
 
   const handleTimelineDragOver = useCallback((event: DragOverEvent) => {
-    const { over, activatorEvent } = event;
+    const { over } = event;
     const currentActiveDragItem = activeDragItemRef.current;
+    const dragState = localDragStateRef.current;
     
     if (over && currentActiveDragItem) {
       const overData = over.data.current as any;
@@ -1584,17 +1636,17 @@ const GanttViewV2 = ({
       if (overData?.date) {
         setCurrentHoverDate(overData.date);
         
-        // Update local drag state
-        if (localDragState.isDragging && localDragState.draggedTaskId) {
-          const taskId = localDragState.draggedTaskId;
+        // Use ref — dragOver can fire before React re-renders after dragStart
+        if (dragState.isDragging && dragState.draggedTaskId) {
+          const taskId = dragState.draggedTaskId;
           const dragType = (currentActiveDragItem as GanttDragItem).dragType;
           
-          let newStartDate = localDragState.originalTaskData[taskId].startDate;
-          let newDueDate = localDragState.originalTaskData[taskId].dueDate;
+          let newStartDate = dragState.originalTaskData[taskId].startDate;
+          let newDueDate = dragState.originalTaskData[taskId].dueDate;
           
           if (dragType === DRAG_TYPES.TASK_MOVE_HANDLE) {
-            const originalStart = new Date(localDragState.originalTaskData[taskId].startDate);
-            const originalEnd = new Date(localDragState.originalTaskData[taskId].dueDate);
+            const originalStart = new Date(dragState.originalTaskData[taskId].startDate);
+            const originalEnd = new Date(dragState.originalTaskData[taskId].dueDate);
             // Add 1 day to duration since both start and end dates are inclusive
             const duration = originalEnd.getTime() - originalStart.getTime() + (24 * 60 * 60 * 1000);
             
@@ -1636,14 +1688,15 @@ const GanttViewV2 = ({
         }
       }
     }
-  }, [localDragState]);
+  }, []);
 
   const handleTimelineDragEnd = useCallback(async (event: DragEndEvent) => {
     const { over } = event;
     const currentActiveDragItem = activeDragItemRef.current;
+    const dragState = localDragStateRef.current;
     
-    if (currentActiveDragItem && localDragState.isDragging && over) {
-      const taskId = localDragState.draggedTaskId;
+    if (currentActiveDragItem && dragState.isDragging && over) {
+      const taskId = dragState.draggedTaskId ?? currentActiveDragItem.taskId;
       const overData = over.data.current as any;
       
       if (overData?.date && onUpdateTask) {
@@ -1705,10 +1758,10 @@ const GanttViewV2 = ({
     });
     
     // Only call onTaskDragEnd if there was actually a drag operation
-    if (onTaskDragEnd && localDragState.isDragging) {
+    if (onTaskDragEnd && dragState.isDragging) {
       onTaskDragEnd();
     }
-  }, [localDragState, columns, onUpdateTask, onTaskDragEnd, ganttTasks]);
+  }, [columns, onUpdateTask, onTaskDragEnd, ganttTasks]);
 
   return (
     <>
@@ -1950,7 +2003,7 @@ const GanttViewV2 = ({
 
       {/* Main content */}
       <div ref={mainContentRef} className="relative flex">
-        {/* Task list (vertical reorder removed — use Kanban/List to reorder) */}
+        {/* Task list — vertical reorder within status + status dropdown */}
         <GanttTaskList
           columns={columns}
           groupedTasks={groupedTasks}
@@ -1964,12 +2017,14 @@ const GanttViewV2 = ({
           taskViewMode={taskViewMode}
           onSelectTask={onSelectTask}
           onTaskSelect={handleTaskSelect}
-          onRelationshipClick={handleRelationshipClick}
           onCopyTask={onCopyTask}
           onRemoveTask={onRemoveTask}
           highlightedTaskId={highlightedTaskId}
           siteSettings={siteSettings}
           isAdmin={Boolean(currentUser?.roles?.includes('admin'))}
+          canMutate={canMutate}
+          onReorderTask={onReorderTaskInColumn}
+          onMoveTaskToColumn={onMoveTaskToColumn}
         />
 
         {/* Timeline (horizontal date move / resize only) */}

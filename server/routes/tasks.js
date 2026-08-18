@@ -3212,6 +3212,12 @@ router.post('/:taskId/relationships', authenticateToken, async (req, res) => {
         if (!inverseExists) {
           await taskQueries.createTaskRelationship(db, toTaskId, 'parent', taskId);
         }
+      } else if (relationship === 'related') {
+        const inverseExists = await taskQueries.getTaskRelationship(db, toTaskId, 'related', taskId);
+
+        if (!inverseExists) {
+          await taskQueries.createTaskRelationship(db, toTaskId, 'related', taskId);
+        }
       }
     });
     

@@ -70,6 +70,23 @@
       "file": "src/components/ListView.tsx"
     },
     {
+      "id": "help:task-relationship-link-mode",
+      "attr": "help",
+      "value": "task-relationship-link-mode",
+      "en": "Related tasks",
+      "fr": "Tâches associées",
+      "searchEn": "Related tasks Related tasks Exit link mode Link tasks — click two tasks; hold Shift for related Link tasks task-relationship-link-mode",
+      "searchFr": "Tâches associées Tâches associées Quitter le mode liaison Lier des tâches — cliquez deux tâches ; maintenez Maj pour une association Lier des tâches task-relationship-link-mode",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"task-relationship-link-mode\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/TaskRelationshipLinker.tsx"
+    },
+    {
       "id": "ownerSetup:add-priority",
       "attr": "ownerSetup",
       "value": "add-priority",
@@ -2115,8 +2132,8 @@
       "value": "view-modes",
       "en": "Tools",
       "fr": "Outils",
-      "searchEn": "Tools Tools Highlight linked tasks (on) — hover a linked card to see parents/children; Shift+click the link icon on a highlighted card to unlink Highlight linked tasks (off) view-modes",
-      "searchFr": "Outils Outils Mettre en évidence les tâches liées (activé) — survolez une carte liée pour voir parents/enfants ; Maj+clic sur l'icône de lien d'une carte mise en évidence pour dissocier Mettre en évidence les tâches liées (désactivé) view-modes",
+      "searchEn": "Tools Tools Hide tools, members & progress view-modes",
+      "searchFr": "Outils Outils Masquer outils, membres et progression view-modes",
       "kind": "view",
       "mode": "kanban",
       "highlights": [

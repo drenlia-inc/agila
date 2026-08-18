@@ -155,7 +155,8 @@
     "filterReasonMembers": "Team members selected",
     "filterReasonRoles": "Role filters",
     "filterReasonColumns": "Columns hidden",
-    "filterReasonAgentHidden": "AI Agent tasks hidden"
+    "filterReasonAgentHidden": "AI Agent tasks hidden",
+    "filterReasonLinkedTasks": "Linked tasks only"
   },
   "textEditor": {
     "placeholder": "Start typing...",
@@ -1112,6 +1113,9 @@
     "clearDueFrom": "Clear due from date",
     "showAgentTasks": "Show AI Agent tasks",
     "hideAgentTasks": "Hide AI Agent tasks",
+    "linkedTasksOnlyOff": "Show tasks with links (off)",
+    "linkedTasksOnlyOn": "Show tasks with links (on)",
+    "linkedTasksOnlyDisabled": "No linked tasks on this board",
     "dueTo": "due to",
     "clearDueTo": "Clear due to date",
     "priority": "priority",
@@ -1467,11 +1471,18 @@
     "createTasksWithDates": "Create tasks with dates to see them here",
     "keyboardHints": "Use ↑↓ to navigate, Enter to select, Esc to close",
     "noDates": "No dates",
-    "selectedAsParent": "Selected as parent - click another task to link",
-    "clickToSelectAsParent": "Click to select as parent task",
+    "selectedAsParent": "Selected as source — click another task to link (Shift for related)",
+    "clickToSelectAsParent": "Click to select source task (Shift+click second task for related)",
+    "linkUseTaskBars": "Link mode — click task bars in the timeline (not this list)",
+    "selectModeHint": "Click a task card or timeline bar to select.",
+    "selectModeHintMove": "Use <bold>arrow keys</bold> to move task bars left or right.",
+    "linkModeHintPickSource": "Click a timeline bar to pick the source task.",
+    "linkModeHintPickTarget": "Click the next bar for parent→child, or hold Shift for related.",
     "done": "DONE",
     "late": "LATE",
-    "newTask": "New Task"
+    "newTask": "New Task",
+    "changeStatus": "Change status",
+    "noColumnsAvailable": "No columns available"
   },
   "tour": {
     "back": "Back",

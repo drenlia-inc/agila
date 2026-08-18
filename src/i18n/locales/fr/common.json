@@ -155,7 +155,8 @@
     "filterReasonMembers": "Membres de l'équipe sélectionnés",
     "filterReasonRoles": "Filtres de rôle",
     "filterReasonColumns": "Colonnes masquées",
-    "filterReasonAgentHidden": "Tâches de l'agent IA masquées"
+    "filterReasonAgentHidden": "Tâches de l'agent IA masquées",
+    "filterReasonLinkedTasks": "Tâches liées uniquement"
   },
   "textEditor": {
     "placeholder": "Commencez à taper...",
@@ -1112,6 +1113,9 @@
     "clearDueFrom": "Effacer la date d'échéance de début",
     "showAgentTasks": "Afficher les tâches de l'agent IA",
     "hideAgentTasks": "Masquer les tâches de l'agent IA",
+    "linkedTasksOnlyOff": "Afficher les tâches liées (désactivé)",
+    "linkedTasksOnlyOn": "Afficher les tâches liées (activé)",
+    "linkedTasksOnlyDisabled": "Aucune tâche liée sur ce tableau",
     "dueTo": "fin à",
     "clearDueTo": "Effacer la date d'échéance de fin",
     "priority": "priorité",
@@ -1467,11 +1471,18 @@
     "createTasksWithDates": "Créez des tâches avec des dates pour les voir ici",
     "keyboardHints": "Utilisez ↑↓ pour naviguer, Entrée pour sélectionner, Échap pour fermer",
     "noDates": "Aucune date",
-    "selectedAsParent": "Sélectionné comme parent - cliquez sur une autre tâche pour créer un lien",
-    "clickToSelectAsParent": "Cliquer pour sélectionner comme tâche parent",
+    "selectedAsParent": "Source sélectionnée — cliquez une autre tâche pour lier (Maj pour associé)",
+    "clickToSelectAsParent": "Cliquez pour choisir la source (Maj+clic sur la deuxième pour un lien associé)",
+    "linkUseTaskBars": "Mode lien — cliquez les barres dans la chronologie (pas cette liste)",
+    "selectModeHint": "Cliquez une carte ou une barre de la chronologie pour sélectionner.",
+    "selectModeHintMove": "Utilisez les <bold>touches fléchées</bold> pour déplacer les barres à gauche ou à droite.",
+    "linkModeHintPickSource": "Cliquez une barre pour choisir la tâche source.",
+    "linkModeHintPickTarget": "Cliquez la barre suivante pour parent→enfant, ou Maj pour associé.",
     "done": "TERMINÉ",
     "late": "RETARD",
-    "newTask": "Nouvelle Tâche"
+    "newTask": "Nouvelle Tâche",
+    "changeStatus": "Changer le statut",
+    "noColumnsAvailable": "Aucune colonne disponible"
   },
   "tour": {
     "back": "Précédent",

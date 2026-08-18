@@ -35,6 +35,7 @@ import {
 } from '../api';
 import { useFileUpload, getUploadErrorMessage } from '../hooks/useFileUpload';
 import { toast } from '../utils/toast';
+import TaskRelationshipLinker from './TaskRelationshipLinker';
 import { getLocalISOString, formatToYYYYMMDDHHmmss } from '../utils/dateUtils';
 import { generateUUID } from '../utils/uuid';
 import { loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
@@ -285,7 +286,46 @@ export default function TaskDetails({
   const [childrenSearchTerm, setChildrenSearchTerm] = useState('');
   const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
   const childrenDropdownRef = useRef<HTMLDivElement>(null);
-  
+
+  const reloadRelationships = useCallback(async () => {
+    if (!task.id) return;
+
+    setIsLoadingRelationships(true);
+    try {
+      const relationshipsData = await getTaskRelationships(task.id);
+      setRelationships(relationshipsData);
+
+      const parent = relationshipsData.find((rel: any) => rel.relationship === 'child' && rel.task_id === task.id);
+      if (parent) {
+        setParentTask({
+          id: parent.to_task_id,
+          ticket: parent.related_task_ticket,
+          title: parent.related_task_title,
+          projectId: parent.related_task_project_id,
+        });
+      } else {
+        setParentTask(null);
+      }
+
+      const children = relationshipsData
+        .filter((rel: any) => rel.relationship === 'parent' && rel.task_id === task.id)
+        .map((rel: any) => ({
+          id: rel.to_task_id,
+          ticket: rel.related_task_ticket,
+          title: rel.related_task_title,
+          projectId: rel.related_task_project_id,
+        }));
+      setChildTasks(children);
+
+      const availableTasksData = await getAvailableTasksForRelationship(task.id);
+      setAvailableTasksForChildren(Array.isArray(availableTasksData) ? availableTasksData : []);
+    } catch (error) {
+      console.error('Error loading task relationships:', error);
+    } finally {
+      setIsLoadingRelationships(false);
+    }
+  }, [task.id]);
+
   // Task attachments state with logging
   const [taskAttachments, setTaskAttachmentsInternal] = useState<Array<{
     id: string;
@@ -459,51 +499,8 @@ export default function TaskDetails({
 
   // Load task relationships
   useEffect(() => {
-    const loadRelationships = async () => {
-      if (!task.id) return;
-      
-      setIsLoadingRelationships(true);
-      try {
-        // Load task relationships
-        const relationshipsData = await getTaskRelationships(task.id);
-        setRelationships(relationshipsData);
-        
-        // Parse parent and children from relationships
-        const parent = relationshipsData.find((rel: any) => rel.relationship === 'child' && rel.task_id === task.id);
-        if (parent) {
-          setParentTask({
-            id: parent.to_task_id,
-            ticket: parent.related_task_ticket,
-            title: parent.related_task_title,
-            projectId: parent.related_task_project_id
-          });
-        } else {
-          setParentTask(null);
-        }
-        
-        const children = relationshipsData
-          .filter((rel: any) => rel.relationship === 'parent' && rel.task_id === task.id)
-          .map((rel: any) => ({
-            id: rel.to_task_id,
-            ticket: rel.related_task_ticket,
-            title: rel.related_task_title,
-            projectId: rel.related_task_project_id
-          }));
-        setChildTasks(children);
-        
-        // Load available tasks for adding as children
-        const availableTasksData = await getAvailableTasksForRelationship(task.id);
-        setAvailableTasksForChildren(Array.isArray(availableTasksData) ? availableTasksData : []);
-        
-      } catch (error) {
-        console.error('Error loading task relationships:', error);
-      } finally {
-        setIsLoadingRelationships(false);
-      }
-    };
-    
-    loadRelationships();
-  }, [task.id]);
+    void reloadRelationships();
+  }, [reloadRelationships]);
 
   // Helper function to calculate optimal dropdown position
   const calculateDropdownPosition = (buttonRef: React.RefObject<HTMLButtonElement>): 'above' | 'below' => {
@@ -2412,6 +2409,17 @@ export default function TaskDetails({
                   )}
                 </div>
               </div>
+
+              {!isLoadingRelationships && (
+                <TaskRelationshipLinker
+                  taskId={task.id}
+                  taskTicket={task.ticket}
+                  relationships={relationships}
+                  availableTasks={availableTasksForChildren}
+                  canMutate={!isWritersLocked}
+                  onRefresh={reloadRelationships}
+                />
+              )}
             </div>
           </div>
         </div>

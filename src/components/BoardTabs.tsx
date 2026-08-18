@@ -85,45 +85,70 @@ function boardTaskCountTooltip(
 
 const BOARD_TAB_ADMIN_CHROME_DELAY_MS = 1000;
 
-/** Delay drag handle + trash on board tabs so quick clicks select the tab; zones reveal immediately on direct hover. */
-function useBoardTabAdminChromeReveal(delayMs = BOARD_TAB_ADMIN_CHROME_DELAY_MS) {
+/** Delay drag handle + trash on board tabs so quick clicks select the tab. */
+function useBoardTabAdminChromeReveal(
+  stripHovered: boolean,
+  isEditing: boolean,
+  delayMs = BOARD_TAB_ADMIN_CHROME_DELAY_MS
+) {
   const [tabHovered, setTabHovered] = useState(false);
-  const [handleHovered, setHandleHovered] = useState(false);
-  const [trashHovered, setTrashHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
   const [delayedReveal, setDelayedReveal] = useState(false);
+  const [pinnedReveal, setPinnedReveal] = useState(false);
+
+  const dismissChrome = () => {
+    setTabHovered(false);
+    setDelayedReveal(false);
+    setPinnedReveal(false);
+  };
+
+  const dismissChromeUnlessEditing = () => {
+    if (isEditing) return;
+    dismissChrome();
+  };
 
   useEffect(() => {
-    if (!tabHovered) {
+    if (!stripHovered && !isEditing) {
+      dismissChrome();
+    }
+  }, [stripHovered, isEditing]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    setPinnedReveal(true);
+  }, [isEditing]);
+
+  useEffect(() => {
+    if (isEditing) return;
+    if (!stripHovered || !tabHovered) {
       setDelayedReveal(false);
+      setPinnedReveal(false);
+      if (!stripHovered) {
+        setTabHovered(false);
+      }
+    }
+  }, [isEditing, stripHovered, tabHovered]);
+
+  useEffect(() => {
+    if (!stripHovered || !tabHovered || pinnedReveal || isEditing) {
+      if (!pinnedReveal && !isEditing) {
+        setDelayedReveal(false);
+      }
       return;
     }
     const timer = window.setTimeout(() => setDelayedReveal(true), delayMs);
     return () => window.clearTimeout(timer);
-  }, [tabHovered, delayMs]);
+  }, [stripHovered, tabHovered, pinnedReveal, isEditing, delayMs]);
 
-  const chromeVisible = delayedReveal || focused;
+  const adminChromeVisible =
+    isEditing || (stripHovered && tabHovered && (delayedReveal || pinnedReveal));
 
   return {
-    showDragHandle: handleHovered || chromeVisible,
-    showTrash: trashHovered || chromeVisible,
+    showDragHandle: adminChromeVisible,
+    showTrash: adminChromeVisible,
+    revealChrome: () => setPinnedReveal(true),
     tabSurfaceProps: {
       onMouseEnter: () => setTabHovered(true),
-      onMouseLeave: () => {
-        setTabHovered(false);
-        setHandleHovered(false);
-        setTrashHovered(false);
-      },
-      onFocus: () => setFocused(true),
-      onBlur: () => setFocused(false),
-    },
-    handleZoneProps: {
-      onMouseEnter: () => setHandleHovered(true),
-      onMouseLeave: () => setHandleHovered(false),
-    },
-    trashZoneProps: {
-      onMouseEnter: () => setTrashHovered(true),
-      onMouseLeave: () => setTrashHovered(false),
+      onMouseLeave: dismissChromeUnlessEditing,
     },
   };
 }
@@ -409,15 +434,15 @@ const SortableBoardTab: React.FC<{
   hasActiveFilters?: boolean;
   /** Visual cue while the edit dropdown is open for this tab. */
   isEditing?: boolean;
-}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete, taskCount, wipCount, effort = 0, effortTooltip, siteSettings, totalTaskCount, deleteConfirmTaskCount, showTaskCount, hasActiveFilters = false, isEditing = false }) => {
+  boardTabsStripHovered?: boolean;
+}> = ({ board, isSelected, onSelect, onEdit, onRemove, canDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete, taskCount, wipCount, effort = 0, effortTooltip, siteSettings, totalTaskCount, deleteConfirmTaskCount, showTaskCount, hasActiveFilters = false, isEditing = false, boardTabsStripHovered = false }) => {
   const [deleteButtonRef, setDeleteButtonRef] = useState<HTMLButtonElement | null>(null);
   const {
     showDragHandle,
     showTrash,
+    revealChrome,
     tabSurfaceProps,
-    handleZoneProps,
-    trashZoneProps,
-  } = useBoardTabAdminChromeReveal();
+  } = useBoardTabAdminChromeReveal(boardTabsStripHovered, isEditing);
   const {
     attributes,
     listeners,
@@ -461,7 +486,14 @@ const SortableBoardTab: React.FC<{
         tabIndex={0}
         data-board-tab-id={board.id}
         onClick={onSelect}
-        onDoubleClick={onEdit}
+        onDoubleClick={() => {
+          revealChrome();
+          onEdit();
+        }}
+        onMouseDown={(e) => {
+          // Selecting a tab must not leave keyboard focus stuck on it (that kept admin chrome visible).
+          if (e.button === 0) e.preventDefault();
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -476,15 +508,14 @@ const SortableBoardTab: React.FC<{
           ${isDragging ? 'opacity-60 shadow-lg ring-2 ring-gray-300/50 dark:ring-gray-500/40' : ''}
         `}
       >
-        {/* Task count pill until hover reveals drag handle (1s tab delay or immediate handle-zone hover). */}
+        {/* Task count pill until 1s tab hover reveals drag handle + trash. */}
         <KanbanChromeTooltip label={handleTooltip} wrapperClassName="relative z-[2] shrink-0">
           <div
             className={`relative flex h-6 min-w-6 items-center justify-center rounded-md px-0 text-gray-400 transition-colors ${
               dragHandleActive
                 ? 'cursor-grab touch-none hover:bg-gray-200/80 hover:text-gray-600 active:cursor-grabbing dark:hover:bg-gray-600/50 dark:hover:text-gray-300'
-                : ''
+                : 'pointer-events-none'
             }`}
-            {...handleZoneProps}
             {...(dragHandleActive ? attributes : {})}
             {...(dragHandleActive ? listeners : {})}
             onClick={(e) => {
@@ -543,12 +574,13 @@ const SortableBoardTab: React.FC<{
           {renderBoardEffortPill(effort, siteSettings, effortTooltip)}
           {canDelete && (
             <div
-              className="flex h-5 w-5 shrink-0 items-center justify-center"
-              {...trashZoneProps}
+              className={`flex h-5 w-5 shrink-0 items-center justify-center ${
+                showTrash ? '' : 'pointer-events-none'
+              }`}
             >
               <div
                 className={`flex items-center justify-center transition-opacity duration-200 ease-out ${
-                  showTrash ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+                  showTrash ? 'opacity-100' : 'pointer-events-none opacity-0'
                 }`}
               >
                 <KanbanChromeTooltip label={t('boardTabs.deleteBoard')}>
@@ -711,6 +743,7 @@ export default function BoardTabs({
   const [canScrollRight, setCanScrollRight] = useState(false);
   /** When true, both chevron slots stay mounted so show/hide never resizes the track. */
   const [tabsOverflow, setTabsOverflow] = useState(false);
+  const [boardTabsStripHovered, setBoardTabsStripHovered] = useState(false);
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   
   // Cross-board drag state
@@ -1148,7 +1181,12 @@ export default function BoardTabs({
     <div className="mb-6">
       {/* Match Kanban toolbar columns: tab strip = Tools + Team Members; actions = Progression width */}
       <div className="flex items-center gap-4">
-        <div className="flex min-w-0 flex-1 items-center gap-1" data-tour-id="board-tabs">
+        <div
+          className="flex min-w-0 flex-1 items-center gap-1"
+          data-tour-id="board-tabs"
+          onMouseEnter={() => setBoardTabsStripHovered(true)}
+          onMouseLeave={() => setBoardTabsStripHovered(false)}
+        >
           {/* Reserve both chevron slots whenever tabs overflow — toggling arrows must not change track width */}
           {tabsOverflow && (
             <KanbanChromeTooltip label={t('boardTabs.scrollLeft')}>
@@ -1240,6 +1278,7 @@ export default function BoardTabs({
                         showTaskCount={allowBoardTabTaskCounts}
                         hasActiveFilters={hasActiveFilters}
                         isEditing={editingBoardId === board.id}
+                        boardTabsStripHovered={boardTabsStripHovered}
                       />
                     )}
                   </div>

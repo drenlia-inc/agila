@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { Copy, Eye, UserPlus, GripVertical, TagIcon, Plus, Trash2, Link, Archive } from 'lucide-react';
+import { Copy, Eye, UserPlus, GripVertical, TagIcon, Plus, Trash2, GitBranch, Archive } from 'lucide-react';
 import { Task, TeamMember, Tag } from '../types';
 import { formatMembersTooltip } from '../utils/taskUtils';
 import AddTagModal from './AddTagModal';
@@ -54,8 +54,6 @@ interface TaskCardToolbarProps {
   onLinkToolHover?: (task: Task) => void;
   onLinkToolHoverEnd?: () => void;
   relationSummary?: TaskRelationshipSummary;
-  /** When true, card owns hover-end so leaving the link control does not clear badges */
-  highlightLinksMode?: boolean;
   getTaskRelationshipType?: (taskId: string) => 'parent' | 'child' | 'related' | null;
   onUnlinkRelatedTask?: (targetTask: Task) => void | Promise<void>;
   
@@ -67,6 +65,8 @@ interface TaskCardToolbarProps {
   isAdmin?: boolean;
   /** When false, only show assignee avatar + watcher/collaborator counts (read-only). */
   canMutate?: boolean;
+  /** Task card root — constrains link tooltip width so long copy wraps within the card. */
+  cardWidthAnchorRef?: React.RefObject<HTMLElement | null>;
 }
 
 export default function TaskCardToolbar({
@@ -103,7 +103,6 @@ export default function TaskCardToolbar({
   onLinkToolHover,
   onLinkToolHoverEnd,
   relationSummary: relationSummaryProp,
-  highlightLinksMode = false,
   getTaskRelationshipType,
   onUnlinkRelatedTask: _onUnlinkRelatedTask,
   
@@ -112,6 +111,7 @@ export default function TaskCardToolbar({
   isSelected = false,
   isAdmin = false,
   canMutate = true,
+  cardWidthAnchorRef,
 }: TaskCardToolbarProps) {
   const { t } = useTranslation('tasks');
   const _priorityButtonRef = useRef<HTMLButtonElement>(null);
@@ -399,10 +399,9 @@ export default function TaskCardToolbar({
             ? agentLockedLabel
             : isLinkingMode && linkingSourceTask?.id === task.id
               ? t('toolbar.sourceTaskForLinking')
-              : hasRelations
-                ? t('toolbar.holdAndDragToLinkWithRelations')
-                : t('toolbar.holdAndDragToLink')
+              : t('toolbar.holdAndDragToLink')
         }
+        widthAnchorRef={cardWidthAnchorRef}
         wrapperClassName="relative inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center"
       >
         <button
@@ -428,10 +427,7 @@ export default function TaskCardToolbar({
           }}
           onMouseLeave={(e) => {
             e.stopPropagation();
-            // Avoid clearing while highlight mode keeps sticky focus across cards
-            if (!(highlightLinksMode && hasRelations)) {
-              onLinkToolHoverEnd?.();
-            }
+            onLinkToolHoverEnd?.();
           }}
           onPointerEnter={(e) => {
             if (agentBlocking) return;
@@ -440,11 +436,9 @@ export default function TaskCardToolbar({
           }}
           onPointerLeave={(e) => {
             e.stopPropagation();
-            if (!(highlightLinksMode && hasRelations)) {
-              onLinkToolHoverEnd?.();
-            }
+            onLinkToolHoverEnd?.();
           }}
-          className={`p-1 rounded-full inline-flex h-[22px] w-[22px] items-center justify-center ${toolbarReachClass} ${
+          className={`relative p-1 rounded-full inline-flex h-[22px] w-[22px] items-center justify-center ${toolbarReachClass} ${
             agentBlocking
               ? 'opacity-40 cursor-not-allowed text-gray-400'
               : isLinkingMode && linkingSourceTask?.id === task.id
@@ -455,11 +449,11 @@ export default function TaskCardToolbar({
           }`}
           style={{ pointerEvents: 'auto', zIndex: 100, touchAction: 'none', userSelect: 'none' }}
         >
-          <span className="relative inline-flex h-[14px] w-[14px] items-center justify-center overflow-visible">
-            <Link size={14} className="shrink-0" />
+          <span className="relative inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center">
+            <GitBranch size={14} className="shrink-0" />
             {hasRelations && (
               <span
-                className="absolute -top-1 -right-1.5 flex items-center gap-px leading-none pointer-events-none"
+                className="absolute bottom-0 right-0 flex items-center gap-px leading-none pointer-events-none"
                 aria-hidden="true"
               >
                 {relationSummary.hasParent && (

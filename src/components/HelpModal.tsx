@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Users, Columns, ClipboardList, MessageSquare, MessageCircle, ArrowRight, LayoutGrid, List, Calendar, Search, Eye, Settings, Play, BarChart3, Shield, Download, Bot, KeyRound, CheckSquare, AlertTriangle, Trash2, ListChecks, Keyboard, Minus, ChevronUp, Circle, HardDrive, Plus, Pencil, Copy, Paperclip, Tag, Link, Archive, GripVertical, type LucideIcon } from 'lucide-react';
+import { X, Users, Columns, ClipboardList, MessageSquare, MessageCircle, ArrowRight, LayoutGrid, List, Calendar, Search, Eye, Settings, Play, BarChart3, Shield, Download, Bot, KeyRound, CheckSquare, AlertTriangle, Trash2, ListChecks, Keyboard, Minus, ChevronUp, Circle, HardDrive, Plus, Pencil, Copy, Paperclip, Tag, GitBranch, Archive, GripVertical, type LucideIcon } from 'lucide-react';
 import { useTour } from '../contexts/TourContext';
 import { useOwnerSetupOptional } from '../contexts/OwnerSetupContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -237,7 +237,7 @@ const HELP_INLINE_ICONS: Record<string, LucideIcon> = {
   paperclip: Paperclip,
   message: MessageCircle,
   tag: Tag,
-  link: Link,
+  link: GitBranch,
   archive: Archive,
   grip: GripVertical,
 };

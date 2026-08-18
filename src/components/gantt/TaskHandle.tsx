@@ -66,7 +66,7 @@ export const TaskHandle: React.FC<TaskHandleProps> = React.memo(({
       className={`
         absolute top-0 w-3 h-full opacity-60 hover:opacity-80 
         transition-all rounded-${isStartHandle ? 'l' : 'r'} flex items-center justify-center
-        ${cursor} z-20
+        ${cursor} z-30
         ${isStartHandle ? 'left-0' : 'right-0'}
         ${isDragging ? 'shadow-lg' : ''}
       `}

@@ -100,7 +100,6 @@ interface KanbanColumnProps {
   onLinkToolHoverEnd?: () => void;
   getTaskRelationshipType?: (taskId: string) => 'parent' | 'child' | 'related' | null;
   onUnlinkRelatedTask?: (targetTask: Task) => void | Promise<void>;
-  highlightLinksMode?: boolean;
   relationSummaryByTaskId?: Map<string, TaskRelationshipSummary>;
   
   // Network status
@@ -200,7 +199,6 @@ function KanbanColumn({
   onLinkToolHoverEnd,
   getTaskRelationshipType,
   onUnlinkRelatedTask,
-  highlightLinksMode = false,
   relationSummaryByTaskId,
   
   // Network status
@@ -261,6 +259,7 @@ function KanbanColumn({
     const w = visibilityWarning;
     const parts: string[] = [];
     if (w.reasons.search) parts.push(t('column.filterTypes.searchFilters'));
+    if (w.reasons.linked) parts.push(t('column.filterTypes.linkedTasks'));
     if (w.reasons.sprint) parts.push(t('column.filterTypes.sprintSelection'));
     if (w.reasons.members) parts.push(t('column.filterTypes.memberFilters'));
     const andW = t('column.and');
@@ -1047,7 +1046,6 @@ function KanbanColumn({
             onLinkToolHoverEnd={onLinkToolHoverEnd}
             getTaskRelationshipType={getTaskRelationshipType}
             onUnlinkRelatedTask={onUnlinkRelatedTask}
-            highlightLinksMode={highlightLinksMode}
             relationSummary={getTaskRelationshipSummary(relationSummaryByTaskId, task.id)}
           />
         </div>
@@ -1097,7 +1095,7 @@ function KanbanColumn({
     }
 
     return taskElements;
-    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, column.title, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, highlightLinksMode, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
+    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, column.title, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
 
   // Combine sortable and column droppable refs for the column container
   const columnElRef = useRef<HTMLElement | null>(null);
@@ -1965,7 +1963,6 @@ function areKanbanColumnPropsEqual(
   if (prev.isAdmin !== next.isAdmin) return false;
   if (prev.isMultiSelectDragLocked !== next.isMultiSelectDragLocked) return false;
   if (prev.selectedSprintId !== next.selectedSprintId) return false;
-  if (prev.highlightLinksMode !== next.highlightLinksMode) return false;
   if (prev.isLinkingMode !== next.isLinkingMode) return false;
   if (prev.linkingSourceTask?.id !== next.linkingSourceTask?.id) return false;
   if (prev.hoveredLinkTask?.id !== next.hoveredLinkTask?.id) return false;

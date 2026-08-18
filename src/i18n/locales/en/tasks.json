@@ -103,6 +103,7 @@
     "markChild": "C",
     "markRelated": "R",
     "addChildTask": "Add child task...",
+    "addRelatedTask": "Add related task...",
     "searchTasks": "Search tasks by number or title...",
     "goToParent": "Go to parent task",
     "goToChild": "Go to child task",
@@ -127,9 +128,22 @@
     "linkFailedTitle": "Could not create relationship",
     "linkAlreadyExistsTitle": "Relationship already exists",
     "linkingFrom": "Linking from {{ticket}} — release on a task or press Esc to cancel",
+    "linkingRelatedFrom": "Related link from {{ticket}} — release on a task (Esc to cancel)",
     "relationshipParent": "parent",
     "relationshipChild": "child",
-    "relationshipRelated": "related"
+    "relationshipRelated": "related",
+    "relatedTasks": "Related tasks",
+    "linkTasks": "Link tasks",
+    "enterLinkMode": "Link tasks — click two tasks; hold Shift for related",
+    "exitLinkMode": "Exit link mode",
+    "linkModePickSource": "Click the first task (source).",
+    "linkModePickTarget": "Click the second task (target).",
+    "linkModeShiftHint": "Hold Shift when clicking the second task to create a related link instead of parent → child.",
+    "linkSourceSelected": "Source: {{ticket}} — pick target",
+    "searchTasksToLink": "Search tasks to link…",
+    "removeRelated": "Remove related link",
+    "noTasksFound": "No tasks found matching your search",
+    "noAvailableTasks": "No available tasks"
   },
   "dnd": {
     "keyboardMoveHint": "Moving {{label}} — arrow keys to reposition, Enter to drop, Esc to cancel"
@@ -146,8 +160,7 @@
     "assignTo": "Assign to:",
     "assignToAgentSection": "AI Agent",
     "sourceTaskForLinking": "Source task for linking",
-    "holdAndDragToLink": "Hold and drag to link tasks",
-    "holdAndDragToLinkWithRelations": "Has links — hold and drag to link more; Shift+click to remove a highlighted relationship",
+    "holdAndDragToLink": "Hold and drag to link (parent-child), shift to relate",
     "noMoreTagsAvailable": "No more tags available",
     "disabledWhileAgent": "Unavailable while the Agent is working on this task"
   },
@@ -216,7 +229,8 @@
     "filterTypes": {
       "searchFilters": "search filters",
       "sprintSelection": "sprint selection",
-      "memberFilters": "member filters"
+      "memberFilters": "member filters",
+      "linkedTasks": "linked tasks filter"
     },
     "and": "and"
   },

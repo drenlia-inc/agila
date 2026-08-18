@@ -15,7 +15,7 @@ import {
   ColumnVisibilityWarning
 } from '../../types';
 import { TaskViewMode, ViewMode, loadUserPreferences, loadUserPreferencesAsync, updateAppSettingsPreference } from '../../utils/userPreferences';
-import { hasConfiguredSearchFilters, clearTaskSoftDelete } from '../../utils/taskUtils';
+import { hasConfiguredSearchFilters, hasNonLinkSearchFilters, clearTaskSoftDelete } from '../../utils/taskUtils';
 import {
   allTasksCheckedInColumn,
   checkedIdsInColumn,
@@ -57,16 +57,6 @@ import { isArchivedColumnFlag } from '../../utils/columnUtils';
 import { onHelpReveal, takeHelpReveal } from '../../utils/helpGoThere';
 
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
-
-const HIGHLIGHT_LINKS_STORAGE_KEY = 'ek_highlight_links_mode';
-
-function readHighlightLinksMode(): boolean {
-  try {
-    return localStorage.getItem(HIGHLIGHT_LINKS_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
 
 // Lazy load GanttViewV2 to reduce initial bundle size (only loads when Gantt view is selected) with retry logic
 const GanttViewV2 = lazyWithRetry(() => import('../GanttViewV2'));
@@ -160,6 +150,7 @@ interface KanbanPageProps {
   onTagAdd: (taskId: string) => (tagId: string) => Promise<void>;
   onTagRemove: (taskId: string) => (tagId: string) => Promise<void>;
   onMoveTaskToColumn: (taskId: string, targetColumnId: string) => Promise<void>;
+  onGanttReorderTask?: (taskId: string, columnId: string, targetIndex: number) => Promise<void>;
   animateCopiedTaskId?: string | null;
   onEditColumn: (
     columnId: string,
@@ -320,6 +311,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   onTagAdd,
   onTagRemove,
   onMoveTaskToColumn,
+  onGanttReorderTask,
   animateCopiedTaskId,
   onEditColumn,
   onRemoveColumn,
@@ -400,7 +392,6 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     const prefs = loadUserPreferences(currentUser?.id ?? null);
     return prefs.appSettings.showBoardToolbar !== false;
   });
-  const [highlightLinksMode, setHighlightLinksMode] = useState(readHighlightLinksMode);
   const [trashOpen, setTrashOpen] = useState(() =>
     readBoardTrashOpenPreference(selectedBoard)
   );
@@ -842,25 +833,11 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     return onHelpReveal(applyHelpReveal);
   }, [currentUser?.id, setTrashOpenPersisted]);
 
-  const handleToggleHighlightLinks = useCallback(() => {
-    setHighlightLinksMode((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(HIGHLIGHT_LINKS_STORAGE_KEY, next ? 'true' : 'false');
-      } catch {
-        // ignore quota / private mode
-      }
-      return next;
-    });
-  }, []);
-
   const relationSummaryByTaskId = useMemo(
     () => buildTaskRelationshipSummaryMap(boardRelationships),
     [boardRelationships]
   );
   const hasBoardRelationships = boardRelationships.length > 0;
-  /** Don't dim the board when there is nothing to highlight (e.g. stale localStorage). */
-  const effectiveHighlightLinksMode = highlightLinksMode && hasBoardRelationships;
 
   // Column filtering logic - memoized to prevent unnecessary re-renders
   const visibleColumnsForCurrentBoard = useMemo(() => {
@@ -878,7 +855,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   }, [selectedBoard, columns, boardColumnVisibility]);
 
   const activeFilterTooltip = useMemo(() => {
-    const hasSearchCriteria = hasConfiguredSearchFilters(searchFilters);
+    const hasSearchCriteria = hasNonLinkSearchFilters(searchFilters);
 
     let hasHiddenColumns = false;
     const allColumns = Object.values(columns);
@@ -898,11 +875,14 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     const agentHidden =
       siteSettings?.AI_ENABLED === 'true' && !showAgentTasks;
 
+    const linkedTasksOnly = !!searchFilters.linkedTasksOnly;
+
     // Member selection + role chips live in Team Members — do not badge Search for them.
     const badgeActive =
       hasSearchCriteria ||
       hasHiddenColumns ||
-      agentHidden;
+      agentHidden ||
+      linkedTasksOnly;
 
     if (!badgeActive) return '';
 
@@ -915,6 +895,9 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     }
     if (agentHidden) {
       reasons.push(t('tools.filterReasonAgentHidden', { ns: 'common' }));
+    }
+    if (linkedTasksOnly) {
+      reasons.push(t('tools.filterReasonLinkedTasks', { ns: 'common' }));
     }
 
     if (reasons.length === 0) {
@@ -1323,9 +1306,6 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               hasActiveFilters={showSearchFilterBadge}
               activeFilterTooltip={activeFilterTooltip}
               onHideToolbar={() => void handleToggleBoardToolbar()}
-              highlightLinksMode={effectiveHighlightLinksMode}
-              onToggleHighlightLinks={handleToggleHighlightLinks}
-              hasBoardRelationships={hasBoardRelationships}
             />
           </div>
           <div className="min-w-0 flex-1 flex">
@@ -1394,6 +1374,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
             selectedBoard={selectedBoard}
             showAgentTasks={showAgentTasks}
             onToggleShowAgentTasks={onToggleShowAgentTasks}
+            hasBoardRelationships={hasBoardRelationships}
           />
         </div>
       )}
@@ -1524,6 +1505,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 onRemoveTask={onRemoveTask}
                 siteSettings={siteSettings}
                 canMutate={canMutate}
+                onMoveTaskToColumn={onMoveTaskToColumn}
+                onReorderTaskInColumn={onGanttReorderTask}
               />
             </Suspense>
           ) : (
@@ -1676,7 +1659,6 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                             onLinkToolHoverEnd={onLinkToolHoverEnd}
                             getTaskRelationshipType={getTaskRelationshipType}
                             onUnlinkRelatedTask={onUnlinkRelatedTask}
-                            highlightLinksMode={effectiveHighlightLinksMode}
                             relationSummaryByTaskId={relationSummaryByTaskId}
                             
                             // Network status
@@ -1785,7 +1767,6 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                       onLinkToolHoverEnd={onLinkToolHoverEnd}
                       getTaskRelationshipType={getTaskRelationshipType}
                       onUnlinkRelatedTask={onUnlinkRelatedTask}
-                      highlightLinksMode={effectiveHighlightLinksMode}
                       relationSummaryByTaskId={relationSummaryByTaskId}
                       
                       // Network status

@@ -12,6 +12,8 @@ export type ColumnFilterState = {
   includeCollaborators: boolean;
   includeRequesters: boolean;
   showAgentTasks: boolean;
+  /** When set, linked-tasks-only filter applies; omit for boards without relationship data. */
+  linkedTaskIds?: Set<string>;
 };
 
 /** Resolve sprint id from either camelCase or snake_case API shapes. */
@@ -57,6 +59,7 @@ export function applyActiveColumnFilters(
     includeCollaborators,
     includeRequesters,
     showAgentTasks,
+    linkedTaskIds,
   } = state;
 
   const searchConfigured = hasConfiguredSearchFilters(searchFilters);
@@ -147,6 +150,10 @@ export function applyActiveColumnFilters(
     }
 
     columnTasks = stripAgentIfNeeded(columnTasks);
+
+    if (searchFilters.linkedTasksOnly && linkedTaskIds !== undefined) {
+      columnTasks = columnTasks.filter((task) => linkedTaskIds.has(task.id));
+    }
 
     filteredColumns[columnId] = {
       ...column,

@@ -53,6 +53,249 @@ interface DependencyArrow {
   color: string;
 }
 
+interface PendingArrow {
+  id: string;
+  relationshipId: string;
+  fromTaskId: string;
+  toTaskId: string;
+  relationship: 'parent' | 'related';
+  fromPos: TaskPosition;
+  toPos: TaskPosition;
+  color: string;
+}
+
+const BAR_HEIGHT = 24;
+const COLUMN_WIDTH = 40;
+const GAP = COLUMN_WIDTH * 1.5;
+const LANE_X_STEP = 12;
+const LANE_Y_STEP = 10;
+const TYPE_Y_OFFSET = 8;
+const TRUNK_Y_TOLERANCE = 6;
+const BAR_PADDING_INSET = 4;
+
+const getBarBounds = (pos: { y: number; height: number }) => {
+  const barTop = pos.y + Math.max(0, (pos.height - BAR_HEIGHT) / 2);
+  return { barTop, barBottom: barTop + BAR_HEIGHT, barCenter: barTop + BAR_HEIGHT / 2 };
+};
+
+/** Vertical center of the padding band below the bar (inside the row, away from the border). */
+const lowerPaddingCenter = (pos: { y: number; height: number }) => {
+  const { barBottom } = getBarBounds(pos);
+  const rowBottom = pos.y + pos.height;
+  return barBottom + (rowBottom - barBottom) * 0.5;
+};
+
+/** Vertical center of the padding band above the bar (inside the row, away from the border). */
+const upperPaddingCenter = (pos: { y: number; height: number }) => {
+  const { barTop } = getBarBounds(pos);
+  return pos.y + (barTop - pos.y) * 0.5;
+};
+
+const isAdjacentRow = (fromPos: TaskPosition, toPos: TaskPosition, goingDown: boolean) => {
+  if (goingDown) {
+    return Math.abs(toPos.y - (fromPos.y + fromPos.height)) < 2;
+  }
+  return Math.abs(fromPos.y - (toPos.y + toPos.height)) < 2;
+};
+
+const clampRouteY = (
+  routeY: number,
+  arrow: PendingArrow,
+  goingDown: boolean
+): number => {
+  const fromBar = getBarBounds(arrow.fromPos);
+  const toBar = getBarBounds(arrow.toPos);
+  const sameRow = Math.abs(arrow.fromPos.y - arrow.toPos.y) < 1;
+
+  if (goingDown) {
+    const minY = fromBar.barBottom + BAR_PADDING_INSET;
+    const maxY = sameRow
+      ? arrow.fromPos.y + arrow.fromPos.height - BAR_PADDING_INSET
+      : toBar.barTop - BAR_PADDING_INSET;
+    return Math.max(minY, Math.min(routeY, maxY));
+  }
+
+  const maxY = fromBar.barTop - BAR_PADDING_INSET;
+  const minY = sameRow
+    ? arrow.fromPos.y + BAR_PADDING_INSET
+    : toBar.barBottom + BAR_PADDING_INSET;
+  return Math.min(maxY, Math.max(routeY, minY));
+};
+
+/** Spread connection points along the bar edge so multiple lines do not share one anchor. */
+const endpointYOnBar = (pos: { y: number; height: number }, slot: number, total: number): number => {
+  const { barTop, barCenter } = getBarBounds(pos);
+  if (total <= 1) return barCenter;
+
+  const inset = 4;
+  const usable = BAR_HEIGHT - inset * 2;
+  if (total === 2) {
+    return slot === 0 ? barTop + inset + usable * 0.25 : barTop + inset + usable * 0.75;
+  }
+  return barTop + inset + (slot / (total - 1)) * usable;
+};
+
+/** Assign lane indices per task for outgoing (right edge) and incoming (left edge) lines. */
+const assignConnectionLanes = (pending: PendingArrow[]) => {
+  const outgoing = new Map<string, PendingArrow[]>();
+  const incoming = new Map<string, PendingArrow[]>();
+
+  pending.forEach((arrow) => {
+    if (!outgoing.has(arrow.fromTaskId)) outgoing.set(arrow.fromTaskId, []);
+    if (!incoming.has(arrow.toTaskId)) incoming.set(arrow.toTaskId, []);
+    outgoing.get(arrow.fromTaskId)!.push(arrow);
+    incoming.get(arrow.toTaskId)!.push(arrow);
+  });
+
+  const sortByTargetY = (a: PendingArrow, b: PendingArrow) =>
+    a.toPos.y - b.toPos.y || a.toTaskId.localeCompare(b.toTaskId);
+  const sortBySourceY = (a: PendingArrow, b: PendingArrow) =>
+    a.fromPos.y - b.fromPos.y || a.fromTaskId.localeCompare(b.fromTaskId);
+
+  const fromLane = new Map<string, number>();
+  const toLane = new Map<string, number>();
+
+  outgoing.forEach((group) => {
+    group.sort(sortByTargetY);
+    group.forEach((arrow, index) => fromLane.set(arrow.id, index));
+  });
+
+  incoming.forEach((group) => {
+    group.sort(sortBySourceY);
+    group.forEach((arrow, index) => toLane.set(arrow.id, index));
+  });
+
+  return { fromLane, toLane, outgoing, incoming };
+};
+
+interface RouteDraft {
+  arrow: PendingArrow;
+  fromLane: number;
+  toLane: number;
+  outgoingCount: number;
+  incomingCount: number;
+  fromY: number;
+  toY: number;
+  fromX: number;
+  toX: number;
+  stepOutX: number;
+  approachX: number;
+  routeY: number;
+}
+
+/** Route horizontal trunks through bar padding bands — never on row border lines. */
+const computeBaseRouteY = (
+  arrow: PendingArrow,
+  fromY: number,
+  toY: number,
+  fromLane: number
+): number => {
+  const goingDown = toY >= fromY;
+  const typeOffset = arrow.relationship === 'related' ? TYPE_Y_OFFSET : 0;
+  const laneOffset = fromLane * LANE_Y_STEP;
+  const sameRow = Math.abs(arrow.fromPos.y - arrow.toPos.y) < 1;
+
+  let routeY: number;
+
+  if (sameRow || isAdjacentRow(arrow.fromPos, arrow.toPos, goingDown)) {
+    // Adjacent rows share a border pixel — stay inside source row padding
+    routeY = goingDown
+      ? lowerPaddingCenter(arrow.fromPos) + laneOffset + typeOffset
+      : upperPaddingCenter(arrow.fromPos) - laneOffset - typeOffset;
+  } else {
+    const fromBar = getBarBounds(arrow.fromPos);
+    const toBar = getBarBounds(arrow.toPos);
+    // Bias 35 % from source bar toward target bar — avoids landing on row boundaries
+    if (goingDown) {
+      routeY = fromBar.barBottom + (toBar.barTop - fromBar.barBottom) * 0.35 + laneOffset + typeOffset;
+    } else {
+      routeY = toBar.barTop + (fromBar.barBottom - toBar.barTop) * 0.35 - laneOffset - typeOffset;
+    }
+  }
+
+  return clampRouteY(routeY, arrow, goingDown);
+};
+
+/** Bump trunk Y when horizontal segments overlap in the same X band. */
+const deconflictTrunkLanes = (drafts: RouteDraft[]): Map<string, number> => {
+  const bumps = new Map<string, number>();
+  const placed: { y: number; xMin: number; xMax: number }[] = [];
+  const sorted = [...drafts].sort((a, b) => a.routeY - b.routeY || a.arrow.id.localeCompare(b.arrow.id));
+
+  sorted.forEach((draft) => {
+    const xMin = Math.min(draft.stepOutX, draft.approachX);
+    const xMax = Math.max(draft.stepOutX, draft.approachX);
+    const goingDown = draft.toY >= draft.fromY;
+    let bump = 0;
+    const triedY = new Set<number>();
+
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const signedBump = goingDown ? bump : -bump;
+      const candidateY = clampRouteY(draft.routeY + signedBump, draft.arrow, goingDown);
+      if (triedY.has(candidateY)) {
+        bump += LANE_Y_STEP;
+        continue;
+      }
+      triedY.add(candidateY);
+
+      const conflict = placed.some(
+        (segment) =>
+          Math.abs(candidateY - segment.y) < TRUNK_Y_TOLERANCE &&
+          xMin < segment.xMax &&
+          xMax > segment.xMin
+      );
+      if (!conflict) {
+        placed.push({ y: candidateY, xMin, xMax });
+        bumps.set(draft.arrow.id, candidateY - draft.routeY);
+        break;
+      }
+      bump += LANE_Y_STEP;
+    }
+  });
+
+  return bumps;
+};
+
+const buildRouteDraft = (
+  arrow: PendingArrow,
+  fromLane: number,
+  toLane: number,
+  outgoingCount: number,
+  incomingCount: number
+): RouteDraft => {
+  const fromY = endpointYOnBar(arrow.fromPos, fromLane, outgoingCount);
+  const toY = endpointYOnBar(arrow.toPos, toLane, incomingCount);
+  const fromX = arrow.fromPos.x + arrow.fromPos.width;
+  const toX = arrow.toPos.x;
+  const stepOutX = fromX + GAP + fromLane * LANE_X_STEP;
+  const approachX = toX - GAP - toLane * LANE_X_STEP;
+  const routeY = computeBaseRouteY(arrow, fromY, toY, fromLane);
+
+  return {
+    arrow,
+    fromLane,
+    toLane,
+    outgoingCount,
+    incomingCount,
+    fromY,
+    toY,
+    fromX,
+    toX,
+    stepOutX,
+    approachX,
+    routeY,
+  };
+};
+
+const buildArrowPathFromDraft = (draft: RouteDraft, trunkBump = 0): string => {
+  const { fromX, fromY, toX, toY, stepOutX, approachX, arrow } = draft;
+  const goingDown = toY >= fromY;
+  const routeY = clampRouteY(draft.routeY + trunkBump, arrow, goingDown);
+
+  // Finish-to-start: out right → down/up once in gutter → across → drop to child start
+  return `M ${fromX} ${fromY} L ${stepOutX} ${fromY} L ${stepOutX} ${routeY} L ${approachX} ${routeY} L ${approachX} ${toY} L ${toX} ${toY}`;
+};
+
 const TaskDependencyArrows: React.FC<TaskDependencyArrowsProps> = ({
   ganttTasks,
   taskPositions,
@@ -68,9 +311,29 @@ const TaskDependencyArrows: React.FC<TaskDependencyArrowsProps> = ({
   const [localRelationships, setLocalRelationships] = useState<TaskRelationship[]>([]);
   const [arrows, setArrows] = useState<DependencyArrow[]>([]);
   const [hoveredArrow, setHoveredArrow] = useState<string | null>(null);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [hoverDeletePoint, setHoverDeletePoint] = useState<{ x: number; y: number } | null>(null);
   const [positionKey, setPositionKey] = useState(0);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  /** Match visible stroke (3px) with a small tolerance — not a wide grab band. */
+  const ARROW_HIT_STROKE_WIDTH = 6;
+
+  const clientToSvgPoint = (clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    const svgPt = pt.matrixTransform(ctm.inverse());
+    return { x: svgPt.x, y: svgPt.y };
+  };
+
+  const clearArrowHover = () => {
+    setHoveredArrow(null);
+    setHoverDeletePoint(null);
+  };
 
   // Connection drawing state (simplified for icon-based approach)
   // const [hoveredTask, setHoveredTask] = useState<string | null>(null);
@@ -127,123 +390,89 @@ const TaskDependencyArrows: React.FC<TaskDependencyArrowsProps> = ({
 
 
 
-  // Generate SVG path for arrow using same positioning as tasks
-  const generateArrowPath = (from: TaskPosition, to: TaskPosition): string => {
-    // Use 40px column width (same as tasks)
-    const COLUMN_WIDTH = 40;
-    
-    const fromX = from.x + from.width; // Right edge of parent task (end date)
-    const fromY = from.y + (from.height / 2); // Vertical center of parent task
-    const toX = to.x; // Left edge of child task (start date)
-    const toY = to.y + (to.height / 2); // Vertical center of child task
-
-    // Add breathing room: step out further from parent's end date
-    const stepOutDistance = COLUMN_WIDTH * 1.5; // 30px - more breathing room
-    const stepOutX = fromX + stepOutDistance;
-    
-    // Add breathing room: approach further before child's start date
-    const approachDistance = COLUMN_WIDTH * 1.5; // 30px - more breathing room
-    const approachX = toX - approachDistance;
-    
-    // Smart arrow direction: draw upwards if parent is below child
-    const isParentBelowChild = fromY > toY;
-    const routeY = isParentBelowChild 
-      ? fromY - 30  // 30px above parent task center
-      : fromY + 30; // 30px below parent task center
-    
-    // Connect with appropriate vertical offset
-    const fromYAdjusted = isParentBelowChild 
-      ? fromY - 2  // 2px higher from parent center
-      : fromY + 2; // 2px lower from parent center
-    const toYAdjusted = isParentBelowChild 
-      ? toY - 2    // 2px higher to child center
-      : toY + 2;   // 2px lower to child center
-    
-    // Path: right from parent end → up/down from parent → left/right to approach point → up/down to child start
-    return `M ${fromX} ${fromYAdjusted} L ${stepOutX} ${fromYAdjusted} L ${stepOutX} ${routeY} L ${approachX} ${routeY} L ${approachX} ${toYAdjusted} L ${toX} ${toYAdjusted}`;
-  };
-
   // Calculate arrows based on relationships using actual task positions from DOM
-  // Smart update: only recalculate arrows for tasks that have actually moved
   useEffect(() => {
     if (!localRelationships || !ganttTasks || taskPositions.size === 0) {
       return;
     }
-    
-    setArrows(prevArrows => {
-      const newArrows: DependencyArrow[] = [];
-      const processedPairs = new Set<string>(); // Prevent duplicate arrows
-      const arrowsById = new Map(prevArrows.map(a => [a.id, a]));
 
-      localRelationships.forEach((rel) => {
-        // Support both camelCase (from API) and snake_case (from optimistic updates)
-        const taskId = rel.taskId || rel.task_id;
-        const toTaskId = rel.toTaskId || rel.to_task_id;
-        const fromTask = ganttTasks.find(t => t.id === taskId);
-        const toTask = ganttTasks.find(t => t.id === toTaskId);
+    const pending: PendingArrow[] = [];
+    const processedPairs = new Set<string>();
 
-        if (!fromTask || !toTask) {
-          return;
-        }
+    localRelationships.forEach((rel) => {
+      const taskId = rel.taskId || rel.task_id;
+      const toTaskId = rel.toTaskId || rel.to_task_id;
+      const fromTask = ganttTasks.find((t) => t.id === taskId);
+      const toTask = ganttTasks.find((t) => t.id === toTaskId);
 
-        // Only show parent->child arrows (finish-to-start dependencies)
-        if (rel.relationship === 'parent') {
-          // Create unique pair identifier to prevent duplicates
-          const pairKey = `${taskId}-${toTaskId}`;
-          if (processedPairs.has(pairKey)) {
-            return;
-          }
-          processedPairs.add(pairKey);
+      if (!fromTask || !toTask) return;
 
-          // Use actual task positions from DOM (same as task bars use)
-          const fromPos = taskPositions.get(fromTask.id);
-          const toPos = taskPositions.get(toTask.id);
+      if (rel.relationship === 'parent') {
+        const pairKey = `parent:${taskId}-${toTaskId}`;
+        if (processedPairs.has(pairKey)) return;
+        processedPairs.add(pairKey);
 
-          if (!fromPos || !toPos) {
-            return;
-          }
+        const fromPosRaw = taskPositions.get(fromTask.id);
+        const toPosRaw = taskPositions.get(toTask.id);
+        if (!fromPosRaw || !toPosRaw) return;
 
-          const arrowId = `${rel.id}-${pairKey}`;
-          const existingArrow = arrowsById.get(arrowId);
-          
-          // Add taskId to positions for TypeScript compatibility
-          const fromPosWithId = { ...fromPos, taskId: fromTask.id };
-          const toPosWithId = { ...toPos, taskId: toTask.id };
+        pending.push({
+          id: `${rel.id}-${pairKey}`,
+          relationshipId: rel.id,
+          fromTaskId: taskId,
+          toTaskId,
+          relationship: 'parent',
+          fromPos: { ...fromPosRaw, taskId: fromTask.id },
+          toPos: { ...toPosRaw, taskId: toTask.id },
+          color: '#3B82F6',
+        });
+      } else if (rel.relationship === 'related') {
+        const pairKey = `related:${[taskId, toTaskId].sort().join('-')}`;
+        if (processedPairs.has(pairKey)) return;
+        processedPairs.add(pairKey);
 
-          // Only recalculate path if positions have actually changed
-          const positionsChanged = !existingArrow || 
-            existingArrow.fromPosition.x !== fromPosWithId.x ||
-            existingArrow.fromPosition.y !== fromPosWithId.y ||
-            existingArrow.fromPosition.width !== fromPosWithId.width ||
-            existingArrow.toPosition.x !== toPosWithId.x ||
-            existingArrow.toPosition.y !== toPosWithId.y;
+        const fromPosRaw = taskPositions.get(fromTask.id);
+        const toPosRaw = taskPositions.get(toTask.id);
+        if (!fromPosRaw || !toPosRaw) return;
 
-          if (positionsChanged) {
-            const path = generateArrowPath(fromPosWithId, toPosWithId);
-            const color = '#3B82F6'; // Blue for parent relationships
-
-            const arrow = {
-              id: arrowId,
-              relationshipId: rel.id,
-              fromTaskId: taskId,
-              toTaskId: toTaskId,
-              relationship: rel.relationship as any,
-              fromPosition: fromPosWithId,
-              toPosition: toPosWithId,
-              path,
-              color
-            };
-
-            newArrows.push(arrow);
-          } else {
-            // Reuse existing arrow if positions haven't changed
-            newArrows.push(existingArrow);
-          }
-        }
-      });
-
-      return newArrows;
+        pending.push({
+          id: `${rel.id}-${pairKey}`,
+          relationshipId: rel.id,
+          fromTaskId: taskId,
+          toTaskId,
+          relationship: 'related',
+          fromPos: { ...fromPosRaw, taskId: fromTask.id },
+          toPos: { ...toPosRaw, taskId: toTask.id },
+          color: '#CA8A04',
+        });
+      }
     });
+
+    const { fromLane, toLane, outgoing, incoming } = assignConnectionLanes(pending);
+
+    const drafts = pending.map((arrow) => {
+      const outLane = fromLane.get(arrow.id) ?? 0;
+      const inLane = toLane.get(arrow.id) ?? 0;
+      const outCount = outgoing.get(arrow.fromTaskId)?.length ?? 1;
+      const inCount = incoming.get(arrow.toTaskId)?.length ?? 1;
+      return buildRouteDraft(arrow, outLane, inLane, outCount, inCount);
+    });
+
+    const trunkBumps = deconflictTrunkLanes(drafts);
+
+    const newArrows: DependencyArrow[] = drafts.map((draft) => ({
+      id: draft.arrow.id,
+      relationshipId: draft.arrow.relationshipId,
+      fromTaskId: draft.arrow.fromTaskId,
+      toTaskId: draft.arrow.toTaskId,
+      relationship: draft.arrow.relationship,
+      fromPosition: draft.arrow.fromPos,
+      toPosition: draft.arrow.toPos,
+      path: buildArrowPathFromDraft(draft, trunkBumps.get(draft.arrow.id) ?? 0),
+      color: draft.arrow.color,
+    }));
+
+    setArrows(newArrows);
   }, [localRelationships, ganttTasks, taskPositions, positionKey]);
 
   // Arrow marker definition
@@ -290,124 +519,90 @@ const TaskDependencyArrows: React.FC<TaskDependencyArrowsProps> = ({
       >
       {/* Define arrow markers for each color */}
       <ArrowMarker id="arrow-parent" color="#3B82F6" />
-      <ArrowMarker id="arrow-related" color="#6B7280" />
       <ArrowMarker id="arrow-child" color="#10B981" />
 
       {/* SVG overlays no longer needed - using link icons instead */}
 
       {/* Connection drawing no longer needed - using simple click approach */}
 
-      {/* Render dependency arrows */}
-      {arrows.map((arrow) => (
+      {/* Render topmost hit targets last so overlapping arrows prefer the upper one */}
+      {arrows.map((arrow) => {
+        const isHovered = hoveredArrow === arrow.id;
+        return (
         <g key={`arrow-${arrow.id}`}>
-          {/* Arrow path */}
+          {/* Visible arrow */}
           <path
-            key={`arrow-path-${arrow.id}-${arrow.path.slice(0,20)}`}
             d={arrow.path}
             stroke={arrow.color}
             strokeWidth={3}
-            strokeOpacity={0.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeOpacity={
+              isHovered
+                ? arrow.relationship === 'related'
+                  ? 1
+                  : 0.85
+                : arrow.relationship === 'related'
+                  ? 0.75
+                  : 0.5
+            }
+            strokeDasharray={arrow.relationship === 'related' ? '6 4' : undefined}
             fill="none"
-            markerEnd={`url(#arrow-${arrow.relationship})`}
+            markerEnd={arrow.relationship === 'related' ? undefined : `url(#arrow-${arrow.relationship})`}
+            pointerEvents="none"
           />
-          
-          {/* Invisible wider path for easier hovering */}
+
+          {/* Precise hit target — only this stroke receives pointer events */}
           <path
             d={arrow.path}
             stroke="transparent"
-            strokeWidth={10}
+            strokeWidth={ARROW_HIT_STROKE_WIDTH}
             fill="none"
-            className="pointer-events-auto cursor-pointer"
-            onMouseEnter={() => {
-              if (hoverTimeoutRef.current) {
-                clearTimeout(hoverTimeoutRef.current);
+            className={onDeleteRelationship ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'}
+            onMouseMove={(e) => {
+              const pt = clientToSvgPoint(e.clientX, e.clientY);
+              if (pt) {
+                setHoverDeletePoint(pt);
               }
               setHoveredArrow(arrow.id);
             }}
-            onMouseLeave={() => {
-              hoverTimeoutRef.current = setTimeout(() => {
-                setHoveredArrow(null);
-              }, 500);
+            onMouseLeave={clearArrowHover}
+            onClick={(e) => {
+              if (!onDeleteRelationship) return;
+              e.stopPropagation();
+              e.preventDefault();
+              clearArrowHover();
+              onDeleteRelationship(arrow.relationshipId, arrow.fromTaskId);
             }}
           />
-          
-          {/* Delete button on hover */}
-          {hoveredArrow === arrow.id && onDeleteRelationship && (
-            <g>
-              {(() => {
-                // Get the actual task position from taskPositions map
-                const toTaskPosition = taskPositions.get(arrow.toTaskId);
-                if (!toTaskPosition) return null;
-                
-                // Position delete button 20px to the left of the target task's left edge
-                const deleteX = toTaskPosition.x - 20;
-                const deleteY = toTaskPosition.y + toTaskPosition.height / 2;
-                
-                
-                return (
-                  <>
-                    {/* Extended hover area around delete button */}
-                    <rect
-                      x={deleteX - 15}
-                      y={deleteY - 15}
-                      width={30}
-                      height={30}
-                      fill="transparent"
-                      className="pointer-events-auto"
-                      onMouseEnter={() => {
-                        if (hoverTimeoutRef.current) {
-                          clearTimeout(hoverTimeoutRef.current);
-                        }
-                        setHoveredArrow(arrow.id);
-                      }}
-                      onMouseLeave={() => {
-                        hoverTimeoutRef.current = setTimeout(() => {
-                          setHoveredArrow(null);
-                        }, 500);
-                      }}
-                    />
-                    {/* Delete button background */}
-                    <circle
-                      cx={deleteX}
-                      cy={deleteY}
-                      r="6"
-                      fill="rgba(239, 68, 68, 0.9)"
-                      stroke="white"
-                      strokeWidth="1"
-                      className="cursor-pointer"
-                      style={{ pointerEvents: 'auto' }}
-                      onMouseEnter={() => {
-                        if (hoverTimeoutRef.current) {
-                          clearTimeout(hoverTimeoutRef.current);
-                        }
-                        setHoveredArrow(arrow.id);
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        onDeleteRelationship(arrow.relationshipId, arrow.fromTaskId);
-                      }}
-                    />
-                    {/* X icon */}
-                    <text
-                      x={deleteX}
-                      y={deleteY + 1}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fill="white"
-                      fontSize="8"
-                      fontWeight="bold"
-                      className="pointer-events-none"
-                    >
-                      ×
-                    </text>
-                  </>
-                );
-              })()}
+
+          {/* Visual delete hint at cursor — no extra hit box (click the line) */}
+          {isHovered && hoverDeletePoint && onDeleteRelationship && (
+            <g pointerEvents="none" aria-hidden>
+              <circle
+                cx={hoverDeletePoint.x}
+                cy={hoverDeletePoint.y}
+                r="5"
+                fill="rgba(239, 68, 68, 0.95)"
+                stroke="white"
+                strokeWidth="1"
+              />
+              <text
+                x={hoverDeletePoint.x}
+                y={hoverDeletePoint.y + 1}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="white"
+                fontSize="8"
+                fontWeight="bold"
+              >
+                ×
+              </text>
             </g>
           )}
         </g>
-      ))}
+        );
+      })}
 
     </svg>
     </div>

@@ -110,7 +110,6 @@ interface TaskCardProps {
   onLinkToolHover?: (task: Task) => void;
   onLinkToolHoverEnd?: () => void;
   getTaskRelationshipType?: (taskId: string) => 'parent' | 'child' | 'related' | null;
-  highlightLinksMode?: boolean;
   relationSummary?: TaskRelationshipSummary;
   onUnlinkRelatedTask?: (targetTask: Task) => void | Promise<void>;
   
@@ -165,7 +164,6 @@ const TaskCard = React.memo(function TaskCard({
   onLinkToolHover,
   onLinkToolHoverEnd,
   getTaskRelationshipType,
-  highlightLinksMode = false,
   relationSummary: relationSummaryProp,
   onUnlinkRelatedTask,
   
@@ -1581,12 +1579,6 @@ const TaskCard = React.memo(function TaskCard({
             }
             return '';
           })() : ''
-        } ${
-          highlightLinksMode && !relationSummary.hasAny ? 'opacity-40' : ''
-        } ${
-          highlightLinksMode && relationSummary.hasAny && hoveredLinkTask?.id === task.id
-            ? 'ring-2 ring-blue-300 dark:ring-blue-500'
-            : ''
         }`}
         {...attributes}
         {...listeners}
@@ -1885,12 +1877,6 @@ const TaskCard = React.memo(function TaskCard({
             setIsHoveringTitle(true);
             setIsHoveringDescription(true);
           }
-          if (highlightLinksMode && relationSummary.hasAny) {
-            // Switch highlight focus to this card so counterpart badges (PARENT/CHILD) update
-            onLinkToolHover?.(task);
-          } else if (highlightLinksMode && !relationSummary.hasAny) {
-            onLinkToolHoverEnd?.();
-          }
         }}
         onMouseLeave={() => {
           // Only clear hover if card is not selected (selected cards have their own styling)
@@ -1898,8 +1884,7 @@ const TaskCard = React.memo(function TaskCard({
             setIsHoveringTitle(false);
             setIsHoveringDescription(false);
           }
-          // Do not clear highlight focus on leave while highlight mode is on —
-          // column scroll would otherwise remove PARENT/CHILD badges mid-inspect.
+          // Do not clear link-tool hover focus on card leave — toolbar handles pointer lifecycle.
         }}
         onDoubleClick={(e) => {
           // Cancel pending single-click timer to prevent TaskDetails from opening/closing
@@ -1926,7 +1911,7 @@ const TaskCard = React.memo(function TaskCard({
           if (onFinishLinking) {
             if (linkingSourceTask?.id !== task.id) {
               cardLog('🔗 Creating relationship (pointer):', linkingSourceTask?.ticket, '→', task.ticket);
-              void onFinishLinking(task);
+              void onFinishLinking(task, e.shiftKey ? 'related' : 'parent');
             } else {
               cardLog('🔗 Same task - canceling linking (pointer)');
               void onFinishLinking(null);
@@ -2023,7 +2008,6 @@ const TaskCard = React.memo(function TaskCard({
           onLinkToolHover={onLinkToolHover}
           onLinkToolHoverEnd={onLinkToolHoverEnd}
           relationSummary={relationSummary}
-          highlightLinksMode={highlightLinksMode}
           getTaskRelationshipType={getTaskRelationshipType}
           onUnlinkRelatedTask={onUnlinkRelatedTask}
           
@@ -2033,6 +2017,7 @@ const TaskCard = React.memo(function TaskCard({
           isSelected={isSelected}
           isAdmin={Boolean(currentUser?.roles?.includes('admin'))}
           canMutate={allowMutations}
+          cardWidthAnchorRef={cardElRef}
         />
 
         {/* Relationship Type Indicator - when focus card highlights related ones */}
@@ -3471,10 +3456,6 @@ const TaskCard = React.memo(function TaskCard({
 
   // Relationships list may load after hover — must refresh PARENT/CHILD badges
   if (prevProps.getTaskRelationshipType !== nextProps.getTaskRelationshipType) {
-    return false;
-  }
-
-  if (prevProps.highlightLinksMode !== nextProps.highlightLinksMode) {
     return false;
   }
 
