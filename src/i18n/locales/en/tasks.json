@@ -385,7 +385,8 @@
     "noTasksFound": "No tasks found matching your filters",
     "showHideDependencies": "Show/Hide dependencies",
     "sprintColumnUnavailableSingleSprint": "Sprint column is hidden while viewing backlog or a single sprint",
-    "resizeColumn": "Drag to resize column"
+    "resizeColumn": "Drag to resize column",
+    "hideColumn": "Hide {{column}} column"
   },
   "columnLabels": {
     "sprint": "Sprint",
@@ -456,7 +457,8 @@
     "noSprintsAvailable": "No sprints available",
     "noFilter": "(No filter)",
     "unassigned": "(Unassigned)",
-    "active": "Active"
+    "active": "Active",
+    "current": "Current"
   },
   "taskPage": {
     "loading": "Loading task...",

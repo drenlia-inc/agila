@@ -385,7 +385,8 @@
     "noTasksFound": "Aucune tâche trouvée correspondant à vos filtres",
     "showHideDependencies": "Afficher/Masquer les dépendances",
     "sprintColumnUnavailableSingleSprint": "La colonne Sprint est masquée pour le backlog ou un seul sprint",
-    "resizeColumn": "Glisser pour redimensionner la colonne"
+    "resizeColumn": "Glisser pour redimensionner la colonne",
+    "hideColumn": "Masquer la colonne {{column}}"
   },
   "columnLabels": {
     "sprint": "Sprint",
@@ -456,7 +457,8 @@
     "noSprintsAvailable": "Aucun sprint disponible",
     "noFilter": "(Aucun filtre)",
     "unassigned": "(Non assigné)",
-    "active": "Actif"
+    "active": "Actif",
+    "current": "Actuel"
   },
   "taskPage": {
     "loading": "Chargement de la tâche...",

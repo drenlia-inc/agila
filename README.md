@@ -93,7 +93,6 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 - **Gamification** - Points, achievements, and leaderboard (when enabled)
 - **Keyboard shortcuts** - F1 for help, efficient keyboard navigation
 - **Column persistence** - Column preferences saved between sessions
-- **Multi-level sorting** - Sort by multiple columns in List View
 
 ## Getting Started
 

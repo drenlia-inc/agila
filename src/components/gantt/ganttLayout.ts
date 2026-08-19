@@ -28,3 +28,14 @@ export const ganttRowBoxStyle = (taskViewMode: string): CSSProperties => {
 
 export const ganttRowPaddingClass = (taskViewMode: string): string =>
   taskViewMode === 'compact' ? 'px-2 py-1' : 'px-2 py-0.5';
+
+/** Left task column — keep wide enough for header nav + resize handle without overlapping day headers. */
+export const GANTT_TASK_COLUMN_MIN_WIDTH = 250;
+export const GANTT_TASK_COLUMN_MAX_WIDTH = 600;
+export const GANTT_TASK_COLUMN_DEFAULT_WIDTH = 320;
+
+export const clampGanttTaskColumnWidth = (width: number): number =>
+  Math.min(
+    GANTT_TASK_COLUMN_MAX_WIDTH,
+    Math.max(GANTT_TASK_COLUMN_MIN_WIDTH, Math.round(width))
+  );

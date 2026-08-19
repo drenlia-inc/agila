@@ -79,7 +79,7 @@ const DroppableCell = ({
   activeDragItem: any;
   disabled?: boolean;
 }) => {
-  const dropId = `date-${dateIndex}`;
+  const dropId = `gantt-date-${activeDragItem?.taskId ?? 'unknown'}-${dateIndex}`;
   const isTaskBarDrag = activeDragItem && (
     activeDragItem.dragType === DRAG_TYPES.TASK_START_HANDLE ||
     activeDragItem.dragType === DRAG_TYPES.TASK_END_HANDLE ||
@@ -226,9 +226,11 @@ const TaskBar = ({
     >
       <div
         className={`absolute h-6 rounded ${
-          isDragging ? 'opacity-0' :
-          isSelected ? 'opacity-100 ring-2 ring-green-400 shadow-lg' :
-          'opacity-80 hover:opacity-100'
+          isDragging
+            ? 'opacity-95 ring-2 ring-blue-400 shadow-lg z-50 cursor-grabbing'
+            : isSelected
+              ? 'opacity-100 ring-2 ring-green-400 shadow-lg'
+              : 'opacity-80 hover:opacity-100'
         } ${
           highlightedTaskId === task.id ? 'ring-2 ring-yellow-400 dark:ring-yellow-600 shadow-lg' : ''
         } transition-all flex items-center group cursor-pointer`}
