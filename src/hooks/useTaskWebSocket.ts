@@ -993,16 +993,9 @@ export const useTaskWebSocket = ({
       });
     }
     
-    // Always refresh relationships if boardId is provided
-    // This ensures all users viewing the board get the update, even if selectedBoardRef is stale
     const currentBoardId = selectedBoardRef.current;
-    if (data.boardId) {
-      wsHookLog('🔗 [WebSocket] Refreshing relationships for board:', data.boardId, {
-        matchesCurrentBoard: data.boardId === currentBoardId,
-        currentBoardId: currentBoardId
-      });
-      
-      // Load relationships for the board where the relationship was created
+    if (data.boardId && data.boardId === currentBoardId) {
+      wsHookLog('🔗 [WebSocket] Refreshing relationships for board:', data.boardId);
       getBoardTaskRelationships(data.boardId)
         .then(relationships => {
           wsHookLog('🔗 [WebSocket] Loaded relationships:', relationships.length, 'for board:', data.boardId);
@@ -1010,43 +1003,39 @@ export const useTaskWebSocket = ({
         })
         .catch(error => {
           console.warn('⚠️ [WebSocket] Failed to load relationships:', error);
-          // Fallback to full refresh on error
           if (refreshBoardDataRef.current) {
             refreshBoardDataRef.current();
           }
         });
-    } else {
+    } else if (!data.boardId) {
       console.warn('⚠️ [WebSocket] task-relationship-created event missing boardId:', data);
     }
   }, [selectedBoardRef, taskLinking]);
   
   const handleTaskRelationshipDeleted = useCallback((data: any) => {
-    // Only refresh if the relationship is for the current board
-    if (data.boardId === selectedBoardRef.current) {
-      // Clear the taskRelationships cache for both tasks involved
-      if (data.taskId && data.toTaskId) {
-        taskLinking.setTaskRelationships((prev: { [taskId: string]: any[] }) => {
-          const updated = { ...prev };
-          delete updated[data.taskId];
-          delete updated[data.toTaskId];
-          return updated;
-        });
-      }
-      
-      // Load just the relationships instead of full refresh
-      getBoardTaskRelationships(selectedBoardRef.current!)
+    if (data.taskId && data.toTaskId) {
+      taskLinking.setTaskRelationships((prev: { [taskId: string]: any[] }) => {
+        const updated = { ...prev };
+        delete updated[data.taskId];
+        delete updated[data.toTaskId];
+        return updated;
+      });
+    }
+
+    const currentBoardId = selectedBoardRef.current;
+    if (data.boardId && data.boardId === currentBoardId) {
+      getBoardTaskRelationships(data.boardId)
         .then(relationships => {
           taskLinking.setBoardRelationships(relationships);
         })
         .catch(error => {
           console.warn('Failed to load relationships:', error);
-          // Fallback to full refresh on error
           if (refreshBoardDataRef.current) {
             refreshBoardDataRef.current();
           }
         });
     }
-  }, [selectedBoardRef]);
+  }, [selectedBoardRef, taskLinking]);
   
   const handleTaskWatcherAdded = useCallback((data: any) => {
     // Only refresh if the task is for the current board

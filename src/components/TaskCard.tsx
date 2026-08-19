@@ -1568,8 +1568,8 @@ const TaskCard = React.memo(function TaskCard({
             ? 'ring-2 ring-blue-500 bg-blue-100 dark:bg-blue-900' 
             : ''
         } ${
-          // Highlight related tasks when hovering over link tool
-          hoveredLinkTask && getTaskRelationshipType && hoveredLinkTask.id !== task.id ? (() => {
+          // Highlight related tasks when hovering over link tool (skip the open TaskDetails card)
+          hoveredLinkTask && getTaskRelationshipType && hoveredLinkTask.id !== task.id && !isSelected ? (() => {
             const relationshipType = getTaskRelationshipType(task.id);
             if (relationshipType === 'parent') {
               return 'ring-2 ring-green-400 bg-green-50 dark:bg-green-900 shadow-lg';
