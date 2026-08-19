@@ -35,6 +35,7 @@ import {
 } from '../api';
 import { useFileUpload, getUploadErrorMessage } from '../hooks/useFileUpload';
 import { toast } from '../utils/toast';
+import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
 import TaskRelationshipLinker from './TaskRelationshipLinker';
 import { getLocalISOString, formatToYYYYMMDDHHmmss } from '../utils/dateUtils';
 import { generateUUID } from '../utils/uuid';
@@ -325,6 +326,20 @@ export default function TaskDetails({
       setIsLoadingRelationships(false);
     }
   }, [task.id]);
+
+  useEffect(() => {
+    const maybeReloadRelationships = (data: { taskId?: string; toTaskId?: string }) => {
+      if (data.taskId === task.id || data.toTaskId === task.id) {
+        void reloadRelationships();
+      }
+    };
+    websocketClient.onTaskRelationshipCreated(maybeReloadRelationships);
+    websocketClient.onTaskRelationshipDeleted(maybeReloadRelationships);
+    return () => {
+      websocketClient.offTaskRelationshipCreated(maybeReloadRelationships);
+      websocketClient.offTaskRelationshipDeleted(maybeReloadRelationships);
+    };
+  }, [task.id, reloadRelationships]);
 
   // Task attachments state with logging
   const [taskAttachments, setTaskAttachmentsInternal] = useState<Array<{
@@ -1104,6 +1119,7 @@ export default function TaskDetails({
       setChildrenSearchTerm('');
     } catch (error) {
       console.error('Failed to add child task:', error);
+      showRelationshipCreateErrorToast(error, t, toast);
     }
   };
 

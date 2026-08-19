@@ -20,6 +20,10 @@ import {
 import { updateStorageUsage } from '../utils/storageUtils.js';
 import { notifyCollaboratorAdded, notifyBulkColumnMove, notifyWatcherAdded } from '../services/taskEmailNotificationService.js';
 import {
+  classifyRelationshipConflict,
+  relationshipConflictResponse,
+} from '../utils/taskRelationshipValidation.js';
+import {
   parseBody,
   createTaskBodySchema,
   updateTaskBodySchema,
@@ -329,7 +333,6 @@ async function checkForCycles(db, sourceTaskId, targetTaskId, relationship) {
   return { hasCycle: false };
 }
 
-// MIGRATED: Use sqlManager instead of inline SQL
 // Helper function to get task ticket by ID
 async function getTaskTicket(db, taskId) {
   const ticket = await taskQueries.getTaskTicket(db, taskId);
@@ -3179,7 +3182,15 @@ router.post('/:taskId/relationships', authenticateToken, async (req, res) => {
     const existingRelationship = await taskQueries.getTaskRelationship(db, taskId, relationship, toTaskId);
     
     if (existingRelationship) {
-      return res.status(409).json({ error: tTranslator('errors.relationshipAlreadyExists') });
+      const conflict = relationshipConflictResponse(tTranslator, 'RELATIONSHIP_ALREADY_EXISTS');
+      return res.status(conflict.status).json(conflict.body);
+    }
+
+    const existingBetween = await taskQueries.getRelationshipsBetweenTasks(db, taskId, toTaskId);
+    if (existingBetween.length > 0) {
+      const code = classifyRelationshipConflict(existingBetween, relationship);
+      const conflict = relationshipConflictResponse(tTranslator, code);
+      return res.status(conflict.status).json(conflict.body);
     }
     
     // Check for circular relationships (prevent cycles in parent/child hierarchies)
@@ -3263,7 +3274,10 @@ router.post('/:taskId/relationships', authenticateToken, async (req, res) => {
       error.message?.includes('duplicate key') ||
       error.message?.includes('UNIQUE constraint')
     ) {
-      return res.status(409).json({ error: tTranslator('errors.relationshipAlreadyExists') });
+      return res.status(409).json({
+        code: 'RELATIONSHIP_ALREADY_EXISTS',
+        error: tTranslator('errors.relationshipAlreadyExists'),
+      });
     }
     console.error('Error creating task relationship:', error);
     res.status(500).json({ error: tTranslator('errors.failedToCreateTaskRelationship') });

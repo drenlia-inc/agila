@@ -31,6 +31,7 @@ import notificationService from './notificationService.js';
 import { getDefaultBoardColumns } from '../utils/defaultBoardColumns.js';
 import { updateStorageUsage } from '../utils/storageUtils.js';
 import { wrapQuery } from '../utils/queryLogger.js';
+import { classifyRelationshipConflict } from '../utils/taskRelationshipValidation.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1300,6 +1301,18 @@ async function toolLinkTasks(ctx, args, { dryRun }, allowedBoardIds) {
 
   const existing = await taskQueries.getTaskRelationship(ctx.db, taskId, relationship, toTaskId);
   if (existing) return { error: 'Relationship already exists' };
+
+  const existingBetween = await taskQueries.getRelationshipsBetweenTasks(ctx.db, taskId, toTaskId);
+  if (existingBetween.length > 0) {
+    const code = classifyRelationshipConflict(existingBetween, relationship);
+    if (code === 'PARENT_CHILD_EXISTS') {
+      return { error: 'A parent-child relationship already exists between these tasks' };
+    }
+    if (code === 'RELATED_EXISTS') {
+      return { error: 'These tasks are already linked as related' };
+    }
+    return { error: 'Relationship already exists' };
+  }
 
   if (dryRun) {
     return { wouldAffect: [{ taskId, toTaskId, relationship }], dryRun: true };

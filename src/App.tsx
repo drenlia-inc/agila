@@ -117,6 +117,7 @@ import {
   pickBoardRelationshipEdgeToDelete,
   buildLinkedTaskIdSet,
 } from './utils/taskRelationshipSummary';
+import { showRelationshipCreateErrorToast } from './utils/relationshipErrors';
 import { 
   getInitialSelectedBoard, 
   getInitialPage,
@@ -1888,9 +1889,11 @@ function AppContent() {
 
           if (!response.ok) {
             let errorMessage = t('relationships.linkFailedTitle');
+            let errorCode: string | undefined;
             try {
               const errorData = await response.json();
               errorMessage = errorData.error || errorMessage;
+              errorCode = errorData.code;
             } catch {
               try {
                 const errorText = await response.text();
@@ -1899,12 +1902,30 @@ function AppContent() {
                 // keep default
               }
             }
-            const err = new Error(errorMessage) as Error & { status?: number };
+            const err = new Error(errorMessage) as Error & { status?: number; code?: string };
             err.status = response.status;
+            err.code = errorCode;
             throw err;
           }
 
           await response.json();
+
+          taskLinking.setTaskRelationships((prevRels: { [taskId: string]: any[] }) => {
+            const next = { ...prevRels };
+            delete next[sourceTask.id];
+            delete next[targetTask.id];
+            return next;
+          });
+          if (selectedBoard) {
+            try {
+              const relationships = await getBoardTaskRelationships(selectedBoard);
+              boardRelationshipsRef.current = relationships;
+              taskLinking.setBoardRelationships(relationships);
+            } catch {
+              /* WebSocket handler will retry */
+            }
+          }
+
           toast.success(
             t('relationships.linkCreatedTitle'),
             t('relationships.linkCreatedMessage', {
@@ -1914,17 +1935,7 @@ function AppContent() {
             })
           );
         } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : t('relationships.linkFailedTitle');
-          const status = (error as Error & { status?: number })?.status;
-          const alreadyExists =
-            status === 409 ||
-            /already exists|existe déjà/i.test(errorMessage);
-          if (alreadyExists) {
-            toast.warning(t('relationships.linkAlreadyExistsTitle'), errorMessage);
-          } else {
-            toast.error(t('relationships.linkFailedTitle'), errorMessage);
-          }
+          showRelationshipCreateErrorToast(error, t, toast);
         }
       } else {
         toast.info(t('relationships.linkCancelledTitle'), t('relationships.linkCancelledMessage'));

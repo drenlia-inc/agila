@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown } from 'lucide-react';
 import { addTaskRelationship, removeTaskRelationship } from '../api';
 import { toast } from '../utils/toast';
+import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
 
 export interface TaskRelationshipRow {
   id: string;
@@ -104,9 +105,7 @@ export default function TaskRelationshipLinker({
       setRelatedSearchTerm('');
       await onRefresh();
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : t('relationships.linkFailedTitle');
-      toast.error(t('relationships.linkFailedTitle'), errorMessage);
+      showRelationshipCreateErrorToast(error, t, toast);
     } finally {
       addInFlightRef.current = false;
     }

@@ -15,6 +15,8 @@ import ModalManager from './layout/ModalManager';
 import Header from './layout/Header';
 import TaskFlowChart from './TaskFlowChart';
 import TaskRelationshipLinker from './TaskRelationshipLinker';
+import { toast } from '../utils/toast';
+import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
 import DOMPurify from 'dompurify';
 import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { commentTextToHtml } from '../utils/commentContent';
@@ -393,6 +395,7 @@ export default function TaskPage({
       setChildrenSearchTerm('');
     } catch (error) {
       console.error('Failed to add child task:', error);
+      showRelationshipCreateErrorToast(error, t, toast);
     }
   };
 

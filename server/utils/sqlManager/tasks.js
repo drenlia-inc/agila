@@ -1156,6 +1156,26 @@ export async function getTaskRelationship(db, taskId, relationship, toTaskId) {
 }
 
 /**
+ * All relationship rows between two tasks (either direction).
+ *
+ * @param {Database} db - Database connection
+ * @param {string} taskIdA - First task ID
+ * @param {string} taskIdB - Second task ID
+ * @returns {Promise<Array>} Matching relationship rows
+ */
+export async function getRelationshipsBetweenTasks(db, taskIdA, taskIdB) {
+  const query = `
+    SELECT id, task_id, relationship, to_task_id
+    FROM task_rels
+    WHERE (task_id = $1 AND to_task_id = $2)
+       OR (task_id = $2 AND to_task_id = $1)
+  `;
+
+  const stmt = wrapQuery(db.prepare(query), 'SELECT');
+  return await stmt.all(taskIdA, taskIdB);
+}
+
+/**
  * Check for opposite relationship (for cycle detection)
  * 
  * @param {Database} db - Database connection

@@ -78,6 +78,8 @@
     "cannotCreateRelationshipWithSelf": "Impossible de créer une relation avec soi-même",
     "oneOrBothTasksNotFound": "Une ou les deux tâches sont introuvables",
     "relationshipAlreadyExists": "La relation existe déjà",
+    "parentChildRelationshipAlreadyExists": "Une relation parent-enfant existe déjà entre ces tâches",
+    "relatedTaskAlreadySet": "Ces tâches sont déjà liées comme associées",
     "failedToCreateRelationship": "Échec de la création de la relation",
     "failedToCreateTaskRelationship": "Échec de la création de la relation de tâche",
     "relationshipNotFound": "Relation introuvable",

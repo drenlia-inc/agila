@@ -18,6 +18,8 @@ import {
   clampGanttTaskColumnWidth,
   GANTT_TASK_COLUMN_DEFAULT_WIDTH,
 } from './gantt/ganttLayout';
+import { toast } from '../utils/toast';
+import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
 
 interface GanttViewV2Props {
   columns: Columns;
@@ -1405,16 +1407,38 @@ const GanttViewV2 = ({
     const existingRelationship = localRelationships.find(rel => {
       const taskId = rel.taskId || rel.task_id;
       const toTaskId = rel.toTaskId || rel.to_task_id;
-      if (relationshipType === 'parent') {
-        return taskId === sourceTaskId && toTaskId === targetTaskId && rel.relationship === 'parent';
-      }
-      return rel.relationship === 'related' && (
+      if (!taskId || !toTaskId) return false;
+      const hasHierarchy = rel.relationship === 'parent' || rel.relationship === 'child';
+      const pairMatches =
         (taskId === sourceTaskId && toTaskId === targetTaskId) ||
-        (taskId === targetTaskId && toTaskId === sourceTaskId)
-      );
+        (taskId === targetTaskId && toTaskId === sourceTaskId);
+      if (!pairMatches) return false;
+      if (relationshipType === 'parent') {
+        return hasHierarchy || rel.relationship === 'related';
+      }
+      return hasHierarchy || rel.relationship === 'related';
     });
     
     if (existingRelationship) {
+      const hasHierarchy =
+        existingRelationship.relationship === 'parent' ||
+        existingRelationship.relationship === 'child';
+      if (relationshipType === 'related' && hasHierarchy) {
+        toast.warning(
+          t('relationships.linkConflictTitle'),
+          t('relationships.parentChildAlreadyExists')
+        );
+      } else if (relationshipType === 'parent' && existingRelationship.relationship === 'related') {
+        toast.warning(
+          t('relationships.linkConflictTitle'),
+          t('relationships.relatedAlreadySet')
+        );
+      } else {
+        toast.warning(
+          t('relationships.linkAlreadyExistsTitle'),
+          t('relationships.relationshipAlreadyExists')
+        );
+      }
       return;
     }
     
@@ -1448,7 +1472,7 @@ const GanttViewV2 = ({
       // Note: WebSocket event will update boardRelationships, which will sync via props
       // The merge logic will handle replacing the confirmed relationship with the real one
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to create relationship:', error);
       
       // Always revert optimistic update on error
@@ -1456,23 +1480,7 @@ const GanttViewV2 = ({
         prev.filter(rel => rel.id !== optimisticRelationship.id)
       );
       
-      // Handle specific error cases with user-friendly messages
-      const status = error?.response?.status;
-      const errorMessage = error?.response?.data?.message || error?.message || t('gantt.unknownError', { ns: 'common' });
-      
-      if (status === 409) {
-        // Duplicate relationship or circular dependency
-        alert(`${t('gantt.cannotCreateRelationship', { ns: 'common' })}: ${errorMessage}`);
-      } else if (status === 400) {
-        // Invalid relationship type or self-relationship
-        alert(`${t('gantt.invalidRelationship', { ns: 'common' })}: ${errorMessage}`);
-      } else if (status === 404) {
-        // Task not found
-        alert(`${t('gantt.taskNotFound', { ns: 'common' })}: ${errorMessage}`);
-      } else {
-        // Other errors
-        alert(`${t('gantt.failedToCreateRelationship', { ns: 'common' })}: ${errorMessage}`);
-      }
+      showRelationshipCreateErrorToast(error, t, toast);
     }
   }, [localRelationships, onRefreshData, canMutate, t]);
 

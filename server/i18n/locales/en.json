@@ -78,6 +78,8 @@
     "cannotCreateRelationshipWithSelf": "Cannot create relationship with self",
     "oneOrBothTasksNotFound": "One or both tasks not found",
     "relationshipAlreadyExists": "Relationship already exists",
+    "parentChildRelationshipAlreadyExists": "A parent-child relationship already exists between these tasks",
+    "relatedTaskAlreadySet": "These tasks are already linked as related",
     "failedToCreateRelationship": "Failed to create relationship",
     "failedToCreateTaskRelationship": "Failed to create task relationship",
     "relationshipNotFound": "Relationship not found",
