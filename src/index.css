@@ -565,7 +565,7 @@ body {
 
 /*
  * Ctrl/Cmd = card multi-select, Shift = range select. Disable card chrome so
- * archive/copy/link cannot steal the click. Delete stays clickable on Shift.
+ * archive/copy cannot steal the click. Delete and link stay clickable on Shift.
  */
 body.kanban-mod-ctrl .task-card button:not([data-kanban-mod-allow~="ctrl"]),
 body.kanban-mod-ctrl .task-card a {

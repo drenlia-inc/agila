@@ -3313,6 +3313,11 @@ router.delete('/:taskId/relationships/:relationshipId', authenticateToken, async
       if (inverseRel) {
         await taskQueries.deleteTaskRelationship(db, inverseRel.id);
       }
+    } else if (relationship.relationship === 'related') {
+      const inverseRel = await taskQueries.getTaskRelationship(db, relationship.to_task_id, 'related', relationship.task_id);
+      if (inverseRel) {
+        await taskQueries.deleteTaskRelationship(db, inverseRel.id);
+      }
     }
     
     // MIGRATED: Get the board ID for the source task to publish the update

@@ -16,7 +16,7 @@ function applyKanbanModifierClasses(ctrl: boolean, shift: boolean): void {
 /**
  * While Ctrl/Cmd or Shift is held (and the user is not typing), mark <body>
  * so card chrome buttons cannot steal the click. Ctrl = multi-select;
- * Shift = range-select (delete remains clickable via data-kanban-mod-allow).
+ * Shift = range-select (delete + link reserve Shift via data-kanban-mod-allow).
  */
 export function useKanbanModifierKeys(): void {
   useEffect(() => {

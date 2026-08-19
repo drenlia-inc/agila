@@ -154,7 +154,11 @@ interface MainLayoutProps {
   isLinkingMode?: boolean;
   linkingSourceTask?: Task | null;
   linkingLine?: {startX: number, startY: number, endX: number, endY: number} | null;
-  onStartLinking?: (task: Task, startPosition: {x: number, y: number}) => void;
+  onStartLinking?: (
+    task: Task,
+    startPosition: { x: number; y: number },
+    options?: { shiftKey?: boolean }
+  ) => void;
   onUpdateLinkingLine?: (endPosition: {x: number, y: number}) => void;
   onFinishLinking?: (targetTask: Task | null, relationshipType?: 'parent' | 'child' | 'related') => Promise<void>;
   onCancelLinking?: () => void;

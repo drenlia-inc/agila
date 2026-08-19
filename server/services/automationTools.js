@@ -1385,6 +1385,9 @@ async function toolUnlinkTasks(ctx, args, { dryRun }, allowedBoardIds) {
   } else if (relationship === 'child') {
     const inverse = await taskQueries.getTaskRelationship(ctx.db, toTaskId, 'parent', taskId);
     if (inverse) await taskQueries.deleteTaskRelationship(ctx.db, inverse.id);
+  } else if (relationship === 'related') {
+    const inverse = await taskQueries.getTaskRelationship(ctx.db, toTaskId, 'related', taskId);
+    if (inverse) await taskQueries.deleteTaskRelationship(ctx.db, inverse.id);
   }
 
   await journal(ctx, 'unlink_task', 'task_rel', rel.id, before, null);

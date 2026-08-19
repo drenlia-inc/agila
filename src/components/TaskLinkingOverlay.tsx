@@ -8,6 +8,8 @@ interface TaskLinkingOverlayProps {
   linkingLine: { startX: number; startY: number; endX: number; endY: number } | null;
   onUpdateLinkingLine: (endPosition: { x: number; y: number }) => void;
   onCancelLinking: () => void;
+  wantRelated?: boolean;
+  onWantRelatedChange?: (wantRelated: boolean) => void;
 }
 
 const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
@@ -16,6 +18,8 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
   linkingLine,
   onUpdateLinkingLine,
   onCancelLinking,
+  wantRelated = false,
+  onWantRelatedChange,
 }) => {
   const { t } = useTranslation('tasks');
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -24,6 +28,17 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
   const edgeScrollZone = 50;
   const scrollSpeed = 10;
   const [shiftHeld, setShiftHeld] = useState(false);
+
+  useEffect(() => {
+    if (isLinkingMode) {
+      setShiftHeld(wantRelated);
+    }
+  }, [isLinkingMode, linkingSourceTask?.id, wantRelated]);
+
+  const updateWantRelated = (next: boolean) => {
+    setShiftHeld(next);
+    onWantRelatedChange?.(next);
+  };
 
   const findScrollableContainer = (): HTMLElement | null => {
     return document.querySelector('.kanban-scrollable-container') as HTMLElement | null;
@@ -87,7 +102,6 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
 
   useEffect(() => {
     if (!isLinkingMode || !linkingLine) {
-      setShiftHeld(false);
       return;
     }
 
@@ -110,7 +124,7 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      setShiftHeld(event.shiftKey);
+      updateWantRelated(event.shiftKey);
       updateLineFromClientPoint(event.clientX, event.clientY);
     };
 
@@ -128,13 +142,13 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
         return;
       }
       if (event.key === 'Shift') {
-        setShiftHeld(true);
+        updateWantRelated(true);
       }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
       if (event.key === 'Shift') {
-        setShiftHeld(false);
+        updateWantRelated(false);
       }
     };
 
@@ -156,7 +170,7 @@ const TaskLinkingOverlay: React.FC<TaskLinkingOverlayProps> = ({
 
       currentMousePositionRef.current = null;
     };
-  }, [isLinkingMode, linkingLine, onUpdateLinkingLine, onCancelLinking]);
+  }, [isLinkingMode, linkingLine, onUpdateLinkingLine, onCancelLinking, onWantRelatedChange]);
 
   if (!isLinkingMode || !linkingLine || !linkingSourceTask) {
     return null;
