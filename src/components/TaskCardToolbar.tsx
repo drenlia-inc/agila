@@ -47,7 +47,11 @@ interface TaskCardToolbarProps {
   // Task linking props
   isLinkingMode?: boolean;
   linkingSourceTask?: Task | null;
-  onStartLinking?: (task: Task, startPosition: {x: number, y: number}) => void;
+  onStartLinking?: (
+    task: Task,
+    startPosition: { x: number; y: number },
+    options?: { shiftKey?: boolean }
+  ) => void;
   
   // Hover highlighting props
   hoveredLinkTask?: Task | null;
@@ -140,6 +144,7 @@ export default function TaskCardToolbar({
   // State for drag-to-link logic
   const [isDragPrepared, setIsDragPrepared] = useState(false);
   const [dragStartPosition, setDragStartPosition] = useState<{x: number, y: number} | null>(null);
+  const linkGestureHandledRef = useRef(false);
   const dragThreshold = 5; // Minimum pixels to consider it a drag
 
   const handleLinkPointerDown = (e: React.PointerEvent) => {
@@ -150,6 +155,7 @@ export default function TaskCardToolbar({
     // Use the actual mouse position when clicking, not the button center
     // This prevents false drag detection when clicking the button
     const startPos = { x: e.clientX, y: e.clientY };
+    linkGestureHandledRef.current = false;
     
     // Prepare for potential drag, but don't start linking yet
     setIsDragPrepared(true);
@@ -162,12 +168,33 @@ export default function TaskCardToolbar({
     e.stopPropagation();
     
     const startPos = { x: e.clientX, y: e.clientY };
+    linkGestureHandledRef.current = false;
     setIsDragPrepared(true);
     setDragStartPosition(startPos);
   };
   
   // Handle global mouse/pointer move to detect drag while holding down
   useEffect(() => {
+    const beginLinkingDrag = (shiftKey: boolean) => {
+      if (!dragStartPosition || !onStartLinking) return;
+      linkGestureHandledRef.current = true;
+      setIsDragPrepared(false);
+      onStartLinking(task, dragStartPosition, { shiftKey });
+      setDragStartPosition(null);
+    };
+
+    const tryFinishLinkClick = (clientX: number, clientY: number, shiftKey: boolean) => {
+      if (!isDragPrepared || !dragStartPosition || !onStartLinking) return false;
+      const deltaX = Math.abs(clientX - dragStartPosition.x);
+      const deltaY = Math.abs(clientY - dragStartPosition.y);
+      const isClick = deltaX <= dragThreshold && deltaY <= dragThreshold;
+      if (isClick && shiftKey) {
+        beginLinkingDrag(true);
+        return true;
+      }
+      return false;
+    };
+
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (isDragPrepared && dragStartPosition && onStartLinking) {
         const currentX = e.clientX;
@@ -175,43 +202,37 @@ export default function TaskCardToolbar({
         const deltaX = Math.abs(currentX - dragStartPosition.x);
         const deltaY = Math.abs(currentY - dragStartPosition.y);
         
-        // If moved beyond threshold, start linking mode
+        // If moved beyond threshold, start linking mode (Shift = related)
         if (deltaX > dragThreshold || deltaY > dragThreshold) {
-          setIsDragPrepared(false);
-          onStartLinking(task, dragStartPosition);
-          setDragStartPosition(null);
+          beginLinkingDrag(e.shiftKey);
         }
       }
     };
 
     const handleGlobalPointerMove = (e: PointerEvent) => {
-      // Also handle pointer events for better cross-device support
       if (isDragPrepared && dragStartPosition && onStartLinking) {
         const currentX = e.clientX;
         const currentY = e.clientY;
         const deltaX = Math.abs(currentX - dragStartPosition.x);
         const deltaY = Math.abs(currentY - dragStartPosition.y);
         
-        // If moved beyond threshold, start linking mode
         if (deltaX > dragThreshold || deltaY > dragThreshold) {
-          setIsDragPrepared(false);
-          onStartLinking(task, dragStartPosition);
-          setDragStartPosition(null);
+          beginLinkingDrag(e.shiftKey);
         }
       }
     };
 
-    const handleGlobalMouseUp = (_e: MouseEvent) => {
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      if (tryFinishLinkClick(e.clientX, e.clientY, e.shiftKey)) return;
       if (isDragPrepared) {
-        // Released without dragging - cancel linking
         setIsDragPrepared(false);
         setDragStartPosition(null);
       }
     };
 
-    const handleGlobalPointerUp = (_e: PointerEvent) => {
+    const handleGlobalPointerUp = (e: PointerEvent) => {
+      if (tryFinishLinkClick(e.clientX, e.clientY, e.shiftKey)) return;
       if (isDragPrepared) {
-        // Released without dragging - cancel linking
         setIsDragPrepared(false);
         setDragStartPosition(null);
       }
@@ -406,19 +427,31 @@ export default function TaskCardToolbar({
       >
         <button
           data-no-dnd="true"
+          data-kanban-mod-allow="shift link"
           disabled={agentBlocking}
           onPointerDown={(e) => {
             if (agentBlocking) return;
+            e.stopPropagation();
             handleLinkPointerDown(e);
           }}
           onMouseDown={(e) => {
             if (agentBlocking) return;
+            e.stopPropagation();
             handleLinkMouseDown(e);
           }}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            // Unlink is handled on pointerdown to avoid a second DELETE after success
+            if (
+              !agentBlocking &&
+              e.shiftKey &&
+              onStartLinking &&
+              !isLinkingMode &&
+              !linkGestureHandledRef.current
+            ) {
+              linkGestureHandledRef.current = true;
+              onStartLinking(task, { x: e.clientX, y: e.clientY }, { shiftKey: true });
+            }
           }}
           onMouseEnter={(e) => {
             if (agentBlocking) return;

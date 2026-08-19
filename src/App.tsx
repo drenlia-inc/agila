@@ -1807,12 +1807,18 @@ function AppContent() {
   };
 
   // Task linking handlers
-  const handleStartLinking = (task: Task, startPosition: {x: number, y: number}) => {
+  const handleStartLinking = (
+    task: Task,
+    startPosition: { x: number; y: number },
+    options?: { shiftKey?: boolean }
+  ) => {
     if (feDebug('FE_DEBUG_TASK_LINKING')) console.log('🔗 handleStartLinking called:', {
       taskTicket: task.ticket,
       taskId: task.id,
-      startPosition
+      startPosition,
+      shiftKey: options?.shiftKey,
     });
+    taskLinking.setLinkingWantRelated(Boolean(options?.shiftKey));
     taskLinking.setIsLinkingMode(true);
     taskLinking.setLinkingSourceTask(task);
     // For fixed overlay, coordinates should be viewport-relative (clientX/clientY)
@@ -1852,6 +1858,7 @@ function AppContent() {
     taskLinking.setIsLinkingMode(false);
     taskLinking.setLinkingSourceTask(null);
     taskLinking.setLinkingLine(null);
+    taskLinking.setLinkingWantRelated(false);
   };
 
   const handleFinishLinking = async (
@@ -5806,6 +5813,8 @@ function AppContent() {
         linkingLine={taskLinking.linkingLine}
         onUpdateLinkingLine={handleUpdateLinkingLine}
         onCancelLinking={handleCancelLinking}
+        wantRelated={taskLinking.linkingWantRelated}
+        onWantRelatedChange={taskLinking.setLinkingWantRelated}
       />
       </div>
       

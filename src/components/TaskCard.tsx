@@ -103,7 +103,11 @@ interface TaskCardProps {
   // Task linking props
   isLinkingMode?: boolean;
   linkingSourceTask?: Task | null;
-  onStartLinking?: (task: Task, startPosition: {x: number, y: number}) => void;
+  onStartLinking?: (
+    task: Task,
+    startPosition: { x: number; y: number },
+    options?: { shiftKey?: boolean }
+  ) => void;
   onFinishLinking?: (targetTask: Task | null, relationshipType?: 'parent' | 'child' | 'related') => Promise<void>;
   
   // Hover highlighting props

@@ -13,6 +13,9 @@ export interface UseTaskLinkingReturn {
   setLinkingSourceTask: (task: Task | null) => void;
   linkingLine: { startX: number; startY: number; endX: number; endY: number } | null;
   setLinkingLine: (line: { startX: number; startY: number; endX: number; endY: number } | null) => void;
+  /** True while linking if Shift selects a related link (live during drag). */
+  linkingWantRelated: boolean;
+  setLinkingWantRelated: (wantRelated: boolean) => void;
 
   // Hover highlighting
   hoveredLinkTask: Task | null;
@@ -34,6 +37,7 @@ export const useTaskLinking = (): UseTaskLinkingReturn => {
     endX: number;
     endY: number;
   } | null>(null);
+  const [linkingWantRelated, setLinkingWantRelated] = useState(false);
 
   const [hoveredLinkTask, setHoveredLinkTask] = useState<Task | null>(null);
   const [taskRelationships, setTaskRelationships] = useState<{ [taskId: string]: any[] }>({});
@@ -46,6 +50,8 @@ export const useTaskLinking = (): UseTaskLinkingReturn => {
     setLinkingSourceTask,
     linkingLine,
     setLinkingLine,
+    linkingWantRelated,
+    setLinkingWantRelated,
     hoveredLinkTask,
     setHoveredLinkTask,
     taskRelationships,
