@@ -475,9 +475,11 @@ export default function TaskCardToolbar({
     ) : null;
 
   const linkVisibility =
-    hasRelations || highlightedAsRelated
+    toolbarPinnedOpen || (isLinkingMode && linkingSourceTask?.id === task.id)
       ? 'pointer-events-auto opacity-100'
-      : toolbarHoverVisibility;
+      : hasRelations
+        ? 'pointer-events-auto opacity-50 group-hover:opacity-100'
+        : toolbarHoverVisibility;
 
   const assigneeAvatar = <MemberAvatar member={member} members={members} size="lg" />;
 
@@ -538,6 +540,12 @@ export default function TaskCardToolbar({
           className="flex h-[22px] items-center gap-0.5"
           data-tour-id="task-card-toolbar"
         >
+          {linkButton && (
+            <div className={`flex h-[22px] items-center transition-opacity duration-200 ${linkVisibility}`}>
+              {linkButton}
+            </div>
+          )}
+
           {onTagAdd && (
             <div className={`flex h-[22px] items-center transition-opacity duration-200 ${toolbarHoverVisibility}`}>
               <KanbanChromeTooltip label={agentBlocking ? agentLockedLabel : t('toolbar.addTag')}>
@@ -570,12 +578,6 @@ export default function TaskCardToolbar({
               </button>
             </KanbanChromeTooltip>
           </div>
-
-          {linkButton && (
-            <div className={`flex h-[22px] items-center transition-opacity duration-200 ${linkVisibility}`}>
-              {linkButton}
-            </div>
-          )}
 
           {(() => {
             const archiveColumnId = getArchivedColumnId(columns);

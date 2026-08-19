@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
 import { Task, Columns } from '../types';
 import GanttTaskList from './gantt/GanttTaskList';
@@ -14,6 +14,10 @@ import { getAllPriorities, addTaskRelationship, removeTaskRelationship, getUserS
 import websocketClient from '../services/websocketClient';
 import { loadUserPreferencesAsync, saveUserPreferences, loadUserPreferences } from '../utils/userPreferences';
 import { useGanttScrollPosition, getLeftmostVisibleDateFromDOM } from '../hooks/useGanttScrollPosition';
+import {
+  clampGanttTaskColumnWidth,
+  GANTT_TASK_COLUMN_DEFAULT_WIDTH,
+} from './gantt/ganttLayout';
 
 interface GanttViewV2Props {
   columns: Columns;
@@ -99,7 +103,7 @@ const GanttViewV2 = ({
   const [activeDragItem, setActiveDragItem] = useState<any>(null);
   const activeDragItemRef = useRef<any>(null);
   const [currentHoverDate, setCurrentHoverDate] = useState<string | null>(null);
-  const [taskColumnWidth, setTaskColumnWidth] = useState(320);
+  const [taskColumnWidth, setTaskColumnWidth] = useState(GANTT_TASK_COLUMN_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [isMultiSelectMode, setIsMultiSelectModeState] = useState(false);
@@ -831,7 +835,7 @@ const GanttViewV2 = ({
     const loadPreferences = async () => {
       try {
         const preferences = await loadUserPreferencesAsync();
-        setTaskColumnWidth(preferences.ganttTaskColumnWidth);
+        setTaskColumnWidth(clampGanttTaskColumnWidth(preferences.ganttTaskColumnWidth));
       } catch (error) {
         // Keep default value
       }
@@ -874,7 +878,7 @@ const GanttViewV2 = ({
     // Heavily debounce the save to avoid blocking during resize (2 seconds)
     const timeoutId = setTimeout(() => {
       // Only save if not the initial default value (avoid saving on mount)
-      if (taskColumnWidth !== 320) {
+      if (taskColumnWidth !== GANTT_TASK_COLUMN_DEFAULT_WIDTH) {
         savePreference();
       }
     }, 2000); // 2000ms debounce for performance
@@ -891,7 +895,7 @@ const GanttViewV2 = ({
     
     const handleMove = (moveE: MouseEvent) => {
       const deltaX = moveE.clientX - initialX;
-      const newWidth = Math.max(200, Math.min(600, initialWidth + deltaX));
+      const newWidth = clampGanttTaskColumnWidth(initialWidth + deltaX);
       setTaskColumnWidth(newWidth);
     };
     
@@ -2071,44 +2075,6 @@ const GanttViewV2 = ({
             siteSettings={siteSettings}
           />
       </div>
-      <DragOverlay dropAnimation={null} zIndex={100}>
-        {activeDragItem && localDragState.isDragging && (() => {
-          const taskId = localDragState.draggedTaskId ?? activeDragItem.taskId;
-          const task = ganttTasks.find((item) => item.id === taskId);
-          const localDates = localDragState.localTaskData[taskId];
-          if (!task || !localDates?.startDate || !localDates?.dueDate) return null;
-
-          const startIdx = dateRange.findIndex(
-            (col) => formatLocalDate(col.date) === localDates.startDate
-          );
-          const endIdx = dateRange.findIndex(
-            (col) => formatLocalDate(col.date) === localDates.dueDate
-          );
-
-          let overlayWidth = 40;
-          if (startIdx >= 0 && endIdx >= 0) {
-            overlayWidth = (endIdx - startIdx + 1) * 40;
-          } else {
-            const startMs = new Date(`${localDates.startDate}T00:00:00`).getTime();
-            const endMs = new Date(`${localDates.dueDate}T00:00:00`).getTime();
-            const daySpan = Math.max(1, Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) + 1);
-            overlayWidth = daySpan * 40;
-          }
-
-          const priorityName =
-            (task as { priorityName?: string }).priorityName || task.priority;
-
-          return (
-            <div
-              className="h-6 rounded shadow-lg ring-2 ring-blue-400 opacity-95 cursor-grabbing"
-              style={{
-                width: overlayWidth,
-                backgroundColor: getPriorityColor(priorityName),
-              }}
-            />
-          );
-        })()}
-      </DragOverlay>
       </DndContext>
 
     </div>

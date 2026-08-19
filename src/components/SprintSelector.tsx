@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, ChevronDown, Search, X } from 'lucide-react';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
+import SprintAssignmentCurrentPill from './ui/SprintAssignmentCurrentPill';
 
 interface Sprint {
   id: string;
@@ -353,7 +354,10 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
                           {getSprintTaskCount(null)}
                         </span>
                       )}
-                      {isBacklogSelected && (
+                      {isAssign && isBacklogSelected && (
+                        <SprintAssignmentCurrentPill />
+                      )}
+                      {!isAssign && isBacklogSelected && (
                         <span className="text-xs text-blue-600 dark:text-blue-400">{t('sprintSelector.unassigned')}</span>
                       )}
                     </div>
@@ -394,11 +398,16 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
                             {new Date(sprint.start_date).toLocaleDateString()} - {new Date(sprint.end_date).toLocaleDateString()}
                           </div>
                         </div>
-                        {taskCount > 0 ? (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 ml-2 flex-shrink-0">
-                            {taskCount}
-                          </span>
-                        ) : null}
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          {taskCount > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                              {taskCount}
+                            </span>
+                          ) : null}
+                          {isAssign && selectedSprintId === sprint.id && (
+                            <SprintAssignmentCurrentPill />
+                          )}
+                        </div>
                       </div>
                     </button>
                   );

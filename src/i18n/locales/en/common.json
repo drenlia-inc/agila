@@ -746,7 +746,6 @@
       "horizontalScrolling": "Horizontal Scrolling: Use scroll controls to navigate through many columns efficiently.",
       "sortingFiltering": "Sorting & Filtering",
       "sortByColumn": "Sort by Column: Click any column header to sort tasks by that field (ascending/descending).",
-      "multiLevelSorting": "Multi-Level Sorting: Hold Shift while clicking headers to sort by multiple columns.",
       "searchIntegration": "Search Integration: Use the search panel to filter tasks by text, dates, members, priorities, tags, and project IDs.",
       "savedFilters": "Saved Filters: Save frequently used filter combinations for quick access and sharing with team members.",
       "advancedFiltering": "Advanced Filtering: Filter by assignees, watchers, collaborators, requesters, and system tasks.",

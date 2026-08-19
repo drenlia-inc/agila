@@ -1512,7 +1512,7 @@ export default function HelpModal({
       renderSectionWithList(
         'help.list.sortingFiltering',
         [],
-        ['help.list.sortByColumn', 'help.list.multiLevelSorting', 'help.list.searchIntegration', 'help.list.savedFilters', 'help.list.advancedFiltering'],
+        ['help.list.sortByColumn', 'help.list.searchIntegration', 'help.list.savedFilters', 'help.list.advancedFiltering'],
         Search,
         'text-orange-600 dark:text-orange-400',
         'bg-orange-50 dark:bg-orange-900/40'
@@ -2050,7 +2050,7 @@ export default function HelpModal({
       case 'list':
         tabKeys.push('help.list.overview', 'help.list.overviewDesc1', 'help.list.overviewDesc2', 'help.list.overviewDesc3',
           'help.list.columnConfiguration', 'help.list.showHideColumns', 'help.list.defaultColumns', 'help.list.columnPersistence',
-          'help.list.horizontalScrolling', 'help.list.sortingFiltering', 'help.list.sortByColumn', 'help.list.multiLevelSorting',
+          'help.list.horizontalScrolling', 'help.list.sortingFiltering', 'help.list.sortByColumn',
           'help.list.searchIntegration', 'help.list.savedFilters', 'help.list.advancedFiltering', 'help.list.taskActions',
           'help.list.statusChanges', 'help.list.directEditing', 'help.list.taskDetails',
           'help.list.dataDisplay', 'help.list.richText', 'help.list.dateFormatting', 'help.list.priorityIndicators',
@@ -2139,22 +2139,32 @@ export default function HelpModal({
               {showDockedChat ? t('help.minimizedTitle') : activeTabMeta?.label}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-gray-700"
-            aria-label={t('help.close')}
-          >
-            <X size={16} />
-          </button>
-          <ChevronUp
-            size={18}
-            className="text-blue-600 dark:text-blue-400 flex-shrink-0"
-            aria-hidden
-          />
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMinimized(false);
+              }}
+              className="p-1.5 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/30"
+              aria-label={t('help.expand')}
+              title={t('help.expand')}
+            >
+              <ChevronUp size={18} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+              aria-label={t('help.close')}
+              title={t('help.close')}
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       </>
     );

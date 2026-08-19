@@ -34,6 +34,7 @@ import {
   resolveTaskMember,
 } from '../utils/agentMemberUi';
 import { userCanExport } from '../utils/permissions';
+import SprintAssignmentCurrentPill from './ui/SprintAssignmentCurrentPill';
 
 interface ListViewScrollControls {
   canScrollLeft: boolean;
@@ -219,6 +220,7 @@ interface ColumnConfig {
 // System / Agent member IDs: see appConstants
 
 const LIST_VIEW_INSTANT_TOOLTIP_CLASS = `${CHROME_TOOLTIP_POPOVER_CLASS} top-full mt-1 z-[60]`;
+const LIST_VIEW_COLUMN_SEPARATOR_CLASS = 'border-r border-gray-200 dark:border-gray-700';
 
 /** Blob fix + DOMPurify + anchor `target` / `rel` from `SITE_OPENS_NEW_TAB` (matches TaskCard). */
 function buildListViewDescriptionHtml(
@@ -823,9 +825,13 @@ export default function ListView({
 
   const ticketColumnWidthBoost = showListDependencyTree ? 140 : 0;
 
-  const columnSizeStyle = (column: ColumnConfig) => {
+  const columnSizeStyle = (column: ColumnConfig, isLastColumn = false) => {
     const width =
       column.key === 'ticket' ? column.width + ticketColumnWidthBoost : column.width;
+    if (isLastColumn) {
+      // Last column: honor saved min width but grow with content / remaining space (no max cap).
+      return { minWidth: width, width: 'auto' as const };
+    }
     return { width, minWidth: width, maxWidth: width } as const;
   };
 
@@ -1768,14 +1774,14 @@ export default function ListView({
         {/* Scrollable table container */}
         <div
           ref={tableContainerRef}
-          className="overflow-x-auto w-full"
+          className="overflow-x-auto w-full scroll-pr-4"
           style={{ 
             scrollbarWidth: 'thin',
             scrollbarColor: '#CBD5E1 #F1F5F9'
           }}
         >
         <table
-          className={`min-w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700 ${
+          className={`min-w-full w-max divide-y divide-gray-200 dark:divide-gray-700 ${
             resizingColumnKey ? 'select-none' : ''
           }`}
         >
@@ -1783,7 +1789,7 @@ export default function ListView({
             <tr>
               {/* Row number column with column management dropdown */}
               <th
-                className="px-4 py-3 align-middle text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider relative group"
+                className={`px-4 py-3 align-middle text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider relative group ${LIST_VIEW_COLUMN_SEPARATOR_CLASS}`}
                 style={{ width: 64, minWidth: 64, maxWidth: 64 }}
               >
                 <div className="flex items-center justify-between">
@@ -1822,13 +1828,22 @@ export default function ListView({
                 </div>
 
               </th>
-              {visibleColumns.map(column => (
+              {visibleColumns.map((column, columnIndex) => {
+                const effCount = countEffectiveVisibleColumns(columns);
+                const cannotHideLast = effCount === 1;
+                const columnLabel =
+                  t(`columnLabels.${column.key}`, { ns: 'tasks' }) || column.label;
+                const showColumnSeparator = columnIndex < visibleColumns.length - 1;
+                const isLastColumn = columnIndex === visibleColumns.length - 1;
+                return (
                 <th
                   key={column.key}
                   className={`px-4 py-3 align-middle text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 relative group ${
+                    showColumnSeparator ? LIST_VIEW_COLUMN_SEPARATOR_CLASS : ''
+                  } ${isLastColumn ? 'pr-5' : ''} ${
                     resizingColumnKey === column.key ? 'bg-gray-100 dark:bg-gray-600' : ''
                   }`}
-                  style={columnSizeStyle(column)}
+                  style={columnSizeStyle(column, isLastColumn)}
                   onClick={() => handleSort(column.key)}
                 >
                   <div className="flex items-center justify-between gap-1 pr-1">
@@ -1870,12 +1885,28 @@ export default function ListView({
                         </span>
                       )}
                       <span className="truncate">
-                        {t(`columnLabels.${column.key}`, { ns: 'tasks' }) || column.label}
+                        {columnLabel}
                       </span>
                     </div>
-                    {sortField === column.key && (
-                      sortDirection === 'asc' ? <ChevronUp size={14} className="shrink-0" /> : <ChevronDown size={14} className="shrink-0" />
-                    )}
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {sortField === column.key && (
+                        sortDirection === 'asc' ? <ChevronUp size={14} className="shrink-0" /> : <ChevronDown size={14} className="shrink-0" />
+                      )}
+                      {!cannotHideLast && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleColumnVisibility(column.key);
+                          }}
+                          className="opacity-50 hover:opacity-100 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-opacity"
+                          aria-label={t('listView.hideColumn', { column: columnLabel })}
+                          title={t('listView.hideColumn', { column: columnLabel })}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div
                     role="separator"
@@ -1891,7 +1922,8 @@ export default function ListView({
                     onClick={(e) => e.stopPropagation()}
                   />
                 </th>
-              ))}
+                );
+              })}
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -1929,7 +1961,7 @@ export default function ListView({
                     } ${getAnimationClasses()}`}
                   >
                   {/* Row number and actions cell */}
-                  <td className="px-4 py-2 align-middle whitespace-nowrap text-xs text-gray-500 w-24">
+                  <td className={`px-4 py-2 align-middle whitespace-nowrap text-xs text-gray-500 w-24 ${LIST_VIEW_COLUMN_SEPARATOR_CLASS}`}>
                     <div className="flex items-center gap-1 min-h-[1.75rem]">
                       <span className="text-xs text-gray-500 mr-1">{index + 1}</span>
                       {canMutate && (
@@ -1992,11 +2024,15 @@ export default function ListView({
                       )}
                     </div>
                   </td>
-                  {visibleColumns.map(column => (
+                  {visibleColumns.map((column, columnIndex) => {
+                    const isLastColumn = columnIndex === visibleColumns.length - 1;
+                    return (
                     <td 
                       key={column.key} 
-                      className={`px-4 py-2 align-middle overflow-hidden ${column.key !== 'title' ? 'whitespace-nowrap' : ''}`}
-                      style={columnSizeStyle(column)}
+                      className={`px-4 py-2 align-middle ${isLastColumn ? 'overflow-visible pr-5' : 'overflow-hidden'} ${column.key !== 'title' ? 'whitespace-nowrap' : ''} ${
+                        columnIndex < visibleColumns.length - 1 ? LIST_VIEW_COLUMN_SEPARATOR_CLASS : ''
+                      }`}
+                      style={columnSizeStyle(column, isLastColumn)}
                     >
                       {column.key === 'title' && (
                         <div className="max-w-full">
@@ -2148,11 +2184,48 @@ export default function ListView({
                         </div>
                       )}
                       {column.key === 'sprint' && (
-                        <div className="text-sm text-gray-700">
+                        <div className="flex items-center gap-1 min-h-[1.75rem]">
+                          <div className="relative inline-flex shrink-0">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              aria-label={t('listView.clickToSelectSprint')}
+                              className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full p-1 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleSprintSelectorOpen(task.id, e);
+                                }
+                              }}
+                              onMouseEnter={() => setSprintCalTooltipTaskId(task.id)}
+                              onMouseLeave={() =>
+                                setSprintCalTooltipTaskId(prev =>
+                                  prev === task.id ? null : prev
+                                )
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSprintSelectorOpen(task.id, e);
+                              }}
+                            >
+                              <Calendar
+                                size={12}
+                                className="text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 transition-colors flex-shrink-0"
+                              />
+                            </div>
+                            {sprintCalTooltipTaskId === task.id ? (
+                              <span className={LIST_VIEW_INSTANT_TOOLTIP_CLASS}>
+                                {t('listView.clickToSelectSprint')}
+                              </span>
+                            ) : null}
+                          </div>
                           {task.sprintId ? (
-                            getSprintName(task.sprintId) || '-'
+                            <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                              {getSprintName(task.sprintId) || '-'}
+                            </span>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-sm text-gray-400">-</span>
                           )}
                         </div>
                       )}
@@ -2277,41 +2350,7 @@ export default function ListView({
                         </div>
                       )}
                       {column.key === 'startDate' && (
-                        <div className="flex items-center gap-1 min-h-[1.75rem]">
-                          <div className="relative inline-flex shrink-0">
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              aria-label={t('listView.clickToSelectSprint')}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleSprintSelectorOpen(task.id, e);
-                                }
-                              }}
-                              onMouseEnter={() => setSprintCalTooltipTaskId(task.id)}
-                              onMouseLeave={() =>
-                                setSprintCalTooltipTaskId(prev =>
-                                  prev === task.id ? null : prev
-                                )
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSprintSelectorOpen(task.id, e);
-                              }}
-                            >
-                              <Calendar
-                                size={12}
-                                className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
-                              />
-                            </div>
-                            {sprintCalTooltipTaskId === task.id ? (
-                              <span className={LIST_VIEW_INSTANT_TOOLTIP_CLASS}>
-                                {t('listView.clickToSelectSprint')}
-                              </span>
-                            ) : null}
-                          </div>
+                        <div className="flex items-center min-h-[1.75rem]">
                           {(() => {
                             const validation = getDateValidation(task);
                             return (
@@ -2436,10 +2475,10 @@ export default function ListView({
                               const commentButton = (
                                 <button
                                   type="button"
-                                  className={`flex items-center gap-0.5 rounded px-1 py-1 transition-colors ${
+                                  className={`flex items-center gap-0.5 rounded-full px-1 py-1 transition-colors ${
                                     commentCount > 0
-                                      ? 'text-blue-600'
-                                      : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+                                      ? 'text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900'
+                                      : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                                   }`}
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -2479,7 +2518,8 @@ export default function ListView({
                         </span>
                       )}
                     </td>
-                  ))}
+                    );
+                  })}
                 </tr>
                 </React.Fragment>
                 );
@@ -3000,6 +3040,10 @@ export default function ListView({
 
       {/* Portal-rendered Sprint Selector Dropdown */}
       {showSprintSelector && sprintSelectorCoords && createPortal(
+        (() => {
+          const sprintSelectorTask = allTasks.find((t) => t.id === showSprintSelector);
+          const currentSprintId = sprintSelectorTask?.sprintId ?? null;
+          return (
         <div 
           ref={sprintSelectorRef}
           className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-[9999]"
@@ -3038,21 +3082,26 @@ export default function ListView({
                     }}
                     onMouseEnter={() => setHighlightedSprintIndex(-1)}
                     className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border-b border-gray-200 dark:border-gray-600 ${
-                      highlightedSprintIndex === -1
+                      currentSprintId == null
+                        ? 'bg-blue-100 dark:bg-blue-900/30 border-l-2 border-blue-500'
+                        : highlightedSprintIndex === -1
                         ? 'bg-blue-50 dark:bg-blue-900/20'
                         : ''
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="font-medium text-gray-900 dark:text-white">
-                        None (Backlog)
+                        {t('taskCard.noneBacklog', { ns: 'tasks' })}
                       </div>
-                      <span className="ml-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-400 dark:bg-gray-600 text-white">
-                        Unassigned
-                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {currentSprintId == null && <SprintAssignmentCurrentPill />}
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-400 dark:bg-gray-600 text-white">
+                          {t('taskCard.unassigned', { ns: 'tasks' })}
+                        </span>
+                      </div>
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Remove from sprint
+                      {t('taskCard.removeFromSprint', { ns: 'tasks' })}
                     </div>
                   </button>
                 )}
@@ -3076,7 +3125,9 @@ export default function ListView({
                         }}
                         onMouseEnter={() => setHighlightedSprintIndex(index)}
                         className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
-                          highlightedSprintIndex === index
+                          currentSprintId === sprint.id
+                            ? 'bg-blue-100 dark:bg-blue-900/30 border-l-2 border-blue-500'
+                            : highlightedSprintIndex === index
                             ? 'bg-blue-50 dark:bg-blue-900/20'
                             : sprint.is_active === 1 || sprint.is_active === true
                             ? 'bg-green-50 dark:bg-green-900/10'
@@ -3087,11 +3138,14 @@ export default function ListView({
                           <div className="font-medium text-gray-900 dark:text-white">
                             {sprint.name}
                           </div>
-                          {(sprint.is_active === 1 || sprint.is_active === true) && (
-                            <span className="ml-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-green-500 text-white">
-                              Active
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {currentSprintId === sprint.id && <SprintAssignmentCurrentPill />}
+                            {(sprint.is_active === 1 || sprint.is_active === true) && (
+                              <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-500 text-white">
+                                {t('taskCard.active', { ns: 'tasks' })}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           {formatDate(sprint.start_date)} → {formatDate(sprint.end_date)}
@@ -3102,7 +3156,9 @@ export default function ListView({
               </>
             )}
           </div>
-        </div>,
+        </div>
+          );
+        })(),
         document.body
       )}
 

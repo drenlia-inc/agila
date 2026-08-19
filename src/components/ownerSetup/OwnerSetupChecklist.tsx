@@ -315,10 +315,32 @@ const OwnerSetupChecklist: React.FC = () => {
               {coreComplete ? ` · ${t('ownerSetup.coreComplete')}` : ''}
             </div>
           </div>
-          <ChevronUp
-            size={18}
-            className="text-amber-600 dark:text-amber-400 flex-shrink-0 pointer-events-none"
-          />
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                expandChecklist();
+              }}
+              className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-900/30"
+              aria-label={t('ownerSetup.expand')}
+              title={t('ownerSetup.expand')}
+            >
+              <ChevronUp size={18} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                dismissChecklist();
+              }}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+              aria-label={t('ownerSetup.dismiss')}
+              title={t('ownerSetup.dismiss')}
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       </div>
     );
