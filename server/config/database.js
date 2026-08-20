@@ -15,6 +15,7 @@ import {
   AGENT_DEFAULT_COLOR
 } from '../constants/agentIdentity.js';
 import { initializeDemoData, installDemoSeedAvatar } from './demoData.js';
+import { ensureDemoBacklogTasksUnassigned } from './demoDataSeed.js';
 import { seedWelcomeTasks } from './welcomeTasks.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { dbExec, dbGet, dbAll, dbRun } from '../utils/dbAsync.js';
@@ -1344,6 +1345,13 @@ const initializeDefaultData = async (db, tenantId = null) => {
       } catch (error) {
         console.error('❌ Welcome task seed failed (continuing startup):', error);
       }
+    }
+  } else if (process.env.DEMO_ENABLED === 'true') {
+    // Existing demo volume: keep claimable backlog tasks unassigned after code deploys
+    try {
+      await ensureDemoBacklogTasksUnassigned(db);
+    } catch (error) {
+      console.error('❌ Demo backlog unassign ensure failed (continuing startup):', error);
     }
   }
 
