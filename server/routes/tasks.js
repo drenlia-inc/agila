@@ -2070,6 +2070,9 @@ router.post('/:id/restore', authenticateToken, async (req, res) => {
     restored.boardId = boardId;
 
     const tenantId = getTenantId(req);
+
+    // Only publish shifted siblings (usually small). Full-column snapshots blow past
+    // PostgreSQL NOTIFY's 8KB limit on large boards and the event becomes a useless stub.
     if (shifted.length > 0) {
       await notificationService.publish(
         'tasks-positions-updated',
@@ -2077,7 +2080,7 @@ router.post('/:id/restore', authenticateToken, async (req, res) => {
           boardId,
           updates: shifted.map((row) => ({
             taskId: row.id,
-            position: row.position,
+            position: typeof row.position === 'number' ? row.position : parseFloat(row.position) || 0,
             columnId: row.columnId || columnId,
           })),
           timestamp: new Date().toISOString(),
@@ -2115,6 +2118,7 @@ router.post('/:id/restore', authenticateToken, async (req, res) => {
       console.error('Background activity logging failed:', error);
     });
 
+    // Keep NOTIFY lean: no positionUpdates array (8KB limit). Peers bump locally / apply shifted WS.
     await notificationService.publish(
       'task-restored',
       {

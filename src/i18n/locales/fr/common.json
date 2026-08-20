@@ -50,7 +50,7 @@
     "pleaseWait": "Veuillez patienter...",
     "readOnlyMode": "Votre compte est en lecture seule. Vous ne pouvez pas modifier les données.",
     "readOnlyBadge": "Lecture seule",
-    "unassignedMember": "Non assigné",
+    "unassignedMember": "Non assignée",
     "adminBadge": "Admin"
   },
   "navigation": {
@@ -1035,6 +1035,7 @@
     "scrollRight": "Défiler vers la droite",
     "scrollColumnsLeft": "Cliquer ou maintenir pour défiler vers la gauche",
     "scrollColumnsRight": "Cliquer ou maintenir pour défiler vers la droite",
+    "scrollToTop": "Retour en haut",
     "scrollListLeft": "Défiler vers la gauche",
     "scrollListRight": "Défiler vers la droite",
     "addNewBoard": "Ajouter un nouveau tableau (Admin uniquement)",
@@ -1204,8 +1205,8 @@
     "collaboratorsTooltip": "Afficher les tâches où les membres sélectionnés collaborent activement",
     "requesters": "Demandeurs",
     "requestersTooltip": "Afficher les tâches demandées par les membres sélectionnés",
-    "unassigned": "Non assigné",
-    "unassignedTooltip": "Afficher les tâches sans assigné (travail à revendiquer)",
+    "unassigned": "Non assignées",
+    "unassignedTooltip": "Afficher les tâches non assignées (travail à revendiquer)",
     "system": "Système",
     "systemTooltip": "Afficher les tâches assignées à l'utilisateur système (admin uniquement)",
     "noFiltersSelected": "⚠️ Aucune option de filtre sélectionnée. Sélectionnez au moins une option ci-dessus pour afficher les tâches.",

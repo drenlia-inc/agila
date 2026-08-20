@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { DndContext, DragOverlay, useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
-import { ChevronLeft, ChevronRight, Calendar, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, Calendar, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useKanbanModifierKeys } from '../../hooks/useKanbanModifierKeys';
 import { useAppHeaderStickyTop } from '../../hooks/useAppHeaderStickyTop';
@@ -56,6 +56,7 @@ import {
 } from '../../utils/boardTrashEvents';
 import { getTaskSprintId, taskMatchesSelectedSprint } from '../../utils/columnFilters';
 import { isArchivedColumnFlag } from '../../utils/columnUtils';
+import { isKanbanPageScrolledDown, scrollKanbanPageToTopFastSmooth } from '../../utils/kanbanScroll';
 import { onHelpReveal, takeHelpReveal } from '../../utils/helpGoThere';
 
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
@@ -158,6 +159,8 @@ interface KanbanPageProps {
   onMoveTaskToColumn: (taskId: string, targetColumnId: string) => Promise<void>;
   onGanttReorderTask?: (taskId: string, columnId: string, targetIndex: number) => Promise<void>;
   animateCopiedTaskId?: string | null;
+  /** Brief highlight after create-at-top (kanban). */
+  highlightedNewTaskId?: string | null;
   onEditColumn: (
     columnId: string,
     title: string,
@@ -326,6 +329,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   onMoveTaskToColumn,
   onGanttReorderTask,
   animateCopiedTaskId,
+  highlightedNewTaskId,
   onEditColumn,
   onRemoveColumn,
   onAddColumn,
@@ -1066,6 +1070,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
+  const [scrollToTopRightPx, setScrollToTopRightPx] = useState(48);
   
   // ListView scroll controls
   const [listViewScrollControls, setListViewScrollControls] = useState<{
@@ -1089,6 +1095,38 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     setCanScrollLeft(container.scrollLeft > 0);
     setCanScrollRight(container.scrollLeft < container.scrollWidth - container.clientWidth);
   };
+
+  // Align “back to top” with the horizontal right-chevron gutter (-right-12).
+  // Prefer this over a fixed viewport `right-6`: same board chrome lane, stays clear of cards.
+  const syncScrollToTopGutter = useCallback(() => {
+    const container = columnsContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    // Match Tailwind `-right-12` (3rem): button right edge sits 48px past the scroller.
+    setScrollToTopRightPx(Math.max(8, window.innerWidth - rect.right - 48));
+  }, []);
+
+  useEffect(() => {
+    const onWindowScroll = () => {
+      setShowScrollToTop(isKanbanPageScrolledDown());
+    };
+    onWindowScroll();
+    window.addEventListener('scroll', onWindowScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onWindowScroll);
+  }, []);
+
+  useEffect(() => {
+    syncScrollToTopGutter();
+    window.addEventListener('resize', syncScrollToTopGutter);
+    const container = columnsContainerRef.current;
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncScrollToTopGutter()) : null;
+    if (container && resizeObserver) resizeObserver.observe(container);
+    return () => {
+      window.removeEventListener('resize', syncScrollToTopGutter);
+      resizeObserver?.disconnect();
+    };
+  }, [syncScrollToTopGutter, viewMode, selectedBoard]);
 
   // Column scroll functions
   const scrollColumnsLeft = () => {
@@ -1633,6 +1671,21 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 )}
               </div>
             )}
+
+            {showScrollToTop && (
+              <button
+                type="button"
+                onClick={() => {
+                  void scrollKanbanPageToTopFastSmooth();
+                }}
+                className="fixed z-40 bottom-6 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-50 hover:opacity-100 hover:scale-110"
+                style={{ right: scrollToTopRightPx }}
+                title={t('boardTabs.scrollToTop', { ns: 'common' })}
+                aria-label={t('boardTabs.scrollToTop', { ns: 'common' })}
+              >
+                <ChevronUp size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
+              </button>
+            )}
             
             {/* Scrollable columns container */}
             <div
@@ -1753,6 +1806,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                             selectedSprintId={selectedSprintId}
                             availableSprints={availableSprints}
                             hasActiveFilters={activeFilters}
+                            highlightedNewTaskId={highlightedNewTaskId}
                             checkedTaskIds={checkedTaskIds}
                             onToggleTaskChecked={onToggleTaskChecked}
                             onToggleColumnChecked={onToggleColumnChecked}
@@ -1862,6 +1916,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                       selectedSprintId={selectedSprintId}
                       availableSprints={availableSprints}
                       hasActiveFilters={activeFilters}
+                      highlightedNewTaskId={highlightedNewTaskId}
                       checkedTaskIds={checkedTaskIds}
                       onToggleTaskChecked={onToggleTaskChecked}
                       onToggleColumnChecked={onToggleColumnChecked}

@@ -235,11 +235,14 @@ class PostgresNotificationService {
             message: 'Activity feed updated - fetch latest from API'
           });
         } else if (
-          (channel === 'task-updated' || channel === 'task-created') &&
+          (channel === 'task-updated' ||
+            channel === 'task-created' ||
+            channel === 'task-restored') &&
           data.task?.id &&
           data.boardId
         ) {
           // Keep enough for the Kanban merge; drop bulky nested arrays / description
+          // (and never re-attach large positionUpdates — NOTIFY is 8KB max)
           console.warn(
             `⚠️ Payload too large (${payloadSize} bytes) for ${channel}, sending compact task notification`
           );
@@ -252,8 +255,11 @@ class PostgresNotificationService {
               boardId: data.task.boardId || data.boardId,
               columnId: data.task.columnId || data.task.columnid,
               memberId: data.task.memberId ?? data.task.memberid ?? null,
+              requesterId: data.task.requesterId ?? data.task.requesterid ?? null,
               ticket: data.task.ticket ?? null,
               position: data.task.position ?? 0,
+              deletedAt: null,
+              deletedBy: null,
               ...(data.task.previousColumnId
                 ? { previousColumnId: data.task.previousColumnId }
                 : {}),
@@ -261,6 +267,23 @@ class PostgresNotificationService {
                 ? { previousBoardId: data.task.previousBoardId }
                 : {})
             },
+            timestamp: data.timestamp || new Date().toISOString(),
+            truncated: true
+          });
+        } else if (
+          channel === 'tasks-positions-updated' &&
+          data.boardId &&
+          Array.isArray(data.updates)
+        ) {
+          // Large columns: ask clients to refresh rather than dropping the event
+          console.warn(
+            `⚠️ Payload too large (${payloadSize} bytes) for ${channel}, sending refresh hint`
+          );
+          payload = JSON.stringify({
+            ...shrinkMeta,
+            boardId: data.boardId,
+            columnId: data.updates[0]?.columnId || data.columnId || null,
+            refresh: true,
             timestamp: data.timestamp || new Date().toISOString(),
             truncated: true
           });

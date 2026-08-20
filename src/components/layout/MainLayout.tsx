@@ -146,6 +146,7 @@ interface MainLayoutProps {
   onSelectTask: (task: Task | null, options?: { scrollToComments?: boolean }) => void;
   onTaskDropOnBoard: (taskId: string, targetBoardId: string) => Promise<void>;
   animateCopiedTaskId?: string | null;
+  highlightedNewTaskId?: string | null;
   showColumnDeleteConfirm?: string | null;
   onConfirmColumnDelete?: (columnId: string) => Promise<void>;
   onCancelColumnDelete?: () => void;

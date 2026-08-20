@@ -120,6 +120,9 @@ interface KanbanColumnProps {
   /** When true, task count pill uses the blue “filtered” style (same as board tabs). */
   hasActiveFilters?: boolean;
 
+  /** Task id briefly highlighted after create-at-top. */
+  highlightedNewTaskId?: string | null;
+
   /** Multi-check set for this board. */
   checkedTaskIds?: Set<string>;
   onToggleTaskChecked?: (taskId: string, options?: ToggleTaskCheckedOptions) => void;
@@ -219,6 +222,7 @@ function KanbanColumn({
   selectedSprintId = null,
   availableSprints,
   hasActiveFilters = false,
+  highlightedNewTaskId = null,
   checkedTaskIds,
   onToggleTaskChecked,
   onClearAllChecked,
@@ -1061,6 +1065,7 @@ function KanbanColumn({
             selectedSprintId={selectedSprintId}
             availableSprints={availableSprints}
             isChecked={!!checkedTaskIds?.has(task.id)}
+            isNewlyCreatedHighlight={highlightedNewTaskId === task.id}
             onToggleChecked={
               canMutate && onToggleTaskChecked
                 ? (options) =>
@@ -1322,7 +1327,11 @@ function KanbanColumn({
             )
           )}
           {isEditing ? (
-            <form onSubmit={handleTitleSubmit} className="flex-1 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <form
+              onSubmit={handleTitleSubmit}
+              className="flex-1 min-w-0 space-y-3 rounded-lg border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-600 dark:bg-gray-800"
+              onClick={(e) => e.stopPropagation()}
+            >
               <input
                 ref={editInputRef}
                 type="text"
@@ -1402,48 +1411,50 @@ function KanbanColumn({
                 </label>
               </div>
 
-              {/* Soft WIP limit — label + field + clear on one line */}
+              {/* Soft WIP limit — label wraps; input + clear stay together */}
               {!isFinished && !isArchived && (
                 <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border dark:border-gray-600">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <label
                       htmlFor={`column-wip-${column.id}`}
-                      className="text-sm font-medium text-gray-700 dark:text-gray-200 shrink-0 inline-flex items-center gap-1"
+                      className="text-sm font-medium text-gray-700 dark:text-gray-200 min-w-0 basis-[min(100%,11rem)] grow inline-flex items-center gap-1"
                     >
-                      {t('column.wipLimit')}
+                      <span className="min-w-0 break-words">{t('column.wipLimit')}</span>
                       <KanbanChromeTooltip label={t('column.wipLimitHint')}>
                         <span
-                          className="inline-flex text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help"
+                          className="inline-flex shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help"
                           aria-label={t('column.wipLimitHint')}
                         >
                           <HelpCircle size={14} />
                         </span>
                       </KanbanChromeTooltip>
                     </label>
-                    <input
-                      id={`column-wip-${column.id}`}
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      step={1}
-                      value={wipLimitInput}
-                      onChange={(e) => setWipLimitInput(e.target.value)}
-                      className="w-[2.75rem] shrink-0 px-1.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      disabled={isSubmitting}
-                    />
-                    {!!String(wipLimitInput).trim() && (
-                      <KanbanChromeTooltip label={t('column.clearWipLimit')}>
-                        <button
-                          type="button"
-                          onClick={() => setWipLimitInput('')}
-                          disabled={isSubmitting}
-                          className="p-1 rounded text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-                          aria-label={t('column.clearWipLimit')}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </KanbanChromeTooltip>
-                    )}
+                    <div className="flex shrink-0 items-center gap-1">
+                      <input
+                        id={`column-wip-${column.id}`}
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        value={wipLimitInput}
+                        onChange={(e) => setWipLimitInput(e.target.value)}
+                        className="w-[2.75rem] shrink-0 px-1.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        disabled={isSubmitting}
+                      />
+                      {!!String(wipLimitInput).trim() && (
+                        <KanbanChromeTooltip label={t('column.clearWipLimit')}>
+                          <button
+                            type="button"
+                            onClick={() => setWipLimitInput('')}
+                            disabled={isSubmitting}
+                            className="p-1 rounded text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                            aria-label={t('column.clearWipLimit')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </KanbanChromeTooltip>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

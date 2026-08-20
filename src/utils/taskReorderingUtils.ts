@@ -222,6 +222,96 @@ export function stripTaskFromAllColumns(
   return changed ? next : columns;
 }
 
+export type TaskPositionUpdate = {
+  taskId: string;
+  position: number;
+  columnId?: string;
+};
+
+/**
+ * Insert/update a restored task at its original position, shifting siblings down.
+ *
+ * - If `positionUpdates` is provided (small shifted-sibling list), apply those first.
+ * - Otherwise bump only when the insert slot is already occupied (collision), so we
+ *   don't double-shift after a prior tasks-positions-updated event.
+ *
+ * Note: full-column snapshots are not sent over WS (PostgreSQL NOTIFY 8KB limit).
+ */
+export function applyRestoredTaskToColumns(
+  columns: Columns,
+  task: Task,
+  options?: { positionUpdates?: TaskPositionUpdate[] }
+): Columns {
+  const targetColumnId = task.columnId || (task as any).columnid;
+  if (!targetColumnId) return columns;
+
+  const insertPos = Number(task.position);
+  const updates = options?.positionUpdates;
+
+  let next = stripTaskFromAllColumns(columns, task.id, {
+    renumber: false,
+  });
+
+  const column = next[targetColumnId] || {
+    id: targetColumnId,
+    boardId: task.boardId || (task as any).boardid,
+    title: 'Unknown Column',
+    tasks: [] as Task[],
+    position: 0,
+    is_finished: false,
+    is_archived: false,
+  };
+
+  let tasks = [...(column.tasks || [])];
+
+  if (updates && updates.length > 0) {
+    const byId = new Map<string, TaskPositionUpdate>();
+    for (const u of updates) {
+      if (!u?.taskId) continue;
+      byId.set(u.taskId, {
+        taskId: u.taskId,
+        position:
+          typeof u.position === 'number' ? u.position : parseFloat(String(u.position)) || 0,
+        columnId: u.columnId,
+      });
+    }
+    tasks = tasks.map((t) => {
+      const u = byId.get(t.id);
+      if (!u) return t;
+      return {
+        ...t,
+        position: u.position,
+        columnId: u.columnId || t.columnId,
+      };
+    });
+  } else if (Number.isFinite(insertPos)) {
+    // Only shift when the insert slot is occupied (e.g. dense local state after delete).
+    // If tasks-positions-updated already opened a gap, inserting alone is enough.
+    const hasCollision = tasks.some((t) => parsePos(t.position) === insertPos);
+    if (hasCollision) {
+      tasks = tasks.map((t) => {
+        const p = parsePos(t.position);
+        return p >= insertPos ? { ...t, position: p + 1 } : t;
+      });
+    }
+  }
+
+  const exists = tasks.some((t) => t.id === task.id);
+  tasks = exists
+    ? tasks.map((t) => (t.id === task.id ? { ...t, ...task, deletedAt: null, deletedBy: null } : t))
+    : [...tasks, { ...task, deletedAt: null, deletedBy: null }];
+
+  tasks.sort((a, b) => parsePos(a.position) - parsePos(b.position));
+
+  return {
+    ...next,
+    [targetColumnId]: {
+      ...column,
+      tasks,
+    },
+  };
+}
+
 /**
  * If the same task id appears in multiple columns, keep only one copy:
  * prefer the column matching task.columnId, else the first seen.

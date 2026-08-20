@@ -2,7 +2,7 @@ import { useCallback, useRef, useEffect, RefObject } from 'react';
 import { Board, Columns, Task, TeamMember } from '../types';
 import { getBoardTaskRelationships } from '../api';
 import { feDebug } from '../utils/clientDebug';
-import { dedupeTasksInColumns, stripTaskFromAllColumns } from '../utils/taskReorderingUtils';
+import { dedupeTasksInColumns, stripTaskFromAllColumns, applyRestoredTaskToColumns } from '../utils/taskReorderingUtils';
 import { scheduleSettledBoardRefresh } from '../utils/boardRestoredRefresh';
 
 function wsHookLog(...args: unknown[]) {
@@ -843,20 +843,12 @@ export const useTaskWebSocket = ({
             const column = updatedColumns[columnId];
             const taskIndex = column.tasks.findIndex(t => t.id === data.taskId);
             if (taskIndex !== -1) {
-              // Remove the deleted task
+              // Keep position gaps (matches server soft-delete) so restore can reclaim its slot
               const remainingTasks = column.tasks.filter(task => task.id !== data.taskId);
-              
-              // Renumber remaining tasks sequentially from 0
-              const renumberedTasks = remainingTasks
-                .sort((a, b) => (a.position || 0) - (b.position || 0))
-                .map((task, index) => ({
-                  ...task,
-                  position: index
-                }));
               
               updatedColumns[columnId] = {
                 ...column,
-                tasks: renumberedTasks
+                tasks: remainingTasks
               };
             }
           });
@@ -880,20 +872,12 @@ export const useTaskWebSocket = ({
           
           const taskIndex = column.tasks.findIndex(t => t && t.id === data.taskId);
           if (taskIndex !== -1) {
-            // Remove the deleted task
+            // Keep position gaps (matches server soft-delete) so restore can reclaim its slot
             const remainingTasks = column.tasks.filter(task => task && task.id !== data.taskId);
-            
-            // Renumber remaining tasks sequentially from 0
-            const renumberedTasks = remainingTasks
-              .sort((a, b) => (a.position || 0) - (b.position || 0))
-              .map((task, index) => ({
-                ...task,
-                position: index
-              }));
             
             updatedColumns[columnId] = {
               ...column,
-              tasks: renumberedTasks
+              tasks: remainingTasks
             };
           }
         });
@@ -930,7 +914,43 @@ export const useTaskWebSocket = ({
     data.task.deletedBy = null;
     data.task.deleted_at = null;
     data.task.deleted_by = null;
-    handleTaskCreated(data);
+
+    const positionUpdates = Array.isArray(data.positionUpdates)
+      ? data.positionUpdates
+      : undefined;
+
+    // Single state update: reclaim original slot + shift siblings (or apply server snapshot)
+    setBoards((prevBoards) => {
+      const boardExists = prevBoards.some((b) => b.id === data.boardId);
+      if (!boardExists) {
+        return [
+          ...prevBoards,
+          {
+            id: data.boardId,
+            title: data.boardTitle || data.task?.boardTitle || 'Board',
+            columns: applyRestoredTaskToColumns({}, data.task, { positionUpdates }),
+            deletedAt: null,
+          } as Board,
+        ];
+      }
+      return prevBoards.map((board) => {
+        if (board.id !== data.boardId) return board;
+        return {
+          ...board,
+          deletedAt: null,
+          columns: applyRestoredTaskToColumns(board.columns || {}, data.task, {
+            positionUpdates,
+          }),
+        };
+      });
+    });
+
+    if (data.boardId === selectedBoardRef.current) {
+      setColumns((prev) =>
+        applyRestoredTaskToColumns(prev, data.task, { positionUpdates })
+      );
+    }
+
     // Lifecycle "restore board then tasks" still needs a settled force refresh.
     // Local trash/details restores already patched from HTTP — skip the 1.5s flash
     // (including the WS echo for our own restore).
@@ -951,7 +971,7 @@ export const useTaskWebSocket = ({
         deleted_by: null,
       });
     }
-  }, [handleTaskCreated, recentlyDeletedTasksRef, setSelectedTask, refreshBoardDataRef, pendingSelfTaskRestoresRef]);
+  }, [setBoards, setColumns, selectedBoardRef, recentlyDeletedTasksRef, setSelectedTask, refreshBoardDataRef, pendingSelfTaskRestoresRef]);
 
   const handleTaskPurged = useCallback((data: any) => {
     if (!data.taskId) return;
@@ -1431,6 +1451,14 @@ export const useTaskWebSocket = ({
    * Payload: { boardId, updates: [{ taskId, position, columnId }] }
    */
   const handleTasksPositionsUpdated = useCallback((data: any) => {
+    if (!data) return;
+
+    // Oversized NOTIFY was compacted to a refresh hint (large columns)
+    if (data.refresh === true && data.boardId) {
+      scheduleSettledBoardRefresh(refreshBoardDataRef.current);
+      return;
+    }
+
     if (!data?.updates || !Array.isArray(data.updates) || data.updates.length === 0) {
       return;
     }
@@ -1491,7 +1519,7 @@ export const useTaskWebSocket = ({
         return { ...board, columns: updatedColumns };
       })
     );
-  }, [setColumns, setBoards, selectedBoardRef]);
+  }, [setColumns, setBoards, selectedBoardRef, refreshBoardDataRef]);
   
   return {
     handleTaskCreated,
