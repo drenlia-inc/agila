@@ -5,6 +5,9 @@
 // System user member ID - used to identify system-generated tasks and members
 export const SYSTEM_MEMBER_ID = '00000000-0000-0000-0000-000000000001';
 
+/** Sentinel in selectedMembers / saved memberFilters for “no assignee” tasks */
+export const UNASSIGNED_MEMBER_FILTER_ID = '__unassigned__';
+
 // AI Agent pseudo-member (assignable when AI_ENABLED); mirrors SYSTEM fixed UUIDs
 export const AGENT_USER_ID = '00000000-0000-0000-0000-000000000010';
 export const AGENT_MEMBER_ID = '00000000-0000-0000-0000-000000000011';

@@ -49,8 +49,8 @@ export type ColumnBulkActionBarProps = {
   onSprint: (sprintId: string | null) => void;
   onPriority: (priorityId: string) => void;
   onMoveToBoard: (boardId: string) => void;
-  onAssignee?: (memberId: string) => void;
-  onRequester?: (memberId: string) => void;
+  onAssignee?: (memberId: string | null) => void;
+  onRequester?: (memberId: string | null) => void;
   onAddWatcher?: (memberId: string) => void;
   onRemoveWatcher?: (memberId: string) => void;
   onAddCollaborator?: (memberId: string) => void;
@@ -182,6 +182,7 @@ export default function ColumnBulkActionBar({
         showAgent: kind === 'assignee',
         excludeViewers: kind === 'assignee',
         placement: 'beside',
+        extraChrome: 44,
       });
       setMenuPos(layout);
       setMenu(kind);
@@ -442,6 +443,7 @@ export default function ColumnBulkActionBar({
                 members={members}
                 showAgentSection
                 excludeViewers
+                allowClear
                 columns={menuPos.columns || 1}
                 maxHeightClassName="max-h-none"
                 className="min-h-0 flex-1"
@@ -456,6 +458,7 @@ export default function ColumnBulkActionBar({
               <MemberSearchList
                 members={members}
                 showAgentSection={false}
+                allowClear
                 columns={menuPos.columns || 1}
                 maxHeightClassName="max-h-none"
                 className="min-h-0 flex-1"
@@ -479,7 +482,9 @@ export default function ColumnBulkActionBar({
                       .filter((c) => c.count >= selectedCount)
                       .map((c) => c.member.id)}
                     showAgentSection={false}
-                    onSelect={(memberId) => onAddWatcher?.(memberId)}
+                    onSelect={(memberId) => {
+                      if (memberId) onAddWatcher?.(memberId);
+                    }}
                     onEscape={closeMenu}
                     maxHeightClassName="max-h-48"
                   />
@@ -499,7 +504,9 @@ export default function ColumnBulkActionBar({
                       .filter((c) => c.count >= selectedCount)
                       .map((c) => c.member.id)}
                     showAgentSection={false}
-                    onSelect={(memberId) => onAddCollaborator?.(memberId)}
+                    onSelect={(memberId) => {
+                      if (memberId) onAddCollaborator?.(memberId);
+                    }}
                     onEscape={closeMenu}
                     maxHeightClassName="max-h-48"
                   />

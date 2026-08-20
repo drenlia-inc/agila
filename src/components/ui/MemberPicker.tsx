@@ -12,7 +12,7 @@ export interface MemberPickerProps {
   members: TeamMember[];
   /** Selected member id (single mode) */
   value?: string | null;
-  onChange: (memberId: string) => void;
+  onChange: (memberId: string | null) => void;
   /** Exclude members from the list (e.g. already watchers) */
   excludeIds?: string[];
   /**
@@ -32,6 +32,8 @@ export interface MemberPickerProps {
   showAgentSection?: boolean;
   /** Hide read-only viewers from assignee lists */
   excludeViewers?: boolean;
+  /** Show clear/unassign row (assignee pickers) */
+  allowClear?: boolean;
 }
 
 /**
@@ -49,6 +51,7 @@ export default function MemberPicker({
   className = '',
   showAgentSection,
   excludeViewers = false,
+  allowClear = false,
 }: MemberPickerProps) {
   const { t } = useTranslation('tasks');
   const [open, setOpen] = useState(false);
@@ -70,6 +73,7 @@ export default function MemberPicker({
         excludeViewers,
         selectedId: mode === 'single' ? value : null,
         placement: 'below',
+        extraChrome: allowClear && mode === 'single' ? 44 : 0,
       })
     );
   };
@@ -77,7 +81,7 @@ export default function MemberPicker({
   useLayoutEffect(() => {
     if (!open) return;
     measure();
-  }, [open, members, preferAgentSection, excludeViewers, value, mode]);
+  }, [open, members, preferAgentSection, excludeViewers, value, mode, allowClear]);
 
   useEffect(() => {
     if (!open) return;
@@ -101,7 +105,7 @@ export default function MemberPicker({
     if (disabled) setOpen(false);
   }, [disabled]);
 
-  const pick = (id: string) => {
+  const pick = (id: string | null) => {
     onChange(id);
     close();
   };
@@ -111,7 +115,10 @@ export default function MemberPicker({
       ? placeholder || t('taskPage.addWatcher', { defaultValue: 'Add…' })
       : selected
         ? truncateMemberName(selected.name)
-        : placeholder || t('labels.selectMember', { defaultValue: 'Select member' });
+        : placeholder ||
+          (allowClear
+            ? t('taskCard.noAssignee')
+            : t('labels.selectMember', { defaultValue: 'Select member' }));
 
   const shellClass =
     'w-full flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
@@ -201,6 +208,7 @@ export default function MemberPicker({
               selectedId={mode === 'single' ? value : null}
               showAgentSection={preferAgentSection}
               excludeViewers={excludeViewers}
+              allowClear={allowClear && mode === 'single'}
               columns={layout.columns}
               onSelect={pick}
               onEscape={close}

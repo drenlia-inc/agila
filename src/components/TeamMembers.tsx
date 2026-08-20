@@ -26,6 +26,7 @@ import {
   sortMembersAgentLast,
 } from '../utils/agentMemberUi';
 import { memberIsViewer } from '../utils/memberUtils';
+import { UNASSIGNED_MEMBER_FILTER_ID } from '../constants/appConstants';
 import {
   loadUserPreferences,
   loadUserPreferencesAsync,
@@ -33,6 +34,7 @@ import {
 } from '../utils/userPreferences';
 import { KanbanChromeTooltip, CHROME_TOOLTIP_MUTED_TEXT_CLASS } from './KanbanChromeTooltip';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import MemberAvatar from './ui/MemberAvatar';
 
 export const PRESET_COLORS = [
   '#FF3B30', // Bright Red
@@ -879,6 +881,19 @@ export default function TeamMembers({
                 </KanbanChromeTooltip>
               )}
 
+              <KanbanChromeTooltip label={t('teamMembers.unassignedTooltip')}>
+                <button
+                  type="button"
+                  onClick={() => onSelectMember(UNASSIGNED_MEMBER_FILTER_ID)}
+                  className={roleChipClass(
+                    selectedMembers.includes(UNASSIGNED_MEMBER_FILTER_ID)
+                  )}
+                >
+                  <MemberAvatar member={null} size="xs" />
+                  <span>{t('teamMembers.unassigned')}</span>
+                </button>
+              </KanbanChromeTooltip>
+
               {onToggleSystem && currentUser?.roles?.includes('admin') && (
                 <KanbanChromeTooltip label={t('teamMembers.systemTooltip')}>
                   <button
@@ -910,7 +925,11 @@ export default function TeamMembers({
         </KanbanChromeTooltip>
       </div>
 
-      {!includeAssignees && !includeWatchers && !includeCollaborators && !includeRequesters && (
+      {!includeAssignees &&
+        !includeWatchers &&
+        !includeCollaborators &&
+        !includeRequesters &&
+        !selectedMembers.includes(UNASSIGNED_MEMBER_FILTER_ID) && (
         <div className="mb-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-2 py-1 rounded border border-red-200 dark:border-red-800">
           {t('teamMembers.noFiltersSelected')}
         </div>

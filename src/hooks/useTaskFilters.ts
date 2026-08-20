@@ -8,11 +8,13 @@ import {
   searchFiltersToViewFilters,
   viewToSearchFilters,
 } from '../utils/savedFilterViewUtils';
-import { SYSTEM_MEMBER_ID } from '../constants/appConstants';
+import { SYSTEM_MEMBER_ID, UNASSIGNED_MEMBER_FILTER_ID } from '../constants/appConstants';
 import { isAgentMemberId } from '../utils/agentMemberUi';
 import { onHelpReveal, takeHelpReveal } from '../utils/helpGoThere';
 import {
   applyActiveColumnFilters,
+  realSelectedMemberIds,
+  selectionIncludesUnassigned,
   taskMatchesSelectedSprint,
 } from '../utils/columnFilters';
 
@@ -225,21 +227,27 @@ export const useTaskFilters = ({
     // Note: Watchers/collaborators are async and will be handled by the useEffect
     if (selectedMembers.length > 0) {
       let includeTask = false;
-      
-      // Check assignees
-      if (includeAssignees && selectedMembers.includes(task.memberId || '')) {
-        includeTask = true;
+      const wantsUnassigned = selectionIncludesUnassigned(selectedMembers);
+      const realMemberIds = realSelectedMemberIds(selectedMembers);
+
+      // Assignees role and/or Unassigned chip
+      if (includeAssignees || wantsUnassigned) {
+        if (!task.memberId) {
+          if (wantsUnassigned) includeTask = true;
+        } else if (realMemberIds.includes(task.memberId)) {
+          includeTask = true;
+        }
       }
       
       // Check requesters
-      if (!includeTask && includeRequesters && task.requesterId && selectedMembers.includes(task.requesterId)) {
+      if (!includeTask && includeRequesters && task.requesterId && realMemberIds.includes(task.requesterId)) {
         includeTask = true;
       }
       
       // Check watchers (synchronous using cached data)
       if (!includeTask && includeWatchers) {
         const watchers = task.watchers || [];
-        if (watchers.some((watcher: any) => selectedMembers.includes(watcher.id))) {
+        if (watchers.some((watcher: any) => realMemberIds.includes(watcher.id))) {
           includeTask = true;
         }
       }
@@ -247,7 +255,7 @@ export const useTaskFilters = ({
       // Check collaborators (synchronous using cached data)
       if (!includeTask && includeCollaborators) {
         const collaborators = task.collaborators || [];
-        if (collaborators.some((collaborator: any) => selectedMembers.includes(collaborator.id))) {
+        if (collaborators.some((collaborator: any) => realMemberIds.includes(collaborator.id))) {
           includeTask = true;
         }
       }
@@ -382,18 +390,53 @@ export const useTaskFilters = ({
   }, []);
 
   const handleMemberToggle = (memberId: string) => {
-    const newSelectedMembers = selectedMembers.includes(memberId) 
-      ? selectedMembers.filter(id => id !== memberId)
-      : [...selectedMembers, memberId];
-    
+    // Unassigned ↔ Assignees are mutually exclusive.
+    // Unassigned alone = only no-assignee tasks; Assignees + no people = everyone.
+    if (memberId === UNASSIGNED_MEMBER_FILTER_ID) {
+      const turningOn = !selectedMembers.includes(UNASSIGNED_MEMBER_FILTER_ID);
+      if (turningOn) {
+        const next = [UNASSIGNED_MEMBER_FILTER_ID];
+        setSelectedMembers(next);
+        updateCurrentUserPreference('selectedMembers', next);
+        if (includeAssignees) {
+          setIncludeAssignees(false);
+          updateCurrentUserPreference('includeAssignees', false);
+        }
+      } else {
+        setSelectedMembers([]);
+        updateCurrentUserPreference('selectedMembers', []);
+        if (!includeAssignees) {
+          setIncludeAssignees(true);
+          updateCurrentUserPreference('includeAssignees', true);
+        }
+      }
+      return;
+    }
+
+    // Real member: leave Unassigned mode; Assignees must be on for people filters
+    const withoutUnassigned = selectedMembers.filter((id) => id !== UNASSIGNED_MEMBER_FILTER_ID);
+    const newSelectedMembers = withoutUnassigned.includes(memberId)
+      ? withoutUnassigned.filter((id) => id !== memberId)
+      : [...withoutUnassigned, memberId];
+
     setSelectedMembers(newSelectedMembers);
     updateCurrentUserPreference('selectedMembers', newSelectedMembers);
+
+    if (!includeAssignees) {
+      setIncludeAssignees(true);
+      updateCurrentUserPreference('includeAssignees', true);
+    }
   };
 
   const handleClearMemberSelections = () => {
     // Clear to empty array = show all members
     setSelectedMembers([]);
     updateCurrentUserPreference('selectedMembers', []);
+    // Leaving Unassigned mode: restore default Assignees role
+    if (!includeAssignees && selectedMembers.includes(UNASSIGNED_MEMBER_FILTER_ID)) {
+      setIncludeAssignees(true);
+      updateCurrentUserPreference('includeAssignees', true);
+    }
   };
 
   const handleSelectAllMembers = () => {
@@ -423,11 +466,23 @@ export const useTaskFilters = ({
       updateCurrentUserPreference('includeCollaborators', true);
       updateCurrentUserPreference('includeRequesters', true);
     }
+    // Assignees (or all roles) mode cannot include Unassigned
+    if (selectedMembers.includes(UNASSIGNED_MEMBER_FILTER_ID)) {
+      const next = selectedMembers.filter((id) => id !== UNASSIGNED_MEMBER_FILTER_ID);
+      setSelectedMembers(next);
+      updateCurrentUserPreference('selectedMembers', next);
+    }
   };
 
   const handleToggleAssignees = (include: boolean) => {
     setIncludeAssignees(include);
     updateCurrentUserPreference('includeAssignees', include);
+    // Turning Assignees on exits Unassigned-only mode
+    if (include && selectedMembers.includes(UNASSIGNED_MEMBER_FILTER_ID)) {
+      const next = selectedMembers.filter((id) => id !== UNASSIGNED_MEMBER_FILTER_ID);
+      setSelectedMembers(next);
+      updateCurrentUserPreference('selectedMembers', next);
+    }
   };
 
   const handleToggleWatchers = (include: boolean) => {

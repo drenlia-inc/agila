@@ -1028,9 +1028,38 @@ export default function ListView({
     return sprint?.name || '';
   };
 
-  const getMemberDisplay = (memberId: string, task?: Task) => {
-    const member = resolveTaskMember(members, memberId);
-    if (!member) return null;
+  const getMemberDisplay = (memberId: string | null | undefined, task?: Task) => {
+    const member = memberId ? resolveTaskMember(members, memberId) : undefined;
+    if (!member) {
+      return (
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <MemberAvatar member={null} size="sm" />
+            <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+              {t('taskCard.noAssignee')}
+            </span>
+          </div>
+          <div className="flex gap-1">
+            {task?.watchers && task.watchers.length > 0 && (
+              <KanbanChromeTooltip label={formatMembersTooltip(task.watchers, 'watcher')} delayMs={0} wrapperClassName="flex items-center">
+                <span className="flex items-center">
+                  <Eye size={10} className="text-blue-500" />
+                  <span className="text-[9px] text-blue-600 ml-0.5 font-medium">{task.watchers.length}</span>
+                </span>
+              </KanbanChromeTooltip>
+            )}
+            {task?.collaborators && task.collaborators.length > 0 && (
+              <KanbanChromeTooltip label={formatMembersTooltip(task.collaborators, 'collaborator')} delayMs={0} wrapperClassName="flex items-center">
+                <span className="flex items-center">
+                  <UserPlus size={10} className="text-blue-500" />
+                  <span className="text-[9px] text-blue-600 ml-0.5 font-medium">{task.collaborators.length}</span>
+                </span>
+              </KanbanChromeTooltip>
+            )}
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="flex items-center gap-2">
@@ -1429,6 +1458,7 @@ export default function ListView({
             excludeViewers: true,
             selectedId: allTasks.find((t) => t.id === showDropdown?.taskId)?.memberId || null,
             placement: 'below',
+            extraChrome: 44,
           });
           return layout;
         }
@@ -1555,12 +1585,12 @@ export default function ListView({
     }
   };
 
-  const handleDropdownSelect = async (taskId: string, field: string, value: string | Tag[]) => {
+  const handleDropdownSelect = async (taskId: string, field: string, value: string | Tag[] | null) => {
     if (!canMutate) return;
     const task = allTasks.find(t => t.id === taskId);
     if (!task) return;
 
-    if (field === 'memberId' && isAgentMemberId(String(value))) {
+    if (field === 'memberId' && value != null && isAgentMemberId(String(value))) {
       if (siteSettings?.AI_ENABLED !== 'true') {
         setShowDropdown(null);
         setAssigneeDropdownCoords(null);
@@ -2800,6 +2830,7 @@ export default function ListView({
             }
             showAgentSection
             excludeViewers
+            allowClear
             columns={assigneeDropdownCoords.columns || 1}
             onSelect={(memberId) => {
               handleDropdownSelect(showDropdown.taskId, 'memberId', memberId);

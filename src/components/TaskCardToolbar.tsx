@@ -20,7 +20,7 @@ import { getArchivedColumnId, isArchivedColumnFlag } from '../utils/columnUtils'
 
 interface TaskCardToolbarProps {
   task: Task;
-  member: TeamMember;
+  member?: TeamMember | null;
   members: TeamMember[];
   isDragDisabled?: boolean;
   showMemberSelect: boolean;
@@ -28,7 +28,7 @@ interface TaskCardToolbarProps {
   onEdit: (task: Task) => void;
   onSelect: (task: Task, options?: { scrollToComments?: boolean }) => void;
   onRemove: (taskId: string, event?: React.MouseEvent) => void;
-  onMemberChange: (memberId: string) => void;
+  onMemberChange: (memberId: string | null) => void;
   onToggleMemberSelect: () => void;
   /** Close assignee menu without toggling (outside click / exclusive open). */
   onCloseMemberSelect: () => void;
@@ -311,9 +311,9 @@ export default function TaskCardToolbar({
       return layoutMemberDropdownFromElement(memberButtonRef.current, members, {
         showAgent: true,
         excludeViewers: true,
-        selectedId: member.id,
+        selectedId: member?.id ?? null,
         placement: 'below',
-        extraChrome: 28,
+        extraChrome: 72,
       });
     }
     return { left: 0, top: 0, height: 280, width: 280, columns: 1 as const };
@@ -375,7 +375,7 @@ export default function TaskCardToolbar({
     onToggleMemberSelect();
   };
 
-  const isAgentAssigned = member.id === AGENT_MEMBER_ID;
+  const isAgentAssigned = member?.id === AGENT_MEMBER_ID;
   const agentBlocking =
     isAgentAssigned &&
     !!agentWorkStatus &&
@@ -515,6 +515,7 @@ export default function TaskCardToolbar({
         : toolbarHoverVisibility;
 
   const assigneeAvatar = <MemberAvatar member={member} members={members} size="lg" />;
+  const assigneeLabel = member?.name || t('taskCard.noAssignee');
 
   // Viewers: assignee avatar + watcher/collaborator counts only (no mutation controls).
   if (!canMutate) {
@@ -539,7 +540,7 @@ export default function TaskCardToolbar({
           )}
         </div>
         <div className="absolute top-1 right-2 z-20">
-          <KanbanChromeTooltip label={member.name}>
+          <KanbanChromeTooltip label={assigneeLabel}>
             <div className="rounded-full" aria-hidden>
               {assigneeAvatar}
             </div>
@@ -824,9 +825,10 @@ export default function TaskCardToolbar({
             </div>
             <MemberSearchList
               members={members}
-              selectedId={member.id}
+              selectedId={member?.id ?? null}
               showAgentSection
               excludeViewers
+              allowClear
               columns={position.columns}
               onSelect={(memberId) => {
                 onMemberChange(memberId);

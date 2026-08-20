@@ -1431,8 +1431,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Task Page loads by ticket and historically omitted camelCase location fields — never wipe them.
     const nextColumnId = task.columnId ?? task.columnid ?? normalizedCurrentTask.columnId;
     const nextBoardId = task.boardId ?? task.boardid ?? normalizedCurrentTask.boardId;
-    const nextMemberId = task.memberId ?? task.memberid ?? normalizedCurrentTask.memberId;
-    const nextRequesterId = task.requesterId ?? task.requesterid ?? normalizedCurrentTask.requesterId;
+    // Explicit null clears assignee/requester; omit keeps current (?? cannot clear).
+    const nextMemberId =
+      'memberId' in task || 'memberid' in task
+        ? (task.memberId !== undefined ? task.memberId : task.memberid) || null
+        : (normalizedCurrentTask.memberId || null);
+    const nextRequesterId =
+      'requesterId' in task || 'requesterid' in task
+        ? (task.requesterId !== undefined ? task.requesterId : task.requesterid) || null
+        : (normalizedCurrentTask.requesterId || null);
     if (
       nextMemberId &&
       nextMemberId !== (normalizedCurrentTask.memberId || null) &&

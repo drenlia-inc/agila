@@ -37,8 +37,8 @@ export const useTaskDetails = ({
 
   const [editedTask, setEditedTask] = useState<Task>(() => ({
     ...task,
-    memberId: task.memberId || members[0]?.id || '',
-    requesterId: task.requesterId || members[0]?.id || '',
+    memberId: task.memberId ?? null,
+    requesterId: task.requesterId ?? null,
     comments: (task.comments || [])
       .filter(comment => 
         comment && 
@@ -120,8 +120,8 @@ export const useTaskDetails = ({
             }
           : {}),
         id: task.id,
-        memberId: task.memberId || members[0]?.id || prev.memberId || '',
-        requesterId: task.requesterId || members[0]?.id || prev.requesterId || '',
+        memberId: task.memberId ?? null,
+        requesterId: task.requesterId ?? null,
         comments: nextComments
       }));
       if (taskIdChanged) {

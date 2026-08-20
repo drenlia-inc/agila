@@ -617,7 +617,7 @@ export function useKanbanMultiSelect({
   );
 
   const onBulkAssignee = useCallback(
-    async (taskIds: string[], memberId: string) => {
+    async (taskIds: string[], memberId: string | null) => {
       const changedIds: string[] = [];
       const oldValues = new Set<string | null>();
       const previousByTaskId: Record<string, Partial<Task>> = {};
@@ -626,9 +626,9 @@ export function useKanbanMultiSelect({
         async (id) => {
           const task = findTask(id);
           if (!task) throw new Error('missing');
-          if (task.memberId === memberId) return false;
+          if ((task.memberId || null) === memberId) return false;
           oldValues.add(task.memberId || null);
-          previousByTaskId[id] = { memberId: task.memberId };
+          previousByTaskId[id] = { memberId: task.memberId ?? null };
           await onEditTask({ ...task, memberId }, { skipActivity: true });
           changedIds.push(id);
         },
@@ -660,7 +660,7 @@ export function useKanbanMultiSelect({
   );
 
   const onBulkRequester = useCallback(
-    async (taskIds: string[], memberId: string) => {
+    async (taskIds: string[], memberId: string | null) => {
       const changedIds: string[] = [];
       const oldValues = new Set<string | null>();
       const previousByTaskId: Record<string, Partial<Task>> = {};
@@ -669,9 +669,9 @@ export function useKanbanMultiSelect({
         async (id) => {
           const task = findTask(id);
           if (!task) throw new Error('missing');
-          if (task.requesterId === memberId) return false;
+          if ((task.requesterId || null) === memberId) return false;
           oldValues.add(task.requesterId || null);
-          previousByTaskId[id] = { requesterId: task.requesterId };
+          previousByTaskId[id] = { requesterId: task.requesterId ?? null };
           await onEditTask({ ...task, requesterId: memberId }, { skipActivity: true });
           changedIds.push(id);
         },

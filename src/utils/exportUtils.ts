@@ -1,4 +1,5 @@
 import { Task, Board, TeamMember, Tag, Columns, PriorityOption } from '../types';
+import i18n from 'i18next';
 
 /**
  * Strip HTML tags from text while preserving line breaks
@@ -81,9 +82,10 @@ export function transformTaskForExport(
   availablePriorities?: PriorityOption[]
 ): ExportData {
   // Get assignee name
+  const unassignedLabel = i18n.t('taskCard.noAssignee', { ns: 'tasks' });
   const assignee = task.memberId 
-    ? members.find(m => m.id === task.memberId)?.name || 'Unassigned'
-    : 'Unassigned';
+    ? members.find(m => m.id === task.memberId)?.name || unassignedLabel
+    : unassignedLabel;
 
   // Get tags as comma-separated string
   const tags = task.tags 
