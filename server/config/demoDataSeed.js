@@ -19,7 +19,7 @@ import {
 } from './demoCopy.js';
 
 const TASK_META = [
-  // To Do — five unassigned (claimable); rest assigned
+  // To Do / À faire — five backlog (no sprint) tasks with no assignee (memberid NULL)
   { key: 'research_integrations', priority: 'low', effort: 1, columnIndex: 0, inSprint: false, assignedTo: null, dueOffset: null, start: 'today' },
   { key: 'dark_mode_polish', priority: 'low', effort: 2, columnIndex: 0, inSprint: false, assignedTo: null, dueOffset: null, start: 'today' },
   { key: 'api_versioning', priority: 'medium', effort: 2, columnIndex: 0, inSprint: false, assignedTo: null, dueOffset: 14, start: 'today' },
@@ -43,6 +43,15 @@ const TASK_META = [
   { key: 'sprint_filter_wire', priority: 'low', effort: 1, columnIndex: 3, inSprint: true, assignedTo: 3, startAgo: 11, dueAgo: 4, completedAgo: 5 },
   { key: 'legacy_removal', priority: 'low', effort: 1, columnIndex: 4, inSprint: true, assignedTo: 2, startAgo: 13, dueAgo: 10, completedAgo: 11 },
   { key: 'old_docs_cleanup', priority: 'low', effort: 1, columnIndex: 4, inSprint: true, assignedTo: 0, startAgo: 12, dueAgo: 8, completedAgo: 9 },
+];
+
+/** Backlog (no sprint) demo tasks that must have memberid NULL on EN + FR boards. */
+export const DEMO_BACKLOG_UNASSIGNED_KEYS = [
+  'research_integrations',
+  'dark_mode_polish',
+  'api_versioning',
+  'analytics_vendors',
+  'keyboard_shortcuts',
 ];
 
 function daysFromNow(d) {
@@ -127,13 +136,16 @@ async function seedOneBoard(db, { lang, members, tagIds, position, writeLeaderbo
     const positionInCol = positionsByColumn[colIdx]++;
     const taskId = crypto.randomUUID();
     const assigneeIndex = meta.assignedTo;
-    const assignedMember =
-      assigneeIndex == null ? null : members[assigneeIndex % members.length];
+    const hasAssignee = Number.isInteger(assigneeIndex);
+    const assignedMember = hasAssignee
+      ? members[assigneeIndex % members.length]
+      : null;
     // Unassigned tasks still need a requester (demo admin / first teammate)
     const requester =
-      members[
-        (assigneeIndex == null ? 0 : assigneeIndex + 1) % members.length
-      ];
+      members[(hasAssignee ? assigneeIndex + 1 : 0) % members.length];
+    if (!requester?.id) {
+      throw new Error(`Demo seed: missing requester for task ${meta.key}`);
+    }
     const startDate =
       meta.start === 'sprint'
         ? sprintStartForTasks
@@ -411,6 +423,40 @@ export async function seedBilingualDemoBoards(db, members) {
 
   await seedOneBoard(db, { lang: 'en', members, tagIds, position: 0, writeLeaderboard: true });
   await seedOneBoard(db, { lang: 'fr', members, tagIds, position: 1, writeLeaderboard: false });
+}
+
+/**
+ * Demo DBs persist across deploys. Force the five backlog titles (EN+FR) to memberid NULL
+ * so claimable work appears even when boards were seeded before unassigned assignees existed.
+ */
+export async function ensureDemoBacklogTasksUnassigned(db) {
+  if (process.env.DEMO_ENABLED !== 'true') return;
+
+  const titles = [];
+  for (const key of DEMO_BACKLOG_UNASSIGNED_KEYS) {
+    const copy = DEMO_TASK_COPY[key];
+    if (copy?.en?.title) titles.push(copy.en.title);
+    if (copy?.fr?.title) titles.push(copy.fr.title);
+  }
+  if (titles.length === 0) return;
+
+  const result = await wrapQuery(
+    db.prepare(`
+      UPDATE tasks
+      SET memberid = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE deleted_at IS NULL
+        AND sprint_id IS NULL
+        AND memberid IS NOT NULL
+        AND title = ANY($1::text[])
+    `),
+    'UPDATE'
+  ).run(titles);
+
+  const cleared = Number(result?.rowCount ?? result?.changes ?? 0);
+  if (cleared > 0) {
+    console.log(`✅ Demo backlog: cleared assignee on ${cleared} task(s) (EN+FR claimable work)`);
+  }
 }
 
 export { DEMO_ADMIN_BIO };
