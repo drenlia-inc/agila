@@ -47,7 +47,7 @@ export const DEMO_TAGS = [
   { name: 'testing', color: '#EC4899' },
 ];
 
-/** Stable keys; dates/effort/column live in demoData.js */
+/** Stable keys; dates/effort/column/assignee live in demoDataSeed.js TASK_META */
 export const DEMO_TASK_COPY = {
   research_integrations: {
     en: { title: 'Research third-party integrations', description: 'Investigate available APIs and services for payment processing and analytics.' },

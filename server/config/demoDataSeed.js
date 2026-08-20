@@ -19,11 +19,12 @@ import {
 } from './demoCopy.js';
 
 const TASK_META = [
-  { key: 'research_integrations', priority: 'low', effort: 1, columnIndex: 0, inSprint: false, assignedTo: 2, dueOffset: null, start: 'today' },
-  { key: 'dark_mode_polish', priority: 'low', effort: 2, columnIndex: 0, inSprint: false, assignedTo: 0, dueOffset: null, start: 'today' },
-  { key: 'api_versioning', priority: 'medium', effort: 2, columnIndex: 0, inSprint: false, assignedTo: 3, dueOffset: 14, start: 'today' },
-  { key: 'analytics_vendors', priority: 'low', effort: 1, columnIndex: 0, inSprint: false, assignedTo: 1, dueOffset: null, start: 'today' },
-  { key: 'keyboard_shortcuts', priority: 'low', effort: 1, columnIndex: 0, inSprint: false, assignedTo: 0, dueOffset: 21, start: 'today' },
+  // To Do — five unassigned (claimable); rest assigned
+  { key: 'research_integrations', priority: 'low', effort: 1, columnIndex: 0, inSprint: false, assignedTo: null, dueOffset: null, start: 'today' },
+  { key: 'dark_mode_polish', priority: 'low', effort: 2, columnIndex: 0, inSprint: false, assignedTo: null, dueOffset: null, start: 'today' },
+  { key: 'api_versioning', priority: 'medium', effort: 2, columnIndex: 0, inSprint: false, assignedTo: null, dueOffset: 14, start: 'today' },
+  { key: 'analytics_vendors', priority: 'low', effort: 1, columnIndex: 0, inSprint: false, assignedTo: null, dueOffset: null, start: 'today' },
+  { key: 'keyboard_shortcuts', priority: 'low', effort: 1, columnIndex: 0, inSprint: false, assignedTo: null, dueOffset: 21, start: 'today' },
   { key: 'project_docs', priority: 'high', effort: 3, columnIndex: 0, inSprint: true, assignedTo: 3, dueOffset: 7, start: 'sprint' },
   { key: 'ui_mockups', priority: 'medium', effort: 2, columnIndex: 0, inSprint: true, assignedTo: 1, dueOffset: 5, start: 'sprint' },
   { key: 'onboarding_checklist', priority: 'medium', effort: 2, columnIndex: 0, inSprint: true, assignedTo: 3, dueOffset: 6, start: 'sprint' },
@@ -125,8 +126,14 @@ async function seedOneBoard(db, { lang, members, tagIds, position, writeLeaderbo
     if (positionsByColumn[colIdx] === undefined) positionsByColumn[colIdx] = 0;
     const positionInCol = positionsByColumn[colIdx]++;
     const taskId = crypto.randomUUID();
-    const assignedMember = members[meta.assignedTo % members.length];
-    const requester = members[(meta.assignedTo + 1) % members.length];
+    const assigneeIndex = meta.assignedTo;
+    const assignedMember =
+      assigneeIndex == null ? null : members[assigneeIndex % members.length];
+    // Unassigned tasks still need a requester (demo admin / first teammate)
+    const requester =
+      members[
+        (assigneeIndex == null ? 0 : assigneeIndex + 1) % members.length
+      ];
     const startDate =
       meta.start === 'sprint'
         ? sprintStartForTasks
@@ -146,7 +153,7 @@ async function seedOneBoard(db, { lang, members, tagIds, position, writeLeaderbo
       copy.title,
       copy.description,
       `TASK-${String(index + 1).padStart(5, '0')}`,
-      assignedMember.id,
+      assignedMember?.id ?? null,
       requester.id,
       startDate,
       dueDate,
@@ -165,7 +172,7 @@ async function seedOneBoard(db, { lang, members, tagIds, position, writeLeaderbo
       title: copy.title,
       ticket: `TASK-${String(index + 1).padStart(5, '0')}`,
       columnIndex: colIdx,
-      memberId: assignedMember.id,
+      memberId: assignedMember?.id ?? null,
       completedDate,
       effort: meta.effort,
       startDate,
