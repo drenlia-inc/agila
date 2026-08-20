@@ -64,6 +64,7 @@ import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
 import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById } from './api';
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
+import { scrollKanbanPageToTopFastSmooth } from './utils/kanbanScroll';
 import { applyActiveColumnFilters } from './utils/columnFilters';
 import { closeBoardTrashView } from './utils/boardTrashEvents';
 import {
@@ -305,37 +306,42 @@ function AppContent() {
       Object.keys(updatedColumns).forEach(columnId => {
         const column = updatedColumns[columnId];
         if (column) {
-          const remainingTasks = column.tasks.filter(task => task.id !== taskId);
-          const renumberedTasks = remainingTasks
-            .sort((a, b) => (a.position || 0) - (b.position || 0))
-            .map((task, index) => ({
-              ...task,
-              position: index
-            }));
+          // Keep position gaps (matches server soft-delete) so restore can reclaim its slot
           updatedColumns[columnId] = {
             ...column,
-            tasks: renumberedTasks
+            tasks: column.tasks.filter(task => task.id !== taskId)
           };
         }
       });
       return updatedColumns;
     });
 
+    setBoards(prevBoards =>
+      prevBoards.map(board => {
+        if (!board.columns) return board;
+        let changed = false;
+        const nextColumns = { ...board.columns };
+        Object.keys(nextColumns).forEach(columnId => {
+          const column = nextColumns[columnId];
+          if (!column?.tasks?.some(task => task.id === taskId)) return;
+          changed = true;
+          nextColumns[columnId] = {
+            ...column,
+            tasks: column.tasks.filter(task => task.id !== taskId)
+          };
+        });
+        return changed ? { ...board, columns: nextColumns } : board;
+      })
+    );
+
     taskFilters.setFilteredColumns(prevFilteredColumns => {
       const updatedFilteredColumns = { ...prevFilteredColumns };
       Object.keys(updatedFilteredColumns).forEach(columnId => {
         const column = updatedFilteredColumns[columnId];
         if (column) {
-          const remainingTasks = column.tasks.filter(task => task.id !== taskId);
-          const renumberedTasks = remainingTasks
-            .sort((a, b) => (a.position || 0) - (b.position || 0))
-            .map((task, index) => ({
-              ...task,
-              position: index
-            }));
           updatedFilteredColumns[columnId] = {
             ...column,
-            tasks: renumberedTasks
+            tasks: column.tasks.filter(task => task.id !== taskId)
           };
         }
       });
@@ -347,40 +353,68 @@ function AppContent() {
     taskId: string,
     options?: { skipEmail?: boolean }
   ) => {
-    try {
-      recentlyDeletedTasksRef.current.add(taskId);
-      setTimeout(() => {
-        recentlyDeletedTasksRef.current.delete(taskId);
-      }, 10000);
+    recentlyDeletedTasksRef.current.add(taskId);
+    setTimeout(() => {
+      recentlyDeletedTasksRef.current.delete(taskId);
+    }, 10000);
 
-      let boardIdForTrash = selectedBoardRef.current;
-      for (const column of Object.values(columns)) {
-        const found = column?.tasks?.find((task) => task.id === taskId);
-        if (found) {
-          boardIdForTrash = found.boardId || boardIdForTrash;
-          break;
-        }
+    let boardIdForTrash = selectedBoardRef.current;
+    for (const column of Object.values(columnsRef.current || columns)) {
+      const found = column?.tasks?.find((task) => task.id === taskId);
+      if (found) {
+        boardIdForTrash = found.boardId || boardIdForTrash;
+        break;
       }
+    }
 
+    // Optimistic: remove from UI immediately (don't wait on DELETE round-trip)
+    removeTaskFromLocalColumns(taskId);
+    if (selectedTask?.id === taskId) {
+      handleSelectTask(null);
+    }
+
+    try {
       await deleteTask(taskId, options);
-      removeTaskFromLocalColumns(taskId);
       notifyBoardTrashChanged(boardIdForTrash);
     } catch (error) {
+      recentlyDeletedTasksRef.current.delete(taskId);
+      const refresh = refreshBoardDataRef.current;
+      if (refresh) {
+        await refresh({ force: true, forBoardId: boardIdForTrash || undefined }).catch(() => {});
+      }
       throw error;
     }
   };
 
   /** Admin hard-delete (Shift+click) — bypasses trash. */
   const handleTaskPermanentDelete = async (taskId: string) => {
-    try {
-      recentlyDeletedTasksRef.current.add(taskId);
-      setTimeout(() => {
-        recentlyDeletedTasksRef.current.delete(taskId);
-      }, 10000);
+    recentlyDeletedTasksRef.current.add(taskId);
+    setTimeout(() => {
+      recentlyDeletedTasksRef.current.delete(taskId);
+    }, 10000);
 
+    let boardIdForRefresh = selectedBoardRef.current;
+    for (const column of Object.values(columnsRef.current || columns)) {
+      const found = column?.tasks?.find((task) => task.id === taskId);
+      if (found) {
+        boardIdForRefresh = found.boardId || boardIdForRefresh;
+        break;
+      }
+    }
+
+    removeTaskFromLocalColumns(taskId);
+    if (selectedTask?.id === taskId) {
+      handleSelectTask(null);
+    }
+
+    try {
       await purgeTask(taskId);
-      removeTaskFromLocalColumns(taskId);
     } catch (error: any) {
+      recentlyDeletedTasksRef.current.delete(taskId);
+      const refresh = refreshBoardDataRef.current;
+      if (refresh) {
+        await refresh({ force: true, forBoardId: boardIdForRefresh || undefined }).catch(() => {});
+      }
       toast.error(error?.response?.data?.error || t('trash.purgeFailed'));
       throw error;
     }
@@ -459,6 +493,17 @@ function AppContent() {
   const [taskCreationPause, setTaskCreationPause] = useState(false);
   const [boardCreationPause, setBoardCreationPause] = useState(false);
   const [animateCopiedTaskId, setAnimateCopiedTaskId] = useState<string | null>(null);
+  const [highlightedNewTaskId, setHighlightedNewTaskId] = useState<string | null>(null);
+  const highlightedNewTaskTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (highlightedNewTaskTimerRef.current) {
+        clearTimeout(highlightedNewTaskTimerRef.current);
+      }
+    };
+  }, []);
+
   const [pendingCopyAnimation, setPendingCopyAnimation] = useState<{
     title: string;
     columnId: string;
@@ -3204,6 +3249,11 @@ function AppContent() {
       return false;
     }
 
+    // New tasks land at the top of the column — scroll there so the card is visible.
+    if (taskFilters.viewModeRef.current === 'kanban') {
+      await scrollKanbanPageToTopFastSmooth();
+    }
+
     const targetColumnForWip = columnsRef.current[columnId] || columns[columnId];
     if (targetColumnForWip && isBoardWipActiveColumn(targetColumnForWip)) {
       const currentBoard = boards.find((b) => b.id === selectedBoard);
@@ -3278,6 +3328,16 @@ function AppContent() {
         }
       };
     });
+
+    // Brief highlight so the new card is easy to spot after scroll-to-top
+    if (highlightedNewTaskTimerRef.current) {
+      clearTimeout(highlightedNewTaskTimerRef.current);
+    }
+    setHighlightedNewTaskId(newTask.id);
+    highlightedNewTaskTimerRef.current = setTimeout(() => {
+      setHighlightedNewTaskId((current) => (current === newTask.id ? null : current));
+      highlightedNewTaskTimerRef.current = null;
+    }, 1000);
     
     // ALSO update boards state for tab counters
     setBoards(prev => {
@@ -5600,6 +5660,7 @@ function AppContent() {
                                     onMoveTaskToColumn={handleMoveTaskToColumn}
                                     onGanttReorderTask={handleGanttReorderTask}
                                     animateCopiedTaskId={animateCopiedTaskId}
+                                    highlightedNewTaskId={highlightedNewTaskId}
                                     onEditColumn={handleEditColumn}
                                     onRemoveColumn={handleRemoveColumn}
                                     onAddColumn={handleAddColumn}

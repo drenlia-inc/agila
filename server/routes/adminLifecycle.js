@@ -143,7 +143,7 @@ router.post('/tasks/restore-batch', async (req, res) => {
               boardId,
               updates: shifted.map((row) => ({
                 taskId: row.id,
-                position: row.position,
+                position: typeof row.position === 'number' ? row.position : parseFloat(row.position) || 0,
                 columnId: row.columnId || columnId,
               })),
               timestamp: new Date().toISOString(),

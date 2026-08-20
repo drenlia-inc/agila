@@ -703,6 +703,13 @@ export default function TeamMembers({
     () => loadUserPreferences(currentUserId ?? null).memberDisplayOrder || []
   );
 
+  // Hide System chip when unused; clear sticky filter so it cannot stay on invisibly
+  useEffect(() => {
+    if (systemTaskCount === 0 && includeSystem && onToggleSystem) {
+      onToggleSystem(false);
+    }
+  }, [systemTaskCount, includeSystem, onToggleSystem]);
+
   useEffect(() => {
     let cancelled = false;
     loadUserPreferencesAsync(currentUserId ?? null).then((prefs) => {
@@ -894,18 +901,19 @@ export default function TeamMembers({
                 </button>
               </KanbanChromeTooltip>
 
-              {onToggleSystem && currentUser?.roles?.includes('admin') && (
+              {onToggleSystem &&
+                currentUser?.roles?.includes('admin') &&
+                systemTaskCount > 0 && (
                 <KanbanChromeTooltip label={t('teamMembers.systemTooltip')}>
                   <button
+                    type="button"
                     onClick={() => onToggleSystem(!includeSystem)}
                     className={roleChipClass(includeSystem)}
                   >
                     <span>{t('teamMembers.system')}</span>
-                    {systemTaskCount > 0 && (
-                      <span className="ml-0.5 px-1.5 py-0.5 bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 rounded-full text-xs font-semibold">
-                        {systemTaskCount}
-                      </span>
-                    )}
+                    <span className="ml-0.5 px-1.5 py-0.5 bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 rounded-full text-xs font-semibold">
+                      {systemTaskCount}
+                    </span>
                   </button>
                 </KanbanChromeTooltip>
               )}

@@ -931,7 +931,14 @@ async function toolRestoreTasks(ctx, args, { dryRun }, allowedBoardIds) {
       'task-restored',
       {
         boardId: item.boardId,
-        task: restored,
+        task: {
+          ...restored,
+          position,
+          columnId: item.columnId,
+          boardId: item.boardId,
+          deletedAt: null,
+          deletedBy: null,
+        },
         timestamp: new Date().toISOString()
       },
       ctx.tenantId || null

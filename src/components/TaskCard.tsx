@@ -128,6 +128,8 @@ interface TaskCardProps {
   onToggleChecked?: (options?: { range?: boolean }) => void;
   /** True when multi-check spans multiple columns — disables this card’s DnD. */
   isMultiSelectDragLocked?: boolean;
+  /** Brief highlight after create-at-top (kanban). */
+  isNewlyCreatedHighlight?: boolean;
   /** false for viewer — hide toolbar, pencil, multi-select, inline editors */
   canMutate?: boolean;
 }
@@ -179,6 +181,7 @@ const TaskCard = React.memo(function TaskCard({
   isChecked = false,
   onToggleChecked,
   isMultiSelectDragLocked = false,
+  isNewlyCreatedHighlight = false,
   canMutate = true,
 }: TaskCardProps) {
   const { t } = useTranslation('tasks');
@@ -1591,6 +1594,10 @@ const TaskCard = React.memo(function TaskCard({
             }
             return '';
           })() : ''
+        } ${
+          isNewlyCreatedHighlight && !isSelected
+            ? 'ring-2 ring-sky-400 bg-sky-50 dark:bg-sky-900/50 shadow-md transition-shadow duration-300'
+            : 'transition-shadow duration-300'
         }`}
         {...attributes}
         {...listeners}
