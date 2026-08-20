@@ -1588,8 +1588,8 @@
       "value": "board-trash-bulk-purge-confirm",
       "en": "Permanently delete all {{count}} task(s) in trash? This cannot be undone.",
       "fr": "Supprimer définitivement les {{count}} tâche(s) de la corbeille ? Cette action est irréversible.",
-      "searchEn": "Permanently delete all {{count}} task(s) in trash? This cannot be undone. Permanently delete all {{count}} task(s) in trash? This cannot be undone. Permanently delete {{count}} selected task(s)? This cannot be undone. Cancel Empty trash Delete selected trash deleted board-trash-bulk-purge-confirm",
-      "searchFr": "Supprimer définitivement les {{count}} tâche(s) de la corbeille ? Cette action est irréversible. Supprimer définitivement les {{count}} tâche(s) de la corbeille ? Cette action est irréversible. Supprimer définitivement {{count}} tâche(s) sélectionnée(s) ? Cette action est irréversible. Annuler Vider la corbeille Supprimer la sélection corbeille supprimees supprimes board-trash-bulk-purge-confirm",
+      "searchEn": "Permanently delete all {{count}} task(s) in trash? This cannot be undone. Permanently delete all {{count}} task(s) in trash? This cannot be undone. Permanently delete {{count}} selected task(s)? This cannot be undone. Cancel Empty trash Delete selected Loading trash… trash deleted board-trash-bulk-purge-confirm",
+      "searchFr": "Supprimer définitivement les {{count}} tâche(s) de la corbeille ? Cette action est irréversible. Supprimer définitivement les {{count}} tâche(s) de la corbeille ? Cette action est irréversible. Supprimer définitivement {{count}} tâche(s) sélectionnée(s) ? Cette action est irréversible. Annuler Vider la corbeille Supprimer la sélection Chargement de la corbeille… corbeille supprimees supprimes board-trash-bulk-purge-confirm",
       "kind": "view",
       "mode": "kanban",
       "highlights": [
@@ -1707,8 +1707,8 @@
       "value": "board-trash-view",
       "en": "Trash",
       "fr": "Corbeille",
-      "searchEn": "Trash Trash trash deleted board-trash-view",
-      "searchFr": "Corbeille Corbeille corbeille supprimees supprimes board-trash-view",
+      "searchEn": "Trash Trash Trash is empty Soft-deleted tasks from this board appear here. trash deleted board-trash-view",
+      "searchFr": "Corbeille Corbeille La corbeille est vide Les tâches en suppression récupérable de ce tableau apparaissent ici. corbeille supprimees supprimes board-trash-view",
       "kind": "view",
       "mode": "kanban",
       "highlights": [
@@ -1843,8 +1843,8 @@
       "value": "kanban-columns",
       "en": "This is your Kanban board! Tasks are organized in columns. You can drag and drop tasks between columns to update their status.",
       "fr": "C'est votre tableau Kanban ! Les tâches sont organisées en colonnes. Vous pouvez faire glisser et déposer les tâches entre les colonnes pour mettre à jour leur statut.",
-      "searchEn": "This is your Kanban board! Tasks are organized in columns. You can drag and drop tasks between columns to update their status. Click or hold to scroll right kanban-columns",
-      "searchFr": "C'est votre tableau Kanban ! Les tâches sont organisées en colonnes. Vous pouvez faire glisser et déposer les tâches entre les colonnes pour mettre à jour leur statut. Cliquer ou maintenir pour défiler vers la droite kanban-columns",
+      "searchEn": "This is your Kanban board! Tasks are organized in columns. You can drag and drop tasks between columns to update their status. Back to top kanban-columns",
+      "searchFr": "C'est votre tableau Kanban ! Les tâches sont organisées en colonnes. Vous pouvez faire glisser et déposer les tâches entre les colonnes pour mettre à jour leur statut. Retour en haut kanban-columns",
       "kind": "view",
       "mode": "kanban",
       "highlights": [
