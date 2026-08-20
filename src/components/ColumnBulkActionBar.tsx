@@ -24,11 +24,9 @@ import AddTagModal from './AddTagModal';
 import MemberAvatar from './ui/MemberAvatar';
 import MemberSearchList from './ui/MemberSearchList';
 import { layoutMemberDropdownFromElement } from '../utils/memberDropdownLayout';
-import { useFixedColumnFabPosition } from '../hooks/useFixedColumnFabPosition';
 
 export type ColumnBulkActionBarProps = {
   columnId: string;
-  anchorRef: React.RefObject<HTMLElement | null>;
   selectedCount: number;
   selectedTasks?: Task[];
   members?: TeamMember[];
@@ -116,7 +114,6 @@ const MEMBER_MENU_WIDTH = 280;
 
 export default function ColumnBulkActionBar({
   columnId,
-  anchorRef,
   selectedCount,
   selectedTasks = [],
   members = [],
@@ -156,7 +153,6 @@ export default function ColumnBulkActionBar({
   const [permanentDeleteConfirm, setPermanentDeleteConfirm] = useState(false);
   const [boardConfirm, setBoardConfirm] = useState<{ id: string; name: string } | null>(null);
   const confirmRef = useRef<HTMLDivElement>(null);
-  const rootPos = useFixedColumnFabPosition(anchorRef);
 
   const watcherChips = useMemo(
     () => unionMembersFromTasks(selectedTasks, members, 'watchers'),
@@ -640,15 +636,11 @@ export default function ColumnBulkActionBar({
         )
       : null;
 
-  const actionBarPortal =
-    typeof document !== 'undefined'
-      ? createPortal(
+  const actionBar = (
           <div
             ref={rootRef}
-            className={`pointer-events-auto fixed z-[9980] flex -translate-x-1/2 flex-col gap-1 ${
-              rootPos.visible ? '' : 'invisible'
-            }`}
-            style={{ top: rootPos.top, left: rootPos.left }}
+            className="pointer-events-auto absolute top-full z-20 mt-1 flex -translate-x-1/2 flex-col gap-1"
+            style={{ left: 'calc(-1rem)' }}
             data-testid={`column-bulk-fab-${columnId}`}
           >
             <div className="flex flex-col gap-1 items-center">
@@ -894,14 +886,12 @@ export default function ColumnBulkActionBar({
                 </button>
               </KanbanChromeTooltip>
             </div>
-          </div>,
-          document.body
-        )
-      : null;
+          </div>
+  );
 
   return (
     <>
-      {actionBarPortal}
+      {actionBar}
       {menuPortal}
       {addTagModalPortal}
       {boardConfirmPortal}

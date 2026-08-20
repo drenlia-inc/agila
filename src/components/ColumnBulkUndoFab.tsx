@@ -1,13 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Undo2 } from 'lucide-react';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
-import { useFixedColumnFabPosition } from '../hooks/useFixedColumnFabPosition';
 
 export type ColumnBulkUndoFabProps = {
   columnId: string;
-  anchorRef: React.RefObject<HTMLElement | null>;
   count: number;
   busy?: boolean;
   labelKey?: string;
@@ -19,11 +16,11 @@ const btnClass =
   'inline-flex h-7 w-7 items-center justify-center rounded-md border border-amber-300 bg-amber-50 text-amber-800 shadow-sm transition-colors hover:bg-amber-100 hover:text-amber-900 disabled:opacity-40 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200 dark:hover:bg-amber-900/60';
 
 /**
- * One-shot undo control in the same portal slot as the multi-select FAB.
+ * One-shot undo control in the same slot as the multi-select FAB
+ * (in-column, so it pans with the board instead of lagging as position:fixed).
  */
 export default function ColumnBulkUndoFab({
   columnId,
-  anchorRef,
   count,
   busy = false,
   labelKey = 'kanbanSelect.undoBulk',
@@ -32,7 +29,6 @@ export default function ColumnBulkUndoFab({
 }: ColumnBulkUndoFabProps) {
   const { t } = useTranslation('tasks');
   const rootRef = useRef<HTMLDivElement>(null);
-  const rootPos = useFixedColumnFabPosition(anchorRef);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,17 +41,13 @@ export default function ColumnBulkUndoFab({
     return () => document.removeEventListener('keydown', onKey);
   }, [onDismiss]);
 
-  if (typeof document === 'undefined') return null;
-
   const tooltip = t(labelKey, { count });
 
-  return createPortal(
+  return (
     <div
       ref={rootRef}
-      className={`pointer-events-auto fixed z-[9980] flex -translate-x-1/2 flex-col gap-1 items-center ${
-        rootPos.visible ? '' : 'invisible'
-      }`}
-      style={{ top: rootPos.top, left: rootPos.left }}
+      className="pointer-events-auto absolute top-full z-20 mt-1 flex -translate-x-1/2 flex-col gap-1 items-center"
+      style={{ left: 'calc(-1rem)' }}
       data-testid={`column-bulk-undo-${columnId}`}
     >
       <div
@@ -75,7 +67,6 @@ export default function ColumnBulkUndoFab({
           <Undo2 size={14} />
         </button>
       </KanbanChromeTooltip>
-    </div>,
-    document.body
+    </div>
   );
 }

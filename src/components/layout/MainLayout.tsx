@@ -71,6 +71,7 @@ interface MainLayoutProps {
   collisionDetection: any;
   boardColumnVisibility: {[boardId: string]: string[]};
   onBoardColumnVisibilityChange: (boardId: string, visibleColumns: string[]) => void;
+  onBoardColumnVisibilityReset: (boardId: string) => void;
 
   
   // Event handlers
@@ -94,7 +95,10 @@ interface MainLayoutProps {
   onTaskViewModeChange: (mode: TaskViewMode) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onToggleSearch: () => void;
-  onSearchFiltersChange: (filters: any) => void;
+  onSearchFiltersChange: (filters: any, options?: { preserveFilterView?: boolean }) => void;
+  onApplySavedFilter?: (view: any) => Promise<any>;
+  onUpdateSavedFilter?: (viewId: number, filters: any) => Promise<any>;
+  onClearAllSearchFilters?: () => Promise<void>;
   currentFilterView?: any; // SavedFilterView | null
   sharedFilterViews?: any[]; // SavedFilterView[]
   onFilterViewChange?: (view: any) => void; // (view: SavedFilterView | null) => void

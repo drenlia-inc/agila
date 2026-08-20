@@ -419,8 +419,14 @@ export const viewFiltersSchema = z
     priorityFilters: viewFilterValue.optional(),
     tagFilters: viewFilterValue.optional(),
     projectFilter: viewFilterValue.optional(),
+    projectFilters: viewFilterValue.optional(),
     taskFilter: viewFilterValue.optional(),
-    boardColumnFilter: viewFilterValue.optional()
+    boardColumnFilter: viewFilterValue.optional(),
+    linkedTasksOnlyFilter: booleanish.optional(),
+    overdueOnlyFilter: booleanish.optional(),
+    blockedOnlyFilter: booleanish.optional(),
+    sprintFilters: viewFilterValue.optional(),
+    stalledDaysFilter: z.union([z.number().int().min(1).max(999), z.null()]).optional()
   })
   .passthrough();
 

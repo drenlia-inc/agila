@@ -94,9 +94,13 @@ export interface UserPreferences {
     selectedMembers: string[];
     selectedPriorities: Priority[];
     selectedTags: string[];
-    projectId: string;
+    selectedProjectIds: string[];
     taskId: string;
     linkedTasksOnly: boolean;
+    overdueOnly: boolean;
+    blockedOnly: boolean;
+    selectedSprintIds: string[];
+    stalledDays: number | null;
   };
   appSettings: {
     taskDeleteConfirm?: boolean; // User override for system TASK_DELETE_CONFIRM setting
@@ -303,9 +307,13 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
     selectedMembers: [],
     selectedPriorities: [],
     selectedTags: [],
-    projectId: '',
+    selectedProjectIds: [],
     taskId: '',
     linkedTasksOnly: false,
+    overdueOnly: false,
+    blockedOnly: false,
+    selectedSprintIds: [],
+    stalledDays: null,
   },
   appSettings: {
     // taskDeleteConfirm: undefined - let it inherit from system setting by default
@@ -562,8 +570,13 @@ const EMPTY_SEARCH_FILTERS_FOR_CLEAR: UserPreferences['searchFilters'] = {
   selectedMembers: [],
   selectedPriorities: [],
   selectedTags: [],
-  projectId: '',
+  selectedProjectIds: [],
   taskId: '',
+  linkedTasksOnly: false,
+  overdueOnly: false,
+  blockedOnly: false,
+  selectedSprintIds: [],
+  stalledDays: null,
 };
 
 /**
@@ -736,9 +749,24 @@ const readLocalPreferences = (userId: string | null = null): UserPreferences => 
             ...defaults.searchFilters,
             ...loadedPrefs.searchFilters,
             text: loadedPrefs.searchFilters?.text || '',
-            projectId: loadedPrefs.searchFilters?.projectId || '',
+            selectedProjectIds: Array.isArray(loadedPrefs.searchFilters?.selectedProjectIds)
+              ? loadedPrefs.searchFilters.selectedProjectIds
+              : loadedPrefs.searchFilters?.projectId?.trim()
+                ? [loadedPrefs.searchFilters.projectId.trim()]
+                : [],
             taskId: loadedPrefs.searchFilters?.taskId || '',
             linkedTasksOnly: loadedPrefs.searchFilters?.linkedTasksOnly === true,
+            overdueOnly: loadedPrefs.searchFilters?.overdueOnly === true,
+            blockedOnly: loadedPrefs.searchFilters?.blockedOnly === true,
+            selectedSprintIds: Array.isArray(loadedPrefs.searchFilters?.selectedSprintIds)
+              ? loadedPrefs.searchFilters.selectedSprintIds
+              : [],
+            stalledDays:
+              loadedPrefs.searchFilters?.stalledDays != null &&
+              loadedPrefs.searchFilters.stalledDays !== '' &&
+              Number(loadedPrefs.searchFilters.stalledDays) > 0
+                ? Number(loadedPrefs.searchFilters.stalledDays)
+                : null,
           };
           try {
             if (
@@ -1270,6 +1298,36 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
       // Fallback to saving all preferences if single save fails
       await saveUserPreferences(updatedPrefs, resolvedUserId);
     }
+  }
+};
+
+/** Atomically persist search filter state + active saved view id (avoids apply/clear races). */
+export const patchSearchFilterApplyState = async (
+  searchFilters: UserPreferences['searchFilters'],
+  currentFilterViewId: number | null,
+  userId: string | null = null,
+): Promise<void> => {
+  const resolvedUserId = resolvePreferencesUserId(userId);
+  const currentPrefs = getEffectiveUserPreferences(resolvedUserId);
+  const updatedPrefs: UserPreferences = {
+    ...currentPrefs,
+    searchFilters,
+    currentFilterViewId,
+  };
+  persistLocalPreferences(resolvedUserId, updatedPrefs);
+
+  if (!resolvedUserId) return;
+
+  try {
+    await updateUserSetting('searchFilters', JSON.stringify(searchFilters));
+    if (currentFilterViewId == null) {
+      await updateUserSetting('currentFilterViewId', null);
+    } else {
+      await updateUserSetting('currentFilterViewId', currentFilterViewId);
+    }
+  } catch (error) {
+    console.warn('Failed to patch saved filter apply state, falling back to full save:', error);
+    await saveUserPreferences(updatedPrefs, resolvedUserId);
   }
 };
 

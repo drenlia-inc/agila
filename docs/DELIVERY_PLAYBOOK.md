@@ -164,7 +164,7 @@ Sprints are **timeboxes for filtering and reporting**. The board remains the sou
 
 Turn counts **on** for search, filters, and WIP coaching. Leave effort off until the team estimates consistently.
 
-**Saved filters** in search help repeating views (e.g. “Blocked”, “This sprint”, “Unassigned”).
+**Saved filters** in search help repeating views (e.g. “Blocked”, “Overdue”, “Stalled 7+ days”, multi-sprint combinations). Use **All sprints** in the header when combining header sprint context with the Search panel sprint multi-select.
 
 **Reports / My Stats / Leaderboard** are optional. Turn gamification on only if it helps the culture; it is easy to distract a new team.
 

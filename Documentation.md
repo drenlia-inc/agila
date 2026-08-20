@@ -516,17 +516,21 @@ Developer details (APIs, `task_work`, runner): [`docs/AI_INTEGRATION.md`](docs/A
 [Screenshot: Advanced filter interface]
 
 #### Filter Types
-- **Text Search**: Search in task titles and descriptions
-- **Date Range**: Filter by start date, due date, or creation date
-- **Member Filter**: Filter by assigned team members
-- **Priority Filter**: Filter by priority levels
-- **Tag Filter**: Filter by assigned tags
-- **Project Filter**: Filter by project/board
-- **Status Filter**: Filter by task status/column
-- **Sprint Filter**: Filter by sprint or backlog
+- **Text Search**: Search in task titles, descriptions, comments, tickets, assignee names, and sprint names
+- **Date Range**: Filter by start date or due date
+- **Member Filter**: Filter by assigned team members (Team strip) or saved-view member lists
+- **Priority Filter**: Filter by priority levels (multi-select)
+- **Tag Filter**: Filter by assigned tags (multi-select)
+- **Project / Task ID**: Filter by board project identifier or task ticket
+- **Linked tasks**: Show only tasks with parent/child/related links on the current board
+- **Overdue**: Toggle to show tasks past due or without a due date (finished/archived columns excluded)
+- **Blocked**: Toggle to show only tasks marked blocked
+- **Sprint filter**: Multi-select sprints (and backlog) in Search & Filter — works across boards; combine with header sprint filter by setting header to **All sprints**
+- **Stalled**: Minimum days in the current column (card aging)
+- **Column visibility**: Show/hide columns on the board (not the same as filtering by status)
 
 #### Saved Filters
-- **Save Filter**: Save frequently used filter combinations
+- **Save Filter**: Save frequently used filter combinations (includes overdue, blocked, sprint, stalled, and linked toggles)
 - **Load Filter**: Apply saved filter configurations
 - **Share Filters**: Share filter views with team members
 - **Default Filters**: Set default filter for each board

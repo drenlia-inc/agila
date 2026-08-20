@@ -142,7 +142,7 @@ export function applyActiveColumnFilters(
       const searchOnlyFilters = memberRoleFiltering
         ? { ...effectiveFilters, selectedMembers: [] }
         : effectiveFilters;
-      columnTasks = filterTasks(columnTasks, searchOnlyFilters, true, members, boards, sprints);
+      columnTasks = filterTasks(columnTasks, searchOnlyFilters, true, members, boards, sprints, column);
     }
 
     if (memberRoleFiltering) {

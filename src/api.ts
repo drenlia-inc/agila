@@ -1190,8 +1190,14 @@ export interface SavedFilterView {
   priorityFilters?: string[];
   tagFilters?: string[];
   projectFilter?: string;
+  projectFilters?: string[];
   taskFilter?: string;
   boardColumnFilter?: string;
+  linkedTasksOnlyFilter?: boolean | string;
+  overdueOnlyFilter?: boolean | string;
+  blockedOnlyFilter?: boolean | string;
+  sprintFilters?: string[];
+  stalledDaysFilter?: number | string | null;
   created_at: string;
   updated_at: string;
   creatorName?: string; // Available for shared filters
@@ -1199,35 +1205,13 @@ export interface SavedFilterView {
 
 export interface CreateFilterViewRequest {
   filterName: string;
-  filters: {
-    text?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    dueDateFrom?: string;
-    dueDateTo?: string;
-    selectedMembers?: string[];
-    selectedPriorities?: string[];
-    selectedTags?: string[];
-    projectId?: string;
-    taskId?: string;
-    boardColumnFilter?: string;
-  };
+  filters: import('../utils/savedFilterViewUtils').SavedViewFilterFields;
   shared?: boolean;
 }
 
 export interface UpdateFilterViewRequest {
   filterName?: string;
-  filters?: {
-    text?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    dueDateFrom?: string;
-    dueDateTo?: string;
-    selectedMembers?: string[];
-    selectedPriorities?: string[];
-    selectedTags?: string[];
-    projectId?: string;
-    taskId?: string;
+  filters?: import('../utils/savedFilterViewUtils').SavedViewFilterFields & {
     boardColumnFilter?: string;
   };
   shared?: boolean;

@@ -41,7 +41,8 @@ import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { feDebug } from '../utils/clientDebug';
 import { commentTextToHtml } from '../utils/commentContent';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
-import { isEditableEscapeTarget } from '../utils/escapeKeyUtils';
+import { isEditableEscapeTarget, hasEscapeConsumingOverlay } from '../utils/escapeKeyUtils';
+import { isTypingTarget } from '../utils/keyboardShortcutUtils';
 import {
   AGENT_MEMBER_ID,
   SYSTEM_MEMBER_ID,
@@ -443,6 +444,12 @@ const TaskCard = React.memo(function TaskCard({
     
     return {
       ...originalListeners,
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (isTypingTarget(e.target) || hasEscapeConsumingOverlay() || isDndGloballyDisabled()) {
+          return;
+        }
+        originalListeners.onKeyDown?.(e);
+      },
       onPointerDown: (e: React.PointerEvent) => {
         // Check if the target or any parent has data-no-dnd attribute
         const target = e.target as HTMLElement;

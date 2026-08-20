@@ -113,8 +113,14 @@ const FILTER_FIELD_PG = {
   priorityFilters: 'priorityfilters',
   tagFilters: 'tagfilters',
   projectFilter: 'projectfilter',
+  projectFilters: 'projectfilters',
   taskFilter: 'taskfilter',
   boardColumnFilter: 'boardcolumnfilter',
+  linkedTasksOnlyFilter: 'linkedtasksonlyfilter',
+  overdueOnlyFilter: 'overdueonlyfilter',
+  blockedOnlyFilter: 'blockedonlyfilter',
+  sprintFilters: 'sprintfilters',
+  stalledDaysFilter: 'stalleddaysfilter',
 };
 
 /**
@@ -132,8 +138,10 @@ export async function createView(db, filterName, userId, shared, filters) {
     INSERT INTO views (
       filtername, userid, shared, textfilter, datefromfilter, datetofilter,
       duedatefromfilter, duedatetofilter, memberfilters, priorityfilters,
-      tagfilters, projectfilter, taskfilter, boardcolumnfilter
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      tagfilters, projectfilter, projectfilters, taskfilter, boardcolumnfilter,
+      linkedtasksonlyfilter, overdueonlyfilter, blockedonlyfilter,
+      sprintfilters, stalleddaysfilter
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
     RETURNING *
   `;
 
@@ -151,8 +159,14 @@ export async function createView(db, filterName, userId, shared, filters) {
     filters.priorityFilters || null,
     filters.tagFilters || null,
     filters.projectFilter || null,
+    filters.projectFilters || null,
     filters.taskFilter || null,
-    filters.boardColumnFilter || null
+    filters.boardColumnFilter || null,
+    filters.linkedTasksOnlyFilter ? true : false,
+    filters.overdueOnlyFilter ? true : false,
+    filters.blockedOnlyFilter ? true : false,
+    filters.sprintFilters || null,
+    filters.stalledDaysFilter != null ? filters.stalledDaysFilter : null
   );
 }
 

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Download, FileText, Table } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ExcelJS from 'exceljs';
@@ -126,7 +127,10 @@ export default function ExportMenu({
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [sprints, setSprints] = useState<Array<{ id: string; name: string }>>([]);
+  const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuPortalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchSprints = async () => {
@@ -152,9 +156,10 @@ export default function ExportMenu({
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (menuPortalRef.current?.contains(target)) return;
+      setIsOpen(false);
     }
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -162,6 +167,28 @@ export default function ExportMenu({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !buttonRef.current) {
+      setMenuCoords(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setMenuCoords({ top: rect.bottom + 4, left: rect.left });
+    };
+
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen]);
 
   if (!isAdmin) {
     return null;
@@ -209,22 +236,32 @@ export default function ExportMenu({
   return (
     <div className="relative" ref={menuRef}>
       <button
+        ref={buttonRef}
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={isExporting}
         className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-opacity disabled:opacity-50"
         title={t('export.title')}
+        aria-label={t('export.title')}
+        aria-expanded={isOpen}
         data-tour-id="export-menu"
       >
         <Download size={14} />
       </button>
 
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-48 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-50">
+      {isOpen && menuCoords && createPortal(
+        <div
+          ref={menuPortalRef}
+          className="fixed w-48 bg-white dark:bg-gray-700 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-[9999]"
+          style={{ top: menuCoords.top, left: menuCoords.left }}
+          role="menu"
+        >
           <div className="py-1">
             <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               {t('export.csvExport')}
             </div>
             <button
+              type="button"
               onClick={() => handleExport({ format: 'csv', scope: 'current' })}
               disabled={isExporting}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-2 disabled:opacity-50"
@@ -233,6 +270,7 @@ export default function ExportMenu({
               {t('export.currentBoard')}
             </button>
             <button
+              type="button"
               onClick={() => handleExport({ format: 'csv', scope: 'all' })}
               disabled={isExporting}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-2 disabled:opacity-50"
@@ -247,6 +285,7 @@ export default function ExportMenu({
               {t('export.excelExport')}
             </div>
             <button
+              type="button"
               onClick={() => handleExport({ format: 'xlsx', scope: 'current' })}
               disabled={isExporting}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-2 disabled:opacity-50"
@@ -255,6 +294,7 @@ export default function ExportMenu({
               {t('export.currentBoard')}
             </button>
             <button
+              type="button"
               onClick={() => handleExport({ format: 'xlsx', scope: 'all' })}
               disabled={isExporting}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-2 disabled:opacity-50"
@@ -263,7 +303,8 @@ export default function ExportMenu({
               {t('export.allBoards')}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

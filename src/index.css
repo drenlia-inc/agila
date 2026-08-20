@@ -35,6 +35,29 @@
   padding-right: max(0.75rem, min(1.5rem, calc((100vw - var(--app-page-min-width)) / 2)));
 }
 
+/*
+ * The column bulk menu sits just left of the column (half its width hangs out).
+ * The board scroller would clip that overhang on the first column, so borrow as
+ * much of the page gutter as we can and pad the rest. Columns stay aligned with
+ * the header on typical widths; the menu still scrolls away with the column.
+ */
+[data-kanban-scroll="board"],
+[data-kanban-scroll="trash"] {
+  --kanban-bulk-fab-overhang: 1.5rem;
+  --kanban-inline-gutter: max(
+    0.75rem,
+    min(1.5rem, calc((100vw - var(--app-page-min-width)) / 2))
+  );
+  --kanban-bulk-fab-borrow: min(
+    var(--kanban-inline-gutter),
+    var(--kanban-bulk-fab-overhang)
+  );
+  margin-left: calc(-1 * var(--kanban-bulk-fab-borrow));
+  padding-left: var(--kanban-bulk-fab-overhang);
+  width: calc(100% + var(--kanban-bulk-fab-borrow));
+  box-sizing: border-box;
+}
+
 /* Prevent flash of light content in dark mode */
 @layer base {
   html.dark {
@@ -81,7 +104,14 @@ div[data-tour-id="kanban-columns"],
   background-color: rgb(249, 250, 251) !important; /* gray-50 */
   /* Hint browser to optimize for background changes */
   will-change: background-color;
-  /* Ensure background is painted immediately */
+}
+
+/*
+ * contain:paint makes a containing block for position:fixed, which would pin
+ * kanban column titles to the board scroller instead of the viewport.
+ * Keep paint containment on other overflow-x-auto surfaces (e.g. list body).
+ */
+.overflow-x-auto.w-full:not(.kanban-scrollable-container):not([data-tour-id="kanban-columns"]) {
   contain: paint;
 }
 

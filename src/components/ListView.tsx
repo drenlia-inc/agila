@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useAppHeaderStickyTop } from '../hooks/useAppHeaderStickyTop';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronUp, Eye, EyeOff, Menu, X, Check, Trash2, Copy, FileText, ChevronLeft, ChevronRight, MessageCircle, UserPlus, Plus, Paperclip, Calendar, GitBranch } from 'lucide-react';
@@ -221,6 +222,9 @@ interface ColumnConfig {
 
 const LIST_VIEW_INSTANT_TOOLTIP_CLASS = `${CHROME_TOOLTIP_POPOVER_CLASS} top-full mt-1 z-[60]`;
 const LIST_VIEW_COLUMN_SEPARATOR_CLASS = 'border-r border-gray-200 dark:border-gray-700';
+const LIST_VIEW_ROW_NUM_WIDTH_PX = 96;
+const LIST_VIEW_TABLE_CLASS =
+  'min-w-full w-max border-separate border-spacing-0 table-fixed';
 
 /** Blob fix + DOMPurify + anchor `target` / `rel` from `SITE_OPENS_NEW_TAB` (matches TaskCard). */
 function buildListViewDescriptionHtml(
@@ -326,7 +330,7 @@ export default function ListView({
     return onEditTaskProp(task);
   };
   
-  const [sortField, setSortField] = useState<SortField>('column');
+  const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [agentAssignTask, setAgentAssignTask] = useState<Task | null>(null);
   const [agentAssignWork, setAgentAssignWork] = useState<TaskWorkMap>({});
@@ -404,6 +408,7 @@ export default function ListView({
   // Horizontal scroll navigation state
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const stickyHeaderTopPx = useAppHeaderStickyTop();
   const [showListDependencyTree, setShowListDependencyTree] = useState(false);
   const [depsToggleHovered, setDepsToggleHovered] = useState(false);
   const [columnMenuTooltipHovered, setColumnMenuTooltipHovered] = useState(false);
@@ -509,6 +514,8 @@ export default function ListView({
   }, [schedulePersistColumnWidths]);
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const tableHeaderScrollRef = useRef<HTMLDivElement>(null);
+  const isSyncingHorizontalScrollRef = useRef(false);
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -581,24 +588,40 @@ export default function ListView({
   // Check scroll state for table
   const checkTableScrollState = () => {
     if (!tableContainerRef.current) return;
-    
+
     const container = tableContainerRef.current;
     const newCanScrollLeft = container.scrollLeft > 0;
     const newCanScrollRight = container.scrollLeft < container.scrollWidth - container.clientWidth;
-    
+
     setCanScrollLeft(newCanScrollLeft);
     setCanScrollRight(newCanScrollRight);
-    
+
     // Notify parent of scroll control changes
     if (onScrollControlsChange) {
       onScrollControlsChange({
         canScrollLeft: newCanScrollLeft,
         canScrollRight: newCanScrollRight,
         scrollLeft: scrollTableLeft,
-        scrollRight: scrollTableRight
+        scrollRight: scrollTableRight,
       });
     }
   };
+
+  const syncHeaderScrollLeft = useCallback((scrollLeft: number) => {
+    const headerScroll = tableHeaderScrollRef.current;
+    if (!headerScroll || headerScroll.scrollLeft === scrollLeft) return;
+    isSyncingHorizontalScrollRef.current = true;
+    headerScroll.scrollLeft = scrollLeft;
+    isSyncingHorizontalScrollRef.current = false;
+  }, []);
+
+  const handleTableBodyScroll = useCallback(() => {
+    if (isSyncingHorizontalScrollRef.current) return;
+    const body = tableContainerRef.current;
+    if (!body) return;
+    syncHeaderScrollLeft(body.scrollLeft);
+    checkTableScrollState();
+  }, [syncHeaderScrollLeft]);
 
   // Table scroll functions
   const scrollTableLeft = () => {
@@ -647,6 +670,8 @@ export default function ListView({
     setAnimatingTask(null);
     setAnimationPhase(null);
     setCopiedTaskId(null);
+    setSortField(null);
+    setSortDirection('asc');
   }, [selectedBoard]);
 
   // Fetch board columns when selectedBoard changes
@@ -722,10 +747,8 @@ export default function ListView({
   // Sort tasks with multi-level sorting
   const sortedTasks = useMemo(() => {
     return [...allTasks].sort((a, b) => {
-      // Multi-level sort when using default column sort, or single-field sort when user clicks a column
-      if (sortField === 'column' && sortDirection === 'asc') {
-        // Default multi-level sort: column position → task position → ticket
-        
+      // Default multi-level sort: column position → task position → ticket
+      if (sortField === null) {
         // 1. By column position (ascending)
         if (a.columnPosition !== b.columnPosition) {
           return a.columnPosition - b.columnPosition;
@@ -837,37 +860,43 @@ export default function ListView({
 
   // Update scroll state when table content changes
   useEffect(() => {
-    // Check scroll state after a short delay to ensure layout is complete
     const timeoutId = setTimeout(() => {
       checkTableScrollState();
+      const body = tableContainerRef.current;
+      if (body) syncHeaderScrollLeft(body.scrollLeft);
     }, 100);
-    
+
     const container = tableContainerRef.current;
     if (container) {
-      container.addEventListener('scroll', checkTableScrollState);
       const resizeObserver = new ResizeObserver(() => {
-        // Also delay the resize check
-        setTimeout(checkTableScrollState, 50);
+        setTimeout(() => {
+          checkTableScrollState();
+          syncHeaderScrollLeft(container.scrollLeft);
+        }, 50);
       });
       resizeObserver.observe(container);
-      
+
       return () => {
         clearTimeout(timeoutId);
-        container.removeEventListener('scroll', checkTableScrollState);
         resizeObserver.disconnect();
       };
     }
-    
+
     return () => clearTimeout(timeoutId);
-  }, [tableTasks]);
+  }, [tableTasks, columns, syncHeaderScrollLeft]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortField(null);
+        setSortDirection('asc');
+      }
+      return;
     }
+    setSortField(field);
+    setSortDirection('asc');
   };
 
   /** Hide Sprint column when not in “all sprints” mode (single sprint or backlog — no useful variation in that column). */
@@ -1769,28 +1798,70 @@ export default function ListView({
     visibleColumns = columns.filter(col => col.visible);
   }
 
+  const listViewRowNumColumnStyle = {
+    width: LIST_VIEW_ROW_NUM_WIDTH_PX,
+    minWidth: LIST_VIEW_ROW_NUM_WIDTH_PX,
+    maxWidth: LIST_VIEW_ROW_NUM_WIDTH_PX,
+  } as const;
+
+  const listViewTableMinWidthPx = (() => {
+    let total = LIST_VIEW_ROW_NUM_WIDTH_PX;
+    for (const column of visibleColumns) {
+      total +=
+        column.key === 'ticket'
+          ? column.width + ticketColumnWidthBoost
+          : column.width;
+    }
+    return total;
+  })();
+
+  const listViewTableWidthStyle = {
+    minWidth: listViewTableMinWidthPx,
+    width: listViewTableMinWidthPx,
+  } as const;
+
+  const listViewColGroup = (
+    <colgroup>
+      <col style={listViewRowNumColumnStyle} />
+      {visibleColumns.map((column, columnIndex) => {
+        const isLastColumn = columnIndex === visibleColumns.length - 1;
+        const colWidth =
+          column.key === 'ticket'
+            ? column.width + ticketColumnWidthBoost
+            : column.width;
+        return (
+          <col
+            key={column.key}
+            style={
+              isLastColumn
+                ? { minWidth: colWidth, width: colWidth }
+                : { width: colWidth, minWidth: colWidth, maxWidth: colWidth }
+            }
+          />
+        );
+      })}
+    </colgroup>
+  );
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        {/* Scrollable table container */}
+    <div className="rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        {/* Viewport sticky — must stay outside overflow-hidden/auto ancestors. */}
         <div
-          ref={tableContainerRef}
-          className="overflow-x-auto w-full scroll-pr-4"
-          style={{ 
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#CBD5E1 #F1F5F9'
-          }}
+          className="sticky z-40 overflow-visible bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700 shadow-sm"
+          style={{ top: stickyHeaderTopPx }}
         >
-        <table
-          className={`min-w-full w-max divide-y divide-gray-200 dark:divide-gray-700 ${
-            resizingColumnKey ? 'select-none' : ''
-          }`}
-        >
-          <thead className="bg-gray-50 dark:bg-gray-700">
+          <div ref={tableHeaderScrollRef} className="overflow-x-hidden overflow-y-visible w-full">
+            <table
+              className={`${LIST_VIEW_TABLE_CLASS} ${resizingColumnKey ? 'select-none' : ''}`}
+              style={listViewTableWidthStyle}
+            >
+              {listViewColGroup}
+              <thead>
             <tr>
               {/* Row number column with column management dropdown */}
               <th
-                className={`px-4 py-3 align-middle text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider relative group ${LIST_VIEW_COLUMN_SEPARATOR_CLASS}`}
-                style={{ width: 64, minWidth: 64, maxWidth: 64 }}
+                className={`px-4 py-3 align-middle text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider relative group bg-gray-50 dark:bg-gray-700 ${LIST_VIEW_COLUMN_SEPARATOR_CLASS}`}
+                style={listViewRowNumColumnStyle}
               >
                 <div className="flex items-center justify-between">
                   <span>#</span>
@@ -1838,7 +1909,7 @@ export default function ListView({
                 return (
                 <th
                   key={column.key}
-                  className={`px-4 py-3 align-middle text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 relative group ${
+                  className={`px-4 py-3 align-middle text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 relative group bg-gray-50 dark:bg-gray-700 ${
                     showColumnSeparator ? LIST_VIEW_COLUMN_SEPARATOR_CLASS : ''
                   } ${isLastColumn ? 'pr-5' : ''} ${
                     resizingColumnKey === column.key ? 'bg-gray-100 dark:bg-gray-600' : ''
@@ -1925,7 +1996,28 @@ export default function ListView({
                 );
               })}
             </tr>
-          </thead>
+              </thead>
+            </table>
+          </div>
+        </div>
+
+        {/* Body scrolls horizontally; header scrollLeft stays in sync. */}
+        <div
+          ref={tableContainerRef}
+          className="relative z-0 overflow-x-auto w-full scroll-pr-4"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#CBD5E1 #F1F5F9',
+          }}
+          onScroll={handleTableBodyScroll}
+        >
+        <table
+          className={`${LIST_VIEW_TABLE_CLASS} divide-y divide-gray-200 dark:divide-gray-700 ${
+            resizingColumnKey ? 'select-none' : ''
+          }`}
+          style={listViewTableWidthStyle}
+        >
+          {listViewColGroup}
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {tableTasks.length === 0 ? (
               <tr>
@@ -1961,7 +2053,10 @@ export default function ListView({
                     } ${getAnimationClasses()}`}
                   >
                   {/* Row number and actions cell */}
-                  <td className={`px-4 py-2 align-middle whitespace-nowrap text-xs text-gray-500 w-24 ${LIST_VIEW_COLUMN_SEPARATOR_CLASS}`}>
+                  <td
+                    className={`px-4 py-2 align-middle whitespace-nowrap text-xs text-gray-500 ${LIST_VIEW_COLUMN_SEPARATOR_CLASS}`}
+                    style={listViewRowNumColumnStyle}
+                  >
                     <div className="flex items-center gap-1 min-h-[1.75rem]">
                       <span className="text-xs text-gray-500 mr-1">{index + 1}</span>
                       {canMutate && (

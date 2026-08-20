@@ -919,6 +919,66 @@ const migrations = [
       }
       console.log('✅ Migration 41: webhooks + notification delivery channel');
     }
+  },
+  {
+    version: 42,
+    name: 'views_extended_search_filters',
+    description: 'Add overdue, blocked, sprint, stalled, and linked columns to saved filter views',
+    up: async (db) => {
+      const schema = db.schema && typeof db.schema === 'string' ? db.schema : 'public';
+      const columnExists = async (columnName) => {
+        const rows = await dbAll(
+          db.prepare(`
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = ? AND table_name = 'views' AND column_name = ?
+          `),
+          schema,
+          columnName
+        );
+        return rows.length > 0;
+      };
+      if (!(await columnExists('linkedtasksonlyfilter'))) {
+        await dbExec(db, 'ALTER TABLE views ADD COLUMN linkedtasksonlyfilter BOOLEAN DEFAULT false');
+      }
+      if (!(await columnExists('overdueonlyfilter'))) {
+        await dbExec(db, 'ALTER TABLE views ADD COLUMN overdueonlyfilter BOOLEAN DEFAULT false');
+      }
+      if (!(await columnExists('blockedonlyfilter'))) {
+        await dbExec(db, 'ALTER TABLE views ADD COLUMN blockedonlyfilter BOOLEAN DEFAULT false');
+      }
+      if (!(await columnExists('sprintfilters'))) {
+        await dbExec(db, 'ALTER TABLE views ADD COLUMN sprintfilters TEXT');
+      }
+      if (!(await columnExists('stalleddaysfilter'))) {
+        await dbExec(db, 'ALTER TABLE views ADD COLUMN stalleddaysfilter INTEGER');
+      }
+      console.log('✅ Migration 42: extended search filter columns on views');
+    }
+  },
+  {
+    version: 43,
+    name: 'views_project_filters_array',
+    description: 'Add projectfilters JSON column for multi-select project filter on saved views',
+    up: async (db) => {
+      const schema = db.schema && typeof db.schema === 'string' ? db.schema : 'public';
+      const columnExists = async (columnName) => {
+        const rows = await dbAll(
+          db.prepare(`
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = ? AND table_name = 'views' AND column_name = ?
+          `),
+          schema,
+          columnName
+        );
+        return rows.length > 0;
+      };
+      if (!(await columnExists('projectfilters'))) {
+        await dbExec(db, 'ALTER TABLE views ADD COLUMN projectfilters TEXT');
+      }
+      console.log('✅ Migration 43: projectfilters column on views');
+    }
   }
 ];
 
