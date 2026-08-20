@@ -1452,6 +1452,7 @@ export default function TaskPage({
                   onChange={(memberId) => handleTaskUpdate({ memberId })}
                   mode="single"
                   excludeViewers
+                  allowClear
                   disabled={fieldsLocked}
                 />
 
@@ -1462,6 +1463,7 @@ export default function TaskPage({
                   onChange={(memberId) => handleTaskUpdate({ requesterId: memberId })}
                   mode="single"
                   showAgentSection={false}
+                  allowClear
                   disabled={fieldsLocked}
                 />
                 

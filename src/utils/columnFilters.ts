@@ -2,6 +2,7 @@ import { Board, Columns, Task, TeamMember } from '../types';
 import { filterTasks, hasConfiguredSearchFilters, SprintSearchInfo } from './taskUtils';
 import { dedupeTasksInColumns } from './taskReorderingUtils';
 import { isAgentMemberId } from './agentMemberUi';
+import { UNASSIGNED_MEMBER_FILTER_ID } from '../constants/appConstants';
 
 export type ColumnFilterState = {
   selectedSprintId: string | null;
@@ -34,6 +35,40 @@ export function taskMatchesSelectedSprint(
   return sprintId === selectedSprintId;
 }
 
+/** True when selectedMembers includes the unassigned-assignee sentinel. */
+export function selectionIncludesUnassigned(selectedMembers: string[]): boolean {
+  return selectedMembers.includes(UNASSIGNED_MEMBER_FILTER_ID);
+}
+
+/** Real member ids in a selection (excludes the unassigned sentinel). */
+export function realSelectedMemberIds(selectedMembers: string[]): string[] {
+  return selectedMembers.filter((id) => id !== UNASSIGNED_MEMBER_FILTER_ID);
+}
+
+/**
+ * Whether member-avatar selection is “show everyone” (no people and not
+ * filtering to unassigned-only).
+ */
+export function isShowAllMembersSelection(selectedMembers: string[]): boolean {
+  return realSelectedMemberIds(selectedMembers).length === 0 && !selectionIncludesUnassigned(selectedMembers);
+}
+
+/** Assignee filter match for a task given selected member ids (may include unassigned sentinel). */
+export function taskMatchesAssigneeSelection(
+  task: Task,
+  selectedMembers: string[],
+  showAllMembers: boolean
+): boolean {
+  if (showAllMembers) {
+    // Include assigned and unassigned work when no people are selected
+    return true;
+  }
+  if (!task.memberId) {
+    return selectionIncludesUnassigned(selectedMembers);
+  }
+  return realSelectedMemberIds(selectedMembers).includes(task.memberId);
+}
+
 /**
  * Apply the same sprint / search / member / agent filters used on the live board.
  * Pure — safe to call when seeding filteredColumns on board switch (avoids unfiltered flash).
@@ -63,8 +98,14 @@ export function applyActiveColumnFilters(
   } = state;
 
   const searchConfigured = hasConfiguredSearchFilters(searchFilters);
+  const wantsUnassigned = selectionIncludesUnassigned(selectedMembers);
+  // Unassigned sentinel is a first-class filter (does not require Assignees role chip)
   const memberRoleFiltering =
-    includeAssignees || includeWatchers || includeCollaborators || includeRequesters;
+    includeAssignees ||
+    includeWatchers ||
+    includeCollaborators ||
+    includeRequesters ||
+    wantsUnassigned;
 
   const stripAgentIfNeeded = (tasks: Task[]) =>
     showAgentTasks ? tasks : tasks.filter((task) => !isAgentMemberId(task.memberId));
@@ -72,16 +113,16 @@ export function applyActiveColumnFilters(
   const customFilterTasks = (tasks: Task[]) => {
     if (!memberRoleFiltering) return tasks;
 
-    const showAllMembers = selectedMembers.length === 0;
+    const showAllMembers = isShowAllMembersSelection(selectedMembers);
+    const realMemberIds = realSelectedMemberIds(selectedMembers);
     const filteredTasks: Task[] = [];
 
     for (const task of tasks) {
       let includeTask = false;
 
-      if (includeAssignees) {
-        if (showAllMembers) {
-          if (task.memberId) includeTask = true;
-        } else if (task.memberId && selectedMembers.includes(task.memberId)) {
+      // Assignees role and/or Unassigned chip
+      if (includeAssignees || wantsUnassigned) {
+        if (taskMatchesAssigneeSelection(task, selectedMembers, showAllMembers)) {
           includeTask = true;
         }
       }
@@ -91,7 +132,7 @@ export function applyActiveColumnFilters(
         if (watchers.length > 0) {
           if (showAllMembers) {
             includeTask = true;
-          } else if (watchers.some((watcher) => selectedMembers.includes(watcher.id))) {
+          } else if (watchers.some((watcher) => realMemberIds.includes(watcher.id))) {
             includeTask = true;
           }
         }
@@ -102,7 +143,7 @@ export function applyActiveColumnFilters(
         if (collaborators.length > 0) {
           if (showAllMembers) {
             includeTask = true;
-          } else if (collaborators.some((c) => selectedMembers.includes(c.id))) {
+          } else if (collaborators.some((c) => realMemberIds.includes(c.id))) {
             includeTask = true;
           }
         }
@@ -111,7 +152,7 @@ export function applyActiveColumnFilters(
       if (!includeTask && includeRequesters) {
         if (showAllMembers) {
           if (task.requesterId) includeTask = true;
-        } else if (task.requesterId && selectedMembers.includes(task.requesterId)) {
+        } else if (task.requesterId && realMemberIds.includes(task.requesterId)) {
           includeTask = true;
         }
       }

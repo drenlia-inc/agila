@@ -167,8 +167,8 @@ export default function TaskDetails({
   const detailsPanelRef = useRef<HTMLDivElement>(null);
   const [editedTask, setEditedTask] = useState<Task>(() => ({
     ...task,
-    memberId: task.memberId || members[0]?.id || '',
-    requesterId: task.requesterId || members[0]?.id || '',
+    memberId: task.memberId ?? null,
+    requesterId: task.requesterId ?? null,
     comments: (task.comments || [])
       .filter(comment => 
         comment && 
@@ -872,8 +872,8 @@ export default function TaskDetails({
       // Reset edited task to match the new task
       setEditedTask({
         ...task,
-        memberId: task.memberId || members[0]?.id || '',
-        requesterId: task.requesterId || members[0]?.id || '',
+        memberId: task.memberId ?? null,
+        requesterId: task.requesterId ?? null,
         comments: (task.comments || [])
           .filter(comment => 
             comment && 
@@ -1392,14 +1392,14 @@ export default function TaskDetails({
     )
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  // Ensure we have valid member IDs
+  // Prefer a known member id; keep null when unassigned (do not coerce to members[0])
   const validMemberId = members.some(m => m.id === editedTask.memberId)
     ? editedTask.memberId
-    : members[0]?.id || '';
-    
+    : null;
+
   const validRequesterId = members.some(m => m.id === editedTask.requesterId)
     ? editedTask.requesterId
-    : members[0]?.id || '';
+    : null;
 
   // Update the date formatting utility
   const formatDateTime = (dateString: string) => {
@@ -1877,6 +1877,7 @@ export default function TaskDetails({
                   onChange={(memberId) => handleUpdate({ memberId })}
                   mode="single"
                   excludeViewers
+                  allowClear
                   disabled={isSubmitting || isWritersLocked}
                 />
               </div>
@@ -1889,6 +1890,7 @@ export default function TaskDetails({
                   onChange={(memberId) => handleUpdate({ requesterId: memberId })}
                   mode="single"
                   showAgentSection={false}
+                  allowClear
                   disabled={isSubmitting || isWritersLocked}
                 />
               </div>

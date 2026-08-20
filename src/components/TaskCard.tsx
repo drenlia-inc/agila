@@ -78,7 +78,7 @@ const getPriorityColors = (hexColor: string) => {
 
 interface TaskCardProps {
   task: Task;
-  member: TeamMember;
+  member?: TeamMember | null;
   members: TeamMember[];
   currentUser?: CurrentUser | null;
   onRemove: (taskId: string, event?: React.MouseEvent) => void;
@@ -699,7 +699,7 @@ const TaskCard = React.memo(function TaskCard({
     };
   }, [showAgentPanel, task.id, task.memberId]);
 
-  const handleMemberChange = async (memberId: string) => {
+  const handleMemberChange = async (memberId: string | null) => {
     if (!allowMutations) return;
     setShowMemberSelect(false);
     if (memberId === AGENT_MEMBER_ID) {
@@ -1551,11 +1551,11 @@ const TaskCard = React.memo(function TaskCard({
         }}
         style={{ 
           ...style, 
-          borderLeft: `4px solid ${member.color}`,
+          borderLeft: `4px solid ${member?.color || '#9CA3AF'}`,
           // Use CSS variable for background to prevent flash - ensures correct color immediately
           backgroundColor: isSelected 
             ? undefined 
-            : member.id === SYSTEM_MEMBER_ID 
+            : member?.id === SYSTEM_MEMBER_ID 
               ? undefined 
               : isAgentWorkActive
                 ? undefined
@@ -1565,7 +1565,7 @@ const TaskCard = React.memo(function TaskCard({
         }}
         className={`group task-card sortable-item cursor-pointer outline-none focus:outline-none focus-visible:outline-none ${
           isSelected ? 'bg-gray-100 dark:bg-gray-700 ring-1 ring-amber-400 dark:ring-amber-500' : 
-          member.id === SYSTEM_MEMBER_ID ? 'bg-yellow-50 dark:bg-yellow-900' :
+          member?.id === SYSTEM_MEMBER_ID ? 'bg-yellow-50 dark:bg-yellow-900' :
           isAgentWorkActive ? 'bg-teal-50/90 dark:bg-teal-950/40' :
           '' // Background now handled by CSS variable in style to prevent flash
         } p-4 rounded-lg shadow-sm relative ${

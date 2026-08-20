@@ -151,7 +151,7 @@ import { KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, Dra
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { SimpleDragDropManager } from './components/dnd/SimpleDragDropManager';
 import SimpleDragOverlay from './components/dnd/SimpleDragOverlay';
-import { SYSTEM_MEMBER_ID, WEBSOCKET_THROTTLE_MS } from './constants/appConstants';
+import { SYSTEM_MEMBER_ID, UNASSIGNED_MEMBER_FILTER_ID, WEBSOCKET_THROTTLE_MS } from './constants/appConstants';
 import { checkInstanceStatusOnError, getDefaultPriorityName } from './utils/appHelpers';
 
 // Extend Window interface for WebSocket flags
@@ -774,21 +774,25 @@ function AppContent() {
         return task.sprintId !== taskFilters.selectedSprintId;
       })();
       const wouldBeFilteredByMembers = (() => {
+        const wantsUnassigned = taskFilters.selectedMembers.includes(UNASSIGNED_MEMBER_FILTER_ID);
         if (
           !taskFilters.includeAssignees &&
           !taskFilters.includeWatchers &&
           !taskFilters.includeCollaborators &&
-          !taskFilters.includeRequesters
+          !taskFilters.includeRequesters &&
+          !wantsUnassigned
         ) {
           return false;
         }
         const showAllMembers = taskFilters.selectedMembers.length === 0;
         const memberIds = new Set(taskFilters.selectedMembers);
         let hasMatchingMember = false;
-        if (taskFilters.includeAssignees) {
+        if (taskFilters.includeAssignees || wantsUnassigned) {
           if (showAllMembers) {
-            if (task.memberId) hasMatchingMember = true;
-          } else if (task.memberId && memberIds.has(task.memberId)) {
+            hasMatchingMember = true;
+          } else if (!task.memberId) {
+            if (wantsUnassigned) hasMatchingMember = true;
+          } else if (memberIds.has(task.memberId)) {
             hasMatchingMember = true;
           }
         }
@@ -3209,7 +3213,7 @@ function AppContent() {
       );
     }
     
-    // Always assign new tasks to the logged-in user, not the filtered selection
+    // Requester = current user; leave assignee unassigned until someone claims it
     const currentUserMember = members.find(m => m.user_id === currentUser.id);
     if (!currentUserMember) {
       // console.error('Current user not found in members list');
@@ -3241,7 +3245,7 @@ function AppContent() {
       id: generateUUID(),
       title: t('taskCard.newTask'),
       description: '',
-      memberId: currentUserMember.id,
+      memberId: null,
       startDate: taskStartDate,
       dueDate: taskDueDate,
       effort: 1,

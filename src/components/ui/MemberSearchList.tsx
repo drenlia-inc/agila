@@ -12,7 +12,7 @@ import MemberAvatar from './MemberAvatar';
 
 export interface MemberSearchListProps {
   members: TeamMember[];
-  onSelect: (memberId: string) => void;
+  onSelect: (memberId: string | null) => void;
   /** Exclude members from the list (e.g. already watchers) */
   excludeIds?: string[];
   /** Highlight currently selected id (assignee/requester single pick) */
@@ -21,6 +21,8 @@ export interface MemberSearchListProps {
   excludeViewers?: boolean;
   /** Highlight agent in its own section */
   showAgentSection?: boolean;
+  /** Show a clear/unassign row at the top (assignee pickers) */
+  allowClear?: boolean;
   /** Auto-focus search on mount */
   autoFocus?: boolean;
   className?: string;
@@ -49,6 +51,7 @@ export default function MemberSearchList({
   selectedId = null,
   excludeViewers = false,
   showAgentSection = true,
+  allowClear = false,
   autoFocus = true,
   className = '',
   onEscape,
@@ -88,9 +91,34 @@ export default function MemberSearchList({
     return () => window.clearTimeout(id);
   }, [autoFocus]);
 
-  const pick = (id: string) => {
+  const pick = (id: string | null) => {
     onSelect(id);
     setSearchTerm('');
+  };
+
+  const renderClearRow = () => {
+    if (!allowClear) return null;
+    const isSelected = !selectedId;
+    return (
+      <button
+        key="__unassign__"
+        type="button"
+        onClick={() => pick(null)}
+        className={`w-full min-w-0 flex items-center gap-2 px-2.5 py-2 rounded-md text-left transition-colors ${
+          isSelected
+            ? 'bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-200 dark:ring-blue-700'
+            : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+        }`}
+      >
+        <MemberAvatar member={null} size="sm" />
+        <span className="text-sm text-gray-900 dark:text-gray-100 truncate flex-1 min-w-0">
+          {t('taskCard.noAssignee')}
+        </span>
+        {isSelected && (
+          <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+        )}
+      </button>
+    );
   };
 
   const renderRow = (m: TeamMember) => {
@@ -173,6 +201,9 @@ export default function MemberSearchList({
       </div>
 
       <div className={`overflow-y-auto overflow-x-hidden flex-1 min-h-0 p-1.5 ${maxHeightClassName}`}>
+        {allowClear && !searchTerm.trim() && (
+          <div className="mb-1">{renderClearRow()}</div>
+        )}
         {!hasAnyResults ? (
           <div className="px-3 py-3 text-sm text-gray-500 text-center">
             {searchTerm.trim()

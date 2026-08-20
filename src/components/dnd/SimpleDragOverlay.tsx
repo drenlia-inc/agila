@@ -41,13 +41,13 @@ export const SimpleDragOverlay: React.FC<SimpleDragOverlayProps> = ({
           // Small corner indicator when hovering over board tabs
           <SmallTaskIndicator 
             task={draggedTask} 
-            member={members.find(m => m.id === draggedTask.assignedTo)} 
+            member={members.find(m => m.id === draggedTask.memberId)} 
             count={multiCount || 1}
           />
         ) : (
           <TaskDragPreview
             task={draggedTask}
-            member={members.find(m => m.id === draggedTask.assignedTo)}
+            member={members.find(m => m.id === draggedTask.memberId)}
             stackCount={multiCount}
             compact={taskViewMode === 'compact'}
           />

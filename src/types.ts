@@ -51,8 +51,8 @@ export interface Task {
   description?: string;
   ticket?: string;
   columnId: string;
-  memberId?: string;
-  requesterId?: string;
+  memberId?: string | null;
+  requesterId?: string | null;
   startDate: string;
   dueDate?: string;
   effort: number;

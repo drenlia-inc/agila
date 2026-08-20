@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye } from 'lucide-react';
+import { Eye, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TeamMember } from '../../types';
 import { SYSTEM_MEMBER_ID } from '../../constants/appConstants';
@@ -34,6 +34,13 @@ const EYE_PX: Record<AvatarSize, number> = {
   lg: 10,
 };
 
+const USER_PX: Record<AvatarSize, number> = {
+  xs: 10,
+  sm: 12,
+  md: 14,
+  lg: 16,
+};
+
 interface MemberAvatarProps {
   member?: TeamMember | null;
   memberId?: string | null;
@@ -63,12 +70,15 @@ export default function MemberAvatar({
     (memberId && members ? resolveTaskMember(members, memberId) : undefined);
 
   if (!member) {
+    const unassignedLabel = title || t('messages.unassignedMember');
     return (
       <div
-        className={`${SIZE_CLASS[size]} rounded-full bg-gray-200 dark:bg-gray-600 shrink-0 ${className}`}
-        title={title}
-        aria-hidden
-      />
+        className={`${SIZE_CLASS[size]} rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center shrink-0 text-gray-500 dark:text-gray-300 ${className}`}
+        title={unassignedLabel}
+        aria-label={unassignedLabel}
+      >
+        <User size={USER_PX[size]} strokeWidth={2} aria-hidden />
+      </div>
     );
   }
 

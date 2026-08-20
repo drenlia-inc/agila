@@ -447,6 +447,7 @@
     "loadingSprints": "Chargement des sprints...",
     "noneBacklog": "Aucun (Backlog)",
     "unassigned": "Non assigné",
+    "noAssignee": "Non assignée",
     "removeFromSprint": "Retirer du sprint",
     "noSprintsAvailable": "Aucun sprint disponible. Créez-en un dans les paramètres d'administration.",
     "active": "Actif"

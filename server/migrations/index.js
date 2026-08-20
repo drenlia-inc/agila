@@ -979,6 +979,15 @@ const migrations = [
       }
       console.log('✅ Migration 43: projectfilters column on views');
     }
+  },
+  {
+    version: 44,
+    name: 'tasks_memberid_nullable',
+    description: 'Allow unassigned tasks (null memberid / assignee)',
+    up: async (db) => {
+      await dbExec(db, `ALTER TABLE tasks ALTER COLUMN memberid DROP NOT NULL`);
+      console.log('✅ Migration 44: tasks.memberid nullable');
+    }
   }
 ];
 

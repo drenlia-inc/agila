@@ -264,7 +264,7 @@ const CREATE_SCHEMA_SQL = `
       title TEXT NOT NULL,
       description TEXT,
       ticket TEXT,
-      memberid TEXT NOT NULL,
+      memberid TEXT,
       requesterid TEXT,
       startdate TEXT NOT NULL,
       duedate TEXT,

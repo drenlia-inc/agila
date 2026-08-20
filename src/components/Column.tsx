@@ -939,8 +939,7 @@ function KanbanColumn({
       if (!task) return;
 
       const memberList = Array.isArray(members) ? members : [];
-      const member = resolveTaskMember(memberList, task.memberId);
-      if (!member) return;
+      const member = resolveTaskMember(memberList, task.memberId) ?? null;
 
       const isBeingDragged =
         draggedTask?.id === task.id ||
