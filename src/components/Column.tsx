@@ -32,6 +32,10 @@ import {
   TASK_ROW_GAP_PX,
   useColumnVirtualRange,
 } from '../hooks/useColumnVirtualRange';
+import {
+  KANBAN_COLUMN_HEADER_PORTAL_STYLE,
+  useStickyKanbanColumnHeader,
+} from '../hooks/useStickyKanbanColumnHeader';
 
 interface KanbanColumnProps {
   column: Column;
@@ -146,6 +150,9 @@ interface KanbanColumnProps {
   selectedBoardId?: string | null;
   /** Task ids currently in a follower multi-drag (fade placeholders). */
   draggedTaskIds?: string[];
+
+  /** When set, the real column header pins under the logo bar while the page scrolls. */
+  columnHeaderStickyTopPx?: number;
 }
 
 function KanbanColumn({
@@ -238,6 +245,7 @@ function KanbanColumn({
   onClearBulkUndo,
   selectedBoardId = null,
   draggedTaskIds,
+  columnHeaderStickyTopPx,
 }: KanbanColumnProps) {
   const { t, i18n } = useTranslation(['tasks', 'common']);
   const [isEditing, setIsEditing] = useState(false);
@@ -360,6 +368,7 @@ function KanbanColumn({
   const [deleteButtonRef, setDeleteButtonRef] = useState<HTMLButtonElement | null>(null);
   const [shouldSelectAll, setShouldSelectAll] = useState(false);
   const columnHeaderRef = useRef<HTMLDivElement>(null);
+  const columnElRef = useRef<HTMLElement | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const lastSaveTimestampRef = useRef<number>(0);
   const editingStartedRef = useRef<boolean>(false);
@@ -603,15 +612,38 @@ function KanbanColumn({
       ? 'none'  // Other columns: no transform (stay in place)
       : (isDragging 
         ? 'none'  // Dragged column: no transform (shown in DragOverlay instead)
-        : CSS.Transform.toString(transform)),  // Normal state: apply transform
+        : (transform &&
+          (transform.x ||
+            transform.y ||
+            (transform.scaleX != null && transform.scaleX !== 1) ||
+            (transform.scaleY != null && transform.scaleY !== 1))
+          ? CSS.Transform.toString(transform)
+          : undefined)),
     // CRITICAL: Disable transition during drag for smooth mouse following
     transition: (draggedColumn && draggedColumn.id !== column.id) || isDragging 
       ? 'none' 
       : transition,
     // Ensure smooth rendering during drag
-    backfaceVisibility: 'hidden' as const,
-    WebkitBackfaceVisibility: 'hidden' as const,
+    ...(isDragging || draggedColumn
+      ? {
+          backfaceVisibility: 'hidden' as const,
+          WebkitBackfaceVisibility: 'hidden' as const,
+        }
+      : {}),
   };
+
+  const stickyColumnHeaderEnabled = columnHeaderStickyTopPx != null && !isDragging;
+  const {
+    placeholderRef: columnHeaderPlaceholderRef,
+    placeholderHeightPx: columnHeaderPlaceholderHeightPx,
+    isStuck: isColumnHeaderStuck,
+  } = useStickyKanbanColumnHeader(
+    columnHeaderRef,
+    columnElRef,
+    columnHeaderStickyTopPx ?? 0,
+    stickyColumnHeaderEnabled
+  );
+  const portalColumnHeader = stickyColumnHeaderEnabled && isColumnHeaderStuck;
 
   // Note: Now using filteredTasks prop instead of calculating here
 
@@ -1101,9 +1133,6 @@ function KanbanColumn({
     return taskElements;
     }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, column.title, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
 
-  // Combine sortable and column droppable refs for the column container
-  const columnElRef = useRef<HTMLElement | null>(null);
-
   const setColumnRef = (node: HTMLElement | null) => {
     columnElRef.current = node;
     setNodeRef(node);
@@ -1167,34 +1196,6 @@ function KanbanColumn({
       }`}
       {...attributes}
     >
-      {/* Top Drop Zone - Shows "Drop here" when dragging a column over this column */}
-      {draggedColumn && draggedColumn.id !== column.id && (
-        <div
-          ref={setTopDropZoneRef}
-          className={`mb-2 transition-all duration-200 min-h-[48px] ${
-            isTopDropZoneOver 
-              ? 'opacity-100' 
-              : 'opacity-40'
-          }`}
-        >
-          <div className={`bg-blue-100 dark:bg-blue-900 border-2 border-dashed rounded-lg flex items-center justify-center py-2 px-4 transition-all duration-200 ${
-            isTopDropZoneOver
-              ? 'border-blue-500 dark:border-blue-400 shadow-lg scale-105'
-              : 'border-blue-300 dark:border-blue-700'
-          }`}>
-            <div className={`text-sm font-medium flex items-center gap-2 transition-colors ${
-              isTopDropZoneOver
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-blue-600 dark:text-blue-400'
-            }`}>
-              <div className={`w-2 h-2 bg-blue-500 rounded-full ${isTopDropZoneOver ? 'animate-pulse' : ''}`}></div>
-              {t('column.dropColumnHere', { ns: 'tasks' })}
-              <div className={`w-2 h-2 bg-blue-500 rounded-full ${isTopDropZoneOver ? 'animate-pulse' : ''}`}></div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Column warning: new task hidden by sprint / filters — strings from i18n so language switches apply */}
       {visibilityWarning && (
         <div className="mb-3 bg-yellow-100 dark:bg-yellow-900 border border-yellow-400 dark:border-yellow-600 text-yellow-800 dark:text-yellow-200 px-3 py-2 rounded-md text-sm flex flex-col gap-2">
@@ -1268,12 +1269,21 @@ function KanbanColumn({
         </div>
       )}
       
+      {(() => {
+        const columnHeaderNode = (
       <div
         ref={columnHeaderRef}
-        className={`flex justify-between mb-4 ${isEditing ? 'items-start' : 'items-center'}`}
+        className="relative z-20 flex flex-col overflow-visible"
+        style={
+          portalColumnHeader
+            ? { ...KANBAN_COLUMN_HEADER_PORTAL_STYLE, zIndex: isEditing ? 40 : 30 }
+            : undefined
+        }
         data-column-header
         data-kanban-column-title
+        data-kanban-header-column-id={column.id}
       >
+        <div className={`flex justify-between ${isEditing ? 'items-start' : 'items-center'}`}>
         <div className={`flex gap-2 flex-1 min-w-0 ${isEditing ? 'items-start' : 'items-center'}`}>
           {/* Task count pill (same chrome for all roles). Admins: hover reveals drag handle. */}
           {isAdmin ? (
@@ -1704,7 +1714,161 @@ function KanbanColumn({
             </div>
           )}
         </div>
+        </div>
+        {draggedColumn && draggedColumn.id !== column.id && (
+          <div
+            ref={setTopDropZoneRef}
+            className={`mt-2 transition-all duration-200 min-h-[48px] ${
+              isTopDropZoneOver ? 'opacity-100' : 'opacity-40'
+            }`}
+          >
+            <div
+              className={`bg-blue-100 dark:bg-blue-900 border-2 border-dashed rounded-lg flex items-center justify-center py-2 px-4 transition-all duration-200 ${
+                isTopDropZoneOver
+                  ? 'border-blue-500 dark:border-blue-400 shadow-lg scale-105'
+                  : 'border-blue-300 dark:border-blue-700'
+              }`}
+            >
+              <div
+                className={`text-sm font-medium flex items-center gap-2 transition-colors ${
+                  isTopDropZoneOver
+                    ? 'text-blue-700 dark:text-blue-300'
+                    : 'text-blue-600 dark:text-blue-400'
+                }`}
+              >
+                <div className={`w-2 h-2 bg-blue-500 rounded-full ${isTopDropZoneOver ? 'animate-pulse' : ''}`} />
+                {t('column.dropColumnHere', { ns: 'tasks' })}
+                <div className={`w-2 h-2 bg-blue-500 rounded-full ${isTopDropZoneOver ? 'animate-pulse' : ''}`} />
+              </div>
+            </div>
+          </div>
+        )}
+        {canMutate &&
+          checkedTaskIds &&
+          shouldShowColumnBulkFab(checkedTaskIds, filteredTasks) &&
+          onBulkCopy &&
+          onBulkDelete && (
+            <ColumnBulkActionBar
+              columnId={column.id}
+              selectedCount={checkedTaskIds.size}
+              selectedTasks={Array.from(checkedTaskIds)
+                .map((id) => {
+                  const inFiltered = filteredTasks.find((t) => t.id === id);
+                  if (inFiltered) return inFiltered;
+                  if (columns) {
+                    for (const col of Object.values(columns)) {
+                      const found = col.tasks?.find((t) => t.id === id);
+                      if (found) return found;
+                    }
+                  }
+                  return undefined;
+                })
+                .filter((t): t is Task => Boolean(t))}
+              members={members}
+              showUnselectAll={checkedTaskIds.size > 1}
+              isAdmin={isAdmin}
+              hasArchiveColumn={
+                !!columns &&
+                Object.values(columns).some((col) => isArchivedColumnFlag(col)) &&
+                !isArchivedColumnFlag(column)
+              }
+              availableTags={availableTags}
+              availablePriorities={availablePriorities}
+              availableSprints={availableSprints}
+              boards={(boards as Board[]) || []}
+              currentBoardId={selectedBoardId}
+              busy={bulkBusy}
+              onUnselectAll={() => onClearAllChecked?.()}
+              onAddTag={(tagId) =>
+                onBulkAddTag?.(Array.from(checkedTaskIds), tagId)
+              }
+              onCopy={() => onBulkCopy(Array.from(checkedTaskIds))}
+              onArchive={() => onBulkArchive?.(Array.from(checkedTaskIds))}
+              onDelete={() => onBulkDelete(Array.from(checkedTaskIds))}
+              onPermanentDelete={
+                onBulkPermanentDelete
+                  ? () => onBulkPermanentDelete(Array.from(checkedTaskIds))
+                  : undefined
+              }
+              onSprint={(sprintId) =>
+                onBulkSprint?.(Array.from(checkedTaskIds), sprintId)
+              }
+              onPriority={(priorityId) =>
+                onBulkPriority?.(Array.from(checkedTaskIds), priorityId)
+              }
+              onMoveToBoard={(boardId) =>
+                onBulkMoveToBoard?.(Array.from(checkedTaskIds), boardId)
+              }
+              onAssignee={
+                onBulkAssignee
+                  ? (memberId) => onBulkAssignee(Array.from(checkedTaskIds), memberId)
+                  : undefined
+              }
+              onRequester={
+                onBulkRequester
+                  ? (memberId) => onBulkRequester(Array.from(checkedTaskIds), memberId)
+                  : undefined
+              }
+              onAddWatcher={
+                onBulkAddWatcher
+                  ? (memberId) => onBulkAddWatcher(Array.from(checkedTaskIds), memberId)
+                  : undefined
+              }
+              onRemoveWatcher={
+                onBulkRemoveWatcher
+                  ? (memberId) => onBulkRemoveWatcher(Array.from(checkedTaskIds), memberId)
+                  : undefined
+              }
+              onAddCollaborator={
+                onBulkAddCollaborator
+                  ? (memberId) => onBulkAddCollaborator(Array.from(checkedTaskIds), memberId)
+                  : undefined
+              }
+              onRemoveCollaborator={
+                onBulkRemoveCollaborator
+                  ? (memberId) =>
+                      onBulkRemoveCollaborator(Array.from(checkedTaskIds), memberId)
+                  : undefined
+              }
+            />
+          )}
+        {checkedTaskIds &&
+          onBulkUndo &&
+          shouldShowColumnBulkUndo(
+            bulkUndoTaskIds,
+            filteredTasks,
+            checkedTaskIds.size,
+            bulkUndoAnchorColumnIds,
+            column.id
+          ) && (
+            <ColumnBulkUndoFab
+              columnId={column.id}
+              count={bulkUndoTaskIds?.length || 0}
+              busy={bulkBusy}
+              labelKey={bulkUndoLabelKey}
+              onUndo={onBulkUndo}
+              onDismiss={() => onClearBulkUndo?.()}
+            />
+          )}
       </div>
+        );
+        return (
+          <>
+            <div
+              ref={columnHeaderPlaceholderRef}
+              className="mb-4"
+              style={
+                portalColumnHeader
+                  ? { height: columnHeaderPlaceholderHeightPx || undefined }
+                  : undefined
+              }
+            >
+              {portalColumnHeader ? null : columnHeaderNode}
+            </div>
+            {portalColumnHeader ? createPortal(columnHeaderNode, document.body) : null}
+          </>
+        );
+      })()}
 
       <div className="flex-1 min-h-[150px]">
         {/* Calculate if this column is truly empty (excluding dragged task) */}
@@ -1809,117 +1973,6 @@ function KanbanColumn({
         )}
       </div>
 
-      {canMutate &&
-        checkedTaskIds &&
-        shouldShowColumnBulkFab(checkedTaskIds, filteredTasks) &&
-        onBulkCopy &&
-        onBulkDelete && (
-          <ColumnBulkActionBar
-            columnId={column.id}
-            anchorRef={columnHeaderRef}
-            selectedCount={checkedTaskIds.size}
-            selectedTasks={Array.from(checkedTaskIds)
-              .map((id) => {
-                const inFiltered = filteredTasks.find((t) => t.id === id);
-                if (inFiltered) return inFiltered;
-                if (columns) {
-                  for (const col of Object.values(columns)) {
-                    const found = col.tasks?.find((t) => t.id === id);
-                    if (found) return found;
-                  }
-                }
-                return undefined;
-              })
-              .filter((t): t is Task => Boolean(t))}
-            members={members}
-            showUnselectAll={checkedTaskIds.size > 1}
-            isAdmin={isAdmin}
-            hasArchiveColumn={
-              !!columns &&
-              Object.values(columns).some((col) => isArchivedColumnFlag(col)) &&
-              !isArchivedColumnFlag(column)
-            }
-            availableTags={availableTags}
-            availablePriorities={availablePriorities}
-            availableSprints={availableSprints}
-            boards={(boards as Board[]) || []}
-            currentBoardId={selectedBoardId}
-            busy={bulkBusy}
-            onUnselectAll={() => onClearAllChecked?.()}
-            onAddTag={(tagId) =>
-              onBulkAddTag?.(Array.from(checkedTaskIds), tagId)
-            }
-            onCopy={() => onBulkCopy(Array.from(checkedTaskIds))}
-            onArchive={() => onBulkArchive?.(Array.from(checkedTaskIds))}
-            onDelete={() => onBulkDelete(Array.from(checkedTaskIds))}
-            onPermanentDelete={
-              onBulkPermanentDelete
-                ? () => onBulkPermanentDelete(Array.from(checkedTaskIds))
-                : undefined
-            }
-            onSprint={(sprintId) =>
-              onBulkSprint?.(Array.from(checkedTaskIds), sprintId)
-            }
-            onPriority={(priorityId) =>
-              onBulkPriority?.(Array.from(checkedTaskIds), priorityId)
-            }
-            onMoveToBoard={(boardId) =>
-              onBulkMoveToBoard?.(Array.from(checkedTaskIds), boardId)
-            }
-            onAssignee={
-              onBulkAssignee
-                ? (memberId) => onBulkAssignee(Array.from(checkedTaskIds), memberId)
-                : undefined
-            }
-            onRequester={
-              onBulkRequester
-                ? (memberId) => onBulkRequester(Array.from(checkedTaskIds), memberId)
-                : undefined
-            }
-            onAddWatcher={
-              onBulkAddWatcher
-                ? (memberId) => onBulkAddWatcher(Array.from(checkedTaskIds), memberId)
-                : undefined
-            }
-            onRemoveWatcher={
-              onBulkRemoveWatcher
-                ? (memberId) => onBulkRemoveWatcher(Array.from(checkedTaskIds), memberId)
-                : undefined
-            }
-            onAddCollaborator={
-              onBulkAddCollaborator
-                ? (memberId) => onBulkAddCollaborator(Array.from(checkedTaskIds), memberId)
-                : undefined
-            }
-            onRemoveCollaborator={
-              onBulkRemoveCollaborator
-                ? (memberId) =>
-                    onBulkRemoveCollaborator(Array.from(checkedTaskIds), memberId)
-                : undefined
-            }
-          />
-        )}
-
-      {checkedTaskIds &&
-        onBulkUndo &&
-        shouldShowColumnBulkUndo(
-          bulkUndoTaskIds,
-          filteredTasks,
-          checkedTaskIds.size,
-          bulkUndoAnchorColumnIds,
-          column.id
-        ) && (
-          <ColumnBulkUndoFab
-            columnId={column.id}
-            anchorRef={columnHeaderRef}
-            count={bulkUndoTaskIds?.length || 0}
-            busy={bulkBusy}
-            labelKey={bulkUndoLabelKey}
-            onUndo={onBulkUndo}
-            onDismiss={() => onClearBulkUndo?.()}
-          />
-        )}
-
     </div>
   );
 }
@@ -1985,6 +2038,7 @@ function areKanbanColumnPropsEqual(
   if (prev.currentUser !== next.currentUser) return false;
   if (prev.selectedMembers !== next.selectedMembers) return false;
   if (prev.selectedBoardId !== next.selectedBoardId) return false;
+  if (prev.columnHeaderStickyTopPx !== next.columnHeaderStickyTopPx) return false;
 
   return true;
 }

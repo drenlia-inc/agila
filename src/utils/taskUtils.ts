@@ -1,6 +1,57 @@
-import { Task, SearchFilters, Columns, Board, TeamMember } from '../types';
+import { Task, SearchFilters, Columns, Board, TeamMember, Column } from '../types';
 import { getTaskWatchers, getTaskCollaborators } from '../api';
 import { parseLocalDate } from './dateUtils';
+import { getColumnAgeDays } from './kanbanFlowUtils';
+
+/** Parse JSON/text array fields from saved filter views. */
+export function parseSavedViewStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/** Stable project key for a board (PROJ-XXXXX or board id fallback). */
+export function getBoardProjectKey(board: Pick<Board, 'id' | 'project'>): string {
+  return (board.project?.trim() || board.id);
+}
+
+/** Whether a board is included in the project filter (empty selection = all). */
+export function boardMatchesSelectedProjects(
+  board: Pick<Board, 'id' | 'project'>,
+  selectedProjectIds: string[]
+): boolean {
+  if (!selectedProjectIds.length) return true;
+  return selectedProjectIds.includes(getBoardProjectKey(board));
+}
+
+/** Resolve saved-view project filters from JSON array or legacy substring field. */
+export function resolveProjectFiltersFromSavedView(
+  view: { projectFilters?: string[]; projectFilter?: string },
+  boards: Pick<Board, 'id' | 'project'>[]
+): string[] {
+  if (Array.isArray(view.projectFilters) && view.projectFilters.length > 0) {
+    return view.projectFilters;
+  }
+  const legacy = view.projectFilter?.trim();
+  if (!legacy) return [];
+  const q = legacy.toLowerCase();
+  return boards
+    .filter((b) => {
+      const key = getBoardProjectKey(b);
+      const proj = b.project?.toLowerCase() || '';
+      return key.toLowerCase() === q || proj.includes(q);
+    })
+    .map(getBoardProjectKey);
+}
 
 /** Soft-delete markers from API / SQL (camelCase or snake_case). */
 export const isTaskSoftDeleted = (task: Task | null | undefined): boolean => {
@@ -59,11 +110,53 @@ export const hasConfiguredSearchFilters = (searchFilters: SearchFilters): boolea
     searchFilters.selectedMembers.length > 0 ||
     searchFilters.selectedPriorities.length > 0 ||
     searchFilters.selectedTags.length > 0 ||
-    searchFilters.projectId ||
+    (searchFilters.selectedProjectIds?.length ?? 0) > 0 ||
     searchFilters.taskId ||
-    searchFilters.linkedTasksOnly
+    searchFilters.linkedTasksOnly ||
+    searchFilters.overdueOnly ||
+    searchFilters.blockedOnly ||
+    (searchFilters.selectedSprintIds?.length ?? 0) > 0 ||
+    (searchFilters.stalledDays != null && searchFilters.stalledDays > 0)
   );
 };
+
+/** Past due or missing due date; finished/archived columns never match. */
+export function isTaskOverdueForFilter(
+  task: Pick<Task, 'dueDate'>,
+  column?: Pick<Column, 'is_finished' | 'is_archived'> | null
+): boolean {
+  if (column?.is_finished || column?.is_archived) return false;
+  if (!task.dueDate) return true;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = parseLocalDate(task.dueDate);
+  dueDate.setHours(0, 0, 0, 0);
+  return dueDate < today;
+}
+
+/** Stalled = at least minDays in the current column; finished/archived columns never match. */
+export function isTaskStalledForFilter(
+  task: Pick<Task, 'columnEnteredAt'>,
+  minDays: number,
+  column?: Pick<Column, 'is_finished' | 'is_archived'> | null
+): boolean {
+  if (minDays <= 0) return true;
+  if (column?.is_finished || column?.is_archived) return false;
+  return getColumnAgeDays(task.columnEnteredAt) >= minDays;
+}
+
+function getTaskSprintIdLocal(task: Task | Record<string, unknown>): string | null {
+  const sprintId = (task as Task).sprintId ?? (task as { sprint_id?: string | null }).sprint_id;
+  return sprintId ?? null;
+}
+
+function taskMatchesSprintIds(task: Task, selectedSprintIds: string[]): boolean {
+  if (!selectedSprintIds.length) return true;
+  const sprintId = getTaskSprintIdLocal(task);
+  const matchBacklog = selectedSprintIds.includes('backlog') && !sprintId;
+  const matchSprint = sprintId != null && selectedSprintIds.includes(sprintId);
+  return matchBacklog || matchSprint;
+}
 
 /** Search criteria excluding the linked-tasks-only toggle (handled with board relationship data). */
 export const hasNonLinkSearchFilters = (searchFilters: SearchFilters): boolean => {
@@ -84,7 +177,8 @@ export const filterTasks = (
   _isSearchActive?: boolean,
   members?: TeamMember[],
   boards?: any[],
-  sprints?: SprintSearchInfo[]
+  sprints?: SprintSearchInfo[],
+  column?: Pick<Column, 'is_finished' | 'is_archived'> | null
 ): Task[] => {
   if (!hasConfiguredSearchFilters(searchFilters)) return tasks;
 
@@ -205,12 +299,11 @@ export const filterTasks = (
       }
     }
 
-    // Project identifier filter
-    if (searchFilters.projectId) {
+    // Project filter (multi-select by board project key)
+    if ((searchFilters.selectedProjectIds?.length ?? 0) > 0) {
       if (!boards || !task.boardId) return false;
       const board = boards.find(b => b.id === task.boardId);
-      const projectId = board?.project;
-      if (!projectId || !projectId.toLowerCase().includes(searchFilters.projectId.toLowerCase())) {
+      if (!board || !boardMatchesSelectedProjects(board, searchFilters.selectedProjectIds)) {
         return false;
       }
     }
@@ -218,6 +311,26 @@ export const filterTasks = (
     // Task identifier filter
     if (searchFilters.taskId) {
       if (!task.ticket || !task.ticket.toLowerCase().includes(searchFilters.taskId.toLowerCase())) {
+        return false;
+      }
+    }
+
+    if (searchFilters.overdueOnly && !isTaskOverdueForFilter(task, column)) {
+      return false;
+    }
+
+    if (searchFilters.blockedOnly && !task.isBlocked) {
+      return false;
+    }
+
+    if ((searchFilters.selectedSprintIds?.length ?? 0) > 0) {
+      if (!taskMatchesSprintIds(task, searchFilters.selectedSprintIds)) {
+        return false;
+      }
+    }
+
+    if (searchFilters.stalledDays != null && searchFilters.stalledDays > 0) {
+      if (!isTaskStalledForFilter(task, searchFilters.stalledDays, column)) {
         return false;
       }
     }
@@ -244,7 +357,7 @@ export const getFilteredColumns = (
   Object.entries(columns).forEach(([columnId, column]) => {
     filteredColumns[columnId] = {
       ...column,
-      tasks: filterTasks(column.tasks, searchFilters, true, members, boards, sprints)
+      tasks: filterTasks(column.tasks, searchFilters, true, members, boards, sprints, column)
     };
   });
   return filteredColumns;
@@ -279,7 +392,7 @@ export const getFilteredTaskCountForBoard = (
     // Convert to boolean to handle SQLite integer values (0/1)
     const isArchived = Boolean(column.is_archived);
     if (!isArchived) {
-      totalCount += filterTasks(column.tasks, searchFilters, true, members, boards, sprints).length;
+      totalCount += filterTasks(column.tasks, searchFilters, true, members, boards, sprints, column).length;
     }
   });
   return totalCount;
@@ -303,14 +416,15 @@ export const wouldTaskBeFilteredOut = (
   members?: TeamMember[],
   boards?: any[],
   sprints?: SprintSearchInfo[],
-  linkedTaskIds?: Set<string>
+  linkedTaskIds?: Set<string>,
+  column?: Pick<Column, 'is_finished' | 'is_archived'> | null
 ): boolean => {
   if (searchFilters.linkedTasksOnly && linkedTaskIds !== undefined && !linkedTaskIds.has(task.id)) {
     return true;
   }
   if (!hasNonLinkSearchFilters(searchFilters)) return false;
 
-  const filtered = filterTasks([task], searchFilters, true, members, boards, sprints);
+  const filtered = filterTasks([task], searchFilters, true, members, boards, sprints, column);
   return filtered.length === 0;
 };
 

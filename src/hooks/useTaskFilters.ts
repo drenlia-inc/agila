@@ -1,8 +1,13 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Columns, Task, TeamMember, Board, Priority } from '../types';
-import { SavedFilterView, getSavedFilterView } from '../api';
-import { TaskViewMode, ViewMode, loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
+import { Columns, Task, TeamMember, Board, SearchFilters, SearchFiltersChangeOptions } from '../types';
+import { SavedFilterView, getSavedFilterView, updateSavedFilterView } from '../api';
+import { TaskViewMode, ViewMode, loadUserPreferences, patchSearchFilterApplyState } from '../utils/userPreferences';
 import { hasConfiguredSearchFilters, filterTasks } from '../utils/taskUtils';
+import {
+  EMPTY_SEARCH_FILTERS,
+  searchFiltersToViewFilters,
+  viewToSearchFilters,
+} from '../utils/savedFilterViewUtils';
 import { SYSTEM_MEMBER_ID } from '../constants/appConstants';
 import { isAgentMemberId } from '../utils/agentMemberUi';
 import { onHelpReveal, takeHelpReveal } from '../utils/helpGoThere';
@@ -26,6 +31,7 @@ interface UseTaskFiltersProps {
   sprints?: Array<{ id: string; name: string }>;
   /** Task ids with same-board links; omit on boards without relationship data. */
   linkedTaskIds?: Set<string>;
+  userId?: string | null;
   updateCurrentUserPreference: <K extends keyof import('../utils/userPreferences').UserPreferences>(
     key: K,
     value: import('../utils/userPreferences').UserPreferences[K]
@@ -38,6 +44,7 @@ export const useTaskFilters = ({
   boards,
   sprints = [],
   linkedTaskIds,
+  userId = null,
   updateCurrentUserPreference,
 }: UseTaskFiltersProps) => {
   // Load user preferences from cookies
@@ -155,9 +162,13 @@ export const useTaskFilters = ({
     searchFilters.dueDateTo,
     searchFilters.selectedPriorities,
     searchFilters.selectedTags,
-    searchFilters.projectId,
+    searchFilters.selectedProjectIds,
     searchFilters.taskId,
     searchFilters.linkedTasksOnly,
+    searchFilters.overdueOnly,
+    searchFilters.blockedOnly,
+    searchFilters.selectedSprintIds,
+    searchFilters.stalledDays,
     selectedMembers,
     includeAssignees,
     includeWatchers,
@@ -206,7 +217,7 @@ export const useTaskFilters = ({
       } : effectiveFilters;
       
       // Use the filterTasks utility with a single task
-      const filtered = filterTasks([task], searchOnlyFilters, true, members, boards, sprints);
+      const filtered = filterTasks([task], searchOnlyFilters, true, members, boards, sprints, columnsRef.current?.[task.columnId]);
       if (filtered.length === 0) return false; // Task didn't pass search filters
     }
 
@@ -272,18 +283,17 @@ export const useTaskFilters = ({
     return onHelpReveal(openSearch);
   }, [updateCurrentUserPreference]);
 
-  const handleSearchFiltersChange = (newFilters: typeof searchFilters) => {
+  const handleSearchFiltersChange = (
+    newFilters: SearchFilters,
+    _options?: SearchFiltersChangeOptions,
+  ) => {
     setSearchFilters(newFilters);
     updateCurrentUserPreference('searchFilters', newFilters);
     
     // Note: Sprint selection is now independent of date filters - it will not be reset when filters change
     // This allows users to combine sprint filtering with other search filters
     
-    // Clear current filter view when manually changing filters
-    if (currentFilterView) {
-      setCurrentFilterView(null);
-      updateCurrentUserPreference('currentFilterViewId', null);
-    }
+    // Keep the applied saved filter selected while the user tweaks criteria so they can update it in place.
   };
 
   const handleSprintChange = (sprint: { id: string; name: string; start_date: string; end_date: string } | null) => {
@@ -298,30 +308,41 @@ export const useTaskFilters = ({
     }
   };
 
-  const loadSavedFilterView = async (viewId: number) => {
-    try {
-      const view = await getSavedFilterView(viewId);
-      setCurrentFilterView(view);
-      
-      // Convert and apply the filter
-      const searchFilters = {
-        text: view.textFilter || '',
-        dateFrom: view.dateFromFilter || '',
-        dateTo: view.dateToFilter || '',
-        dueDateFrom: view.dueDateFromFilter || '',
-        dueDateTo: view.dueDateToFilter || '',
-        selectedMembers: view.memberFilters || [],
-        selectedPriorities: view.priorityFilters || [],
-        selectedTags: view.tagFilters || [],
-        projectId: view.projectFilter || '',
-        taskId: view.taskFilter || '',
-      };
-      setSearchFilters(searchFilters);
-    } catch (error) {
-      // Clear the invalid preference
-      updateCurrentUserPreference('currentFilterViewId', null);
-    }
-  };
+  const applySavedFilterView = useCallback(
+    async (view: SavedFilterView): Promise<SavedFilterView> => {
+      let viewToApply = view;
+      try {
+        viewToApply = await getSavedFilterView(view.id);
+      } catch (error) {
+        console.error('Failed to refresh saved filter view before apply:', error);
+      }
+      const newFilters = viewToSearchFilters(viewToApply, boards);
+      setCurrentFilterView(viewToApply);
+      setSearchFilters(newFilters);
+      await patchSearchFilterApplyState(newFilters, viewToApply.id, userId);
+      return viewToApply;
+    },
+    [boards, userId],
+  );
+
+  const clearAllSearchFilters = useCallback(async () => {
+    const emptyFilters = { ...EMPTY_SEARCH_FILTERS };
+    setCurrentFilterView(null);
+    setSearchFilters(emptyFilters);
+    await patchSearchFilterApplyState(emptyFilters, null, userId);
+  }, [userId]);
+
+  const loadSavedFilterView = useCallback(
+    async (viewId: number) => {
+      try {
+        const view = await getSavedFilterView(viewId);
+        await applySavedFilterView(view);
+      } catch (error) {
+        updateCurrentUserPreference('currentFilterViewId', null);
+      }
+    },
+    [applySavedFilterView, updateCurrentUserPreference],
+  );
 
   const handleFilterViewChange = (view: SavedFilterView | null) => {
     setCurrentFilterView(view);
@@ -329,25 +350,25 @@ export const useTaskFilters = ({
     updateCurrentUserPreference('currentFilterViewId', view?.id || null);
   };
 
+  /** Persist current filter fields onto an existing saved view (same name). */
+  const updateAppliedSavedFilterView = useCallback(
+    async (viewId: number, filtersToSave: SearchFilters): Promise<SavedFilterView> => {
+      const apiFilters = searchFiltersToViewFilters(filtersToSave);
+      const updatedView = await updateSavedFilterView(viewId, { filters: apiFilters });
+      setCurrentFilterView(updatedView);
+      await patchSearchFilterApplyState(filtersToSave, viewId, userId);
+      return updatedView;
+    },
+    [userId],
+  );
+
   /**
    * Clear search + member selections so a newly created task can appear (does not change sprint selection).
    * Resets role chips to the same defaults as new users (assignees on) so TeamMembers does not show
    * "no filter options selected".
    */
   const clearVisibilityObstructingFilters = useCallback(() => {
-    const emptyFilters = {
-      text: '',
-      dateFrom: '',
-      dateTo: '',
-      dueDateFrom: '',
-      dueDateTo: '',
-      selectedMembers: [],
-      selectedPriorities: [] as Priority[],
-      selectedTags: [] as string[],
-      projectId: '',
-      taskId: '',
-      linkedTasksOnly: false,
-    };
+    const emptyFilters = { ...EMPTY_SEARCH_FILTERS };
     setSearchFilters(emptyFilters);
     setIsSearchActive(false);
     setSelectedMembers([]);
@@ -510,6 +531,9 @@ export const useTaskFilters = ({
     handleSearchFiltersChange,
     handleSprintChange,
     loadSavedFilterView,
+    applySavedFilterView,
+    updateAppliedSavedFilterView,
+    clearAllSearchFilters,
     handleFilterViewChange,
     handleMemberToggle,
     handleClearMemberSelections,

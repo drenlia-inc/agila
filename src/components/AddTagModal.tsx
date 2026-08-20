@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { TAG_NAME_MAX_LENGTH } from '../constants/appConstants';
+import { setDndGloballyDisabled } from '../utils/globalDndState';
 
 interface AddTagModalProps {
   onClose: () => void;
@@ -30,6 +31,13 @@ export default function AddTagModal({ onClose, onTagCreated }: AddTagModalProps)
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const tagNameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setDndGloballyDisabled(true);
+    tagNameInputRef.current?.focus();
+    return () => setDndGloballyDisabled(false);
+  }, []);
 
   const handleClose = useCallback(() => {
     if (!isSubmitting) onClose();
@@ -79,6 +87,10 @@ export default function AddTagModal({ onClose, onTagCreated }: AddTagModalProps)
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === ' ' || e.code === 'Space') {
+      e.stopPropagation();
+      return;
+    }
     // Capture Esc key to close modal
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -97,6 +109,10 @@ export default function AddTagModal({ onClose, onTagCreated }: AddTagModalProps)
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === ' ' || e.code === 'Space') {
+      e.stopPropagation();
+      return;
+    }
     // Stop propagation for Enter to prevent parent handlers from catching it
     if (e.key === 'Enter' && !e.shiftKey) {
       e.stopPropagation();
@@ -117,8 +133,11 @@ export default function AddTagModal({ onClose, onTagCreated }: AddTagModalProps)
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]" 
       onClick={onClose}
       onKeyDown={handleKeyDown}
+      data-shortcut-ignore
     >
       <div 
+        role="dialog"
+        aria-modal="true"
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6" 
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
@@ -140,6 +159,7 @@ export default function AddTagModal({ onClose, onTagCreated }: AddTagModalProps)
               {t('addTagModal.tagName')}
             </label>
             <input
+              ref={tagNameInputRef}
               type="text"
               value={tagName}
               onChange={(e) => setTagName(e.target.value)}
@@ -147,7 +167,6 @@ export default function AddTagModal({ onClose, onTagCreated }: AddTagModalProps)
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               placeholder={t('addTagModal.enterTagName')}
               maxLength={TAG_NAME_MAX_LENGTH}
-              autoFocus
               disabled={isSubmitting}
             />
           </div>

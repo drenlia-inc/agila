@@ -503,6 +503,15 @@ function AppContent() {
     }
   };
 
+  /** Remove saved override so Kanban falls back to default (non-archived columns visible). */
+  const handleBoardColumnVisibilityReset = (boardId: string) => {
+    if (!boardColumnVisibility[boardId]) return;
+    const newVisibility = { ...boardColumnVisibility };
+    delete newVisibility[boardId];
+    setBoardColumnVisibility(newVisibility);
+    updateCurrentUserPreference('boardColumnVisibility', newVisibility);
+  };
+
   // Load column filter from current filter view or user settings
   // Note: This useEffect will be moved after taskFilters hook initialization
   // Modal state extracted to useModalState hook (modalState)
@@ -671,6 +680,7 @@ function AppContent() {
     boards,
     sprints: availableSprints,
     linkedTaskIds,
+    userId: currentUser?.id ?? null,
     updateCurrentUserPreference,
   });
 
@@ -5528,6 +5538,7 @@ function AppContent() {
         collisionDetection={collisionDetection}
         boardColumnVisibility={boardColumnVisibility}
         onBoardColumnVisibilityChange={handleBoardColumnVisibilityChange}
+        onBoardColumnVisibilityReset={handleBoardColumnVisibilityReset}
         kanbanColumnWidth={kanbanColumnWidth}
         onColumnWidthResize={handleColumnWidthResize}
 
@@ -5553,6 +5564,9 @@ function AppContent() {
         onViewModeChange={handleViewModeChange}
         onToggleSearch={taskFilters.handleToggleSearch}
         onSearchFiltersChange={taskFilters.handleSearchFiltersChange}
+        onApplySavedFilter={taskFilters.applySavedFilterView}
+        onUpdateSavedFilter={taskFilters.updateAppliedSavedFilterView}
+        onClearAllSearchFilters={taskFilters.clearAllSearchFilters}
         currentFilterView={taskFilters.currentFilterView}
         sharedFilterViews={taskFilters.sharedFilterViews}
         onFilterViewChange={taskFilters.handleFilterViewChange}

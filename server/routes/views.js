@@ -26,16 +26,21 @@ const validateFilterData = (filters) => {
   const allowedFields = [
     'textFilter', 'dateFromFilter', 'dateToFilter', 'dueDateFromFilter', 
     'dueDateToFilter', 'memberFilters', 'priorityFilters', 'tagFilters',
-    'projectFilter', 'taskFilter', 'boardColumnFilter'
+    'projectFilter', 'projectFilters', 'taskFilter', 'boardColumnFilter',
+    'linkedTasksOnlyFilter', 'overdueOnlyFilter', 'blockedOnlyFilter',
+    'sprintFilters', 'stalledDaysFilter'
   ];
   
   const validatedFilters = {};
   
   for (const [key, value] of Object.entries(filters)) {
     if (allowedFields.includes(key)) {
-      // Convert arrays to JSON strings for database storage
       if (Array.isArray(value)) {
         validatedFilters[key] = JSON.stringify(value);
+      } else if (typeof value === 'boolean') {
+        validatedFilters[key] = value;
+      } else if (typeof value === 'number' && Number.isFinite(value)) {
+        validatedFilters[key] = value;
       } else if (typeof value === 'string' || value === null || value === undefined) {
         validatedFilters[key] = value || null;
       }
@@ -65,8 +70,14 @@ const formatViewForResponse = (view) => {
     priorityfilters: 'priorityFilters',
     tagfilters: 'tagFilters',
     projectfilter: 'projectFilter',
+    projectfilters: 'projectFilters',
     taskfilter: 'taskFilter',
-    boardcolumnfilter: 'boardColumnFilter'
+    boardcolumnfilter: 'boardColumnFilter',
+    linkedtasksonlyfilter: 'linkedTasksOnlyFilter',
+    overdueonlyfilter: 'overdueOnlyFilter',
+    blockedonlyfilter: 'blockedOnlyFilter',
+    sprintfilters: 'sprintFilters',
+    stalleddaysfilter: 'stalledDaysFilter'
   };
   
   // Map lowercase fields to camelCase
@@ -79,13 +90,20 @@ const formatViewForResponse = (view) => {
   
   // Convert boolean fields from SQLite (0/1) or PostgreSQL (true/false) to JavaScript booleans
   formatted.shared = Boolean(formatted.shared);
+  const parseViewBoolean = (value) =>
+    value === true || value === 1 || value === '1' || value === 'true';
+  formatted.linkedTasksOnlyFilter = parseViewBoolean(formatted.linkedTasksOnlyFilter);
+  formatted.overdueOnlyFilter = parseViewBoolean(formatted.overdueOnlyFilter);
+  formatted.blockedOnlyFilter = parseViewBoolean(formatted.blockedOnlyFilter);
   
   // Parse JSON fields back to arrays
-  const jsonFields = ['memberFilters', 'priorityFilters', 'tagFilters'];
+  const jsonFields = ['memberFilters', 'priorityFilters', 'tagFilters', 'sprintFilters', 'projectFilters'];
   jsonFields.forEach(field => {
     if (formatted[field]) {
       try {
-        formatted[field] = JSON.parse(formatted[field]);
+        formatted[field] = typeof formatted[field] === 'string'
+          ? JSON.parse(formatted[field])
+          : formatted[field];
       } catch (e) {
         formatted[field] = [];
       }

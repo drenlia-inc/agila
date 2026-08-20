@@ -242,6 +242,44 @@ const HELP_INLINE_ICONS: Record<string, LucideIcon> = {
   grip: GripVertical,
 };
 
+/** Reminder box pinned beside the Overview → Navigation & Interface title. */
+type ShortcutHintRow = { labelKey?: string; pairs: { keyCap: string; actionKey: string }[] };
+
+const HELP_OVERVIEW_SHORTCUT_HINT_ROWS: ShortcutHintRow[] = [
+  {
+    labelKey: 'help.overview.shortcutHint.views',
+    pairs: [
+      { keyCap: '1', actionKey: 'help.overview.shortcutHint.viewsKanban' },
+      { keyCap: '2', actionKey: 'help.overview.shortcutHint.viewsList' },
+      { keyCap: '3', actionKey: 'help.overview.shortcutHint.viewsGantt' },
+    ],
+  },
+  {
+    labelKey: 'help.overview.shortcutHint.filters',
+    pairs: [{ keyCap: 'S', actionKey: 'help.overview.shortcutHint.filtersSearch' }],
+  },
+  {
+    labelKey: 'help.overview.shortcutHint.density',
+    pairs: [
+      { keyCap: 'F', actionKey: 'help.overview.shortcutHint.densityFull' },
+      { keyCap: 'P', actionKey: 'help.overview.shortcutHint.densityPreview' },
+      { keyCap: 'M', actionKey: 'help.overview.shortcutHint.densityMinimal' },
+    ],
+  },
+  {
+    pairs: [{ keyCap: 'Esc', actionKey: 'help.overview.shortcutHint.escape' }],
+  },
+];
+
+const HELP_OVERVIEW_SHORTCUT_HINT_KEYS = [
+  'help.overview.shortcutHint.title',
+  ...HELP_OVERVIEW_SHORTCUT_HINT_ROWS.flatMap((row) => [
+    ...(row.labelKey ? [row.labelKey] : []),
+    ...row.pairs.map((pair) => pair.actionKey),
+  ]),
+  'help.overview.shortcutHint.more',
+];
+
 type ShortcutRow = { keys: string; actionKey: string };
 
 const HELP_SHORTCUT_SECTIONS: { titleKey: string; rows: ShortcutRow[] }[] = [
@@ -906,12 +944,14 @@ export default function HelpModal({
     icon: any, // Lucide icon type
     iconColor: string,
     iconBg: string = 'bg-blue-50 dark:bg-blue-900/40',
-    titleTarget?: HelpGoTarget
+    titleTarget?: HelpGoTarget,
+    extras?: { aside?: React.ReactNode; asideSearchKeys?: string[] }
   ) => {
     const title = t(titleKey);
     const contents = contentKeys.map(key => t(key));
     const listItems = listKeys.map(key => t(key));
-    const allTexts = [title, ...contents, ...listItems];
+    const asideTexts = (extras?.asideSearchKeys || []).map(key => t(key));
+    const allTexts = [title, ...contents, ...listItems, ...asideTexts];
     const hasMatch = debouncedSearchTerm.trim() ? anyTextMatches(allTexts, debouncedSearchTerm) : false;
 
     const sectionRef = (node: HTMLElement | null) => {
@@ -920,8 +960,9 @@ export default function HelpModal({
       }
     };
 
-    return (
-      <section ref={sectionRef} className={sectionShellClass(hasMatch)}>
+    const body = (
+      <>
+        {extras?.aside}
         <h3 className={sectionTitleClass}>
           <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
             {React.createElement(icon, { className: iconColor, size: 18 })}
@@ -944,6 +985,13 @@ export default function HelpModal({
             </ul>
           )}
         </div>
+      </>
+    );
+
+    return (
+      <section ref={sectionRef} className={sectionShellClass(hasMatch)}>
+        {/* flow-root contains the floated aside so it cannot spill past the card */}
+        {extras?.aside ? <div className="flow-root">{body}</div> : body}
       </section>
     );
   }, [t, debouncedSearchTerm, highlightText, renderHelpContent, anyTextMatches, renderGoThereButton]);
@@ -1265,6 +1313,39 @@ export default function HelpModal({
     return <div className="space-y-5">{sections}</div>;
   };
 
+  const renderShortcutHintCard = () => (
+    <aside className="float-right mb-3 ml-4 w-full max-w-[23rem] rounded-lg border border-indigo-200/90 bg-indigo-50/70 p-3.5 sm:w-[54%] dark:border-indigo-800/70 dark:bg-indigo-950/30">
+      <h4 className="mb-3 flex items-start gap-2 text-sm font-semibold leading-snug text-slate-800 dark:text-gray-100">
+        <Keyboard size={15} className="mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-300" aria-hidden />
+        {highlightText(t('help.overview.shortcutHint.title'), debouncedSearchTerm)}
+      </h4>
+      <div className="space-y-3">
+        {HELP_OVERVIEW_SHORTCUT_HINT_ROWS.map((row, rowIndex) => (
+          <div key={row.labelKey || `hint-row-${rowIndex}`} className="space-y-1">
+            {row.labelKey && (
+              <div className="text-xs font-semibold text-slate-600 dark:text-gray-300">
+                {highlightText(t(row.labelKey), debouncedSearchTerm)}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-700 dark:text-gray-200">
+              {row.pairs.map((pair) => (
+                <span key={pair.keyCap} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded-md border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-700 shadow-[0_1px_0_rgba(15,23,42,0.18)] dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 dark:shadow-[0_1px_0_rgba(0,0,0,0.5)]">
+                    {pair.keyCap}
+                  </kbd>
+                  <span>{highlightText(t(pair.actionKey), debouncedSearchTerm)}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3.5 border-t border-indigo-200/70 pt-2.5 text-xs leading-relaxed text-slate-600 dark:border-indigo-800/60 dark:text-gray-300">
+        {renderHelpContent(t('help.overview.shortcutHint.more'), debouncedSearchTerm)}
+      </p>
+    </aside>
+  );
+
   const renderOverviewTab = () => {
     const navigationKeys = isAdmin
       ? ['help.overview.boardSelectorAdmin', 'help.overview.boardTrash', 'help.overview.viewModes', 'help.overview.searchFilter', 'help.overview.userProfile', 'help.overview.activityFeed', 'help.overview.adminPanel']
@@ -1291,7 +1372,12 @@ export default function HelpModal({
         navigationKeys,
         ArrowRight,
         'text-emerald-600 dark:text-emerald-400',
-        'bg-emerald-50 dark:bg-emerald-900/40'
+        'bg-emerald-50 dark:bg-emerald-900/40',
+        undefined,
+        {
+          aside: renderShortcutHintCard(),
+          asideSearchKeys: HELP_OVERVIEW_SHORTCUT_HINT_KEYS,
+        }
       ),
       renderSectionWithList(
         'help.overview.sprints',
@@ -2002,7 +2088,8 @@ export default function HelpModal({
           'help.overview.assignees', 'help.overview.watchers', 'help.overview.collaborators', 'help.overview.requesters',
           'help.overview.tools',
           'help.overview.multiSelectTools', 'help.overview.taskViewModes', 'help.overview.activityFeedTools',
-          'help.overview.realtimeCollaboration', 'help.overview.keyboardShortcuts');
+          'help.overview.realtimeCollaboration', 'help.overview.keyboardShortcuts',
+          ...HELP_OVERVIEW_SHORTCUT_HINT_KEYS);
         if (isAdmin) {
           tabKeys.push('help.overview.boardSelectorAdmin', 'help.overview.boardTrash', 'help.overview.adminPanel', 'help.overview.system', 'help.overview.deliveryPlaybook');
         } else {

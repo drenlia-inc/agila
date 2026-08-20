@@ -52,7 +52,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 - **Kanban View** - Visual board with drag-and-drop between columns (including cross-board drops onto board tabs)
 - **List View** - Table format with sorting, filtering, column configuration, and horizontal scrolling
 - **Gantt View** - Timeline view with task dependencies, visual arrows, and date move/resize
-- **Advanced search & filtering** - Filter by text, dates, members, priorities, tags, project IDs, and sprints
+- **Advanced search & filtering** - Filter by text, dates, members, priorities, tags, project IDs, overdue, blocked, multi-sprint, stalled days, and linked tasks
 - **Saved filters** - Save and share frequently used filter combinations
 - **Sprint filtering** - Filter tasks by sprint or view backlog (unassigned tasks)
 - **EN / FR localization** - Switch language from preferences

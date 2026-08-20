@@ -4,6 +4,7 @@ import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronLeft, ChevronRight, Calendar, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useKanbanModifierKeys } from '../../hooks/useKanbanModifierKeys';
+import { useAppHeaderStickyTop } from '../../hooks/useAppHeaderStickyTop';
 import { 
   CurrentUser, 
   TeamMember, 
@@ -15,7 +16,7 @@ import {
   ColumnVisibilityWarning
 } from '../../types';
 import { TaskViewMode, ViewMode, loadUserPreferences, loadUserPreferencesAsync, updateAppSettingsPreference } from '../../utils/userPreferences';
-import { hasConfiguredSearchFilters, hasNonLinkSearchFilters, clearTaskSoftDelete } from '../../utils/taskUtils';
+import { hasConfiguredSearchFilters, hasNonLinkSearchFilters, clearTaskSoftDelete, boardMatchesSelectedProjects } from '../../utils/taskUtils';
 import {
   allTasksCheckedInColumn,
   checkedIdsInColumn,
@@ -31,6 +32,7 @@ import KanbanColumn from '../Column';
 import TaskCard from '../TaskCard';
 import BoardTabs from '../BoardTabs';
 import BoardTrashView from '../BoardTrashView';
+import BoardTrashCollapse from '../BoardTrashCollapse';
 import LoadingSpinner from '../LoadingSpinner';
 import ListView from '../ListView';
 import ColumnResizeHandle from '../ColumnResizeHandle';
@@ -97,6 +99,7 @@ interface KanbanPageProps {
   // Column filtering props
   boardColumnVisibility: {[boardId: string]: string[]};
   onBoardColumnVisibilityChange: (boardId: string, visibleColumns: string[]) => void;
+  onBoardColumnVisibilityReset: (boardId: string) => void;
 
   
   // Event handlers
@@ -120,7 +123,10 @@ interface KanbanPageProps {
   onTaskViewModeChange: (mode: TaskViewMode) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onToggleSearch: () => void;
-  onSearchFiltersChange: (filters: any) => void;
+  onSearchFiltersChange: (filters: any, options?: { preserveFilterView?: boolean }) => void;
+  onApplySavedFilter?: (view: any) => Promise<any>;
+  onUpdateSavedFilter?: (viewId: number, filters: any) => Promise<any>;
+  onClearAllSearchFilters?: () => Promise<void>;
   currentFilterView?: any; // SavedFilterView | null
   sharedFilterViews?: any[]; // SavedFilterView[]
   onFilterViewChange?: (view: any) => void; // (view: SavedFilterView | null) => void
@@ -289,6 +295,9 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   onViewModeChange,
   onToggleSearch,
   onSearchFiltersChange,
+  onApplySavedFilter,
+  onUpdateSavedFilter,
+  onClearAllSearchFilters,
   currentFilterView,
   sharedFilterViews,
   onFilterViewChange,
@@ -336,6 +345,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   siteSettings,
   boardColumnVisibility,
   onBoardColumnVisibilityChange,
+  onBoardColumnVisibilityReset,
   
   // Task linking props
   isLinkingMode,
@@ -416,6 +426,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   );
 
   const trashCountRequestRef = useRef(0);
+  const trashTasksRef = useRef(trashTasks);
+  trashTasksRef.current = trashTasks;
 
   const normalizeTrashTasks = useCallback((tasks: Task[]): Task[] => {
     return tasks.map((task) => ({
@@ -524,11 +536,19 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
 
   useEffect(() => {
     if (trashOpen && selectedBoard) {
-      void loadTrashTasks(selectedBoard);
+      void loadTrashTasks(selectedBoard, {
+        silent: trashTasksRef.current.length > 0,
+      });
     }
     // Intentionally omit loadTrashTasks: it used to change with `t` on EN↔FR
     // and flashed the trash loading placeholder.
   }, [trashOpen, selectedBoard]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prefetch trash while closed so opening does not swap in a loading shell.
+  useEffect(() => {
+    if (!selectedBoard || trashOpen || trashCount <= 0 || trashTasks.length > 0) return;
+    void loadTrashTasks(selectedBoard, { silent: true });
+  }, [selectedBoard, trashOpen, trashCount, trashTasks.length, loadTrashTasks]);
 
   // Keep trash count/list in sync with soft-delete / restore / purge events
   useEffect(() => {
@@ -563,14 +583,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   }, [selectedBoard, trashOpen, loadTrashTasks, refreshTrashCount]);
 
   const handleToggleTrash = useCallback(() => {
-    setTrashOpenPersisted((prev) => {
-      const next = !prev;
-      if (next && viewMode !== 'kanban') {
-        onViewModeChange('kanban');
-      }
-      return next;
-    });
-  }, [viewMode, onViewModeChange, setTrashOpenPersisted]);
+    setTrashOpenPersisted((prev) => !prev);
+  }, [setTrashOpenPersisted]);
 
   const handleSelectBoardWithTrashExit = useCallback(
     (boardId: string) => {
@@ -579,6 +593,22 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     },
     [onSelectBoard]
   );
+
+  /** Boards visible on the tab bar when a project filter is active. */
+  const tabBoards = useMemo(() => {
+    const selected = searchFilters.selectedProjectIds;
+    if (!selected.length) return boards;
+    return boards.filter((board) => boardMatchesSelectedProjects(board, selected));
+  }, [boards, searchFilters.selectedProjectIds]);
+
+  useEffect(() => {
+    const selected = searchFilters.selectedProjectIds;
+    if (!selected.length || !selectedBoard) return;
+    if (!tabBoards.some((board) => board.id === selectedBoard)) {
+      const next = tabBoards[0]?.id;
+      if (next) handleSelectBoardWithTrashExit(next);
+    }
+  }, [searchFilters.selectedProjectIds, tabBoards, selectedBoard, handleSelectBoardWithTrashExit]);
 
   const handleRestoreTrashTask = useCallback(
     async (taskId: string) => {
@@ -1015,6 +1045,25 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     return count;
   }, [boards]);
 
+  const sprintFilterTasks = useMemo(() => {
+    const taskRows: Array<{ id: string; sprintId?: string | null }> = [];
+    boards.forEach((board) => {
+      if (board.columns) {
+        Object.values(board.columns).forEach((column) => {
+          if (column.tasks) {
+            taskRows.push(
+              ...column.tasks.map((task) => ({
+                id: task.id,
+                sprintId: task.sprintId,
+              })),
+            );
+          }
+        });
+      }
+    });
+    return taskRows;
+  }, [boards]);
+
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   
@@ -1025,6 +1074,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     scrollLeft: () => void;
     scrollRight: () => void;
   } | null>(null);
+  const appHeaderStickyTopPx = useAppHeaderStickyTop();
   const trashScrollContainerRef = useRef<HTMLDivElement>(null);
   const syncingHorizontalScrollRef = useRef(false);
   const scrollSyncFrameRef = useRef<number | null>(null);
@@ -1367,7 +1417,11 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           <SearchInterface
             filters={searchFilters}
             availablePriorities={availablePriorities}
+            availableTags={availableTags}
             onFiltersChange={onSearchFiltersChange}
+            onApplySavedFilter={onApplySavedFilter}
+            onUpdateSavedFilter={onUpdateSavedFilter}
+            onClearAllSearchFilters={onClearAllSearchFilters}
             siteSettings={siteSettings}
             currentFilterView={currentFilterView}
             sharedFilterViews={sharedFilterViews}
@@ -1379,6 +1433,12 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
             showAgentTasks={showAgentTasks}
             onToggleShowAgentTasks={onToggleShowAgentTasks}
             hasBoardRelationships={hasBoardRelationships}
+            availableSprints={availableSprints}
+            sprintFilterTasks={sprintFilterTasks}
+            boards={boards}
+            onResetColumnVisibility={
+              selectedBoard ? () => onBoardColumnVisibilityReset(selectedBoard) : undefined
+            }
           />
         </div>
       )}
@@ -1386,7 +1446,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
       {/* Board Tabs */}
       <div className="relative">
         <BoardTabs
-          boards={boards}
+          boards={tabBoards}
           selectedBoard={selectedBoard}
           onSelectBoard={handleSelectBoardWithTrashExit}
           onAddBoard={onAddBoard}
@@ -1408,28 +1468,30 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         />
       </div>
 
-      {selectedBoard && trashOpen && (
-        <BoardTrashView
-          tasks={trashTasks.filter((task) =>
-            taskMatchesSelectedSprint(task, selectedSprintId)
-          )}
-          displayColumns={Object.values(getFilteredColumnsForDisplay)
-            .filter((column) => column && column.id)
-            .sort((a, b) => (a.position || 0) - (b.position || 0))}
-          columns={columns}
-          isAdmin={isAdmin && canMutate}
-          canMutate={canMutate}
-          detailsTaskId={selectedTask?.id ?? null}
-          gridStyle={gridStyle}
-          scrollContainerRef={trashScrollContainerRef}
-          loading={trashLoading}
-          onSelectTask={(task) => void handleSelectTrashedTask(task)}
-          onRestore={handleRestoreTrashTask}
-          onPurge={handlePurgeTrashTask}
-          onRestoreSelected={handleRestoreTrashSelected}
-          onPurgeSelected={handlePurgeTrashSelected}
-          onClose={() => setTrashOpenPersisted(false)}
-        />
+      {selectedBoard && trashCount > 0 && (
+        <BoardTrashCollapse open={trashOpen}>
+          <BoardTrashView
+              tasks={trashTasks.filter((task) =>
+                taskMatchesSelectedSprint(task, selectedSprintId)
+              )}
+              displayColumns={Object.values(getFilteredColumnsForDisplay)
+                .filter((column) => column && column.id)
+                .sort((a, b) => (a.position || 0) - (b.position || 0))}
+              columns={columns}
+              isAdmin={isAdmin && canMutate}
+              canMutate={canMutate}
+              detailsTaskId={selectedTask?.id ?? null}
+              gridStyle={gridStyle}
+              scrollContainerRef={trashScrollContainerRef}
+              loading={trashLoading}
+              onSelectTask={(task) => void handleSelectTrashedTask(task)}
+              onRestore={handleRestoreTrashTask}
+              onPurge={handlePurgeTrashTask}
+              onRestoreSelected={handleRestoreTrashSelected}
+              onPurgeSelected={handlePurgeTrashSelected}
+              onClose={() => setTrashOpenPersisted(false)}
+          />
+        </BoardTrashCollapse>
       )}
 
       {selectedBoard && (
@@ -1443,27 +1505,38 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           {/* Conditional View Rendering */}
           {viewMode === 'list' ? (
             <div className="relative">
-              {/* ListView Navigation Chevrons */}
-              {listViewScrollControls?.canScrollLeft && (
-                <button
-                  onClick={listViewScrollControls.scrollLeft}
-                  className="absolute -left-12 top-4 z-20 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-70 hover:opacity-100 hover:scale-110"
-                  title={t('boardTabs.scrollListLeft', { ns: 'common' })}
+              {(listViewScrollControls?.canScrollLeft ||
+                listViewScrollControls?.canScrollRight) && (
+                <div
+                  className="sticky z-40 h-0 w-full overflow-visible pointer-events-none"
+                  style={{ top: appHeaderStickyTopPx + 16 }}
                 >
-                  <ChevronLeft size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
-                </button>
+                  {listViewScrollControls?.canScrollLeft && (
+                    <button
+                      type="button"
+                      onClick={listViewScrollControls.scrollLeft}
+                      className="pointer-events-auto absolute -left-12 top-0 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-70 hover:opacity-100 hover:scale-110"
+                      title={t('boardTabs.scrollListLeft', { ns: 'common' })}
+                      aria-label={t('boardTabs.scrollListLeft', { ns: 'common' })}
+                    >
+                      <ChevronLeft size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
+                    </button>
+                  )}
+
+                  {listViewScrollControls?.canScrollRight && (
+                    <button
+                      type="button"
+                      onClick={listViewScrollControls.scrollRight}
+                      className="pointer-events-auto absolute -right-12 top-0 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-70 hover:opacity-100 hover:scale-110"
+                      title={t('boardTabs.scrollListRight', { ns: 'common' })}
+                      aria-label={t('boardTabs.scrollListRight', { ns: 'common' })}
+                    >
+                      <ChevronRight size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
+                    </button>
+                  )}
+                </div>
               )}
-              
-              {listViewScrollControls?.canScrollRight && (
-                <button
-                  onClick={listViewScrollControls.scrollRight}
-                  className="absolute -right-12 top-4 z-20 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-70 hover:opacity-100 hover:scale-110"
-                  title={t('boardTabs.scrollListRight', { ns: 'common' })}
-                >
-                  <ChevronRight size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
-                </button>
-              )}
-              
+
               <ListView
                 filteredColumns={getFullyFilteredColumns}
                 selectedBoard={selectedBoard}
@@ -1525,32 +1598,40 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               )}
               {/* Columns Navigation Container */}
           <div className="relative kanban-columns-container">
-            {/* Left scroll button - positioned outside board */}
-            {canScrollLeft && (
-              <button
-                onClick={scrollColumnsLeft}
-                onMouseDown={() => startContinuousScroll('left')}
-                onMouseUp={stopContinuousScroll}
-                onMouseLeave={stopContinuousScroll}
-                className="absolute -left-12 top-4 z-20 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-70 hover:opacity-100 hover:scale-110"
-                title={t('boardTabs.scrollColumnsLeft', { ns: 'common' })}
+            {(canScrollLeft || canScrollRight) && (
+              <div
+                className="sticky z-40 h-0 w-full overflow-visible pointer-events-none"
+                style={{ top: appHeaderStickyTopPx + 16 }}
               >
-                <ChevronLeft size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
-              </button>
-            )}
-            
-            {/* Right scroll button - positioned outside board */}
-            {canScrollRight && (
-              <button
-                onClick={scrollColumnsRight}
-                onMouseDown={() => startContinuousScroll('right')}
-                onMouseUp={stopContinuousScroll}
-                onMouseLeave={stopContinuousScroll}
-                className="absolute -right-12 top-4 z-20 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-70 hover:opacity-100 hover:scale-110"
-                title={t('boardTabs.scrollColumnsRight', { ns: 'common' })}
-              >
-                <ChevronRight size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
-              </button>
+                {canScrollLeft && (
+                  <button
+                    type="button"
+                    onClick={scrollColumnsLeft}
+                    onMouseDown={() => startContinuousScroll('left')}
+                    onMouseUp={stopContinuousScroll}
+                    onMouseLeave={stopContinuousScroll}
+                    className="pointer-events-auto absolute -left-12 top-0 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-70 hover:opacity-100 hover:scale-110"
+                    title={t('boardTabs.scrollColumnsLeft', { ns: 'common' })}
+                    aria-label={t('boardTabs.scrollColumnsLeft', { ns: 'common' })}
+                  >
+                    <ChevronLeft size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
+                  </button>
+                )}
+                {canScrollRight && (
+                  <button
+                    type="button"
+                    onClick={scrollColumnsRight}
+                    onMouseDown={() => startContinuousScroll('right')}
+                    onMouseUp={stopContinuousScroll}
+                    onMouseLeave={stopContinuousScroll}
+                    className="pointer-events-auto absolute -right-12 top-0 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-70 hover:opacity-100 hover:scale-110"
+                    title={t('boardTabs.scrollColumnsRight', { ns: 'common' })}
+                    aria-label={t('boardTabs.scrollColumnsRight', { ns: 'common' })}
+                  >
+                    <ChevronRight size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
+                  </button>
+                )}
+              </div>
             )}
             
             {/* Scrollable columns container */}
@@ -1699,6 +1780,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                             onClearBulkUndo={onClearBulkUndo}
                             selectedBoardId={selectedBoard}
                             draggedTaskIds={draggedTaskIds}
+                            columnHeaderStickyTopPx={appHeaderStickyTopPx}
                           />
                           {/* Resize handle between columns (not after the last one) */}
                           {index < array.length - 1 && onColumnWidthResize && (
@@ -1807,6 +1889,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                       onClearBulkUndo={onClearBulkUndo}
                       selectedBoardId={selectedBoard}
                       draggedTaskIds={draggedTaskIds}
+                      columnHeaderStickyTopPx={appHeaderStickyTopPx}
                         />
                         {/* Resize handle between columns (not after the last one) */}
                         {index < array.length - 1 && onColumnWidthResize && (

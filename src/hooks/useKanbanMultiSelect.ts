@@ -119,14 +119,17 @@ export function useKanbanMultiSelect({
   availableTags = [],
 }: UseKanbanMultiSelectArgs) {
   const { t } = useTranslation('tasks');
-  const [checkedTaskIds, setCheckedTaskIds] = useState<Set<string>>(() => new Set());
+  const [checkedTaskIds, setCheckedTaskIds] = useState<Set<string>>(() => {
+    const saved = readKanbanMultiSelectSession();
+    return saved?.taskIds.length ? new Set(saved.taskIds) : new Set();
+  });
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkUndo, setBulkUndo] = useState<BulkUndoSnapshot | null>(null);
   const lastAnchorIdRef = useRef<string | null>(null);
   const detailsTaskIdRef = useRef<string | null>(detailsTaskId);
   detailsTaskIdRef.current = detailsTaskId;
-  const previousBoardRef = useRef<string | null | undefined>(undefined);
-  const skipFirstSelectionPersistRef = useRef(true);
+  const previousBoardRef = useRef<string | null>(null);
+  const allowPersistRef = useRef(false);
 
   const clearAllChecked = useCallback(() => {
     lastAnchorIdRef.current = null;
@@ -143,35 +146,39 @@ export function useKanbanMultiSelect({
   }, []);
 
   // Restore checks after refresh (same tab). Real board switches drop selection.
+  // Do not treat "board still loading" (null → id) as a switch — that wiped sessionStorage.
   useEffect(() => {
+    if (!selectedBoard) return;
+
+    const saved = readKanbanMultiSelectSession();
     const prev = previousBoardRef.current;
 
-    if (prev === undefined || prev == null) {
-      previousBoardRef.current = selectedBoard ?? null;
-      if (selectedBoard) {
-        const saved = readKanbanMultiSelectSession();
-        if (saved?.boardId === selectedBoard && saved.taskIds.length > 0) {
-          setCheckedTaskIds(new Set(saved.taskIds));
-        }
-      }
-      return;
-    }
-
-    if (prev !== selectedBoard) {
+    if (prev && prev !== selectedBoard) {
       previousBoardRef.current = selectedBoard;
       lastAnchorIdRef.current = null;
       setCheckedTaskIds(new Set());
       setBulkUndo(null);
       writeKanbanMultiSelectSession(null, new Set());
-    }
-  }, [selectedBoard]);
-
-  // Skip the initial empty Set so we do not wipe sessionStorage before restore.
-  useEffect(() => {
-    if (skipFirstSelectionPersistRef.current) {
-      skipFirstSelectionPersistRef.current = false;
+      allowPersistRef.current = true;
       return;
     }
+
+    if (saved?.boardId === selectedBoard && saved.taskIds.length > 0) {
+      setCheckedTaskIds((curr) => {
+        const same =
+          curr.size === saved.taskIds.length && saved.taskIds.every((id) => curr.has(id));
+        return same ? curr : new Set(saved.taskIds);
+      });
+    } else if (saved && saved.boardId !== selectedBoard) {
+      setCheckedTaskIds(new Set());
+    }
+
+    previousBoardRef.current = selectedBoard;
+    allowPersistRef.current = true;
+  }, [selectedBoard]);
+
+  useEffect(() => {
+    if (!allowPersistRef.current || !selectedBoard) return;
     writeKanbanMultiSelectSession(selectedBoard, checkedTaskIds);
   }, [selectedBoard, checkedTaskIds]);
 
@@ -191,9 +198,15 @@ export function useKanbanMultiSelect({
     return () => window.clearTimeout(timer);
   }, [bulkUndo]);
 
-  // Prune ids that left the board (wait until columns are loaded so refresh restore is not wiped)
+  // Prune ids that left the board (wait until tasks are loaded so refresh restore is not wiped)
   useEffect(() => {
-    if (Object.keys(columns).length === 0) return;
+    const columnList = Object.values(columns);
+    if (columnList.length === 0) return;
+    const loadedTaskCount = columnList.reduce(
+      (n, col) => n + (col?.tasks?.length || 0),
+      0
+    );
+    if (loadedTaskCount === 0) return;
     setCheckedTaskIds((prev) => pruneCheckedTaskIds(prev, columns));
   }, [columns]);
 

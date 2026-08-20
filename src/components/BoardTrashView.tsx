@@ -435,26 +435,19 @@ export default function BoardTrashView({
     }
   };
 
-  if (loading) {
+  if (tasks.length === 0 && !loading) {
     return (
-      <div className="mb-3 rounded-xl border border-dashed border-gray-300 bg-gray-50/80 px-4 py-4 dark:border-gray-600 dark:bg-gray-800/40">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t('trash.title')}</h3>
+      <div
+        className="relative mb-3 rounded-xl border border-amber-200/80 bg-amber-50/40 py-2 dark:border-amber-900/50 dark:bg-amber-950/20"
+        data-tour-id="board-trash-view"
+      >
+        <div className="relative z-10 mb-2 flex min-h-[1.75rem] items-center justify-between gap-2 px-1">
+          <h3 className="shrink-0 whitespace-nowrap text-sm font-semibold text-gray-800 dark:text-gray-100">
+            {t('trash.title')}
+          </h3>
           {closeButton}
         </div>
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400">{t('trash.loading')}</p>
-      </div>
-    );
-  }
-
-  if (tasks.length === 0) {
-    return (
-      <div className="mb-3 rounded-xl border border-dashed border-gray-300 bg-gray-50/80 px-4 py-4 dark:border-gray-600 dark:bg-gray-800/40">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{t('trash.title')}</h3>
-          {closeButton}
-        </div>
-        <div className="text-center">
+        <div className="px-4 pb-3 text-center">
           <Trash2 className="mx-auto mb-2 text-gray-400" size={22} />
           <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{t('trash.emptyTitle')}</p>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{t('trash.emptyHint')}</p>
@@ -674,13 +667,19 @@ export default function BoardTrashView({
         </div>
       )}
 
-      {/* Same grid as live board — no horizontal padding so columns line up.
-          Scrollbar hidden: horizontal position stays synced with the board scroller. */}
+      {/* Same grid as live board (shared left gutter for the first-column bulk
+          menu). Scrollbar hidden: stay synced with the board scroller. */}
       <div
         ref={scrollContainerRef}
-        className="overflow-x-auto w-full hide-scrollbar"
+        className="relative overflow-x-auto w-full hide-scrollbar"
         data-kanban-scroll="trash"
       >
+        {loading && tasks.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            {t('trash.loading')}
+          </p>
+        ) : (
+          <>
         <div style={trashGridStyle}>
           {displayColumns.map((column) => {
             const columnTasks = tasksByColumn.get(column.id) || [];
@@ -706,6 +705,8 @@ export default function BoardTrashView({
               {renderColumnCards(orphanTasks)}
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

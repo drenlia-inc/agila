@@ -175,12 +175,26 @@ export interface SearchFilters {
   selectedMembers: string[];
   selectedPriorities: string[];
   selectedTags: string[];
-  projectId: string;
+  /** Board project keys (e.g. PROJ-00008); empty = all projects. */
+  selectedProjectIds: string[];
   taskId: string;
   /** When true, only tasks with parent/child/related links on the current board are shown. */
   linkedTasksOnly: boolean;
+  /** Past due or missing due date (excludes finished/archived columns). */
+  overdueOnly: boolean;
+  /** Only tasks marked blocked. */
+  blockedOnly: boolean;
+  /** Sprint ids to include; use `backlog` for unassigned sprint tasks. Empty = no sprint filter. */
+  selectedSprintIds: string[];
+  /** Minimum days in current column; null = off. */
+  stalledDays: number | null;
 }
 
+/** Options when pushing search filter state from SearchInterface. */
+export interface SearchFiltersChangeOptions {
+  /** Keep the active saved filter view (apply saved view, not a manual edit). */
+  preserveFilterView?: boolean;
+}
 
 export interface SiteSettings {
   SITE_NAME: string;
