@@ -91,11 +91,12 @@
               }
             }
             localStorage.setItem('capturedIntendedDestination', intendedDestination);
+            localStorage.setItem('oauthIntendedDestination', intendedDestination);
           } catch (e) {
             // Failed to parse referrer URL
           }
         } else if (currentHash === '#login' && currentPathname === '/' && !referrer.includes('/project/')) {
-          // Clear stale data only when visiting login page directly (not from a /project/ redirect)
+          // Clear stale captured URL only — keep oauthIntendedDestination (set before #login hop)
           localStorage.removeItem('capturedIntendedDestination');
           sessionStorage.removeItem('originalIntendedUrl');
         }
@@ -110,6 +111,8 @@
             const fullPath = currentPathname + currentHash;
             const intendedUrl = fullPath === '/' ? currentHash : fullPath;
             localStorage.setItem('capturedIntendedDestination', intendedUrl);
+            // Same key useAuth restores after a hop to #login (password + OAuth)
+            localStorage.setItem('oauthIntendedDestination', intendedUrl);
           }
         }
         

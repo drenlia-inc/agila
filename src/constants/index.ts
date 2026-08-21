@@ -50,7 +50,7 @@ export const ROUTES = {
 // Default site settings
 export const DEFAULT_SITE_SETTINGS = {
   SITE_NAME: '',
-  SITE_URL: 'http://localhost:3000'
+  SITE_URL: '/'
 };
 
 /** Built-in brand mark when SITE_LOGO is empty / cleared */
