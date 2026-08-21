@@ -98,7 +98,7 @@ import websocketClient from './services/websocketClient';
 import { resolveActivityFeedPosition } from './utils/activityFeedPosition';
 import { isMobileViewport } from './utils/mobileViewport';
 import { loadUserPreferences, loadUserPreferencesAsync, mergeClearedKanbanVisibilityFilters, saveUserPreferences, updateUserPreference, updateActivityFeedPreference, loadAdminDefaults, TaskViewMode, ViewMode, isGloballySavingPreferences, registerSavingStateCallback, UserPreferences, clearAllUserPreferenceCookies } from './utils/userPreferences';
-import { resolveGuestLanguage, normalizeAppLanguage, getExplicitGuestLanguage, setExplicitGuestLanguage } from './utils/guestLanguage';
+import { resolveGuestLanguage, normalizeAppLanguage, getExplicitGuestLanguage, setExplicitGuestLanguage, consumeLanguageQueryParam } from './utils/guestLanguage';
 import { versionDetection } from './utils/versionDetection';
 import { getAllPriorities, getAllTags, getTags, getPriorities, getSettings, getTaskWatchers, getTaskCollaborators, addTagToTask, removeTagFromTask, getBoardTaskRelationships, getTaskRelationships, getAllSprints, getUserSettings, removeTaskRelationship } from './api';
 import { 
@@ -1137,6 +1137,24 @@ function AppContent() {
   
   // Load auto-refresh setting and sprint selection from user preferences
   useEffect(() => {
+    // Deep-link / marketing `?lng=` / `?lang=` — same effect as the header language switcher.
+    // Must run before any early return so the param is not left on the URL.
+    const fromUrl = consumeLanguageQueryParam();
+    if (fromUrl) {
+      setExplicitGuestLanguage(fromUrl);
+      if (isDemoModeClient()) {
+        try {
+          sessionStorage.setItem('ekDemoSessionLang', fromUrl);
+        } catch {
+          /* ignore */
+        }
+      }
+      void i18n.changeLanguage(fromUrl);
+      if (currentUser?.id) {
+        void updateUserPreference('language', fromUrl, currentUser.id);
+      }
+    }
+
     if (currentUser) {
       const restorePreferences = async () => {
         try {
@@ -1144,7 +1162,7 @@ function AppContent() {
           const prefs = await loadUserPreferencesAsync(currentUser.id);
           
           // Language sync (login ↔ app):
-          // 1) Explicit choice made on login/guest screens wins and is saved as user pref
+          // 1) Explicit choice made on login/guest screens (or ?lng=) wins and is saved as user pref
           // 2) Else existing user pref from DB
           // 3) Else seed from browser → APP_LANGUAGE and save once
           const dbSettings = await getUserSettings();

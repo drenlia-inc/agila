@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { login } from '../api';
 import { Github, MousePointerClick, RefreshCw, Sparkles } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
-import { setExplicitGuestLanguage, normalizeAppLanguage } from '../utils/guestLanguage';
+import { setExplicitGuestLanguage, normalizeAppLanguage, peekLanguageQueryParam } from '../utils/guestLanguage';
 import { updateUserPreference } from '../utils/userPreferences';
 import { AGILA_GITHUB_URL } from '../constants';
 import { resolvePublicBrandLogoSrc } from '../utils/brandLogo';
@@ -71,8 +71,8 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   
   const [demoLang, setDemoLang] = useState<DemoSessionLang | null>(() => {
     try {
-      const params = new URLSearchParams(window.location.search);
-      const fromUrl = normalizeAppLanguage(params.get('lng') ?? params.get('lang'));
+      // App.tsx consumes/strips ?lng=; peek here so demo EN/FR buttons preselect on first paint.
+      const fromUrl = peekLanguageQueryParam();
       if (fromUrl) {
         sessionStorage.setItem('ekDemoSessionLang', fromUrl);
         return fromUrl;
@@ -105,26 +105,6 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
     setExplicitGuestLanguage(lang);
     await i18n.changeLanguage(lang);
   };
-
-  // Marketing site deep-link: ?lng=fr|en preselects the demo language buttons.
-  useEffect(() => {
-    if (!isDemoMode) return;
-    let fromUrl: DemoSessionLang | null = null;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      fromUrl = normalizeAppLanguage(params.get('lng') ?? params.get('lang'));
-      if (!fromUrl) return;
-      params.delete('lng');
-      params.delete('lang');
-      const qs = params.toString();
-      const next = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
-      window.history.replaceState({}, '', next);
-    } catch {
-      return;
-    }
-    void handleDemoLanguagePick(fromUrl);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount for URL bootstrap
-  }, [isDemoMode]);
 
   /** Fetch once. Returns credentials only when the real seeded password is available. */
   const fetchAdminCredentials = useCallback(async (): Promise<{

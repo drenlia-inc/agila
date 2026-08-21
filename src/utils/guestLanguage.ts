@@ -41,6 +41,45 @@ export function setExplicitGuestLanguage(lang: AppUiLanguage): void {
   }
 }
 
+/** Read `?lng=` / `?lang=` without mutating the URL. */
+export function peekLanguageQueryParam(
+  search: string = typeof window !== 'undefined' ? window.location.search : '',
+): AppUiLanguage | null {
+  try {
+    const params = new URLSearchParams(search);
+    return normalizeAppLanguage(params.get('lng') ?? params.get('lang'));
+  } catch {
+    return null;
+  }
+}
+
+/** Remove `lng` / `lang` from the current URL via replaceState. */
+export function stripLanguageQueryParam(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('lng') && !params.has('lang')) return;
+    params.delete('lng');
+    params.delete('lang');
+    const qs = params.toString();
+    const next = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', next);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * If the URL has a valid `?lng=` / `?lang=`, strip it and return the language.
+ * Same effect as the header switcher once the caller applies i18n + persistence.
+ */
+export function consumeLanguageQueryParam(): AppUiLanguage | null {
+  const lang = peekLanguageQueryParam();
+  if (!lang) return null;
+  stripLanguageQueryParam();
+  return lang;
+}
+
 /**
  * Resolve language for unauthenticated screens.
  * 1) Explicit guest toggle  2) browser  3) APP_LANGUAGE (site default)  4) en
