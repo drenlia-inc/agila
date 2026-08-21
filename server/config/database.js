@@ -14,7 +14,7 @@ import {
   AGENT_DEFAULT_NAME,
   AGENT_DEFAULT_COLOR
 } from '../constants/agentIdentity.js';
-import { initializeDemoData, installDemoSeedAvatar } from './demoData.js';
+import { initializeDemoData, installDemoSeedAvatar, ensureDemoMemberDisplayFirstNames } from './demoData.js';
 import { ensureDemoBacklogTasksUnassigned } from './demoDataSeed.js';
 import { seedWelcomeTasks } from './welcomeTasks.js';
 import { wrapQuery } from '../utils/queryLogger.js';
@@ -925,7 +925,8 @@ const initializeDefaultData = async (db, tenantId = null) => {
     const isDemo = process.env.DEMO_ENABLED === 'true';
     const adminFirstName = isDemo ? 'Alex' : 'Admin';
     const adminLastName = isDemo ? 'Morgan' : 'User';
-    const adminDisplayName = isDemo ? 'Alex Morgan' : 'Admin User';
+    // Demo: first name only on the board (member display name)
+    const adminDisplayName = isDemo ? adminFirstName : 'Admin User';
 
     // Create admin avatar (optional demo photo, else letter SVG)
     let adminAvatarPath = null;
@@ -1352,6 +1353,11 @@ const initializeDefaultData = async (db, tenantId = null) => {
       await ensureDemoBacklogTasksUnassigned(db);
     } catch (error) {
       console.error('❌ Demo backlog unassign ensure failed (continuing startup):', error);
+    }
+    try {
+      await ensureDemoMemberDisplayFirstNames(db);
+    } catch (error) {
+      console.error('❌ Demo member display-name ensure failed (continuing startup):', error);
     }
   }
 

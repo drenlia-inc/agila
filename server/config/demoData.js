@@ -242,16 +242,18 @@ export async function initializeDemoData(db) {
   const members = [];
   for (const user of demoUsers) {
     const memberId = crypto.randomUUID();
+    // Board/team display name is first name only (full name stays on the user profile)
+    const displayName = user.firstName;
     await wrapQuery(
       db.prepare('INSERT INTO members (id, name, color, user_id) VALUES ($1, $2, $3, $4)'),
       'INSERT'
-    ).run(memberId, `${user.firstName} ${user.lastName}`, user.color, user.id);
-    members.push({ id: memberId, name: `${user.firstName} ${user.lastName}`, userId: user.id });
+    ).run(memberId, displayName, user.color, user.id);
+    members.push({ id: memberId, name: displayName, userId: user.id });
   }
 
   const adminMember = await wrapQuery(
     db.prepare(`
-      SELECT m.id, m.name, m.user_id AS "userId"
+      SELECT m.id, m.name, m.user_id AS "userId", u.first_name AS "firstName"
       FROM members m
       JOIN users u ON u.id = m.user_id
       WHERE u.email = 'admin@kanban.local'
@@ -260,9 +262,16 @@ export async function initializeDemoData(db) {
     'SELECT'
   ).get();
   if (adminMember?.id) {
+    const adminDisplayName = adminMember.firstName || 'Alex';
+    if (adminMember.name !== adminDisplayName) {
+      await wrapQuery(
+        db.prepare('UPDATE members SET name = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2'),
+        'UPDATE'
+      ).run(adminDisplayName, adminMember.id);
+    }
     members.push({
       id: adminMember.id,
-      name: adminMember.name,
+      name: adminDisplayName,
       userId: adminMember.userId,
     });
     await wrapQuery(
@@ -278,6 +287,38 @@ export async function initializeDemoData(db) {
 
   await seedBilingualDemoBoards(db, members);
   console.log('🎉 Bilingual demo data initialization complete');
+}
+
+/**
+ * Demo volumes persist across deploys. Keep board display names as first name only
+ * for the stock demo personas (Alex, John, Sarah, Mike).
+ */
+export async function ensureDemoMemberDisplayFirstNames(db) {
+  if (process.env.DEMO_ENABLED !== 'true') return;
+
+  const result = await wrapQuery(
+    db.prepare(`
+      UPDATE members m
+      SET name = u.first_name,
+          updated_at = CURRENT_TIMESTAMP
+      FROM users u
+      WHERE m.user_id = u.id
+        AND u.first_name IS NOT NULL
+        AND TRIM(u.first_name) <> ''
+        AND m.name IS DISTINCT FROM u.first_name
+        AND (
+          u.email = 'admin@kanban.local'
+          OR u.email LIKE '%@demo.local'
+        )
+        AND u.email <> 'system@local'
+    `),
+    'UPDATE'
+  ).run();
+
+  const updated = Number(result?.rowCount ?? result?.changes ?? 0);
+  if (updated > 0) {
+    console.log(`✅ Demo members: set ${updated} display name(s) to first name only`);
+  }
 }
 
 
