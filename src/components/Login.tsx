@@ -71,6 +71,12 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   
   const [demoLang, setDemoLang] = useState<DemoSessionLang | null>(() => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = normalizeAppLanguage(params.get('lng') ?? params.get('lang'));
+      if (fromUrl) {
+        sessionStorage.setItem('ekDemoSessionLang', fromUrl);
+        return fromUrl;
+      }
       const stored = normalizeAppLanguage(sessionStorage.getItem('ekDemoSessionLang'));
       if (stored) return stored;
     } catch {
@@ -99,6 +105,26 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
     setExplicitGuestLanguage(lang);
     await i18n.changeLanguage(lang);
   };
+
+  // Marketing site deep-link: ?lng=fr|en preselects the demo language buttons.
+  useEffect(() => {
+    if (!isDemoMode) return;
+    let fromUrl: DemoSessionLang | null = null;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      fromUrl = normalizeAppLanguage(params.get('lng') ?? params.get('lang'));
+      if (!fromUrl) return;
+      params.delete('lng');
+      params.delete('lang');
+      const qs = params.toString();
+      const next = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, '', next);
+    } catch {
+      return;
+    }
+    void handleDemoLanguagePick(fromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount for URL bootstrap
+  }, [isDemoMode]);
 
   /** Fetch once. Returns credentials only when the real seeded password is available. */
   const fetchAdminCredentials = useCallback(async (): Promise<{
