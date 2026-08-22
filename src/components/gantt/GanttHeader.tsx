@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
 import { TaskJumpDropdown } from './TaskJumpDropdown';
 
@@ -242,12 +243,12 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
           </div>
           
           {/* Task Navigation: < Task > */}
-          <div className="flex items-center gap-1">
-            {/* Jump to Earliest Task */}
+          <div className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-gray-300 px-1 dark:border-gray-600">
             <button
+              type="button"
               onClick={() => {
                 if (ganttTasks.length > 0) {
-                  const earliestTask = ganttTasks.reduce((earliest, task) => 
+                  const earliestTask = ganttTasks.reduce((earliest, task) =>
                     (!earliest.startDate || (task.startDate && task.startDate < earliest.startDate)) ? task : earliest
                   );
                   if (earliestTask.startDate) {
@@ -256,22 +257,20 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                 }
               }}
               disabled={ganttTasks.length === 0}
-              className="p-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex h-7 w-7 items-center justify-center rounded text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-gray-300 dark:hover:bg-gray-800"
               title={t('gantt.jumpToEarliestTask')}
+              aria-label={t('gantt.jumpToEarliestTask')}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <ChevronLeft size={16} />
             </button>
-
-            {/* Task Label */}
-            <span className="text-sm text-gray-600 font-medium px-2">{t('gantt.task')}</span>
-
-            {/* Jump to Latest Task */}
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+              {t('gantt.task')}
+            </span>
             <button
+              type="button"
               onClick={() => {
                 if (ganttTasks.length > 0) {
-                  const latestTask = ganttTasks.reduce((latest, task) => 
+                  const latestTask = ganttTasks.reduce((latest, task) =>
                     (!latest.endDate || (task.endDate && task.endDate > latest.endDate)) ? task : latest
                   );
                   if (latestTask.endDate) {
@@ -280,12 +279,11 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                 }
               }}
               disabled={ganttTasks.length === 0}
-              className="p-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex h-7 w-7 items-center justify-center rounded text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-gray-300 dark:hover:bg-gray-800"
               title={t('gantt.jumpToLatestTask')}
+              aria-label={t('gantt.jumpToLatestTask')}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight size={16} />
             </button>
           </div>
 

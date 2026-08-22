@@ -40,7 +40,7 @@
     "addComment": "Ajouter un commentaire",
     "addTag": "Ajouter une étiquette",
     "attachFile": "Joindre un fichier",
-    "scrollToCard": "Afficher cette tâche sur le tableau"
+    "jumpToTask": "Aller à la tâche"
   },
   "errors": {
     "uploadError": "Erreur de téléversement",
@@ -48,7 +48,7 @@
     "updateTaskMessage": "Vos modifications n'ont pas été enregistrées. Veuillez réessayer.",
     "createTaskTitle": "Impossible de créer la tâche",
     "createTaskMessage": "La tâche n'a pas pu être créée. Veuillez réessayer.",
-    "scrollToCardFailed": "Impossible de trouver cette tâche sur le tableau.",
+    "jumpToTaskFailed": "Impossible de trouver cette tâche dans la vue actuelle.",
     "createTaskShortcutTitle": "Tâche créée",
     "createTaskShortcutMessage": "Ajoutée dans « {{column}} » via le raccourci N. Renommez-la, ou supprimez-la si c'était involontaire.",
     "copyTaskTitle": "Impossible de copier la tâche",

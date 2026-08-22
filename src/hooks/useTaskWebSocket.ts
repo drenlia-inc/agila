@@ -28,7 +28,7 @@ interface UseTaskWebSocketProps {
   // Task filters hook
   taskFilters: {
     setFilteredColumns: React.Dispatch<React.SetStateAction<Columns>>;
-    viewModeRef: RefObject<'kanban' | 'list' | 'gantt'>;
+    viewModeRef: RefObject<'kanban' | 'list' | 'gantt' | 'calendar'>;
     shouldIncludeTaskRef: RefObject<(task: Task) => boolean>;
   };
   

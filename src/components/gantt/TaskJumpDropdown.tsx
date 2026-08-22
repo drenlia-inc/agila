@@ -9,6 +9,7 @@ interface GanttTask {
   endDate: Date | null;
   status: string;
   priority: string;
+  priorityName?: string;
   columnId: string;
   columnPosition: number;
   taskPosition: number;
@@ -25,7 +26,8 @@ export const TaskJumpDropdown: React.FC<TaskJumpDropdownProps> = ({
   onTaskSelect,
   className = ''
 }) => {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
+  const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -107,16 +109,6 @@ export const TaskJumpDropdown: React.FC<TaskJumpDropdownProps> = ({
     inputRef.current?.blur();
   };
 
-  const formatTaskDisplay = (task: GanttTask) => {
-    const dateInfo = task.startDate && task.endDate 
-      ? ` (${task.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${task.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`
-      : task.startDate 
-        ? ` (${task.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`
-        : ` (${t('gantt.noDates')})`;
-    
-    return `${task.ticket}: ${task.title}${dateInfo}`;
-  };
-
   const getPriorityColor = (priority: string) => {
     const colors: Record<string, string> = {
       low: '#10B981',      // green
@@ -189,7 +181,7 @@ export const TaskJumpDropdown: React.FC<TaskJumpDropdownProps> = ({
                         {/* Priority Indicator */}
                         <div 
                           className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: getPriorityColor((task as any).priorityName || task.priority) }}
+                          style={{ backgroundColor: getPriorityColor(task.priorityName || task.priority) }}
                         />
                         
                         {/* Task Info */}
@@ -204,7 +196,7 @@ export const TaskJumpDropdown: React.FC<TaskJumpDropdownProps> = ({
                         <span className="bg-gray-100 px-2 py-0.5 rounded-md">{task.status}</span>
                         {task.startDate && task.endDate && (
                           <span>
-                            {task.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {task.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {task.startDate.toLocaleDateString(locale, { month: 'short', day: 'numeric' })} - {task.endDate.toLocaleDateString(locale, { month: 'short', day: 'numeric' })}
                           </span>
                         )}
                       </div>

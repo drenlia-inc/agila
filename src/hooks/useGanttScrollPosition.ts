@@ -1,14 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { loadUserPreferencesAsync } from '../utils/userPreferences';
+import { loadUserPreferencesAsync, persistLocalPreferences } from '../utils/userPreferences';
 import { getUserSettings, updateUserSetting } from '../api';
-
-// Cookie expiry days (matches userPreferences.ts)
-const COOKIE_EXPIRY_DAYS = 365;
-
-// Helper to get cookie name (matches userPreferences.ts)
-const getUserCookieName = (userId: string | null = null): string => {
-  return userId ? `easy-kanban-user-prefs-${userId}` : 'easy-kanban-user-prefs';
-};
 
 interface ScrollPosition {
   date: string;
@@ -227,17 +219,12 @@ export const useGanttScrollPosition = ({ boardId, currentUser }: UseGanttScrollP
           }
         };
         
-        // Update cookie first (synchronous, fast)
-        const cookieName = getUserCookieName(currentUser.id);
-        const updatedPreferences = {
+        // Update local storage first (synchronous, fast)
+        persistLocalPreferences(currentUser.id, {
           ...latestPreferences,
           ganttScrollPositions: newScrollPositions
-        };
-        const prefsJson = JSON.stringify(updatedPreferences);
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + COOKIE_EXPIRY_DAYS);
-        document.cookie = `${cookieName}=${encodeURIComponent(prefsJson)}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Strict`;
-        
+        });
+
         // Save ONLY the ganttScrollPositions to database (single API call instead of 30+)
         await updateUserSetting('ganttScrollPositions', JSON.stringify(newScrollPositions));
         
@@ -288,17 +275,12 @@ export const useGanttScrollPosition = ({ boardId, currentUser }: UseGanttScrollP
           }
         };
         
-        // Update cookie first (synchronous, fast)
-        const cookieName = getUserCookieName(currentUser.id);
-        const updatedPreferences = {
+        // Update local storage first (synchronous, fast)
+        persistLocalPreferences(currentUser.id, {
           ...latestPreferences,
           ganttScrollPositions: newScrollPositions
-        };
-        const prefsJson = JSON.stringify(updatedPreferences);
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + COOKIE_EXPIRY_DAYS);
-        document.cookie = `${cookieName}=${encodeURIComponent(prefsJson)}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Strict`;
-        
+        });
+
         // Save ONLY the ganttScrollPositions to database (single API call instead of 30+)
         await updateUserSetting('ganttScrollPositions', JSON.stringify(newScrollPositions));
         

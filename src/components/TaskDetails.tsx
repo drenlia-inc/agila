@@ -54,6 +54,7 @@ import type { AgentPanelView } from './AgentPanel';
 import MemberPicker from './ui/MemberPicker';
 import WatchThisTaskButton from './ui/WatchThisTaskButton';
 import MemberAvatar from './ui/MemberAvatar';
+import PriorityPicker from './ui/PriorityPicker';
 import AgentStatusButton from './AgentStatusButton';
 import {
   AGENT_MEMBER_ID,
@@ -109,7 +110,7 @@ interface TaskDetailsProps {
   onRestore?: () => Promise<void>;
   onPurge?: () => Promise<void>;
   isAdmin?: boolean;
-  onShowTaskOnBoard?: (task: Task) => void | Promise<void>;
+  onJumpToTask?: (task: Task) => void | Promise<void>;
 }
 
 export default function TaskDetails({
@@ -126,7 +127,7 @@ export default function TaskDetails({
   onRestore,
   onPurge,
   isAdmin = false,
-  onShowTaskOnBoard,
+  onJumpToTask,
 }: TaskDetailsProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const userPrefs = loadUserPreferences();
@@ -1726,18 +1727,18 @@ export default function TaskDetails({
                         <button
                           type="button"
                           onClick={() => {
-                            if (onShowTaskOnBoard) {
-                              void onShowTaskOnBoard(task);
+                            if (onJumpToTask) {
+                              void onJumpToTask(task);
                               return;
                             }
                             const found = scrollViewportToTask(task.id);
                             if (!found) {
-                              toast.warning(t('errors.scrollToCardFailed'), '');
+                              toast.warning(t('errors.jumpToTaskFailed'), '');
                             }
                           }}
                           className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-blue-50 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
-                          title={t('actions.scrollToCard')}
-                          aria-label={t('actions.scrollToCard')}
+                          title={t('actions.jumpToTask')}
+                          aria-label={t('actions.jumpToTask')}
                         >
                           <TaskCardLocateIcon className="h-[15px] w-3" />
                         </button>
@@ -2153,40 +2154,18 @@ export default function TaskDetails({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                  {t('labels.priority')}
-                </label>
-                {isWritersLocked || isSubmitting ? (
-                  <div
-                    className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 cursor-default"
-                    aria-readonly="true"
-                  >
-                    {editedTask.priorityId
-                      ? availablePriorities.find((p) => p.id === editedTask.priorityId)?.priority ||
-                        t('taskPage.noPriority')
-                      : t('taskPage.noPriority')}
-                  </div>
-                ) : (
-                <select
-                  value={editedTask.priorityId || ''}
-                  onChange={e => {
-                    const priorityId = e.target.value ? parseInt(e.target.value) : null;
-                    const priority = priorityId ? availablePriorities.find(p => p.id === priorityId) : null;
-                    handleUpdate({ 
-                      priorityId: priorityId,
-                      priority: priority?.priority || null 
-                    });
-                  }}
-                  className="w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="">{t('taskPage.noPriority')}</option>
-                  {availablePriorities.map(priority => (
-                    <option key={priority.id} value={priority.id}>
-                      {priority.priority}
-                    </option>
-                  ))}
-                </select>
-                )}
+                <PriorityPicker
+                  label={t('labels.priority')}
+                  priorities={availablePriorities}
+                  value={editedTask.priorityId}
+                  disabled={isWritersLocked || isSubmitting}
+                  onChange={(priorityId, priorityName) =>
+                    handleUpdate({
+                      priorityId: priorityId ?? undefined,
+                      priority: priorityName ?? undefined,
+                    })
+                  }
+                />
               </div>
             </div>
 

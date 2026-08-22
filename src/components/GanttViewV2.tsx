@@ -20,6 +20,8 @@ import {
 } from './gantt/ganttLayout';
 import { toast } from '../utils/toast';
 import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
+import { scrollViewportToTaskWhenReady } from '../utils/scrollViewportToTask';
+import { completeTaskJump, subscribeTaskJump } from '../utils/taskJumpEvents';
 
 interface GanttViewV2Props {
   columns: Columns;
@@ -1220,6 +1222,32 @@ const GanttViewV2 = ({
       return 0;
     });
   }, [columns, localDragState, priorities]);
+
+  useEffect(
+    () =>
+      subscribeTaskJump(({ task }) => {
+        const startRaw = task.startDate || task.dueDate;
+        const endRaw = task.dueDate || task.startDate;
+        const jumpTask =
+          startRaw && endRaw
+            ? {
+                ...task,
+                startDate: parseLocalDate(startRaw),
+                endDate: parseLocalDate(endRaw),
+              }
+            : null;
+        if (!jumpTask) {
+          completeTaskJump(task.id);
+          return;
+        }
+
+        handleJumpToTask(jumpTask);
+        void scrollViewportToTaskWhenReady(task.id, { maxAttempts: 60 }).finally(() => {
+          completeTaskJump(task.id);
+        });
+      }),
+    [handleJumpToTask]
+  );
 
   // Group tasks by column
   const groupedTasks = useMemo(() => {

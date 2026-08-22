@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { DndContext, DragOverlay, useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
-import { ChevronLeft, ChevronRight, ChevronUp, Calendar, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useKanbanModifierKeys } from '../../hooks/useKanbanModifierKeys';
 import { useAppHeaderStickyTop } from '../../hooks/useAppHeaderStickyTop';
@@ -61,8 +61,9 @@ import { onHelpReveal, takeHelpReveal } from '../../utils/helpGoThere';
 
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-// Lazy load GanttViewV2 to reduce initial bundle size (only loads when Gantt view is selected) with retry logic
+// Lazy load GanttViewV2 / CalendarView to reduce initial bundle size
 const GanttViewV2 = lazyWithRetry(() => import('../GanttViewV2'));
+const CalendarView = lazyWithRetry(() => import('../CalendarView'));
 
 interface KanbanPageProps {
   currentUser: CurrentUser | null;
@@ -1340,8 +1341,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         return; // Don't interfere with text editing
       }
       
-      // Don't handle arrow keys in Gantt view - let GanttViewV2 handle them
-      if (viewMode === 'gantt') {
+      // Don't handle arrow keys in Gantt/Calendar — those views own left/right
+      if (viewMode === 'gantt' || viewMode === 'calendar') {
         return;
       }
       
@@ -1622,6 +1623,22 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 canMutate={canMutate}
                 onMoveTaskToColumn={onMoveTaskToColumn}
                 onReorderTaskInColumn={onGanttReorderTask}
+              />
+            </Suspense>
+          ) : viewMode === 'calendar' ? (
+            <Suspense fallback={<div className="flex items-center justify-center h-64"><LoadingSpinner /></div>}>
+              <CalendarView
+                columns={getFullyFilteredColumns}
+                onSelectTask={onSelectTask}
+                selectedTask={selectedTask}
+                taskViewMode={taskViewMode}
+                onUpdateTask={onEditTask}
+                boardId={selectedBoard}
+                onAddTask={onAddTask}
+                currentUser={currentUser}
+                members={members}
+                canMutate={canMutate}
+                availablePriorities={availablePriorities}
               />
             </Suspense>
           ) : (

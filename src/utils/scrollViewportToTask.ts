@@ -42,6 +42,18 @@ function scrollKanbanHorizontallyClearOfPanel(
   }
 }
 
+const JUMP_HIGHLIGHT_CLASS = 'task-jump-highlight';
+const JUMP_HIGHLIGHT_MS = 1800;
+
+/** Pulse the card/row so a jump is visible even when Task Details stays closed. */
+function flashJumpHighlight(el: HTMLElement): void {
+  el.classList.remove(JUMP_HIGHLIGHT_CLASS);
+  // Reading offsetWidth restarts the animation when jumping to the same task twice.
+  void el.offsetWidth;
+  el.classList.add(JUMP_HIGHLIGHT_CLASS);
+  window.setTimeout(() => el.classList.remove(JUMP_HIGHLIGHT_CLASS), JUMP_HIGHLIGHT_MS);
+}
+
 /**
  * Scroll the board (or list/gantt) so a task card is in view.
  * Kanban virtualization keeps the selected task mounted (`pinnedIndex`).
@@ -74,6 +86,7 @@ export function scrollViewportToTask(taskId: string): boolean {
   el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
   // scrollIntoView can leave the card under TaskDetails — nudge the board scroller afterward.
   window.setTimeout(applyHorizontalReveal, 320);
+  flashJumpHighlight(el);
 
   return true;
 }

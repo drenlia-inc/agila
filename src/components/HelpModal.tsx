@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Users, Columns, ClipboardList, MessageSquare, MessageCircle, ArrowRight, LayoutGrid, List, Calendar, Search, Eye, Settings, Play, BarChart3, Shield, Download, Bot, KeyRound, CheckSquare, AlertTriangle, Trash2, ListChecks, Keyboard, Minus, ChevronUp, Circle, HardDrive, Plus, Pencil, Copy, Paperclip, Tag, GitBranch, Archive, GripVertical, type LucideIcon } from 'lucide-react';
+import { X, Users, Columns, ClipboardList, MessageSquare, MessageCircle, ArrowRight, LayoutGrid, List, Calendar, CalendarDays, Search, Eye, Settings, Play, BarChart3, Shield, Download, Bot, KeyRound, CheckSquare, AlertTriangle, Trash2, ListChecks, Keyboard, Minus, ChevronUp, Circle, HardDrive, Plus, Pencil, Copy, Paperclip, Tag, GitBranch, Archive, GripVertical, type LucideIcon } from 'lucide-react';
 import { useTour } from '../contexts/TourContext';
 import { useOwnerSetupOptional } from '../contexts/OwnerSetupContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -120,10 +120,10 @@ interface HelpModalProps {
   onOpenProfile?: (focus?: 'displayName' | 'bio' | 'activityFeed') => void;
 }
 
-type TabType = 'overview' | 'delivery' | 'shortcuts' | 'kanban' | 'list' | 'gantt' | 'reports' | 'ai' | 'admin';
+type TabType = 'overview' | 'delivery' | 'shortcuts' | 'kanban' | 'list' | 'gantt' | 'calendar' | 'reports' | 'ai' | 'admin';
 
 const HELP_TAB_IDS = new Set<TabType>([
-  'overview', 'delivery', 'shortcuts', 'kanban', 'list', 'gantt', 'reports', 'ai', 'admin',
+  'overview', 'delivery', 'shortcuts', 'kanban', 'list', 'gantt', 'calendar', 'reports', 'ai', 'admin',
 ]);
 
 /** Translation keys for Help → Delivery (search + tab match highlighting). */
@@ -252,6 +252,7 @@ const HELP_OVERVIEW_SHORTCUT_HINT_ROWS: ShortcutHintRow[] = [
       { keyCap: '1', actionKey: 'help.overview.shortcutHint.viewsKanban' },
       { keyCap: '2', actionKey: 'help.overview.shortcutHint.viewsList' },
       { keyCap: '3', actionKey: 'help.overview.shortcutHint.viewsGantt' },
+      { keyCap: '4', actionKey: 'help.overview.shortcutHint.viewsCalendar' },
     ],
   },
   {
@@ -297,7 +298,7 @@ const HELP_SHORTCUT_SECTIONS: { titleKey: string; rows: ShortcutRow[] }[] = [
       { keys: '/ or Ctrl/Cmd+K', actionKey: 'help.shortcuts.boardSearch' },
       { keys: 'S', actionKey: 'help.shortcuts.boardSearchPanel' },
       { keys: 'N', actionKey: 'help.shortcuts.boardNewTask' },
-      { keys: '1 / 2 / 3', actionKey: 'help.shortcuts.boardViews' },
+      { keys: '1 / 2 / 3 / 4', actionKey: 'help.shortcuts.boardViews' },
       { keys: 'F / P / M', actionKey: 'help.shortcuts.boardDensity' },
       { keys: 'Escape', actionKey: 'help.shortcuts.boardFilterEscape' },
       { keys: 'Ctrl/Cmd+click', actionKey: 'help.shortcuts.boardMultiSelectClick' },
@@ -320,6 +321,13 @@ const HELP_SHORTCUT_SECTIONS: { titleKey: string; rows: ShortcutRow[] }[] = [
     rows: [
       { keys: 'Escape / Enter', actionKey: 'help.shortcuts.ganttExitModes' },
       { keys: '← / →', actionKey: 'help.shortcuts.ganttNudge' },
+    ],
+  },
+  {
+    titleKey: 'help.shortcuts.calendar',
+    rows: [
+      { keys: 'Escape / Enter', actionKey: 'help.shortcuts.calendarExitModes' },
+      { keys: '← / →', actionKey: 'help.shortcuts.calendarNudge' },
     ],
   },
   {
@@ -893,6 +901,7 @@ export default function HelpModal({
     { id: 'kanban' as TabType, label: t('help.tabs.kanbanView'), icon: Columns },
     { id: 'list' as TabType, label: t('help.tabs.listView'), icon: List },
     { id: 'gantt' as TabType, label: t('help.tabs.ganttView'), icon: Calendar },
+    { id: 'calendar' as TabType, label: t('help.tabs.calendarView'), icon: CalendarDays },
     { id: 'reports' as TabType, label: t('help.tabs.reports'), icon: BarChart3 },
     ...(aiEnabled ? [{ id: 'ai' as TabType, label: t('help.tabs.ai'), icon: Bot }] : []),
     ...(isAdmin ? [{ id: 'admin' as TabType, label: t('help.tabs.admin'), icon: Shield }] : []),
@@ -1698,6 +1707,73 @@ export default function HelpModal({
     return <div className="space-y-5">{sections}</div>;
   };
 
+  const renderCalendarTab = () => {
+    const sections = [
+      renderSection(
+        'help.calendar.overview',
+        ['help.calendar.overviewDesc1', 'help.calendar.overviewDesc2', 'help.calendar.overviewDesc3'],
+        CalendarDays,
+        'text-blue-600 dark:text-blue-400',
+        'bg-blue-50 dark:bg-blue-900/40',
+        viewGo('calendar')
+      ),
+      renderSectionWithList(
+        'help.calendar.views',
+        [],
+        ['help.calendar.monthView', 'help.calendar.weekView', 'help.calendar.dayView'],
+        Eye,
+        'text-emerald-600 dark:text-emerald-400',
+        'bg-emerald-50 dark:bg-emerald-900/40'
+      ),
+      renderSectionWithList(
+        'help.calendar.navigation',
+        [],
+        [
+          'help.calendar.previousNext',
+          'help.calendar.openDayFromGrid',
+          'help.calendar.todayButton',
+        ],
+        ArrowRight,
+        'text-indigo-600 dark:text-indigo-400',
+        'bg-indigo-50 dark:bg-indigo-900/40'
+      ),
+      renderSectionWithList(
+        'help.calendar.taskManagement',
+        [],
+        [
+          'help.calendar.dateOnlyMove',
+          'help.calendar.barColors',
+          'help.calendar.barPreview',
+          'help.calendar.commentsBubble',
+          'help.calendar.taskDetailsToggle',
+          'help.calendar.emptyDayCreate',
+          'help.calendar.priorityAssigneeMenu',
+        ],
+        ClipboardList,
+        'text-orange-600 dark:text-orange-400',
+        'bg-orange-50 dark:bg-orange-900/40'
+      ),
+      renderSectionWithList(
+        'help.calendar.multiSelect',
+        [],
+        ['help.calendar.multiSelectMode', 'help.calendar.arrowNudge', 'help.calendar.exitMultiSelect'],
+        CheckSquare,
+        'text-purple-600 dark:text-purple-400',
+        'bg-purple-50 dark:bg-purple-900/40'
+      ),
+      renderSectionWithList(
+        'help.calendar.keyboardShortcuts',
+        [],
+        ['help.calendar.keyboardShortcutsDesc'],
+        Keyboard,
+        'text-slate-600 dark:text-slate-300',
+        'bg-slate-100 dark:bg-slate-700/50'
+      ),
+    ].filter(Boolean);
+
+    return <div className="space-y-5">{sections}</div>;
+  };
+
   const renderReportsTab = () => {
     const sections = [
       renderSection(
@@ -2061,6 +2137,8 @@ export default function HelpModal({
         return renderListTab();
       case 'gantt':
         return renderGanttTab();
+      case 'calendar':
+        return renderCalendarTab();
       case 'reports':
         return renderReportsTab();
       case 'ai':
@@ -2159,6 +2237,20 @@ export default function HelpModal({
           'help.gantt.realtimeUpdatesTimeline', 'help.gantt.performance', 'help.gantt.virtualScrolling', 'help.gantt.lazyLoading',
           'help.gantt.realtimeUpdates', 'help.gantt.keyboardShortcuts', 'help.gantt.performanceMonitoring');
         tabKeys.push(isAdmin ? 'help.gantt.deleteTasksAdmin' : 'help.gantt.deleteTasks');
+        break;
+      case 'calendar':
+        tabKeys.push(
+          'help.calendar.overview', 'help.calendar.overviewDesc1', 'help.calendar.overviewDesc2', 'help.calendar.overviewDesc3',
+          'help.calendar.views', 'help.calendar.monthView', 'help.calendar.weekView', 'help.calendar.dayView',
+          'help.calendar.navigation', 'help.calendar.previousNext', 'help.calendar.openDayFromGrid',
+          'help.calendar.todayButton',
+          'help.calendar.taskManagement', 'help.calendar.dateOnlyMove', 'help.calendar.barColors',
+          'help.calendar.barPreview', 'help.calendar.commentsBubble',
+          'help.calendar.taskDetailsToggle', 'help.calendar.emptyDayCreate',
+          'help.calendar.priorityAssigneeMenu', 'help.calendar.multiSelect', 'help.calendar.multiSelectMode',
+          'help.calendar.arrowNudge', 'help.calendar.exitMultiSelect',
+          'help.calendar.keyboardShortcuts', 'help.calendar.keyboardShortcutsDesc'
+        );
         break;
       case 'reports':
         tabKeys.push('help.reports.overview', 'help.reports.overviewDesc', 'help.reports.myStats', 'help.reports.myStatsDesc',

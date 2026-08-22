@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Bug, Github, HelpCircle, Lightbulb, LogOut, User, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check, Eye, Shield } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { CurrentUser, SiteSettings, TeamMember } from '../../types';
+import { CurrentUser, SiteSettings, TeamMember, Task } from '../../types';
+import type { HeaderSearchTask } from './HeaderTaskSearch';
 import ThemeToggle from '../ThemeToggle';
 import { useTheme } from '../../contexts/ThemeContext';
 import { getSystemInfo } from '../../api';
@@ -53,6 +54,20 @@ interface SystemInfo {
 }
 
 /**
+ * Rich text → plain text for header search matching. Regex rather than a DOM
+ * parse: this runs over every task on every board.
+ */
+function htmlToSearchText(html?: string | null): string {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * True when SITE_URL means "this app" rather than an external site.
  * Hash-router SPA: bare origin (https://host) and / are equivalent to #kanban
  * (board restored via onPageChange) — must not full-reload and drop #kanban#boardId.
@@ -91,12 +106,14 @@ interface HeaderProps {
   /** Bound to searchFilters.text — Kanban quick search */
   taskSearchText?: string;
   onTaskSearchTextChange?: (text: string) => void;
+  onJumpToTask?: (task: Task) => void | Promise<void>;
   boards?: Array<{
     id: string;
     columns?: {
       [columnId: string]: {
         id: string;
-        tasks?: Array<{ id: string; sprintId?: string | null }>;
+        title?: string;
+        tasks?: Array<Task & { sprintId?: string | null }>;
       };
     };
   }>;
@@ -122,6 +139,7 @@ const Header: React.FC<HeaderProps> = ({
   hideSprintSelector = false,
   taskSearchText = '',
   onTaskSearchTextChange,
+  onJumpToTask,
   boards = [],
   sprints: propSprints,
 }) => {
@@ -137,7 +155,7 @@ const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener(TROUBLESHOOTING_VISIBILITY_EVENT, sync);
   }, [siteSettings]);
   const isSystemPanelAvailable = systemPanelUnlocked;
-  // Extract all tasks from all boards for sprint counting
+  // Extract all tasks from all boards for sprint counting and header jump search
   const allTasks = useMemo(() => {
     const tasks: Array<{ id: string; sprintId?: string | null }> = [];
     boards.forEach(board => {
@@ -154,6 +172,59 @@ const Header: React.FC<HeaderProps> = ({
     });
     return tasks;
   }, [boards]);
+
+  const jumpToSearchTask = (partial: HeaderSearchTask) => {
+    if (!onJumpToTask) return;
+    for (const board of boards) {
+      if (!board.columns) continue;
+      for (const column of Object.values(board.columns)) {
+        const full = column.tasks?.find((row) => row.id === partial.id);
+        if (full) {
+          void onJumpToTask({
+            ...full,
+            boardId: full.boardId || board.id,
+            status: full.status || column.title,
+          });
+          return;
+        }
+      }
+    }
+    void onJumpToTask(partial as Task);
+  };
+
+  const searchableTasks = useMemo((): HeaderSearchTask[] => {
+    const memberName = (id?: string | null) =>
+      id ? members.find((m) => m.id === id)?.name : undefined;
+    const found: HeaderSearchTask[] = [];
+    boards.forEach((board) => {
+      if (!board.columns) return;
+      Object.values(board.columns).forEach((column) => {
+        (column.tasks || []).forEach((task) => {
+          if (task.deletedAt) return;
+          found.push({
+            id: task.id,
+            title: task.title,
+            ticket: task.ticket,
+            status: task.status || column.title,
+            priority: task.priority,
+            priorityName: task.priorityName,
+            priorityColor: task.priorityColor,
+            boardId: task.boardId || board.id,
+            startDate: task.startDate,
+            dueDate: task.dueDate,
+            columnId: task.columnId || column.id,
+            descriptionText: htmlToSearchText(task.description),
+            commentsText: (task.comments || [])
+              .map((comment) => htmlToSearchText(comment.text))
+              .join(' '),
+            assigneeName: memberName(task.memberId),
+            requesterName: memberName(task.requesterId),
+          });
+        });
+      });
+    });
+    return found;
+  }, [boards, members]);
   const [showInviteDropdown, setShowInviteDropdown] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
@@ -590,6 +661,8 @@ const Header: React.FC<HeaderProps> = ({
                     <HeaderTaskSearch
                       value={taskSearchText}
                       onChange={onTaskSearchTextChange}
+                      tasks={searchableTasks}
+                      onJumpToTask={jumpToSearchTask}
                     />
                   </div>
                   <div

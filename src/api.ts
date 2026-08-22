@@ -8,6 +8,7 @@ import {
   readTroubleshootingUnlocked,
   TROUBLESHOOTING_REQUEST_HEADER,
 } from './utils/troubleshootingAccess';
+import type { ViewMode } from './utils/userPreferences';
 
 function summarizeApiPayload(data: unknown, max = 400): string {
   if (data == null) return '';
@@ -1592,7 +1593,7 @@ export const getAgentLlmInfo = async (): Promise<{ tenantModel: string }> => {
 export type HelpAssistantTarget = {
   kind: 'admin' | 'view' | 'page' | 'profile';
   hash?: string;
-  mode?: 'kanban' | 'list' | 'gantt';
+  mode?: ViewMode;
   page?: 'kanban' | 'reports';
   profileFocus?: string;
   highlights?: string[];
