@@ -71,6 +71,7 @@ import {
   findBoardIdForTask,
   scrollViewportToTaskWhenReady,
 } from './utils/scrollViewportToTask';
+import { requestTaskJump } from './utils/taskJumpEvents';
 import { columnsContentFingerprint } from './utils/columnsFingerprint';
 import { applyLocalColumnReorder } from './utils/columnReorderingUtils';
 import { userCanMutate } from './utils/permissions';
@@ -280,9 +281,12 @@ function AppContent() {
   // Board selection with URL hash persistence and user preference saving
   const handleBoardSelection = useCallback((boardId: string) => {
     setSelectedBoard(boardId);
-    window.location.hash = boardId;
+    // Preserve calendar vs kanban hash prefix (taskFilters is declared later in this component)
+    const raw = window.location.hash.replace(/^#/, '');
+    const viewPrefix = raw === 'calendar' || raw.startsWith('calendar#') ? 'calendar' : 'kanban';
+    window.location.hash = `#${viewPrefix}#${boardId}`;
     updateCurrentUserPreference('lastSelectedBoard', boardId);
-  }, []);
+  }, [updateCurrentUserPreference]);
 
   // Escape: menus/confirms first → close TaskDetails → (multi-check cleared by useKanbanMultiSelect).
   useEffect(() => {
@@ -1811,10 +1815,12 @@ function AppContent() {
     }
     if (page === 'kanban') {
       // If there was a previously selected board, restore it
+      const viewPrefix =
+        taskFilters.viewModeRef.current === 'calendar' ? 'calendar' : 'kanban';
       if (selectedBoard) {
-        window.location.hash = `kanban#${selectedBoard}`;
+        window.location.hash = `${viewPrefix}#${selectedBoard}`;
       } else {
-        window.location.hash = 'kanban';
+        window.location.hash = viewPrefix;
       }
     } else if (page === 'reports') {
       window.location.hash = 'reports';
@@ -2299,6 +2305,27 @@ function AppContent() {
         taskFilters.setTaskViewMode(userSpecificPrefs.taskViewMode);
         taskFilters.setViewMode(userSpecificPrefs.viewMode);
         taskFilters.viewModeRef.current = userSpecificPrefs.viewMode;
+
+        // Keep `#calendar[#boardId]` in sync when the saved view mode is Calendar
+        if (userSpecificPrefs.viewMode === 'calendar') {
+          const hash = window.location.hash.replace(/^#/, '');
+          const route = parseUrlHash(window.location.hash);
+          const onCalendarHash = hash === 'calendar' || hash.startsWith('calendar#');
+          // Only the board view owns this hash. A task/project deep link or any
+          // other page must survive a refresh instead of being sent to Calendar.
+          const onBoardView =
+            !route.isTaskRoute &&
+            !route.isProjectRoute &&
+            (hash === '' || hash === 'kanban' || hash.startsWith('kanban#') || route.isBoardId);
+          if (!onCalendarHash && onBoardView) {
+            const boardFromHash =
+              hash.startsWith('kanban#') ? hash.slice('kanban#'.length).split(/[?#]/)[0] : '';
+            const boardId = boardFromHash || selectedBoard;
+            const next = boardId ? `#calendar#${boardId}` : '#calendar';
+            window.history.replaceState(null, '', next);
+          }
+        }
+
         taskFilters.setIsSearchActive(userSpecificPrefs.isSearchActive);
         taskFilters.setIsAdvancedSearchExpanded(userSpecificPrefs.isAdvancedSearchExpanded);
         taskFilters.setSearchFilters(userSpecificPrefs.searchFilters);
@@ -2454,6 +2481,40 @@ function AppContent() {
       
       // 1. Handle page routing
       if (route.isPage) {
+        // `#calendar` is a board view hash — same chrome as kanban, viewMode = calendar
+        if (route.mainRoute === 'calendar') {
+          if (currentPage !== 'kanban') {
+            if (
+              currentPage === 'admin' &&
+              adminHasUnsavedDrafts() &&
+              !adminLeaveBypassRef.current
+            ) {
+              const intendedHash = window.location.hash.replace(/^#/, '');
+              window.history.replaceState(null, '', `#${adminHashRef.current}`);
+              setAdminLeavePrompt({
+                page: 'kanban',
+                options: { hash: intendedHash },
+              });
+              return;
+            }
+            setCurrentPage('kanban');
+          }
+          if (taskFilters.viewMode !== 'calendar') {
+            taskFilters.setViewMode('calendar');
+            taskFilters.viewModeRef.current = 'calendar';
+            updateCurrentUserPreference('viewMode', 'calendar');
+          }
+          if (route.subRoute && boards.length > 0) {
+            const board = boards.find((b) => b.id === route.subRoute);
+            if (board) {
+              setSelectedBoard(board.id);
+            } else {
+              recoverInvalidBoardHash();
+            }
+          }
+          return;
+        }
+
         if (route.mainRoute !== currentPage) {
           const nextPage = route.mainRoute as
             | 'kanban'
@@ -2482,6 +2543,13 @@ function AppContent() {
             return;
           }
           setCurrentPage(nextPage);
+        }
+
+        // Leaving `#calendar` for `#kanban` should restore a non-calendar board view if needed
+        if (route.mainRoute === 'kanban' && taskFilters.viewMode === 'calendar') {
+          // Keep calendar mode when landing on kanban hash only if user switched views elsewhere;
+          // hash `#kanban` means board views other than calendar — prefer stored preference if not calendar
+          // (no-op here: view mode is already driven by Tools / prefs)
         }
         
         // Handle password reset token
@@ -3549,7 +3617,7 @@ function AppContent() {
     }
   };
 
-  const handleEditTask = useCallback(async (task: Task, options?: { skipActivity?: boolean; localOnly?: boolean }) => {
+  const handleEditTask = useCallback(async (task: Task, options?: { skipActivity?: boolean; localOnly?: boolean; skipLoading?: boolean }) => {
     // Optimistic update
     const previousColumns = { ...columns };
     const previousFilteredColumns = { ...(taskFilters.filteredColumns || {}) };
@@ -3648,10 +3716,15 @@ function AppContent() {
     }
 
     try {
-      await withLoading('tasks', async () => {
+      const persist = async () => {
         await updateTask(task, options?.skipActivity ? { skipActivity: true } : undefined);
         await fetchQueryLogs();
-      });
+      };
+      if (options?.skipLoading) {
+        await persist();
+      } else {
+        await withLoading('tasks', persist);
+      }
     } catch (error: any) {
       console.error('❌ [App] Failed to update task:', error);
 
@@ -5051,9 +5124,25 @@ function AppContent() {
     taskFilters.setViewMode(mode);
     taskFilters.viewModeRef.current = mode;
     updateCurrentUserPreference('viewMode', mode);
+
+    // Calendar uses first-class `#calendar[#boardId]` hash; other board views use `#kanban[#boardId]`.
+    const boardId = selectedBoard;
+    const hash = window.location.hash.replace(/^#/, '');
+    const onCalendarHash = hash === 'calendar' || hash.startsWith('calendar#');
+    if (mode === 'calendar') {
+      const next = boardId ? `#calendar#${boardId}` : '#calendar';
+      if (window.location.hash !== next) {
+        window.history.replaceState(null, '', next);
+      }
+    } else if (onCalendarHash) {
+      const next = boardId ? `#kanban#${boardId}` : '#kanban';
+      if (window.location.hash !== next) {
+        window.history.replaceState(null, '', next);
+      }
+    }
   };
 
-  const handleShowTaskOnBoard = useCallback(
+  const handleJumpToTask = useCallback(
     async (task: Task) => {
       const boardId = findBoardIdForTask(
         task.id,
@@ -5063,15 +5152,12 @@ function AppContent() {
         selectedBoard
       );
       if (!boardId) {
-        toast.warning(t('errors.scrollToCardFailed'), '');
+        toast.warning(t('errors.jumpToTaskFailed'), '');
         return;
       }
 
       if (currentPage !== 'kanban') {
         handlePageChange('kanban');
-      }
-      if (taskFilters.viewMode !== 'kanban') {
-        handleViewModeChange('kanban');
       }
 
       closeBoardTrashView(boardId);
@@ -5081,9 +5167,18 @@ function AppContent() {
         handleBoardSelection(boardId);
       }
 
-      const ok = await scrollViewportToTaskWhenReady(task.id, {
-        maxAttempts: boardSwitched ? 60 : 40,
-      });
+      let ok = true;
+      if (taskFilters.viewMode === 'calendar' || taskFilters.viewMode === 'gantt') {
+        if (!task.startDate && !task.dueDate) {
+          ok = false;
+        } else {
+          requestTaskJump(task);
+        }
+      } else {
+        ok = await scrollViewportToTaskWhenReady(task.id, {
+          maxAttempts: boardSwitched ? 60 : 40,
+        });
+      }
 
       if (boardSwitched) {
         let liveTask: Task | null = null;
@@ -5095,7 +5190,7 @@ function AppContent() {
       }
 
       if (!ok) {
-        toast.warning(t('errors.scrollToCardFailed'), '');
+        toast.warning(t('errors.jumpToTaskFailed'), '');
       }
     },
     [
@@ -5104,6 +5199,7 @@ function AppContent() {
       selectedBoard,
       currentPage,
       taskFilters.viewMode,
+      handlePageChange,
       handleBoardSelection,
       handleSelectTask,
       t,
@@ -5569,6 +5665,7 @@ function AppContent() {
             text,
           })
         }
+        onJumpToTask={handleJumpToTask}
         boards={boards}
         sprints={availableSprints}
       />
@@ -5792,7 +5889,7 @@ function AppContent() {
           siteSettings={siteSettings}
           boards={boards}
           canMutate={canMutate}
-          onShowTaskOnBoard={handleShowTaskOnBoard}
+          onJumpToTask={handleJumpToTask}
         />
       </Suspense>
 

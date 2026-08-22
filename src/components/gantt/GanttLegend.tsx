@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 interface GanttLegendProps {
   priorities: Array<{ id: string; priority: string; color: string }>;
   className?: string;
+  /** Match the shape the view draws on its task bars. */
+  prioritySwatchShape?: 'square' | 'circle';
 }
 
 const SWATCH_CLASS =
-  'w-2.5 h-2.5 rounded-sm shrink-0 border border-gray-200/80 dark:border-gray-600/80';
+  'w-2.5 h-2.5 shrink-0 border border-gray-200/80 dark:border-gray-600/80';
 
 const LegendEntry: React.FC<{
   label: string;
@@ -22,8 +24,14 @@ const LegendEntry: React.FC<{
 );
 
 /** Single-line legend for the Gantt header top row. */
-export const GanttLegend: React.FC<GanttLegendProps> = ({ priorities, className = '' }) => {
+export const GanttLegend: React.FC<GanttLegendProps> = ({
+  priorities,
+  className = '',
+  prioritySwatchShape = 'square',
+}) => {
   const { t } = useTranslation('common');
+  const prioritySwatchClass =
+    prioritySwatchShape === 'circle' ? 'rounded-full' : 'rounded-sm';
 
   return (
     <div
@@ -33,12 +41,12 @@ export const GanttLegend: React.FC<GanttLegendProps> = ({ priorities, className 
       <div className="flex items-center gap-x-3 shrink-0">
         <LegendEntry
           label={t('gantt.today')}
-          swatchClassName="bg-blue-100 dark:bg-blue-900 border-blue-200 dark:border-blue-700"
+          swatchClassName="rounded-sm bg-blue-100 dark:bg-blue-900 border-blue-200 dark:border-blue-700"
           labelClassName="text-blue-600 dark:text-blue-400 font-medium"
         />
         <LegendEntry
           label={t('gantt.weekends')}
-          swatchClassName="bg-gray-100 dark:bg-gray-700"
+          swatchClassName="rounded-sm bg-gray-100 dark:bg-gray-700"
         />
       </div>
 
@@ -57,6 +65,7 @@ export const GanttLegend: React.FC<GanttLegendProps> = ({ priorities, className 
               <LegendEntry
                 key={priority.id}
                 label={priority.priority}
+                swatchClassName={prioritySwatchClass}
                 swatchStyle={{ backgroundColor: priority.color }}
                 labelClassName="capitalize"
               />

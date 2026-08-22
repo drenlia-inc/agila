@@ -598,8 +598,10 @@ const AdminAppSettingsTab: React.FC<AdminAppSettingsTabProps> = ({
                     onChange={(e) => handleDefaultViewModeChange(e.target.value)}
                     className={`w-36 ${adminInputClass}`}
                   >
-                    <option value="kanban">Kanban</option>
-                    <option value="list">List</option>
+                    <option value="kanban">{t('appSettings.viewModeKanban')}</option>
+                    <option value="list">{t('appSettings.viewModeList')}</option>
+                    <option value="gantt">{t('appSettings.viewModeGantt')}</option>
+                    <option value="calendar">{t('appSettings.viewModeCalendar')}</option>
                   </select>
                 </div>
 

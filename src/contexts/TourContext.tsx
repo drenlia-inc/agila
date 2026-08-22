@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { getTourSteps } from '../components/tour/TourSteps';
 import { parseTaskRoute } from '../utils/routingUtils';
 import { adminHashForTabId } from '../utils/adminNavigation';
+import type { ViewMode } from '../utils/userPreferences';
 import { useTheme } from './ThemeContext';
 import { useSettings } from './SettingsContext';
 import {
@@ -32,7 +33,7 @@ export const useTour = () => {
 interface TourProviderProps {
   children: React.ReactNode;
   currentUser: any;
-  onViewModeChange?: (mode: 'kanban' | 'list' | 'gantt') => void;
+  onViewModeChange?: (mode: ViewMode) => void;
   onPageChange?: (
     page: 'kanban' | 'admin' | 'reports',
     options?: { hash?: string }

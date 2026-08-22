@@ -1116,7 +1116,7 @@ export default function TaskPage({
                 initialContent={editedTask.description || ''}
                 placeholder={t('placeholders.enterDescription')}
                 maxLength={TASK_DESCRIPTION_MAX_LENGTH}
-                minHeight="120px"
+                minHeight="260px"
                 showSubmitButtons={false}
                 showAttachments={!fieldsLocked}
                 attachmentContext="task"
@@ -1124,7 +1124,7 @@ export default function TaskPage({
                 existingAttachments={displayAttachments}
                 compact={false}
                 resizable={true}
-                className="min-h-[200px] sm:min-h-[300px] max-w-full"
+                className="max-w-full"
                 editable={!fieldsLocked}
                 showToolbar={!fieldsLocked}
                 allowImagePaste={!fieldsLocked}
@@ -1730,8 +1730,8 @@ export default function TaskPage({
                   disabled={fieldsLocked}
                   onChange={(priorityId, priorityName) =>
                     handleTaskUpdate({
-                      priorityId,
-                      priority: priorityName,
+                      priorityId: priorityId ?? undefined,
+                      priority: priorityName ?? undefined,
                     })
                   }
                 />

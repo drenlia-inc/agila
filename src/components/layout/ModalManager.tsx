@@ -41,7 +41,7 @@ interface ModalManagerProps {
   siteSettings?: { [key: string]: string };
   boards?: any[];
   canMutate?: boolean;
-  onShowTaskOnBoard?: (task: Task) => void | Promise<void>;
+  onJumpToTask?: (task: Task) => void | Promise<void>;
 }
 
 const ModalManager: React.FC<ModalManagerProps> = ({
@@ -70,7 +70,7 @@ const ModalManager: React.FC<ModalManagerProps> = ({
   siteSettings,
   boards,
   canMutate = true,
-  onShowTaskOnBoard,
+  onJumpToTask,
 }) => {
   const isReadOnly = isTaskSoftDeleted(selectedTask);
   const isAdmin = !!currentUser?.roles?.includes('admin');
@@ -94,7 +94,7 @@ const ModalManager: React.FC<ModalManagerProps> = ({
             onRestore={isReadOnly ? onRestoreTask : undefined}
             onPurge={isReadOnly && isAdmin ? onPurgeTask : undefined}
             isAdmin={isAdmin}
-            onShowTaskOnBoard={onShowTaskOnBoard}
+            onJumpToTask={onJumpToTask}
           />
         </Suspense>
       )}

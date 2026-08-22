@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown } from 'lucide-react';
 import type { PriorityOption } from '../../types';
-import { getPriorityPillStyle } from './MemberAvatar';
 
 export interface PriorityPickerProps {
   priorities: PriorityOption[];
@@ -15,7 +14,8 @@ export interface PriorityPickerProps {
 }
 
 /**
- * Priority dropdown with colored pills (matches TaskCard priority UX).
+ * Priority dropdown: color dot plus the priority name, styled like the other
+ * form fields around it.
  */
 export default function PriorityPicker({
   priorities,
@@ -29,7 +29,10 @@ export default function PriorityPicker({
   const { t } = useTranslation('tasks');
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const selected = value != null ? priorities.find((p) => p.id === value) : undefined;
+  const selected =
+    value != null
+      ? priorities.find((priority) => String(priority.id) === String(value))
+      : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -57,12 +60,9 @@ export default function PriorityPicker({
   };
 
   const valueContent = selected ? (
-    <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold min-w-0"
-      style={getPriorityPillStyle(selected.color)}
-    >
+    <span className="inline-flex items-center gap-2 min-w-0">
       <span
-        className="w-2 h-2 rounded-full shrink-0"
+        className="w-2.5 h-2.5 rounded-full shrink-0"
         style={{ backgroundColor: selected.color || '#6B7280' }}
       />
       <span className="truncate">{selected.priority}</span>
@@ -74,7 +74,7 @@ export default function PriorityPicker({
   );
 
   const shellClass =
-    'w-full flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700';
+    'w-full flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700';
 
   return (
     <div className={`relative ${className}`} ref={rootRef}>
@@ -119,7 +119,7 @@ export default function PriorityPicker({
                 !selected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-500 shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-500 shrink-0" />
               <span className="text-gray-600 dark:text-gray-300 flex-1">
                 {t('taskPage.noPriority')}
               </span>
@@ -140,14 +140,11 @@ export default function PriorityPicker({
                 }`}
               >
                 <span
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold min-w-0"
-                  style={getPriorityPillStyle(p.color)}
-                >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: p.color || '#6B7280' }}
-                  />
-                  <span className="truncate">{p.priority}</span>
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: p.color || '#6B7280' }}
+                />
+                <span className="truncate text-gray-900 dark:text-gray-100">
+                  {p.priority}
                 </span>
                 {isSelected && (
                   <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0 ml-auto" />

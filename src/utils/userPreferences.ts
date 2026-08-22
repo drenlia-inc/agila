@@ -23,7 +23,17 @@ const setGlobalSavingState = (saving: boolean) => {
 export const isGloballySavingPreferences = () => isSavingGlobally;
 
 export type TaskViewMode = 'compact' | 'shrink' | 'expand';
-export type ViewMode = 'kanban' | 'list' | 'gantt';
+export type ViewMode = 'kanban' | 'list' | 'gantt' | 'calendar';
+export type CalendarSubView = 'month' | 'week' | 'day';
+
+const CALENDAR_SUB_VIEWS: readonly CalendarSubView[] = ['month', 'week', 'day'];
+
+export function normalizeCalendarSubView(value: unknown): CalendarSubView {
+  if (typeof value === 'string' && (CALENDAR_SUB_VIEWS as readonly string[]).includes(value)) {
+    return value as CalendarSubView;
+  }
+  return 'month';
+}
 
 const TASK_VIEW_MODES: readonly TaskViewMode[] = ['expand', 'shrink', 'compact'];
 
@@ -48,6 +58,10 @@ export type ListViewColumnWidthsByBoard = {
 export interface UserPreferences {
   taskViewMode: TaskViewMode;
   viewMode: ViewMode;
+  /** Calendar month | week | day (prefs only — not in URL hash). */
+  calendarSubView: CalendarSubView;
+  /** YYYY-MM-DD focus date for calendar navigation. */
+  calendarFocusDate: string | null;
   isSearchActive: boolean;
   isAdvancedSearchExpanded: boolean;
   selectedTaskId: string | null;
@@ -140,13 +154,14 @@ export interface UserPreferences {
   };
 }
 
+/** Legacy cookie prefix, read once for migration then deleted. */
 const COOKIE_NAME_PREFIX = 'easy-kanban-user-prefs';
 const LOCAL_STORAGE_PREFIX = 'easy-kanban-user-prefs-local';
-const COOKIE_EXPIRY_DAYS = 365;
+const PREFS_STORAGE_PREFIX = 'easy-kanban-user-prefs-store';
 
 /**
- * Per-board maps that grow with usage. Stored in localStorage (+ DB), never in the cookie —
- * leftover copies in old cookies are ignored on read.
+ * Per-board maps that grow with usage. Stored in localStorage (+ DB) separately from the
+ * main preference payload.
  */
 type BulkyLocalPreferences = {
   listViewColumnWidths: ListViewColumnWidthsByBoard;
@@ -154,7 +169,7 @@ type BulkyLocalPreferences = {
   ganttScrollPositions: UserPreferences['ganttScrollPositions'];
 };
 
-// Get user-specific cookie name
+// Legacy cookie name, kept only so existing cookies can be migrated and removed
 const getUserCookieName = (userId: string | null): string => {
   if (!userId) {
     return `${COOKIE_NAME_PREFIX}-anonymous`;
@@ -162,8 +177,42 @@ const getUserCookieName = (userId: string | null): string => {
   return `${COOKIE_NAME_PREFIX}-${userId}`;
 };
 
+const getPrefsStorageKey = (userId: string | null): string =>
+  `${PREFS_STORAGE_PREFIX}-${userId ?? 'anonymous'}`;
+
 const getBulkyLocalStorageKey = (userId: string | null): string =>
   `${LOCAL_STORAGE_PREFIX}-${userId ?? 'anonymous'}`;
+
+/**
+ * Preferences used to live in a ~3 KB cookie that the server never reads, so every HTML,
+ * module, API and avatar request carried it. Enough of them (one per user id seen on the
+ * host) pushed the request header past what the proxy accepts. Delete on sight.
+ */
+const deleteLegacyPreferenceCookie = (cookieName: string): void => {
+  try {
+    if (!document.cookie.includes(`${cookieName}=`)) return;
+    document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict`;
+  } catch {
+    // ignore private-mode failures
+  }
+};
+
+const readLegacyPreferenceCookie = (userId: string | null) => {
+  try {
+    const cookieName = getUserCookieName(userId);
+    const prefsCookie = document.cookie
+      .split(';')
+      .find((cookie) => cookie.trim().startsWith(`${cookieName}=`));
+    if (!prefsCookie) return null;
+
+    const raw = prefsCookie.slice(prefsCookie.indexOf('=') + 1);
+    const parsed = JSON.parse(decodeURIComponent(raw));
+    deleteLegacyPreferenceCookie(cookieName);
+    return parsed;
+  } catch {
+    return null;
+  }
+};
 
 const writeBulkyPreferencesLocal = (
   userId: string | null,
@@ -216,6 +265,20 @@ const clearBulkyPreferencesLocal = (keepUserId: string | null | undefined = unde
   }
 };
 
+const clearStoredPreferencesLocal = (keepUserId: string | null | undefined = undefined): void => {
+  try {
+    const keepKey = keepUserId === undefined ? null : getPrefsStorageKey(keepUserId);
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(PREFS_STORAGE_PREFIX)) continue;
+      if (keepKey !== null && key === keepKey) continue;
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // ignore quota / private-mode failures
+  }
+};
+
 // Latest known preferences (cookie + localStorage merged with database), so components do not
 // have to re-read storage to see database-backed values.
 let cachedPreferences: { userId: string | null; preferences: UserPreferences } | null = null;
@@ -227,32 +290,32 @@ let cachedPreferences: { userId: string | null; preferences: UserPreferences } |
 const resolvePreferencesUserId = (userId: string | null): string | null =>
   userId ?? cachedPreferences?.userId ?? null;
 
-// Clear all user preference cookies (useful for preventing cookie bloat)
+/** Drop every stored preference set (plus any legacy cookies) for this browser. */
 export const clearAllUserPreferenceCookies = (): void => {
   cachedPreferences = null;
   clearBulkyPreferencesLocal();
-  const cookies = document.cookie.split(';');
-  cookies.forEach(cookie => {
+  clearStoredPreferencesLocal();
+  document.cookie.split(';').forEach((cookie) => {
     const cookieName = cookie.trim().split('=')[0];
     if (cookieName.startsWith(COOKIE_NAME_PREFIX)) {
-      document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict`;
+      deleteLegacyPreferenceCookie(cookieName);
     }
   });
 };
 
-// Clear user preference cookies except for the current user
+/** Keep only the signed-in user's preferences; discard other users' leftovers. */
 export const clearOtherUserPreferenceCookies = (currentUserId: string | null): void => {
   if (cachedPreferences && cachedPreferences.userId !== currentUserId) {
     cachedPreferences = null;
   }
   clearBulkyPreferencesLocal(currentUserId);
-  const cookies = document.cookie.split(';');
+  clearStoredPreferencesLocal(currentUserId);
+
   const currentUserCookieName = getUserCookieName(currentUserId);
-  
-  cookies.forEach(cookie => {
+  document.cookie.split(';').forEach((cookie) => {
     const cookieName = cookie.trim().split('=')[0];
     if (cookieName.startsWith(COOKIE_NAME_PREFIX) && cookieName !== currentUserCookieName) {
-      document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict`;
+      deleteLegacyPreferenceCookie(cookieName);
     }
   });
 };
@@ -261,6 +324,8 @@ export const clearOtherUserPreferenceCookies = (currentUserId: string | null): v
 const BASE_DEFAULT_PREFERENCES: UserPreferences = {
   taskViewMode: 'expand', // Default to expand
   viewMode: 'kanban', // Default to kanban view
+  calendarSubView: 'month',
+  calendarFocusDate: null,
   isSearchActive: false, // Search panel UI visibility only — filter criteria still apply when set
   isAdvancedSearchExpanded: false, // Default to collapsed (basic search)
   selectedTaskId: null, // Default to no task selected
@@ -461,49 +526,32 @@ export const getDefaultPreferences = (): UserPreferences => {
 // Export for backward compatibility - will use admin defaults if loaded
 export const DEFAULT_PREFERENCES = getDefaultPreferences();
 
-/**
- * Browsers cap a single cookie at ~4096 bytes (name + value + attributes) and silently
- * discard writes above it, which used to make every preference look "reset" after a refresh.
- * Bulky per-board maps live in localStorage; only searchFilters is trimmed from the cookie
- * when still near the limit.
- */
-const MAX_PREFS_COOKIE_BYTES = 3900;
-
-const COOKIE_TRIMMABLE_KEYS: (keyof UserPreferences)[] = ['searchFilters'];
-
-/** Cookie payload never includes the per-board maps (localStorage owns those). */
-const stripBulkyFromCookiePayload = (preferences: UserPreferences): UserPreferences => ({
+/** Stored payload excludes the per-board maps (they get their own localStorage entry). */
+const stripBulkyFromStoredPayload = (preferences: UserPreferences): UserPreferences => ({
   ...preferences,
   listViewColumnWidths: BASE_DEFAULT_PREFERENCES.listViewColumnWidths,
   boardColumnVisibility: BASE_DEFAULT_PREFERENCES.boardColumnVisibility,
   ganttScrollPositions: BASE_DEFAULT_PREFERENCES.ganttScrollPositions,
 });
 
-const writePreferencesCookie = (userId: string | null, preferences: UserPreferences): void => {
-  const cookieName = getUserCookieName(userId);
-  const expiryDate = new Date();
-  expiryDate.setDate(expiryDate.getDate() + COOKIE_EXPIRY_DAYS);
-  const attributes = `; expires=${expiryDate.toUTCString()}; path=/; SameSite=Strict`;
-  const overhead = cookieName.length + 1 + attributes.length;
-
-  let payload: UserPreferences = stripBulkyFromCookiePayload(preferences);
-  let encoded = encodeURIComponent(JSON.stringify(payload));
-
-  for (const key of COOKIE_TRIMMABLE_KEYS) {
-    if (overhead + encoded.length <= MAX_PREFS_COOKIE_BYTES) break;
-    payload = { ...payload, [key]: BASE_DEFAULT_PREFERENCES[key] };
-    encoded = encodeURIComponent(JSON.stringify(payload));
+const writeStoredPreferences = (userId: string | null, preferences: UserPreferences): void => {
+  try {
+    localStorage.setItem(
+      getPrefsStorageKey(userId),
+      JSON.stringify(stripBulkyFromStoredPayload(preferences))
+    );
+  } catch (error) {
+    console.warn('Failed to save preferences to localStorage:', error);
   }
-
-  document.cookie = `${cookieName}=${encoded}${attributes}`;
+  deleteLegacyPreferenceCookie(getUserCookieName(userId));
 };
 
-/** Persist cookie (sans bulky maps) + localStorage bulky maps + in-memory cache. */
-const persistLocalPreferences = (
+/** Persist localStorage (payload + bulky maps) + in-memory cache. */
+export const persistLocalPreferences = (
   userId: string | null,
   preferences: UserPreferences
 ): void => {
-  writePreferencesCookie(userId, preferences);
+  writeStoredPreferences(userId, preferences);
   writeBulkyPreferencesLocal(userId, preferences);
   setCachedPreferences(userId, preferences);
 };
@@ -627,6 +675,8 @@ export const saveUserPreferences = async (preferences: UserPreferences, userId: 
           // Core UI Preferences
           saveIfDefined('taskViewMode', preferences.taskViewMode),
           saveIfDefined('viewMode', preferences.viewMode),
+          saveIfDefined('calendarSubView', preferences.calendarSubView),
+          saveIfDefined('calendarFocusDate', preferences.calendarFocusDate),
           saveIfDefined('taskDetailsWidth', preferences.taskDetailsWidth),
           saveIfDefined('ganttTaskColumnWidth', preferences.ganttTaskColumnWidth),
           saveIfDefined('kanbanColumnWidth', preferences.kanbanColumnWidth),
@@ -707,27 +757,48 @@ export const saveUserPreferences = async (preferences: UserPreferences, userId: 
   }
 };
 
-// Load preferences from cookie + localStorage (bulky per-board maps)
+/** Stored payload for this user, migrating (and deleting) a legacy cookie when present. */
+const readStoredPreferences = (userId: string | null) => {
+  try {
+    const raw = localStorage.getItem(getPrefsStorageKey(userId));
+    if (raw) {
+      // A stale cookie may still exist from before the move to localStorage
+      deleteLegacyPreferenceCookie(getUserCookieName(userId));
+      return JSON.parse(raw);
+    }
+  } catch {
+    // fall through to the legacy cookie
+  }
+
+  const legacy = readLegacyPreferenceCookie(userId);
+  if (legacy && typeof legacy === 'object') {
+    try {
+      localStorage.setItem(getPrefsStorageKey(userId), JSON.stringify(legacy));
+    } catch {
+      // ignore quota / private-mode failures
+    }
+    return legacy;
+  }
+  return null;
+};
+
+// Load preferences from localStorage (payload + bulky per-board maps)
 const readLocalPreferences = (userId: string | null = null): UserPreferences => {
   try {
-    const cookieName = getUserCookieName(userId);
-    const cookies = document.cookie.split(';');
-    const prefsCookie = cookies.find(cookie => 
-      cookie.trim().startsWith(`${cookieName}=`)
-    );
     const bulkyLocal = readBulkyPreferencesLocal(userId);
-    
-    if (prefsCookie) {
-      const prefsJson = decodeURIComponent(prefsCookie.split('=')[1]);
-      const loadedPrefs = JSON.parse(prefsJson);
-      
-      // Merge with defaults to handle missing properties in old cookies.
-      // Ignore cookie copies of bulky maps — localStorage is the client source for those.
+    const loadedPrefs = readStoredPreferences(userId);
+
+    if (loadedPrefs) {
+      // Merge with defaults to handle missing properties in older payloads.
+      // Ignore stored copies of bulky maps — their own entry is the source.
       const defaults = getDefaultPreferences();
       return {
         ...defaults,
         ...loadedPrefs,
         taskViewMode: normalizeTaskViewMode(loadedPrefs.taskViewMode ?? defaults.taskViewMode),
+        calendarSubView: normalizeCalendarSubView(
+          loadedPrefs.calendarSubView ?? defaults.calendarSubView
+        ),
         boardColumnVisibility: {
           ...defaults.boardColumnVisibility,
           ...bulkyLocal.boardColumnVisibility
@@ -800,7 +871,7 @@ const readLocalPreferences = (userId: string | null = null): UserPreferences => 
       };
     }
 
-    // No cookie yet — still apply localStorage bulky maps over defaults
+    // Nothing stored yet — still apply localStorage bulky maps over defaults
     const defaults = getDefaultPreferences();
     return {
       ...defaults,
@@ -849,7 +920,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
   }
   // Start with cookie + localStorage preferences
   let preferences = loadUserPreferences(resolvedUserId);
-  let needsCookieUpdate = false;
+  let needsStoredPrefsUpdate = false;
   let needsLocalStorageUpdate = false;
   
   // If user is authenticated, also load database settings and merge them intelligently
@@ -866,7 +937,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
         // If local is default but database has a value, use database value
         // Special case: allow null for sprint selection (represents "All Sprints")
         if (dbValue !== undefined && ((allowNull && dbValue === null) || (dbValue !== null && !isDefaultValue(dbValue, defaultValue)))) {
-          needsCookieUpdate = true;
+          needsStoredPrefsUpdate = true;
           return dbValue;
         }
         // Otherwise keep local value
@@ -895,6 +966,18 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
           smartMerge(preferences.taskViewMode, dbSettings.taskViewMode, defaults.taskViewMode)
         ),
         viewMode: smartMerge(preferences.viewMode, dbSettings.viewMode, defaults.viewMode),
+        calendarSubView: normalizeCalendarSubView(
+          smartMerge(
+            preferences.calendarSubView,
+            dbSettings.calendarSubView,
+            defaults.calendarSubView
+          )
+        ),
+        calendarFocusDate: smartMerge(
+          preferences.calendarFocusDate,
+          dbSettings.calendarFocusDate,
+          defaults.calendarFocusDate
+        ),
         taskDetailsWidth: smartMerge(preferences.taskDetailsWidth, dbSettings.taskDetailsWidth, defaults.taskDetailsWidth),
         ganttTaskColumnWidth: smartMerge(preferences.ganttTaskColumnWidth, dbSettings.ganttTaskColumnWidth, defaults.ganttTaskColumnWidth),
         kanbanColumnWidth: smartMerge(preferences.kanbanColumnWidth, dbSettings.kanbanColumnWidth, defaults.kanbanColumnWidth),
@@ -942,7 +1025,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
             : undefined;
           if (dbLang === 'en' || dbLang === 'fr') {
             if (preferences.language !== dbLang) {
-              needsCookieUpdate = true;
+              needsStoredPrefsUpdate = true;
             }
             return dbLang;
           }
@@ -981,7 +1064,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
             return merged;
           }
           if (dbNotifs && typeof dbNotifs === 'object') {
-            needsCookieUpdate = true;
+            needsStoredPrefsUpdate = true;
             return { ...defaults.notifications, ...dbNotifs };
           }
           return { ...defaults.notifications, ...local };
@@ -996,7 +1079,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
             return cookieColumns; // Cookie is customized, keep it
           }
           if (dbColumns && !isDefaultValue(dbColumns, defaults.listViewColumnVisibility)) {
-            needsCookieUpdate = true;
+            needsStoredPrefsUpdate = true;
             return { ...defaults.listViewColumnVisibility, ...dbColumns }; // Use database
           }
           return cookieColumns; // Keep cookie
@@ -1064,7 +1147,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
             const fromDb = coerceBool(dbSettings.activityFeedMinimized);
             if (fromDb !== undefined) {
               if (fromDb !== preferences.activityFeed.isMinimized) {
-                needsCookieUpdate = true;
+                needsStoredPrefsUpdate = true;
               }
               return fromDb;
             }
@@ -1137,7 +1220,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
             ),
           };
           localStorage.setItem(layoutKey, String(ACTIVITY_FEED_LAYOUT_VERSION));
-          needsCookieUpdate = true;
+          needsStoredPrefsUpdate = true;
           try {
             const { updateUserSetting } = await import('../api');
             await updateUserSetting(
@@ -1153,8 +1236,8 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
       }
       
       // Persist merged values back to the appropriate client stores
-      if (needsCookieUpdate) {
-        writePreferencesCookie(resolvedUserId, preferences);
+      if (needsStoredPrefsUpdate) {
+        writeStoredPreferences(resolvedUserId, preferences);
       }
       if (needsLocalStorageUpdate) {
         writeBulkyPreferencesLocal(resolvedUserId, preferences);
@@ -1234,6 +1317,8 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
       const topLevelKeyMap: Record<string, string> = {
         'taskViewMode': 'taskViewMode',
         'viewMode': 'viewMode',
+        'calendarSubView': 'calendarSubView',
+        'calendarFocusDate': 'calendarFocusDate',
         'taskDetailsWidth': 'taskDetailsWidth',
         'ganttTaskColumnWidth': 'ganttTaskColumnWidth',
         'kanbanColumnWidth': 'kanbanColumnWidth',

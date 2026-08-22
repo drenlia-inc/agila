@@ -18,7 +18,7 @@ export const DEFAULT_COLUMNS = [
 ];
 
 // Page and navigation constants
-export const PAGE_IDENTIFIERS = ['kanban', 'admin', 'reports', 'task', 'forgot-password', 'reset-password', 'reset-success', 'activate-account'];
+export const PAGE_IDENTIFIERS = ['kanban', 'calendar', 'admin', 'reports', 'task', 'forgot-password', 'reset-password', 'reset-success', 'activate-account'];
 /** Hash routes used only while signed out — never treat as board IDs. */
 export const AUTH_HASH_ROUTES = ['login'];
 export const ADMIN_TABS = [
@@ -38,7 +38,7 @@ export const ROUTES = {
   // Pages that don't require authentication
   PUBLIC_PAGES: ['forgot-password', 'reset-password', 'reset-success', 'activate-account'],
   // Pages that require authentication
-  PROTECTED_PAGES: ['kanban', 'admin', 'reports', 'task'],
+  PROTECTED_PAGES: ['kanban', 'calendar', 'admin', 'reports', 'task'],
   // Pages that should skip auto-board-selection
   NO_AUTO_BOARD: ['forgot-password', 'reset-password', 'reset-success', 'activate-account', 'admin', 'reports', 'task'],
   // Default routes

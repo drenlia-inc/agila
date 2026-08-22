@@ -2,7 +2,7 @@
 
 **Agila**
 
-A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List and Gantt views, real-time collaboration, optional sprint timeboxing with burndown, and an optional **AI Agent** that can assist on tasks, work linked Git repos, or (for admins) run board automations. Built with React/TypeScript, Node.js/Express, and PostgreSQL.
+A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List, Gantt, and Calendar views, real-time collaboration, optional sprint timeboxing with burndown, and an optional **AI Agent** that can assist on tasks, work linked Git repos, or (for admins) run board automations. Built with React/TypeScript, Node.js/Express, and PostgreSQL.
 
 <img src="/screenshots/overview.png" alt="Screenshot of easy-kanban" width="100%">
 
@@ -17,7 +17,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 - **Soft WIP limits** on columns (warn when at/over limit; moves still allowed)
 - **Card aging** (days in column) and optional **blocked** flag
 - **Column policy notes** for short entry/exit guidance
-- **Multiple view modes**: Kanban (visual board), List (table format), and Gantt (timeline) views
+- **Multiple view modes**: Kanban (visual board), List (table format), Gantt (timeline), and Calendar (month/week/day) views
 - **Real-time collaboration** - see changes instantly as team members work
 - **User authentication** with local accounts and Google OAuth support
 - **Role-based access control** (Admin/User permissions)
@@ -52,6 +52,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 - **Kanban View** - Visual board with drag-and-drop between columns (including cross-board drops onto board tabs)
 - **List View** - Table format with sorting, filtering, column configuration, and horizontal scrolling
 - **Gantt View** - Timeline view with task dependencies, visual arrows, and date move/resize
+- **Calendar View** - Month, week, and day grids with date-only move/resize, comments, and multi-select date nudge
 - **Advanced search & filtering** - Filter by text, dates, members, priorities, tags, project IDs, overdue, blocked, multi-sprint, stalled days, and linked tasks
 - **Saved filters** - Save and share frequently used filter combinations
 - **Sprint filtering** - Filter tasks by sprint or view backlog (unassigned tasks)
@@ -116,7 +117,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List 
 | Action | Admin | User |
 |--------|-------|------|
 | View kanban boards | ✓ | ✓ |
-| View List and Gantt views | ✓ | ✓ |
+| View List, Gantt, and Calendar views | ✓ | ✓ |
 | Create/edit/delete tasks | ✓ | ✓ |
 | Add comments and attachments | ✓ | ✓ |
 | Move tasks between columns | ✓ | ✓ |

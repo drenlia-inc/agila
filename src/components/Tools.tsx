@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Minimize2, Maximize2, Search, Minus, LayoutGrid, List, Calendar, ChevronUp, type LucideIcon } from 'lucide-react';
+import { Minimize2, Maximize2, Search, Minus, LayoutGrid, List, Calendar, CalendarDays, ChevronUp, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { TaskViewMode, ViewMode } from '../utils/userPreferences';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
@@ -97,6 +97,7 @@ export default function Tools({
     { mode: 'kanban', icon: LayoutGrid, label: t('tools.shortKanban'), tooltip: t('tools.currentKanbanView'), shortcut: '1' },
     { mode: 'list', icon: List, label: t('tools.shortList'), tooltip: t('tools.currentListView'), shortcut: '2' },
     { mode: 'gantt', icon: Calendar, label: t('tools.shortGantt'), tooltip: t('tools.currentGanttView'), shortcut: '3' },
+    { mode: 'calendar', icon: CalendarDays, label: t('tools.shortCalendar'), tooltip: t('tools.currentCalendarView'), shortcut: '4' },
   ];
 
   const densityOptions: {
@@ -124,6 +125,7 @@ export default function Tools({
   const viewTooltip =
     viewMode === 'kanban' ? t('tools.currentKanbanView') :
     viewMode === 'list' ? t('tools.currentListView') :
+    viewMode === 'calendar' ? t('tools.currentCalendarView') :
     t('tools.currentGanttView');
 
   const densityTooltip = isCompact
@@ -288,7 +290,7 @@ export default function Tools({
         })()}
 
         {/* Task density dropdown */}
-        {(viewMode === 'kanban' || viewMode === 'list' || viewMode === 'gantt') && (
+        {(viewMode === 'kanban' || viewMode === 'list' || viewMode === 'gantt' || viewMode === 'calendar') && (
           <div className="relative shrink-0">
             <KanbanChromeTooltip label={densityTooltip}>
               <button

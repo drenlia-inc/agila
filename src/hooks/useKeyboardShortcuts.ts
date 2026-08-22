@@ -12,7 +12,7 @@ export type KeyboardShortcutHandlers = {
   onFocusSearch?: () => void;
   /** Create a task on the first column (N). */
   onNewTask?: () => void;
-  /** Switch Kanban / List / Gantt (1 / 2 / 3). */
+  /** Switch Kanban / List / Gantt / Calendar (1 / 2 / 3 / 4). */
   onViewMode?: (mode: ViewMode) => void;
   /** Card density Full / Preview / Minimal (F / P / M). */
   onTaskViewMode?: (mode: TaskViewMode) => void;
@@ -125,6 +125,11 @@ export const useKeyboardShortcuts = ({
         if (event.key === '3') {
           event.preventDefault();
           onViewMode('gantt');
+          return;
+        }
+        if (event.key === '4') {
+          event.preventDefault();
+          onViewMode('calendar');
           return;
         }
       }

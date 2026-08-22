@@ -11,6 +11,7 @@
    - [Kanban View](#kanban-view)
    - [List View](#list-view)
    - [Gantt View](#gantt-view)
+   - [Calendar View](#calendar-view)
 7. [Task Management](#task-management)
 8. [User Profile & Settings](#user-profile--settings)
 9. [Admin Section](#admin-section-admin-only)
@@ -116,7 +117,7 @@ The sticky header contains branding, sprint context, app navigation, and utiliti
 
 The **Tools** card on the Kanban page controls board layout and card density.
 
-- **Board view** (dropdown): Kanban · List · Gantt — same icon size as the toolbar button; short labels in the menu, full description on hover
+- **Board view** (dropdown): Kanban · List · Gantt · Calendar — same icon size as the toolbar button; short labels in the menu, full description on hover
 - **Search**: Toggle advanced search/filters
 - **Card density** (dropdown): Full · Preview · Minimal
   - **Compact** (tickets only) hides descriptions on cards and shows a **red dot** on the density button as a reminder
@@ -269,6 +270,53 @@ The Gantt view displays tasks on a timeline showing project schedules and depend
 - **Create Links**: Connect tasks to show relationships
 - **Parent-Child**: Hierarchical task relationships
 
+### Calendar View
+
+[Screenshot: Calendar with month grid and task bars]
+
+The Calendar view displays dated tasks on Month, Week, or Day grids for schedule-focused work.
+
+#### Sub-views
+- **Month**: Full-month grid with task bars spanning start–due dates; every dated task is shown, so busy weeks grow taller rather than hiding work
+- **Week**: Seven-day strip centered on the focus date
+- **Day**: Single-day list with larger rows for detailed work on one date
+
+#### URL / routing
+- **`#calendar`**: Open Calendar view for the current board
+- **`#calendar#boardId`**: Open Calendar view for a specific board tab
+
+#### Navigation
+- **Period arrows**: Arrows around the displayed month, week range, or day move exactly one period
+- **Period picker**: The calendar icon beside the period opens a small picker — a month/year field in Month view, a week field in Week view, or a date field in Day view — with **‹ ›** buttons on either side that step a full year at a time
+- **Open a day**: Hover a day number in Month view — or a weekday name in the Week view header — and an arrow slides in; click it to open Day view for that date
+- **Task arrows**: Arrows around **Task** jump to the nearest earlier or later period containing dated work
+- **Today**: Return to the current date; the current day keeps its tinted background and circled date
+- **Task search**: Search by ticket, title, or status to open the task's period and briefly highlight its calendar bar
+
+#### Task bars
+- **Dated tasks only**: Tasks without a start date and without a due date are omitted
+- **Ordering**: Month and Week bars follow their Kanban column/task position; Day view can sort by Kanban order, priority, status, assignee, or title
+- **Move / resize** (Month and Week): Drag a bar to shift dates, or drag its edges to change start or due date — **dates only**; column and position on the Kanban board are unchanged. Day view is a read-only list of that day's work, so its cards cannot be moved or resized
+- **Continues past the edge**: A bar that runs beyond the row or the visible period has a faded edge and a square corner; while dragging, a badge shows the live start and due dates so a clipped bar is not mistaken for a resize
+- **Colors**: Month and Week bars are filled with the assignee's team color (gray when unassigned); Day view shows that color as a left stripe. Priority appears as a small colored dot at the start of the bar
+- **Priority legend**: Color key at the top of the sticky header, shown as dots to match the bars (same priority colors as Gantt)
+
+#### Interaction
+- **Comments**: Hover the comment bubble on a bar to preview recent comments; reply inline or open the task for more
+- **Task preview**: Hover a bar to see ticket, title, dates, and description (same preview as Gantt)
+- **Task Details**: Click a bar to open or toggle the Task Details side panel and edit the task there
+- **Empty day**: In Day view, use **Add task** on an empty day to create a task with that date
+- **Assignee**: Click the avatar on a bar to pick a different assignee (or unassign)
+- **Priority / assignee**: Open the bar context menu to change priority or assignee
+
+#### Multi-select
+- **Select mode**: Toolbar **Select** button; click bars to toggle selection
+- **Date nudge**: With tasks selected, **←** / **→** shifts all selected tasks by one day
+- **Exit**: **Escape** or **Enter** leaves multi-select mode
+
+#### View Modes (Tools → card density)
+- **Expand**, **Shrink**, and **Compact** affect bar density in Calendar the same way as Gantt
+
 ---
 
 ## Task Management
@@ -277,6 +325,7 @@ The Gantt view displays tasks on a timeline showing project schedules and depend
 1. **Kanban View**: Click `+` button in any column
 2. **List View**: There are no "Add Task" buttons.. Use other views to create them
 3. **Gantt View**: Click on timeline at desired date
+4. **Calendar View**: In Day view, click **Add task** on an empty day (or create tasks in Kanban/Gantt and assign dates)
 
 ### Task Details Page
 
@@ -300,6 +349,7 @@ When you click on a task, the Task Details page opens with comprehensive task ma
 - **Mention Users**: @username to notify team members
 
 #### Task Actions
+- **Jump to task**: Locate and highlight the task in the active Kanban, List, Gantt, or Calendar view. If the task belongs to another board, that board opens first; the active view is preserved
 - **Save Changes**: Save all modifications
 - **Delete Task**: Soft-delete to board trash (restore from trash or Admin → Lifecycle). Admins: **Shift+click** delete on the card/toolbar to permanently purge (skips trash; always confirms)
 - **Copy Task**: Duplicate task
@@ -327,7 +377,7 @@ Side-panel edits (description, watchers, collaborators, attachments, effort, etc
 - **Theme**: Light/Dark mode preference is auto-saved
 - **Language**: English / French (header toggle)
 - **Activity Feed**: Enable/disable activity notifications
-- **Default View**: Preferred view mode (Kanban/List/Gantt) is auto-saved
+- **Default View**: Preferred view mode (Kanban/List/Gantt/Calendar) is auto-saved
 
 ### Account Settings
 - **Change Password**: Use the forgot password link at login
@@ -648,7 +698,7 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 - **/** or **Ctrl/Cmd+K**: Focus header task search
 - **S**: Open or close the Filter panel
 - **N**: Create a new task in the first column
-- **1 / 2 / 3**: Switch Kanban / List / Gantt view
+- **1 / 2 / 3 / 4**: Switch Kanban / List / Gantt / Calendar view
 - **F / P / M**: Card density — Full / Preview / Minimal
 - **Escape** (in search/filter panel): Clear the focused field, then clear all filters (same as the X controls)
 
@@ -659,6 +709,11 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 - **Escape**: Exit relationship mode, exit multi-select mode
 - **Enter**: Exit relationship mode, exit multi-select mode
 - **Arrow Keys**: Move task selection (in multi-select mode)
+
+### Calendar View
+- **Escape**: Exit multi-select mode
+- **Enter**: Exit multi-select mode
+- **← / →**: In multi-select mode, shift selected task dates by one day
 
 ### Text Editor
 - **Escape**: Cancel editing / close link dialog

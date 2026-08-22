@@ -3,6 +3,8 @@
  * sessionStorage survives refresh; clear on logout so it does not follow the next login.
  */
 
+import type { ViewMode } from './userPreferences';
+
 const KEY_PREFIX = 'easy-kanban-help-session:';
 
 export type HelpAssistantPersistedMessage = {
@@ -11,7 +13,7 @@ export type HelpAssistantPersistedMessage = {
   target?: {
     kind: 'admin' | 'view' | 'page';
     hash?: string;
-    mode?: 'kanban' | 'list' | 'gantt';
+    mode?: ViewMode;
     page?: 'kanban' | 'reports';
     profileFocus?: string;
     highlights?: string[];

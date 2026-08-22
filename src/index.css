@@ -492,6 +492,29 @@ body {
   }
 }
 
+/* Jump-to-task: brief pulse so the target card/row is findable without
+   opening Task Details. Box shadow covers kanban cards, background tint
+   covers list rows where a table row clips the shadow. */
+.task-jump-highlight {
+  border-radius: 0.5rem;
+  animation: task-jump-highlight-pulse 1.8s ease-out 1;
+}
+
+@keyframes task-jump-highlight-pulse {
+  0% {
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.9);
+    background-color: rgba(56, 189, 248, 0.28);
+  }
+  60% {
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.55);
+    background-color: rgba(56, 189, 248, 0.16);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+    background-color: transparent;
+  }
+}
+
 /* Meet the team modal */
 @keyframes meet-team-backdrop-in {
   from {

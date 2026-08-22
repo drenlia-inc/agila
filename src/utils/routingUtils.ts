@@ -160,7 +160,10 @@ export const getInitialSelectedBoard = (): string | null => {
   // 2. Main route is 'kanban' and subRoute is a board ID
   if (parsed.isBoardId) {
     return parsed.mainRoute;
-  } else if (parsed.mainRoute === 'kanban' && parsed.subRoute) {
+  } else if (
+    (parsed.mainRoute === 'kanban' || parsed.mainRoute === 'calendar') &&
+    parsed.subRoute
+  ) {
     return parsed.subRoute;
   }
   
@@ -181,11 +184,15 @@ export const getInitialPage = (): 'kanban' | 'admin' | 'reports' | 'task' | 'for
   }
   
   if (parsed.isPage) {
+    // `#calendar` shares the kanban page shell
+    if (parsed.mainRoute === 'calendar') {
+      return 'kanban';
+    }
     return parsed.mainRoute as 'kanban' | 'admin' | 'reports' | 'task' | 'forgot-password' | 'reset-password' | 'reset-success' | 'activate-account';
   }
   
   // If it's a board ID, default to kanban page
-  if (parsed.isBoardId || (parsed.mainRoute === 'kanban')) {
+  if (parsed.isBoardId || parsed.mainRoute === 'kanban' || parsed.mainRoute === 'calendar') {
     return 'kanban';
   }
   
