@@ -28,17 +28,6 @@ RUN npm run build
 # Stage 2: Build the backend and create production image
 FROM node:22-alpine AS production
 
-# Build arguments for version tracking
-ARG GIT_COMMIT=unknown
-ARG GIT_BRANCH=unknown
-ARG BUILD_TIME
-ARG BUILD_NUMBER
-
-# Set as environment variables for version generation
-ENV GIT_COMMIT=${GIT_COMMIT}
-ENV GIT_BRANCH=${GIT_BRANCH}
-ENV BUILD_TIME=${BUILD_TIME}
-ENV BUILD_NUMBER=${BUILD_NUMBER}
 ENV NODE_ENV=production
 
 WORKDIR /app
@@ -70,6 +59,19 @@ RUN ls -la node_modules/.bin/vite && node_modules/.bin/vite --version
 
 # Copy built frontend from builder stage
 COPY --from=frontend-builder /app/dist ./dist
+
+# Version tracking build args. Declared here (not at the top of the stage) so a new
+# commit hash does not invalidate the npm install layers above. `.git` is dockerignored,
+# so generate-version.js can only learn the commit from these args.
+ARG GIT_COMMIT=unknown
+ARG GIT_BRANCH=unknown
+ARG BUILD_TIME
+ARG BUILD_NUMBER
+
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV GIT_BRANCH=${GIT_BRANCH}
+ENV BUILD_TIME=${BUILD_TIME}
+ENV BUILD_NUMBER=${BUILD_NUMBER}
 
 # Generate version.json at build time using build args
 RUN node scripts/generate-version.js

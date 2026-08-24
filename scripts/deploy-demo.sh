@@ -19,8 +19,20 @@ git checkout main
 git reset --hard origin/main
 echo "${SHA}" > .deploy-sha
 
+# version.json is generated inside the image, where .git is unavailable, so resolve
+# the commit here and hand it to the build. Passed on the CLI as well as exported,
+# because the compose file this host resolves to may not declare the args itself.
+export GIT_COMMIT="\$(git rev-parse --short HEAD)"
+export GIT_BRANCH="\$(git rev-parse --abbrev-ref HEAD)"
+export BUILD_TIME="\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "Building \${GIT_BRANCH}@\${GIT_COMMIT} (\${BUILD_TIME})"
+
 # Bind-mounted app; rebuild image + restart. Do not down volumes (demo DB / attachments).
-docker compose up -d --build
+docker compose build \
+  --build-arg GIT_COMMIT="\${GIT_COMMIT}" \
+  --build-arg GIT_BRANCH="\${GIT_BRANCH}" \
+  --build-arg BUILD_TIME="\${BUILD_TIME}"
+docker compose up -d
 docker compose ps
 
 echo "=== ready ==="

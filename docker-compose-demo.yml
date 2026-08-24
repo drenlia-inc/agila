@@ -9,6 +9,11 @@ services:
       args:
         DEMO_ENABLED: "true"
         MULTI_TENANT: "false"
+        # Exported by scripts/deploy-demo.sh; `.git` is dockerignored so the build
+        # cannot resolve these itself.
+        GIT_COMMIT: "${GIT_COMMIT:-unknown}"
+        GIT_BRANCH: "${GIT_BRANCH:-unknown}"
+        BUILD_TIME: "${BUILD_TIME:-}"
     container_name: agila
     # Named volumes were created by the old root/dev image; stay root so writes keep working.
     user: "0:0"
@@ -41,8 +46,8 @@ services:
       # Tenant domain (only used in multi-tenant mode, for extracting tenant ID from hostname)
       # Example: If TENANT_DOMAIN=agila.dev, then customer1.agila.dev -> tenant ID: customer1
       - TENANT_DOMAIN=agila.dev
-      # Application version (optional, will override database value if set)
-      - APP_VERSION=0.9-beta
+      # No APP_VERSION here on purpose: the version comes from build-time
+      # server/version.json (package version + commit), which startup prefers anyway.
     volumes:
       - kanban-data:/app/server/data
       - kanban-attachments:/app/server/attachments
