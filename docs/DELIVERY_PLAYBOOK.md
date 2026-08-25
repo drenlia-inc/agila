@@ -43,7 +43,7 @@ Do these in order. Skip branding/SSO/AI until the team can move cards.
   - Highlight overdue: on if you want LATE badges
 6. **Optional: soft board WIP** — double-click the board tab → set a team-capacity limit for **active** work (see [WIP](#soft-wip-column-and-board)).
 7. **Optional: first sprint** — only if you timebox:
-  - Create the sprint in Admin → **Project Settings → Sprint Settings** (do this before you need to assign work to it).
+  - Create the sprint from the header sprint dropdown (**New sprint**) or Admin → **Project Settings → Sprints** (do this before you need to assign work to it).
   - In the header sprint dropdown, pick that sprint: **new tasks you add are placed in that sprint** (and dates follow the sprint window when applicable).
   - With **All sprints** selected, new tasks are not auto-assigned; use the **calendar icon on each card** (or bulk sprint) to send tasks into a sprint.
 8. **Create a few real tasks** and walk the flow once with the team.

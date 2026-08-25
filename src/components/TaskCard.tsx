@@ -1037,6 +1037,10 @@ const TaskCard = React.memo(function TaskCard({
   const handleDateRangeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!allowMutations) return;
+    if (showDateRangePicker) {
+      handleDateRangePickerClose();
+      return;
+    }
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     setDateRangePickerPosition({
@@ -1061,9 +1065,20 @@ const TaskCard = React.memo(function TaskCard({
     setDateRangePickerPosition(null);
   };
 
+  const closeSprintSelector = () => {
+    setShowSprintSelector(false);
+    setSprintSelectorCoords(null);
+    setSprintSearchTerm('');
+    setHighlightedSprintIndex(-1);
+  };
+
   // Sprint selector handlers
   const handleSprintSelectorOpen = (triggerElement?: React.RefObject<HTMLElement>) => {
     if (!allowMutations) return;
+    if (showSprintSelector) {
+      closeSprintSelector();
+      return;
+    }
     // Use provided ref or fall back to calendar icon ref
     const elementRef = triggerElement || calendarIconRef;
     if (!elementRef.current) return;
@@ -1188,19 +1203,23 @@ const TaskCard = React.memo(function TaskCard({
 
   // Close sprint selector when clicking outside
   useEffect(() => {
+    if (!showSprintSelector) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (sprintSelectorRef.current && !sprintSelectorRef.current.contains(event.target as Node)) {
-        setShowSprintSelector(false);
-        setSprintSelectorCoords(null);
-        setSprintSearchTerm('');
-        setHighlightedSprintIndex(-1);
-      }
+      const target = event.target as Node;
+      if (sprintSelectorRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-task-sprint-trigger]')) return;
+      closeSprintSelector();
     };
 
-    if (showSprintSelector) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
+    const timeoutId = window.setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
   }, [showSprintSelector]);
 
   // Reset highlighted index when search term changes
@@ -2308,6 +2327,7 @@ const TaskCard = React.memo(function TaskCard({
                 <span
                   ref={sprintBadgeRef}
                   data-sprint-badge="true"
+                  data-task-sprint-trigger="true"
                   className={`px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700 max-w-full truncate transition-colors ${
                     allowMutations ? 'cursor-pointer hover:bg-indigo-200' : 'cursor-default'
                   }`}
@@ -2531,6 +2551,7 @@ const TaskCard = React.memo(function TaskCard({
               <KanbanChromeTooltip label={t('taskCard.clickToSelectSprint')} delayMs={0} wrapperClassName="inline-flex">
                 <div
                   ref={calendarIconRef}
+                  data-task-sprint-trigger="true"
                   className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full p-1 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2569,6 +2590,7 @@ const TaskCard = React.memo(function TaskCard({
                 wrapperClassName="inline-flex"
               >
                 <div
+                  data-task-date-trigger="true"
                   className={`text-[8px] leading-none font-mono rounded px-0.5 py-0.5 transition-colors ${
                     allowMutations ? 'cursor-pointer hover:bg-gray-100' : 'cursor-default'
                   }`}

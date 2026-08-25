@@ -31,6 +31,8 @@ interface UseTaskFiltersProps {
   boards: Board[];
   /** Used so header/text search can match sprint names. */
   sprints?: Array<{ id: string; name: string }>;
+  /** False until the sprint catalog has been fetched — do not treat [] as “sprint deleted”. */
+  sprintsReady?: boolean;
   /** Task ids with same-board links; omit on boards without relationship data. */
   linkedTaskIds?: Set<string>;
   userId?: string | null;
@@ -45,12 +47,13 @@ export const useTaskFilters = ({
   members,
   boards,
   sprints = [],
+  sprintsReady = false,
   linkedTaskIds,
   userId = null,
   updateCurrentUserPreference,
 }: UseTaskFiltersProps) => {
   // Load user preferences from cookies
-  const [userPrefs] = useState(() => loadUserPreferences());
+  const [userPrefs] = useState(() => loadUserPreferences(userId));
   
   // Filter state
   const [selectedMembers, setSelectedMembers] = useState<string[]>(userPrefs.selectedMembers);
@@ -77,6 +80,14 @@ export const useTaskFilters = ({
   const [isAdvancedSearchExpanded, setIsAdvancedSearchExpanded] = useState(userPrefs.isAdvancedSearchExpanded);
   const [searchFilters, setSearchFilters] = useState(userPrefs.searchFilters);
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(userPrefs.selectedSprintId);
+  // First paint uses anonymous prefs (currentUser is still null). When the user id
+  // arrives, apply that user's stored sprint before children paint — otherwise the
+  // header flashes "All Sprints" until the async DB merge runs.
+  const [prefsUserId, setPrefsUserId] = useState(userId);
+  if (userId !== prefsUserId) {
+    setPrefsUserId(userId);
+    setSelectedSprintId(loadUserPreferences(userId).selectedSprintId);
+  }
   const [currentFilterView, setCurrentFilterView] = useState<SavedFilterView | null>(null);
   const [sharedFilterViews, setSharedFilterViews] = useState<SavedFilterView[]>([]);
   const [filteredColumns, setFilteredColumns] = useState<Columns>({});
@@ -92,6 +103,24 @@ export const useTaskFilters = ({
   useEffect(() => {
     viewModeRef.current = viewMode;
   }, [viewMode]);
+
+  // Header can show "All Sprints" when the selected id is missing from the list; the
+  // filter still used the old id. Drop stale header + search sprint ids after catalog load.
+  useEffect(() => {
+    if (!sprintsReady) return;
+    const known = new Set(sprints.map((sprint) => sprint.id));
+    if (selectedSprintId && selectedSprintId !== 'backlog' && !known.has(selectedSprintId)) {
+      setSelectedSprintId(null);
+      updateCurrentUserPreference('selectedSprintId', null);
+    }
+    const selectedSprintIds = searchFilters.selectedSprintIds;
+    if (!selectedSprintIds?.length) return;
+    const nextSprintIds = selectedSprintIds.filter((id) => id === 'backlog' || known.has(id));
+    if (nextSprintIds.length === selectedSprintIds.length) return;
+    const nextFilters = { ...searchFilters, selectedSprintIds: nextSprintIds };
+    setSearchFilters(nextFilters);
+    updateCurrentUserPreference('searchFilters', nextFilters);
+  }, [sprints, sprintsReady, selectedSprintId, searchFilters, updateCurrentUserPreference]);
 
   const getFilterState = useCallback(
     () => ({

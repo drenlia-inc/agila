@@ -99,12 +99,12 @@ The sticky header contains branding, sprint context, app navigation, and utiliti
   - Default logo is `/agila-logo.png` when no custom logo is set
   - Empty site name hides the text (no fallback to a default product name)
   - **Hide Site Logo** (admin setting) removes the logo entirely
-- **Sprint selector** (Kanban page): Filter by sprint or backlog
+- **Sprint selector** (Boards page): Filter by sprint or backlog. Admins can create a sprint from the dropdown or open Admin → Project Settings → Sprints. Making a sprint Active can move unfinished work from the previous active sprint (dates unchanged); the prompt shows unfinished/total task counts. **Move** transfers unfinished work; **Keep** activates without transferring; **Cancel**, Escape, or click outside abandons the change (no transfer, sprint is not made Active). The board filter switches to the new sprint only if work was moved. Deleting a sprint that is selected in the header returns the filter to All sprints. Deleting the **Active** sprint warns you to activate another first, but still allows deletion.
 - **Demo countdown** (when demo mode is enabled)
 
 ### Right Side (left → right)
 
-1. **App navigation**: Kanban · Reports (if enabled) · Admin (admins)
+1. **App navigation**: Boards · Reports (if enabled) · Admin (admins)
 2. **Invite** (admins): Invite a user by email
 3. **Preferences**: Theme (light/dark) · Language (EN/FR)
 4. **Utilities**: Refresh · System panel toggle (admins) · Help (F1 or ?)
@@ -115,7 +115,7 @@ The sticky header contains branding, sprint context, app navigation, and utiliti
 
 ## Tools Panel
 
-The **Tools** card on the Kanban page controls board layout and card density.
+The **Tools** card on the Boards page controls board layout and card density.
 
 - **Board view** (dropdown): Kanban · List · Gantt · Calendar — same icon size as the toolbar button; short labels in the menu, full description on hover
 - **Search**: Toggle advanced search/filters
@@ -281,6 +281,7 @@ The Gantt view displays tasks on a timeline showing project schedules and depend
 
 #### Navigation
 - **Scroll**: Horizontal scrolling through timeline
+- **Zoom**: **−** / **+** (and the percent control) change how wide each day is. 100% is the default 40px day; the date at the center of the view stays put. Full / Preview / Minimal still only change row height
 - **Jump to Task**: Navigate to specific dates
 - **Today Button**: Jump to current date
 - **Later Button**: Jump to the next timeline
@@ -748,7 +749,7 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 - **Escape**: Close modals, confirmation dialogs, and exit edit modes (layered: overlays first, then task details, then multi-select)
 - **Enter**: Confirm actions, save changes
 
-### Board (Kanban page, when not typing / no dialog open)
+### Boards page (when not typing / no dialog open)
 - **/** or **Ctrl/Cmd+K**: Focus header task search
 - **S**: Open or close the Filter panel
 - **N**: Create a new task in the first column

@@ -245,7 +245,7 @@ export const getTourSteps = (): TourStepsConfig => {
       content: i18n.t('tour.steps.adminProjectSettings', { ns: 'common' }),
       placement: 'bottom',
     },
-    // Step 34: Admin Sprint Settings (Project Settings subtab)
+    // Step 34: Admin Sprints (Project Settings subtab)
     {
       target: '[data-tour-id="admin-sprint-settings"]',
       content: i18n.t('tour.steps.adminSprintSettings', { ns: 'common' }),

@@ -1,8 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Calendar, ChevronDown, Search, X } from 'lucide-react';
+import { Calendar, ChevronDown, Plus, Save, Search, Settings, X } from 'lucide-react';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import SprintAssignmentCurrentPill from './ui/SprintAssignmentCurrentPill';
+import SprintEditorFormFields, { type SprintEditorFormData } from './sprints/SprintEditorFormFields';
+import { getDefaultNewSprintDates } from '../utils/dateUtils';
+import { createSprint } from '../api';
+import { toast } from '../utils/toast';
+import {
+  fetchSprintTransferOffer,
+  notifySprintsUpdated,
+  type SprintTransferOffer,
+} from '../utils/sprintActiveWorkTransfer';
+import SprintTransferConfirmDialog from './sprints/SprintTransferConfirmDialog';
+import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 
 interface Sprint {
   id: string;
@@ -30,6 +41,11 @@ interface SprintSelectorProps {
   /** Extra classes on the root (e.g. w-full for Task Page) */
   className?: string;
   disabled?: boolean;
+  /** Header filter only: show create / Admin sprints actions */
+  canCreateSprint?: boolean;
+  onGoToSprints?: () => void;
+  /** When false, a saved sprint id is not treated as "All Sprints" while the list is still loading. */
+  sprintsReady?: boolean;
 }
 
 const SprintSelector: React.FC<SprintSelectorProps> = ({
@@ -40,24 +56,47 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
   mode = 'filter',
   className = '',
   disabled = false,
+  canCreateSprint = false,
+  onGoToSprints,
+  sprintsReady = true,
 }) => {
   const { t } = useTranslation('tasks');
+  const { t: ta } = useTranslation('admin');
   const [sprints, setSprints] = useState<Sprint[]>(propSprints || []);
   const [isOpen, setIsOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [savingSprint, setSavingSprint] = useState(false);
+  const [transferOffer, setTransferOffer] = useState<SprintTransferOffer | null>(null);
+  const [createForm, setCreateForm] = useState<SprintEditorFormData>({
+    name: '',
+    start_date: '',
+    end_date: '',
+    is_active: false,
+    description: '',
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const showCreateUi = canCreateSprint && mode === 'filter';
 
-  // Use prop sprints if provided, otherwise fetch from API (fallback for backward compatibility)
+  const closeDropdown = useCallback(() => {
+    setIsOpen(false);
+    setIsCreating(false);
+    setTransferOffer(null);
+    setSearchTerm('');
+    setHighlightedIndex(-1);
+  }, []);
+
+  // Parent-controlled list (including []) — do not treat empty as "missing" or we fetch
+  // while App still has [] and the trigger falls back to "All Sprints".
   useEffect(() => {
-    if (propSprints && propSprints.length > 0) {
+    if (propSprints !== undefined) {
       setSprints(propSprints);
       return;
     }
     
-    // Only fetch if not provided via props
     const fetchSprints = async () => {
       try {
         setLoading(true);
@@ -85,19 +124,24 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
 
   // Close dropdown when clicking outside
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        setSearchTerm('');
-        setHighlightedIndex(-1);
-      }
+      if (transferOffer) return;
+      const target = event.target as Node;
+      if (dropdownRef.current?.contains(target)) return;
+      closeDropdown();
     };
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen]);
+    const timeoutId = window.setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
+  }, [isOpen, closeDropdown, transferOffer]);
 
   // Reset highlighted index when search term changes
   useEffect(() => {
@@ -113,6 +157,11 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
       });
     }
   }, [highlightedIndex]);
+
+  useEscapeDismiss(() => setIsCreating(false), {
+    enabled: isOpen && isCreating && !transferOffer,
+    disabled: savingSprint,
+  });
 
   const selectedSprint = sprints.find(s => s.id === selectedSprintId);
 
@@ -144,11 +193,96 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
   const backlogOffset = showBacklogOption ? 1 : 0;
   const totalOptions = allSprintsOffset + backlogOffset + filteredSprints.length;
 
+  const openCreateForm = () => {
+    const { start_date, end_date } = getDefaultNewSprintDates();
+    setCreateForm({
+      name: '',
+      start_date,
+      end_date,
+      is_active: false,
+      description: '',
+    });
+    setIsCreating(true);
+    setHighlightedIndex(-1);
+  };
+
+  const handleGoToSprints = () => {
+    closeDropdown();
+    onGoToSprints?.();
+  };
+
+  const persistCreatedSprint = async (transferActiveWork: boolean, selectCreated: boolean) => {
+    try {
+      setSavingSprint(true);
+      const created = await createSprint({
+        ...createForm,
+        transfer_active_work: transferActiveWork,
+      });
+      const moved = Number(created?.transferred_count) || 0;
+      toast.success(ta('sprintSettings.sprintCreatedSuccessfully'), '');
+      if (moved > 0) {
+        toast.success(ta('sprintSettings.transferSuccess', { count: moved, toName: created.name }), '');
+      }
+      notifySprintsUpdated({
+        selectSprintId: selectCreated && created?.id ? created.id : undefined,
+        transferredFromSprintId: transferActiveWork ? transferOffer?.fromId : undefined,
+        transferredToSprintId:
+          transferActiveWork && transferOffer?.fromId && created?.id ? created.id : undefined,
+      });
+      setTransferOffer(null);
+      if (created?.id) {
+        setSprints((prev) => (prev.some((s) => s.id === created.id) ? prev : [...prev, created]));
+        if (selectCreated) {
+          handleSelectSprint(created);
+        } else {
+          closeDropdown();
+        }
+      } else {
+        closeDropdown();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : ta('sprintSettings.failedToSaveSprint'), '');
+    } finally {
+      setSavingSprint(false);
+    }
+  };
+
+  const handleCreateSprint = async () => {
+    if (savingSprint) return;
+    if (!createForm.name.trim()) {
+      toast.error(ta('sprintSettings.sprintNameRequired'), '');
+      return;
+    }
+    if (!createForm.start_date) {
+      toast.error(ta('sprintSettings.startDateRequired'), '');
+      return;
+    }
+    if (!createForm.end_date) {
+      toast.error(ta('sprintSettings.endDateRequired'), '');
+      return;
+    }
+    if (new Date(createForm.end_date) < new Date(createForm.start_date)) {
+      toast.error(ta('sprintSettings.endDateAfterStartDate'), '');
+      return;
+    }
+
+    try {
+      if (createForm.is_active) {
+        const offer = await fetchSprintTransferOffer({ sprints });
+        if (offer) {
+          setTransferOffer(offer);
+          return;
+        }
+      }
+      await persistCreatedSprint(false, false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : ta('sprintSettings.failedToSaveSprint'), '');
+    }
+  };
+
   const handleSelectSprint = (sprint: Sprint | null) => {
     onSprintChange(sprint);
-    setIsOpen(false);
-    setSearchTerm('');
-    setHighlightedIndex(-1);
+    closeDropdown();
   };
 
   const handleSelectBacklog = () => {
@@ -158,9 +292,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
       return;
     }
     onSprintChange({ id: 'backlog', name: 'Backlog', start_date: '', end_date: '' } as any);
-    setIsOpen(false);
-    setSearchTerm('');
-    setHighlightedIndex(-1);
+    closeDropdown();
   };
 
   const isBacklogSelected = isAssign
@@ -175,11 +307,22 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
       ? t('sprintSelector.backlog')
       : selectedSprint
         ? selectedSprint.name
-        : t('sprintSelector.allSprints');
+        : selectedSprintId
+          ? sprintsReady
+            ? t('sprintSelector.allSprints')
+            : t('sprintSelector.loadingSprints')
+          : t('sprintSelector.allSprints');
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) return;
+    if (isCreating) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setIsCreating(false);
+      }
+      return;
+    }
 
     switch (e.key) {
       case 'ArrowDown':
@@ -214,9 +357,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
         break;
       case 'Escape':
         e.preventDefault();
-        setIsOpen(false);
-        setSearchTerm('');
-        setHighlightedIndex(-1);
+        closeDropdown();
         break;
     }
   };
@@ -234,7 +375,11 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
           type="button"
           onClick={() => {
             if (disabled) return;
-            setIsOpen(!isOpen);
+            if (isOpen) {
+              closeDropdown();
+            } else {
+              setIsOpen(true);
+            }
           }}
           disabled={disabled}
           className={`flex items-center gap-2 px-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-md transition-colors border border-gray-300 dark:border-gray-600 relative ${
@@ -270,9 +415,56 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
       </KanbanChromeTooltip>
 
       {isOpen && (
-        <div className={`absolute left-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-hidden flex flex-col ${
-          isAssign ? 'w-full' : 'w-72'
-        }`}>
+        <div
+          className={`absolute left-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 overflow-hidden flex flex-col ${
+            isAssign
+              ? 'w-full'
+              : isCreating
+                ? 'w-[min(36rem,calc(100vw-1.5rem))] max-h-[min(90vh,40rem)]'
+                : 'w-72 max-h-96'
+          }`}
+          role={isCreating ? 'dialog' : undefined}
+          aria-modal={isCreating ? true : undefined}
+          aria-label={isCreating ? ta('sprintSettings.createNewSprint') : undefined}
+        >
+          {isCreating && showCreateUi ? (
+            <div className="p-6 overflow-y-auto bg-blue-50 dark:bg-blue-900/20">
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                {ta('sprintSettings.createNewSprint')}
+              </h4>
+              <SprintEditorFormFields compact formData={createForm} onChange={setCreateForm} />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleCreateSprint()}
+                  disabled={savingSprint}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Save className="w-4 h-4" />
+                  {ta('sprintSettings.create')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCreating(false)}
+                  disabled={savingSprint}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                  {ta('sprintSettings.cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGoToSprints}
+                  disabled={savingSprint}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  {t('sprintSelector.goToSprints')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Search Input */}
           <div className="p-3 border-b border-gray-200 dark:border-gray-700">
             <div className="relative">
@@ -415,8 +607,38 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
               </>
             )}
           </div>
+          {showCreateUi && (
+            <div className="border-t border-gray-200 dark:border-gray-700 p-1.5 flex flex-col gap-0.5">
+              <button
+                type="button"
+                onClick={openCreateForm}
+                className="w-full text-left px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                {t('sprintSelector.addSprint')}
+              </button>
+              <button
+                type="button"
+                onClick={handleGoToSprints}
+                className="w-full text-left px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors flex items-center gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                {t('sprintSelector.goToSprints')}
+              </button>
+            </div>
+          )}
+            </>
+          )}
         </div>
       )}
+      <SprintTransferConfirmDialog
+        offer={transferOffer}
+        toName={createForm.name.trim() || createForm.name}
+        busy={savingSprint}
+        onMove={() => void persistCreatedSprint(true, true)}
+        onKeep={() => void persistCreatedSprint(false, false)}
+        onCancel={() => setTransferOffer(null)}
+      />
     </div>
   );
 };

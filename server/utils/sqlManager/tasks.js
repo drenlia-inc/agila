@@ -125,6 +125,7 @@ export async function getTaskWithRelationships(db, taskId) {
   task.watchers = deduplicateById(parseJsonField(task.watchers));
   task.collaborators = deduplicateById(parseJsonField(task.collaborators));
   
+  task.sprintId = task.sprint_id ?? task.sprintId ?? null;
   return task;
 }
 

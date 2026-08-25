@@ -142,7 +142,7 @@ interface KanbanPageProps {
   getTaskCountForBoard: (board: Board) => number;
   /** Active-work WIP count (excludes finished/archived columns). */
   getBoardWipTaskCountForBoard?: (board: Board) => number;
-  /** Active-work effort sum for board tab effort pills. */
+  /** Filtered active-work effort for board tab pills (hidden when 0). */
   getBoardWipEffortForBoard?: (board: Board) => number;
   /** Unfiltered board task total, used for destructive confirmations. */
   getTotalTaskCountForBoard?: (board: Board) => number;
@@ -1695,6 +1695,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 availablePriorities={availablePriorities}
                 availableTags={availableTags}
                 availableSprints={availableSprints}
+                selectedSprintId={selectedSprintId}
                 boards={boards}
                 checkedTaskIds={checkedTaskIds}
                 onReplaceCheckedTaskIds={onReplaceCheckedTaskIds}

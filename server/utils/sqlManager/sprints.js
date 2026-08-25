@@ -20,20 +20,31 @@ export async function getAllSprints(db) {
   // res.json() emits ISO datetimes — <input type="date"> ignores those and the admin form looks empty.
   const query = `
     SELECT 
-      id,
-      name,
-      start_date::text AS start_date,
-      end_date::text AS end_date,
-      is_active,
-      description,
-      created_at,
-      updated_at
-    FROM planning_periods
-    ORDER BY start_date DESC
+      pp.id,
+      pp.name,
+      pp.start_date::text AS start_date,
+      pp.end_date::text AS end_date,
+      pp.is_active,
+      pp.description,
+      pp.created_at,
+      pp.updated_at,
+      (
+        SELECT COUNT(*)::int
+        FROM tasks t
+        WHERE t.sprint_id = pp.id
+          AND t.deleted_at IS NULL
+      ) AS task_count
+    FROM planning_periods pp
+    ORDER BY pp.start_date DESC
   `;
   
   const stmt = wrapQuery(db.prepare(query), 'SELECT');
-  return await stmt.all();
+  const rows = await stmt.all();
+  return (rows || []).map((row) => ({
+    ...row,
+    is_active: row.is_active === true || row.is_active === 1 || row.is_active === 't',
+    task_count: Number(row.task_count ?? row.taskCount) || 0
+  }));
 }
 
 /**
@@ -101,14 +112,15 @@ export async function getSprintById(db, sprintId) {
  */
 export async function getSprintUsageCount(db, sprintId) {
   const query = `
-    SELECT COUNT(*) as count 
-    FROM tasks 
+    SELECT COUNT(*)::int AS count
+    FROM tasks
     WHERE sprint_id = $1
+      AND deleted_at IS NULL
   `;
   
   const stmt = wrapQuery(db.prepare(query), 'SELECT');
   const result = await stmt.get(sprintId);
-  return result?.count ?? 0;
+  return Number(result?.count) || 0;
 }
 
 /**
@@ -269,5 +281,77 @@ export async function unassignTasksFromSprint(db, sprintId) {
   const stmt = wrapQuery(db.prepare(query), 'UPDATE');
   const result = await stmt.run(sprintId);
   return result.changes || 0;
+}
+
+const ACTIVE_WORK_FROM_SPRINT = `
+  FROM tasks t
+  INNER JOIN columns c ON c.id = t.columnid
+  WHERE t.sprint_id = $1
+    AND t.deleted_at IS NULL
+    AND c.is_finished IS NOT TRUE
+    AND c.is_archived IS NOT TRUE
+`;
+
+/**
+ * Non-deleted task totals on a sprint, plus unfinished live work (same set as transfer).
+ * @returns {Promise<{ active: number, total: number }>}
+ */
+export async function getSprintWorkCountsForTransfer(db, sprintId) {
+  const query = `
+    SELECT
+      COUNT(*) FILTER (WHERE t.deleted_at IS NULL)::int AS total,
+      COUNT(*) FILTER (
+        WHERE t.deleted_at IS NULL
+          AND c.id IS NOT NULL
+          AND c.is_finished IS NOT TRUE
+          AND c.is_archived IS NOT TRUE
+      )::int AS active
+    FROM tasks t
+    LEFT JOIN columns c ON c.id = t.columnid
+    WHERE t.sprint_id = $1
+  `;
+  const stmt = wrapQuery(db.prepare(query), 'SELECT');
+  const result = await stmt.get(sprintId);
+  return {
+    active: Number(result?.active) || 0,
+    total: Number(result?.total) || 0
+  };
+}
+
+/**
+ * Live unfinished (non-finished, non-archived) tasks on a sprint, all boards.
+ */
+export async function getActiveWorkCountForSprint(db, sprintId) {
+  const { active } = await getSprintWorkCountsForTransfer(db, sprintId);
+  return active;
+}
+
+/**
+ * Reassign unfinished live tasks from one sprint to another. Does not change dates.
+ * @returns {Promise<Array<{id: string, boardId: string}>>}
+ */
+export async function transferActiveWorkToSprint(db, fromSprintId, toSprintId) {
+  const selectStmt = wrapQuery(
+    db.prepare(`SELECT t.id, t.boardid AS "boardId" ${ACTIVE_WORK_FROM_SPRINT}`),
+    'SELECT'
+  );
+  const tasks = await selectStmt.all(fromSprintId);
+  if (!tasks?.length) return [];
+
+  const updateStmt = wrapQuery(
+    db.prepare(`
+      UPDATE tasks t
+      SET sprint_id = $2, updated_at = $3
+      FROM columns c
+      WHERE t.columnid = c.id
+        AND t.sprint_id = $1
+        AND t.deleted_at IS NULL
+        AND c.is_finished IS NOT TRUE
+        AND c.is_archived IS NOT TRUE
+    `),
+    'UPDATE'
+  );
+  await updateStmt.run(fromSprintId, toSprintId, new Date().toISOString());
+  return tasks;
 }
 

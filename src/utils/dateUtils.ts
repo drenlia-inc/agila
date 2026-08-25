@@ -85,4 +85,28 @@ export const getLocalISOString = (date: Date) => {
   const offsetSign = offset >= 0 ? '+' : '-';
   
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
-}; 
+};
+
+/** Local calendar YYYY-MM-DD for `<input type="date">`. */
+export function formatLocalYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Default sprint range: work week starts Monday.
+ * - Start: today if Monday, otherwise the next Monday (upcoming sprint boundary).
+ * - End: Friday after two full Mon–Fri weeks (start + 11 calendar days).
+ */
+export function getDefaultNewSprintDates(now = new Date()): { start_date: string; end_date: string } {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = d.getDay(); // 0 Sun .. 6 Sat
+  const daysUntilMonday = day === 0 ? 1 : day === 1 ? 0 : 8 - day;
+  d.setDate(d.getDate() + daysUntilMonday);
+  const start = new Date(d);
+  const end = new Date(d);
+  end.setDate(end.getDate() + 11); // second Friday after start Monday
+  return { start_date: formatLocalYmd(start), end_date: formatLocalYmd(end) };
+} 

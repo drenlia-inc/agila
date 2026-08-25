@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { GANTT_DAY_COLUMN_PX } from './ganttLayout';
 
 interface DateColumn {
   date: Date;
@@ -20,9 +21,9 @@ interface GanttOffscreenTaskIndicatorsProps {
   headerRef: React.RefObject<HTMLDivElement>;
   /** Scrolls the clicked task's row back into view. */
   onJumpToTask: (taskId: string) => void;
+  dayColumnWidth?: number;
 }
 
-const CELL_WIDTH = 40;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * Both lanes hug the day-number row rather than the header's outer edges: the
@@ -120,6 +121,7 @@ export const GanttOffscreenTaskIndicators: React.FC<GanttOffscreenTaskIndicators
   timelineRef,
   headerRef,
   onJumpToTask,
+  dayColumnWidth = GANTT_DAY_COLUMN_PX,
 }) => {
   const { t } = useTranslation('common');
   const [lanes, setLanes] = useState<LaneSegments>(EMPTY_LANES);
@@ -261,7 +263,7 @@ export const GanttOffscreenTaskIndicators: React.FC<GanttOffscreenTaskIndicators
       if (!band) return;
 
       const rect = event.currentTarget.getBoundingClientRect();
-      const offsetDays = Math.floor((event.clientX - rect.left) / CELL_WIDTH);
+      const offsetDays = Math.floor((event.clientX - rect.left) / dayColumnWidth);
       const dayIndex =
         segment.startIndex + Math.max(0, Math.min(segment.span - 1, offsetDays));
 
@@ -279,7 +281,7 @@ export const GanttOffscreenTaskIndicators: React.FC<GanttOffscreenTaskIndicators
 
       if (nearest) onJumpToTask(nearest.taskId);
     },
-    [bandBounds, onJumpToTask]
+    [bandBounds, dayColumnWidth, onJumpToTask]
   );
 
   if (lanes.above.length === 0 && lanes.below.length === 0) return null;
@@ -299,8 +301,8 @@ export const GanttOffscreenTaskIndicators: React.FC<GanttOffscreenTaskIndicators
           lane === 'above' ? 'items-start' : 'items-end'
         }`}
         style={{
-          left: `${segment.startIndex * CELL_WIDTH}px`,
-          width: `${segment.span * CELL_WIDTH}px`,
+          left: `${segment.startIndex * dayColumnWidth}px`,
+          width: `${segment.span * dayColumnWidth}px`,
           height: `${HIT_HEIGHT}px`,
           ...edgeStyle,
         }}

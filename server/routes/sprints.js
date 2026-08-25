@@ -14,6 +14,28 @@ import {
 
 const router = express.Router();
 
+async function publishTransferredTaskUpdates(db, req, transferredTasks) {
+  if (!transferredTasks?.length) return;
+  const tenantId = getTenantId(req);
+  const byBoard = transferredTasks.reduce((acc, task) => {
+    if (!acc[task.boardId]) acc[task.boardId] = [];
+    acc[task.boardId].push(task);
+    return acc;
+  }, {});
+  for (const [boardId, boardTasks] of Object.entries(byBoard)) {
+    for (const task of boardTasks) {
+      const updatedTask = await taskQueries.getTaskWithRelationships(db, task.id);
+      if (updatedTask) {
+        await notificationService.publish(
+          'task-updated',
+          { boardId, task: updatedTask, timestamp: new Date().toISOString() },
+          tenantId
+        );
+      }
+    }
+  }
+}
+
 // GET /api/admin/sprints - Get all planning periods/sprints (accessible to all authenticated users for filtering)
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -21,8 +43,14 @@ router.get('/', authenticateToken, async (req, res) => {
     
     // MIGRATED: Use sqlManager to get all sprints
     const sprints = await sprintQueries.getAllSprints(db);
-    
-    res.json({ sprints });
+
+    res.json({
+      sprints: (sprints || []).map((sprint) => ({
+        ...sprint,
+        is_active: sprint.is_active === true,
+        task_count: Number(sprint.task_count) || 0
+      }))
+    });
   } catch (error) {
     console.error('Failed to fetch sprints:', error);
     res.status(500).json({ error: 'Failed to fetch sprints' });
@@ -71,6 +99,27 @@ router.get("/:id/usage", authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/admin/sprints/:id/active-work-count — unfinished live tasks (for activate transfer prompt)
+router.get('/:id/active-work-count', authenticateToken, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const { id } = req.params;
+    const sprint = await sprintQueries.getSprintById(db, id);
+    if (!sprint) {
+      return res.status(404).json({ error: 'Sprint not found' });
+    }
+    const counts = await sprintQueries.getSprintWorkCountsForTransfer(db, id);
+    res.json({
+      count: counts.active,
+      active: counts.active,
+      total: counts.total
+    });
+  } catch (error) {
+    console.error('Error fetching sprint active-work count:', error);
+    res.status(500).json({ error: 'Failed to fetch sprint active-work count' });
+  }
+});
+
 // POST /api/admin/sprints - Create a new sprint
 router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
@@ -79,29 +128,39 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error });
     }
-    const { name, start_date, end_date, is_active, description } = parsed.data;
+    const { name, start_date, end_date, is_active, description, transfer_active_work } = parsed.data;
 
     if (new Date(end_date) < new Date(start_date)) {
       return res.status(400).json({ error: 'End date must be after start date' });
     }
     
     const sprintId = crypto.randomUUID();
-    
-    // MIGRATED: If this sprint is being set as active, deactivate all others using sqlManager
-    if (is_active) {
-      await sprintQueries.deactivateAllSprints(db);
-    }
-    
-    // MIGRATED: Create sprint using sqlManager
-    const newSprint = await sprintQueries.createSprint(
-      db, 
-      sprintId, 
-      name, 
-      start_date, 
-      end_date, 
-      is_active, 
-      description
-    );
+    const previousActive = is_active ? await sprintQueries.getActiveSprint(db) : null;
+    let transferredTasks = [];
+
+    await dbTransaction(db, async () => {
+      if (is_active) {
+        await sprintQueries.deactivateAllSprints(db);
+      }
+      await sprintQueries.createSprint(
+        db,
+        sprintId,
+        name,
+        start_date,
+        end_date,
+        is_active,
+        description
+      );
+      if (is_active && transfer_active_work && previousActive?.id) {
+        transferredTasks = await sprintQueries.transferActiveWorkToSprint(
+          db,
+          previousActive.id,
+          sprintId
+        );
+      }
+    });
+
+    const newSprint = await sprintQueries.getSprintById(db, sprintId);
     
     console.log('📤 Publishing sprint-created');
     await notificationService.publish(
@@ -110,8 +169,13 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
       getTenantId(req)
     );
     console.log('✅ Sprint-created published');
+
+    await publishTransferredTaskUpdates(db, req, transferredTasks);
     
-    res.status(201).json(newSprint);
+    res.status(201).json({
+      ...newSprint,
+      transferred_count: transferredTasks.length
+    });
   } catch (error) {
     console.error('Failed to create sprint:', error);
     res.status(500).json({ error: 'Failed to create sprint' });
@@ -127,7 +191,7 @@ router.put("/:id", authenticateToken, requireRole(['admin']), async (req, res) =
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error });
     }
-    const { name, start_date, end_date, is_active, description } = parsed.data;
+    const { name, start_date, end_date, is_active, description, transfer_active_work } = parsed.data;
 
     // MIGRATED: Check if sprint exists using sqlManager
     const existing = await sprintQueries.getSprintById(db, id);
@@ -139,22 +203,39 @@ router.put("/:id", authenticateToken, requireRole(['admin']), async (req, res) =
     if (new Date(end_date) < new Date(start_date)) {
       return res.status(400).json({ error: 'End date must be after start date' });
     }
-    
-    // MIGRATED: If this sprint is being set as active, deactivate all others using sqlManager
-    if (is_active) {
-      await sprintQueries.deactivateAllSprintsExcept(db, id);
-    }
-    
-    // MIGRATED: Update sprint using sqlManager
-    const updated = await sprintQueries.updateSprint(
-      db, 
-      id, 
-      name, 
-      start_date, 
-      end_date, 
-      is_active, 
-      description
-    );
+
+    const becomingActive = Boolean(is_active) && !Boolean(existing.is_active);
+    const previousActive = becomingActive ? await sprintQueries.getActiveSprint(db) : null;
+    let transferredTasks = [];
+
+    await dbTransaction(db, async () => {
+      if (is_active) {
+        await sprintQueries.deactivateAllSprintsExcept(db, id);
+      }
+      await sprintQueries.updateSprint(
+        db,
+        id,
+        name,
+        start_date,
+        end_date,
+        is_active,
+        description
+      );
+      if (
+        becomingActive &&
+        transfer_active_work &&
+        previousActive?.id &&
+        previousActive.id !== id
+      ) {
+        transferredTasks = await sprintQueries.transferActiveWorkToSprint(
+          db,
+          previousActive.id,
+          id
+        );
+      }
+    });
+
+    const updated = await sprintQueries.getSprintById(db, id);
     
     console.log('📤 Publishing sprint-updated');
     await notificationService.publish(
@@ -163,8 +244,13 @@ router.put("/:id", authenticateToken, requireRole(['admin']), async (req, res) =
       getTenantId(req)
     );
     console.log('✅ Sprint-updated published');
+
+    await publishTransferredTaskUpdates(db, req, transferredTasks);
     
-    res.json(updated);
+    res.json({
+      ...updated,
+      transferred_count: transferredTasks.length
+    });
   } catch (error) {
     console.error('Failed to update sprint:', error);
     res.status(500).json({ error: 'Failed to update sprint' });

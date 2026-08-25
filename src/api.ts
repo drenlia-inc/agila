@@ -1144,9 +1144,55 @@ export const createSprint = async (sprint: {
   end_date: string;
   is_active?: boolean;
   description?: string;
+  transfer_active_work?: boolean;
 }) => {
   const { data } = await api.post('/admin/sprints', sprint);
   return data;
+};
+
+export const updateSprint = async (
+  sprintId: string,
+  sprint: {
+    name: string;
+    start_date: string;
+    end_date: string;
+    is_active?: boolean;
+    description?: string | null;
+    transfer_active_work?: boolean;
+  }
+) => {
+  const { data } = await api.put(`/admin/sprints/${sprintId}`, sprint);
+  return data;
+};
+
+export const getActiveSprint = async (): Promise<{
+  id: string;
+  name: string;
+  start_date?: string;
+  end_date?: string;
+} | null> => {
+  try {
+    const { data } = await api.get('/admin/sprints/active');
+    return data;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return null;
+    throw err;
+  }
+};
+
+export const getSprintActiveWorkCount = async (sprintId: string): Promise<number> => {
+  const { data } = await api.get(`/admin/sprints/${sprintId}/active-work-count`);
+  return Number(data?.active ?? data?.count) || 0;
+};
+
+export const getSprintTransferWorkCounts = async (
+  sprintId: string
+): Promise<{ active: number; total: number }> => {
+  const { data } = await api.get(`/admin/sprints/${sprintId}/active-work-count`);
+  const active = Number(data?.active ?? data?.count) || 0;
+  const total = Number(data?.total) || 0;
+  return { active, total: Math.max(total, active) };
 };
 
 export const getSprintUsage = async (sprintId: string) => {

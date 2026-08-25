@@ -33,7 +33,39 @@ export const ganttRowPaddingClass = (taskViewMode: string): string =>
 export const GANTT_TASK_COLUMN_MIN_WIDTH = 250;
 export const GANTT_TASK_COLUMN_MAX_WIDTH = 600;
 export const GANTT_TASK_COLUMN_DEFAULT_WIDTH = 320;
+/** Default day column width (100% zoom). */
 export const GANTT_DAY_COLUMN_PX = 40;
+export const GANTT_DAY_ZOOM_STEPS = [24, 32, 40, 56, 72] as const;
+
+export const ganttDayZoomPercent = (dayColumnPx: number): number =>
+  Math.round((dayColumnPx / GANTT_DAY_COLUMN_PX) * 100);
+
+export const normalizeGanttDayColumnWidth = (value: unknown): number => {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return GANTT_DAY_COLUMN_PX;
+  let nearest = GANTT_DAY_ZOOM_STEPS[0];
+  let best = Math.abs(n - nearest);
+  for (const step of GANTT_DAY_ZOOM_STEPS) {
+    const delta = Math.abs(n - step);
+    if (delta < best) {
+      nearest = step;
+      best = delta;
+    }
+  }
+  return nearest;
+};
+
+export const stepGanttDayColumnWidth = (current: number, dir: -1 | 1): number => {
+  const width = normalizeGanttDayColumnWidth(current);
+  const index = GANTT_DAY_ZOOM_STEPS.indexOf(
+    width as (typeof GANTT_DAY_ZOOM_STEPS)[number]
+  );
+  const next = Math.max(0, Math.min(GANTT_DAY_ZOOM_STEPS.length - 1, index + dir));
+  return GANTT_DAY_ZOOM_STEPS[next];
+};
+
+export const ganttDayGridTemplate = (dayCount: number, dayColumnPx: number): string =>
+  `repeat(${dayCount}, ${dayColumnPx}px)`;
 
 const localYmd = (date: Date): string => {
   const year = date.getFullYear();
@@ -54,7 +86,8 @@ export const ganttBarBoxInDateRange = (
   startDate: Date,
   endDate: Date,
   dateRange: { date: Date }[],
-  dateToIndex: Map<string, number>
+  dateToIndex: Map<string, number>,
+  dayColumnPx: number = GANTT_DAY_COLUMN_PX
 ): { x: number; width: number } | null => {
   if (dateRange.length === 0) return null;
   const last = dateRange.length - 1;
@@ -67,7 +100,7 @@ export const ganttBarBoxInDateRange = (
     return { x: 0, width: 0 };
   }
   if (startMs > rangeEndMs) {
-    return { x: dateRange.length * GANTT_DAY_COLUMN_PX, width: 0 };
+    return { x: dateRange.length * dayColumnPx, width: 0 };
   }
 
   const startIndex = dateToIndex.get(localYmd(startDate)) ?? 0;
@@ -75,8 +108,8 @@ export const ganttBarBoxInDateRange = (
   const lo = Math.min(startIndex, endIndex);
   const hi = Math.max(startIndex, endIndex);
   return {
-    x: lo * GANTT_DAY_COLUMN_PX,
-    width: Math.max(GANTT_DAY_COLUMN_PX, (hi - lo + 1) * GANTT_DAY_COLUMN_PX),
+    x: lo * dayColumnPx,
+    width: Math.max(dayColumnPx, (hi - lo + 1) * dayColumnPx),
   };
 };
 

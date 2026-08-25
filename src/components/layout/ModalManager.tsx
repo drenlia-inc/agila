@@ -40,6 +40,13 @@ interface ModalManagerProps {
   onOpenProfile?: (focus?: 'displayName' | 'bio' | 'activityFeed') => void;
   siteSettings?: { [key: string]: string };
   boards?: any[];
+  sprints?: Array<{
+    id: string;
+    name: string;
+    start_date: string;
+    end_date: string;
+    is_active: boolean | number;
+  }>;
   canMutate?: boolean;
   onJumpToTask?: (task: Task) => void | Promise<void>;
 }
@@ -69,6 +76,7 @@ const ModalManager: React.FC<ModalManagerProps> = ({
   onOpenProfile,
   siteSettings,
   boards,
+  sprints,
   canMutate = true,
   onJumpToTask,
 }) => {
@@ -88,6 +96,7 @@ const ModalManager: React.FC<ModalManagerProps> = ({
             onUpdate={onTaskUpdate}
             siteSettings={siteSettings}
             boards={boards}
+            sprints={sprints}
             scrollToComments={taskDetailsOptions?.scrollToComments}
             readOnly={isReadOnly}
             canMutate={canMutate}

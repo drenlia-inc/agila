@@ -342,7 +342,8 @@ export const createSprintBodySchema = z.object({
   start_date: z.string().min(1, 'Start date is required').max(64),
   end_date: z.string().min(1, 'End date is required').max(64),
   is_active: booleanish,
-  description: z.union([z.string().max(SPRINT_DESCRIPTION_MAX_LENGTH), z.null()]).optional()
+  description: z.union([z.string().max(SPRINT_DESCRIPTION_MAX_LENGTH), z.null()]).optional(),
+  transfer_active_work: booleanish.optional()
 }).passthrough();
 
 export const updateSprintBodySchema = createSprintBodySchema;

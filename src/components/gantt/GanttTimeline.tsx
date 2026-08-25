@@ -5,7 +5,7 @@ import { Task } from '../../types';
 import { TaskHandle } from './TaskHandle';
 import { MoveHandle } from './MoveHandle';
 import { DRAG_TYPES, GanttDragItem, GanttTaskSelectOptions } from './types';
-import { ganttRowBoxStyle } from './ganttLayout';
+import { ganttDayGridTemplate, ganttRowBoxStyle, GANTT_DAY_COLUMN_PX } from './ganttLayout';
 import TaskDependencyArrows from './TaskDependencyArrows';
 import { TaskBarTooltip } from './TaskBarTooltip';
 import { ModernCheckbox } from '../ModernCheckbox';
@@ -61,6 +61,7 @@ interface GanttTimelineProps {
   onDeleteRelationship?: (relationshipId: string, fromTaskId: string) => void;
   columns: any;
   siteSettings?: any;
+  dayColumnWidth: number;
 }
 
 // Droppable cell component
@@ -70,7 +71,8 @@ const DroppableCell = ({
   isToday,
   isWeekend,
   activeDragItem,
-  disabled = false
+  disabled = false,
+  dayColumnWidth = GANTT_DAY_COLUMN_PX
 }: {
   dateString: string;
   dateIndex: number;
@@ -78,6 +80,7 @@ const DroppableCell = ({
   isWeekend?: boolean;
   activeDragItem: any;
   disabled?: boolean;
+  dayColumnWidth?: number;
 }) => {
   const dropId = `gantt-date-${activeDragItem?.taskId ?? 'unknown'}-${dateIndex}`;
   const isTaskBarDrag = activeDragItem && (
@@ -112,7 +115,7 @@ const DroppableCell = ({
       className={`${baseClasses} ${bgClasses} ${hoverClasses}`}
       style={{ 
         gridColumn: dateIndex + 1,
-        minWidth: '40px'
+        minWidth: `${dayColumnWidth}px`
       }}
     />
   );
@@ -140,7 +143,8 @@ const TaskBar = ({
   highlightedTaskId,
   selectedParentTask,
   columns,
-  siteSettings
+  siteSettings,
+  dayColumnWidth = GANTT_DAY_COLUMN_PX
 }: any) => {
   const { t } = useTranslation('common');
   const { startDayIndex, endDayIndex } = gridPosition;
@@ -243,8 +247,8 @@ const TaskBar = ({
           highlightedTaskId === task.id ? 'ring-2 ring-yellow-400 dark:ring-yellow-600 shadow-lg' : ''
         } transition-all flex items-center group cursor-pointer`}
         style={{
-          left: `${displayStartIndex * 40}px`,
-          width: `${(displayEndIndex - displayStartIndex + 1) * 40}px`,
+          left: `${displayStartIndex * dayColumnWidth}px`,
+          width: `${(displayEndIndex - displayStartIndex + 1) * dayColumnWidth}px`,
           top: '50%',
           transform: 'translateY(-50%)',
           backgroundColor: getPriorityColor((task as any).priorityName || task.priority),
@@ -425,7 +429,8 @@ const GanttTimeline = ({
   selectedParentTask,
   onDeleteRelationship,
   columns,
-  siteSettings
+  siteSettings,
+  dayColumnWidth = GANTT_DAY_COLUMN_PX
 }: GanttTimelineProps) => {
   const { t } = useTranslation('common');
   // Allow vertical scrolling to pass through to parent
@@ -465,7 +470,7 @@ const GanttTimeline = ({
       style={{ overscrollBehavior: 'contain auto' }}
     >
       <div style={{ 
-        width: `${dateRange.length * 40}px`,
+        width: `${dateRange.length * dayColumnWidth}px`,
         minWidth: '100%',
         willChange: 'transform' 
       }}>
@@ -473,7 +478,7 @@ const GanttTimeline = ({
         <div 
           className="grid bg-blue-50 dark:bg-blue-900 hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors relative h-12 border-b-4 border-blue-400 cursor-crosshair"
           style={{ 
-            gridTemplateColumns: `repeat(${dateRange.length}, 40px)`,
+            gridTemplateColumns: ganttDayGridTemplate(dateRange.length, dayColumnWidth),
           }}
           onMouseUp={onTaskCreationMouseUp}
         >
@@ -483,7 +488,7 @@ const GanttTimeline = ({
               className={`border-r border-blue-300 dark:border-blue-600 ${
                 taskCreationStart?.date === formatLocalDate(dateCol.date) ? 'bg-blue-200 dark:bg-blue-700' : ''
               }`}
-              style={{ minWidth: '40px' }}
+              style={{ minWidth: `${dayColumnWidth}px` }}
               onMouseDown={(e) => onTaskCreationMouseDown(e, formatLocalDate(dateCol.date))}
               onMouseEnter={(e) => onTaskCreationMouseEnter(e, formatLocalDate(dateCol.date))}
             />
@@ -506,8 +511,8 @@ const GanttTimeline = ({
                 <div
                   className="absolute h-8 bg-blue-500 rounded opacity-50 pointer-events-none flex items-center justify-center"
                   style={{
-                    left: `${minIdx * 40}px`,
-                    width: `${(maxIdx - minIdx + 1) * 40}px`,
+                    left: `${minIdx * dayColumnWidth}px`,
+                    width: `${(maxIdx - minIdx + 1) * dayColumnWidth}px`,
                     top: '50%',
                     transform: 'translateY(-50%)'
                   }}
@@ -558,7 +563,7 @@ const GanttTimeline = ({
                     } hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors`}
                   >
                     {/* Background grid - Always visible */}
-                    <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${dateRange.length}, 40px)` }}>
+                    <div className="absolute inset-0 grid" style={{ gridTemplateColumns: ganttDayGridTemplate(dateRange.length, dayColumnWidth) }}>
                       {dateRange.map((dateCol, dateIndex) => (
                         <div
                           key={`grid-${task.id}-${dateIndex}`}
@@ -576,7 +581,7 @@ const GanttTimeline = ({
                      (activeDragItem.dragType === DRAG_TYPES.TASK_START_HANDLE || 
                       activeDragItem.dragType === DRAG_TYPES.TASK_END_HANDLE || 
                       activeDragItem.dragType === DRAG_TYPES.TASK_MOVE_HANDLE) && (
-                      <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${dateRange.length}, 40px)` }}>
+                      <div className="absolute inset-0 grid" style={{ gridTemplateColumns: ganttDayGridTemplate(dateRange.length, dayColumnWidth) }}>
                         {dateRange.map((dateCol, dateIndex) => {
                           // Format date as local date to avoid timezone issues
                           const formatLocalDate = (date: Date) => {
@@ -595,6 +600,7 @@ const GanttTimeline = ({
                               isWeekend={dateCol.isWeekend}
                               activeDragItem={activeDragItem}
                               disabled={false}
+                              dayColumnWidth={dayColumnWidth}
                             />
                           );
                         })}
@@ -623,6 +629,7 @@ const GanttTimeline = ({
                         selectedParentTask={selectedParentTask}
                         columns={columns}
                         siteSettings={siteSettings}
+                        dayColumnWidth={dayColumnWidth}
                       />
                     )}
                     
@@ -649,6 +656,7 @@ const GanttTimeline = ({
           taskViewMode={taskViewMode}
           isRelationshipMode={isRelationshipMode}
           onDeleteRelationship={onDeleteRelationship}
+          dayColumnWidth={dayColumnWidth}
         />
       </div>
     </div>

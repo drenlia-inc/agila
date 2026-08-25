@@ -3,11 +3,17 @@ import { useTranslation } from 'react-i18next';
 import { Calendar, Plus, Edit2, Trash2, Save, X, CheckCircle } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { toast } from '../../utils/toast';
-import { getSprintUsage, deleteSprint } from '../../api';
-import { ModernCheckbox } from '../ModernCheckbox';
+import { getAllSprints, getSprintUsage, deleteSprint, createSprint, updateSprint } from '../../api';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
-import { SPRINT_NAME_MAX_LENGTH, SPRINT_DESCRIPTION_MAX_LENGTH } from '../../constants/appConstants';
+import { getDefaultNewSprintDates } from '../../utils/dateUtils';
+import SprintEditorFormFields from '../sprints/SprintEditorFormFields';
+import SprintTransferConfirmDialog from '../sprints/SprintTransferConfirmDialog';
+import {
+  fetchSprintTransferOffer,
+  notifySprintsUpdated,
+  type SprintTransferOffer,
+} from '../../utils/sprintActiveWorkTransfer';
 
 interface PlanningPeriod {
   id: string;
@@ -17,6 +23,7 @@ interface PlanningPeriod {
   is_active: boolean;
   description: string | null;
   created_at: string;
+  task_count?: number;
 }
 
 /** `<input type="date">` only accepts YYYY-MM-DD; PostgreSQL JSON often sends ISO datetimes. */
@@ -24,30 +31,6 @@ function toDateInputValue(value: string | null | undefined): string {
   if (!value) return '';
   const m = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
   return m ? m[1] : '';
-}
-
-/** Local calendar YYYY-MM-DD for `<input type="date">`. */
-function formatLocalYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-/**
- * Default sprint range: work week starts Monday.
- * - Start: today if Monday, otherwise the next Monday (upcoming sprint boundary).
- * - End: Friday after two full Mon–Fri weeks (start + 11 calendar days).
- */
-function getDefaultNewSprintDates(now = new Date()): { start_date: string; end_date: string } {
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const day = d.getDay(); // 0 Sun .. 6 Sat
-  const daysUntilMonday = day === 0 ? 1 : day === 1 ? 0 : 8 - day;
-  d.setDate(d.getDate() + daysUntilMonday);
-  const start = new Date(d);
-  const end = new Date(d);
-  end.setDate(end.getDate() + 11); // second Friday after start Monday
-  return { start_date: formatLocalYmd(start), end_date: formatLocalYmd(end) };
 }
 
 const AdminSprintSettingsTab: React.FC = () => {
@@ -66,6 +49,20 @@ const AdminSprintSettingsTab: React.FC = () => {
     is_active: false,
     description: ''
   });
+  const [transferOffer, setTransferOffer] = useState<SprintTransferOffer | null>(null);
+  const [transferToName, setTransferToName] = useState('');
+  const [savingSprint, setSavingSprint] = useState(false);
+  const pendingActivateRef = useRef<{
+    mode: 'create' | 'update' | 'toggle';
+    sprintId?: string;
+    payload: {
+      name: string;
+      start_date: string;
+      end_date: string;
+      is_active: boolean;
+      description: string;
+    };
+  } | null>(null);
 
   useEffect(() => {
     fetchSprints();
@@ -80,12 +77,17 @@ const AdminSprintSettingsTab: React.FC = () => {
     return () => window.removeEventListener('sprints-updated', onSprintsUpdated);
   }, []);
 
-  // Handle click outside to close delete confirmation
+  // Handle click outside to close delete confirmation (defer so the opening click does not dismiss)
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (showDeleteSprintConfirm) {
+    if (!showDeleteSprintConfirm) return;
+    let handleClickOutside: ((event: MouseEvent) => void) | undefined;
+    const timeoutId = window.setTimeout(() => {
+      handleClickOutside = (event: MouseEvent) => {
         const target = event.target as Element;
-        if (!target.closest('.delete-confirmation') && !target.closest(`button[data-sprint-id="${showDeleteSprintConfirm}"]`)) {
+        if (
+          !target.closest('.delete-confirmation') &&
+          !target.closest(`button[data-sprint-id="${showDeleteSprintConfirm}"]`)
+        ) {
           setShowDeleteSprintConfirm(null);
           setDeleteButtonPositions(prev => {
             const updated = { ...prev };
@@ -93,15 +95,15 @@ const AdminSprintSettingsTab: React.FC = () => {
             return updated;
           });
         }
-      }
-    };
-
-    if (showDeleteSprintConfirm) {
+      };
       document.addEventListener('mousedown', handleClickOutside);
-    }
+    }, 0);
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      window.clearTimeout(timeoutId);
+      if (handleClickOutside) {
+        document.removeEventListener('mousedown', handleClickOutside);
+      }
     };
   }, [showDeleteSprintConfirm]);
 
@@ -112,18 +114,7 @@ const AdminSprintSettingsTab: React.FC = () => {
   const fetchSprints = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/sprints', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch sprints');
-      }
-
-      const data = await response.json();
-      setSprints(data.sprints || []);
+      setSprints(await getAllSprints());
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('sprintSettings.failedToLoadSprints'), '');
     } finally {
@@ -164,54 +155,109 @@ const AdminSprintSettingsTab: React.FC = () => {
       is_active: false,
       description: ''
     });
+    setTransferOffer(null);
+    pendingActivateRef.current = null;
+  };
+
+  const commitSprintPayload = async (
+    payload: {
+      name: string;
+      start_date: string;
+      end_date: string;
+      is_active: boolean;
+      description: string;
+    },
+    options: { sprintId?: string; transfer: boolean; selectAfter: boolean }
+  ) => {
+    setSavingSprint(true);
+    try {
+      const saved = options.sprintId
+        ? await updateSprint(options.sprintId, {
+            ...payload,
+            transfer_active_work: options.transfer,
+          })
+        : await createSprint({
+            ...payload,
+            transfer_active_work: options.transfer,
+          });
+      const moved = Number(saved?.transferred_count) || 0;
+      toast.success(
+        options.sprintId
+          ? t('sprintSettings.sprintUpdatedSuccessfully')
+          : t('sprintSettings.sprintCreatedSuccessfully'),
+        ''
+      );
+      if (moved > 0) {
+        toast.success(
+          t('sprintSettings.transferSuccess', { count: moved, toName: saved.name }),
+          ''
+        );
+      }
+      notifySprintsUpdated({
+        selectSprintId: options.selectAfter && saved?.id ? saved.id : undefined,
+        transferredFromSprintId: options.transfer ? transferOffer?.fromId : undefined,
+        transferredToSprintId:
+          options.transfer && transferOffer?.fromId && saved?.id ? saved.id : undefined,
+      });
+      setTransferOffer(null);
+      pendingActivateRef.current = null;
+      const closeEditor = !options.sprintId || editingId === options.sprintId;
+      if (closeEditor) {
+        handleCancel();
+      }
+      fetchSprints();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('sprintSettings.failedToSaveSprint'), '');
+    } finally {
+      setSavingSprint(false);
+    }
   };
 
   const handleSave = async () => {
+    if (!formData.name.trim()) {
+      toast.error(t('sprintSettings.sprintNameRequired'), '');
+      return;
+    }
+    if (!formData.start_date) {
+      toast.error(t('sprintSettings.startDateRequired'), '');
+      return;
+    }
+    if (!formData.end_date) {
+      toast.error(t('sprintSettings.endDateRequired'), '');
+      return;
+    }
+    if (new Date(formData.end_date) < new Date(formData.start_date)) {
+      toast.error(t('sprintSettings.endDateAfterStartDate'), '');
+      return;
+    }
+
+    const wasActive = editingId
+      ? Boolean(sprints.find((s) => s.id === editingId)?.is_active)
+      : false;
+    const becomingActive = Boolean(formData.is_active) && !wasActive;
+
     try {
-      // Validation
-      if (!formData.name.trim()) {
-        toast.error(t('sprintSettings.sprintNameRequired'), '');
-        return;
+      if (becomingActive) {
+        const offer = await fetchSprintTransferOffer({
+          excludeSprintId: editingId || undefined,
+          sprints,
+        });
+        if (offer) {
+          pendingActivateRef.current = {
+            mode: editingId ? 'update' : 'create',
+            sprintId: editingId || undefined,
+            payload: { ...formData },
+          };
+          setTransferToName(formData.name.trim());
+          setTransferOffer(offer);
+          return;
+        }
       }
-      if (!formData.start_date) {
-        toast.error(t('sprintSettings.startDateRequired'), '');
-        return;
-      }
-      if (!formData.end_date) {
-        toast.error(t('sprintSettings.endDateRequired'), '');
-        return;
-      }
-      if (new Date(formData.end_date) < new Date(formData.start_date)) {
-        toast.error(t('sprintSettings.endDateAfterStartDate'), '');
-        return;
-      }
-
-      const url = editingId 
-        ? `/api/admin/sprints/${editingId}`
-        : '/api/admin/sprints';
-      
-      const method = editingId ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
+      await commitSprintPayload(formData, {
+        sprintId: editingId || undefined,
+        transfer: false,
+        selectAfter: false,
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to save sprint');
-      }
-
-      toast.success(editingId ? t('sprintSettings.sprintUpdatedSuccessfully') : t('sprintSettings.sprintCreatedSuccessfully'), '');
-      
-      handleCancel();
-      fetchSprints();
-      
-      // Dispatch custom event to refresh sprints in App-level state
-      window.dispatchEvent(new CustomEvent('sprints-updated'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('sprintSettings.failedToSaveSprint'), '');
     }
@@ -273,13 +319,7 @@ const AdminSprintSettingsTab: React.FC = () => {
   const confirmDeleteSprint = async (id: string) => {
     try {
       const response = await deleteSprint(id);
-      const updatedSprints = await fetch('/api/admin/sprints', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        }
-      });
-      const data = await updatedSprints.json();
-      setSprints(data.sprints || []);
+      setSprints(await getAllSprints());
       setShowDeleteSprintConfirm(null);
       setDeleteButtonPositions(prev => {
         const updated = { ...prev };
@@ -326,27 +366,33 @@ const AdminSprintSettingsTab: React.FC = () => {
   };
 
   const handleToggleActive = async (sprint: PlanningPeriod) => {
+    const payload = {
+      name: sprint.name,
+      start_date: toDateInputValue(sprint.start_date),
+      end_date: toDateInputValue(sprint.end_date),
+      is_active: !sprint.is_active,
+      description: sprint.description || '',
+    };
+
     try {
-      const response = await fetch(`/api/admin/sprints/${sprint.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          ...sprint,
-          is_active: !sprint.is_active
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update sprint status');
+      if (!sprint.is_active) {
+        const offer = await fetchSprintTransferOffer({ excludeSprintId: sprint.id, sprints });
+        if (offer) {
+          pendingActivateRef.current = {
+            mode: 'toggle',
+            sprintId: sprint.id,
+            payload,
+          };
+          setTransferToName(payload.name.trim());
+          setTransferOffer(offer);
+          return;
+        }
       }
-
-      fetchSprints();
-      
-      // Dispatch custom event to refresh sprints in App-level state
-      window.dispatchEvent(new CustomEvent('sprints-updated'));
+      await commitSprintPayload(payload, {
+        sprintId: sprint.id,
+        transfer: false,
+        selectAfter: false,
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('sprintSettings.failedToUpdateSprint'), '');
     }
@@ -404,72 +450,7 @@ const AdminSprintSettingsTab: React.FC = () => {
             {editingId ? t('sprintSettings.editSprint') : t('sprintSettings.createNewSprint')}
           </h4>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('sprintSettings.sprintName')}
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Sprint 1, Q1 2025"
-                maxLength={SPRINT_NAME_MAX_LENGTH}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('sprintSettings.startDate')}
-              </label>
-              <input
-                type="date"
-                value={formData.start_date}
-                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('sprintSettings.endDate')}
-              </label>
-              <input
-                type="date"
-                value={formData.end_date}
-                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('sprintSettings.descriptionLabel')}
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder={t('sprintSettings.optionalDescription')}
-                maxLength={SPRINT_DESCRIPTION_MAX_LENGTH}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <ModernCheckbox
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  size="sm"
-                />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('sprintSettings.markAsActiveSprint')}
-                </span>
-              </label>
-            </div>
-          </div>
+          <SprintEditorFormFields formData={formData} onChange={setFormData} />
 
           <div className="flex gap-2">
             <button
@@ -518,6 +499,9 @@ const AdminSprintSettingsTab: React.FC = () => {
                     {t('sprintSettings.endDate')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    {t('sprintSettings.tasksColumn')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {t('sprintSettings.status')}
                   </th>
                 </tr>
@@ -546,7 +530,7 @@ const AdminSprintSettingsTab: React.FC = () => {
                         {/* Portal-based Delete Confirmation Dialog */}
                         {showDeleteSprintConfirm === sprint.id && deleteButtonPositions[sprint.id] && createPortal(
                           <div 
-                            className="delete-confirmation fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg p-3 z-[9999] min-w-[200px]"
+                            className="delete-confirmation fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg p-3 z-[9999] min-w-[16rem] max-w-sm"
                             style={{
                               top: `${deleteButtonPositions[sprint.id].top}px`,
                               left: `${deleteButtonPositions[sprint.id].left}px`,
@@ -557,10 +541,20 @@ const AdminSprintSettingsTab: React.FC = () => {
                             <div className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                               {(() => {
                                 const taskCount = sprintUsageCounts[sprint.id] || 0;
-                                if (taskCount > 0) {
-                                  return (
-                                    <>
-                                      <div className="font-medium mb-1">{t('sprintSettings.deleteSprint')}</div>
+                                const isActive = sprint.is_active === true;
+                                return (
+                                  <>
+                                    <div className="font-medium mb-1">
+                                      {isActive
+                                        ? t('sprintSettings.deleteActiveTitle')
+                                        : t('sprintSettings.deleteSprint')}
+                                    </div>
+                                    {isActive && (
+                                      <div className="text-xs text-amber-800 dark:text-amber-200 mb-2">
+                                        {t('sprintSettings.deleteActiveBody', { name: sprint.name })}
+                                      </div>
+                                    )}
+                                    {taskCount > 0 ? (
                                       <div className="text-xs text-gray-700 dark:text-gray-400">
                                         <span className="text-blue-600 dark:text-blue-400 font-medium">
                                           {t('sprintSettings.tasksUsingSprint', { count: taskCount })}
@@ -569,19 +563,14 @@ const AdminSprintSettingsTab: React.FC = () => {
                                         <span className="font-medium">{sprint.name}</span>
                                         {' '}{t('sprintSettings.willBeUnassignedToBacklog')}
                                       </div>
-                                    </>
-                                  );
-                                } else {
-                                  return (
-                                    <>
-                                      <div className="font-medium mb-1">{t('sprintSettings.deleteSprint')}</div>
+                                    ) : (
                                       <div className="text-xs text-gray-600 dark:text-gray-400">
                                         {t('sprintSettings.noTasksUsing')}{' '}
                                         <span className="font-medium">{sprint.name}</span>
                                       </div>
-                                    </>
-                                  );
-                                }
+                                    )}
+                                  </>
+                                );
                               })()}
                             </div>
                             <div className="flex space-x-2">
@@ -589,13 +578,15 @@ const AdminSprintSettingsTab: React.FC = () => {
                                 onClick={() => confirmDeleteSprint(sprint.id)}
                                 className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
                               >
-                                {t('sprintSettings.yes')}
+                                {sprint.is_active === true
+                                  ? t('sprintSettings.deleteAnyway')
+                                  : t('sprintSettings.yes')}
                               </button>
                               <button
                                 onClick={cancelDeleteSprint}
                                 className="px-2 py-1 text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
                               >
-                                {t('sprintSettings.no')}
+                                {t('sprintSettings.cancel')}
                               </button>
                             </div>
                           </div>,
@@ -620,6 +611,9 @@ const AdminSprintSettingsTab: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                       {formatDate(sprint.end_date)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                      {Number(sprint.task_count) || 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
@@ -655,6 +649,33 @@ const AdminSprintSettingsTab: React.FC = () => {
           </div>
         </div>
       </div>
+      <SprintTransferConfirmDialog
+        offer={transferOffer}
+        toName={transferToName}
+        busy={savingSprint}
+        onMove={() => {
+          const pending = pendingActivateRef.current;
+          if (!pending) return;
+          void commitSprintPayload(pending.payload, {
+            sprintId: pending.sprintId,
+            transfer: true,
+            selectAfter: true,
+          });
+        }}
+        onKeep={() => {
+          const pending = pendingActivateRef.current;
+          if (!pending) return;
+          void commitSprintPayload(pending.payload, {
+            sprintId: pending.sprintId,
+            transfer: false,
+            selectAfter: false,
+          });
+        }}
+        onCancel={() => {
+          setTransferOffer(null);
+          pendingActivateRef.current = null;
+        }}
+      />
     </div>
   );
 };

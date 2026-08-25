@@ -78,6 +78,8 @@ export interface UserPreferences {
   showAgentTasks: boolean;
   taskDetailsWidth: number;
   ganttTaskColumnWidth: number;
+  /** Gantt timeline day column width in pixels (zoom). */
+  ganttDayColumnWidth: number;
   kanbanColumnWidth: number; // User-adjustable width for Kanban columns (default: 300px)
   ganttScrollPositions: { [boardId: string]: { date: string; sessionId: string } }; // Per-board scroll positions
   listViewColumnVisibility: ColumnVisibility;
@@ -347,6 +349,7 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
   showAgentTasks: true, // Default: show Agent-assigned tasks on the board
   taskDetailsWidth: 480, // Default width in pixels (30rem equivalent)
   ganttTaskColumnWidth: 320, // Default Gantt task column width in pixels
+  ganttDayColumnWidth: 40, // Default Gantt day column width (100% zoom)
   kanbanColumnWidth: 300, // Default Kanban column width in pixels
   ganttScrollPositions: {}, // Per-board Gantt scroll positions (empty by default)
   selectedSprintId: null, // Default to "All Sprints" (no filter)
@@ -687,6 +690,7 @@ export const saveUserPreferences = async (preferences: UserPreferences, userId: 
           saveIfDefined('calendarFocusDate', preferences.calendarFocusDate),
           saveIfDefined('taskDetailsWidth', preferences.taskDetailsWidth),
           saveIfDefined('ganttTaskColumnWidth', preferences.ganttTaskColumnWidth),
+          saveIfDefined('ganttDayColumnWidth', preferences.ganttDayColumnWidth),
           saveIfDefined('kanbanColumnWidth', preferences.kanbanColumnWidth),
           
           // App Settings (only save if explicitly set)
@@ -997,6 +1001,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
         ),
         taskDetailsWidth: smartMerge(preferences.taskDetailsWidth, dbSettings.taskDetailsWidth, defaults.taskDetailsWidth),
         ganttTaskColumnWidth: smartMerge(preferences.ganttTaskColumnWidth, dbSettings.ganttTaskColumnWidth, defaults.ganttTaskColumnWidth),
+        ganttDayColumnWidth: smartMerge(preferences.ganttDayColumnWidth, dbSettings.ganttDayColumnWidth, defaults.ganttDayColumnWidth),
         kanbanColumnWidth: smartMerge(preferences.kanbanColumnWidth, dbSettings.kanbanColumnWidth, defaults.kanbanColumnWidth),
         
         // Member Filter Preferences  
@@ -1354,6 +1359,7 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
         'calendarFocusDate': 'calendarFocusDate',
         'taskDetailsWidth': 'taskDetailsWidth',
         'ganttTaskColumnWidth': 'ganttTaskColumnWidth',
+        'ganttDayColumnWidth': 'ganttDayColumnWidth',
         'kanbanColumnWidth': 'kanbanColumnWidth',
         'isSearchActive': 'isSearchActive',
         'isAdvancedSearchExpanded': 'isAdvancedSearchExpanded',

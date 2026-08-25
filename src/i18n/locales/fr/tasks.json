@@ -466,7 +466,9 @@
     "noFilter": "(Aucun filtre)",
     "unassigned": "(Non assigné)",
     "active": "Actif",
-    "current": "Actuel"
+    "current": "Actuel",
+    "addSprint": "Nouveau sprint",
+    "goToSprints": "Aller aux sprints"
   },
   "taskPage": {
     "loading": "Chargement de la tâche...",

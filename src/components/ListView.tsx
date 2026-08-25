@@ -1340,6 +1340,10 @@ export default function ListView({
   const handleDateRangeClick = (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!canMutate) return;
+    if (showDateRangePicker === taskId) {
+      handleDateRangePickerClose();
+      return;
+    }
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     setDateRangePickerPosition({
@@ -1436,9 +1440,20 @@ export default function ListView({
     }
   };
 
+  const closeSprintSelector = () => {
+    setShowSprintSelector(null);
+    setSprintSelectorCoords(null);
+    setSprintSearchTerm('');
+    setHighlightedSprintIndex(-1);
+  };
+
   // Sprint selector handlers
   const handleSprintSelectorOpen = (taskId: string, event: React.SyntheticEvent<HTMLDivElement>) => {
     if (!canMutate) return;
+    if (showSprintSelector === taskId) {
+      closeSprintSelector();
+      return;
+    }
     const target = event.currentTarget;
     const coords = calculateDropdownCoords(target, 'sprint');
     setSprintSelectorCoords(coords);
@@ -1468,10 +1483,7 @@ export default function ListView({
     }
 
     onEditTask(updatedTask);
-    setShowSprintSelector(null);
-    setSprintSelectorCoords(null);
-    setSprintSearchTerm('');
-    setHighlightedSprintIndex(-1);
+    closeSprintSelector();
   };
 
   const handleSprintKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, taskId: string) => {
@@ -1492,9 +1504,7 @@ export default function ListView({
       handleSprintSelect(taskId, filteredSprints[highlightedSprintIndex]);
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      setShowSprintSelector(null);
-      setSprintSearchTerm('');
-      setHighlightedSprintIndex(-1);
+      closeSprintSelector();
     }
   };
 
@@ -1540,19 +1550,23 @@ export default function ListView({
 
   // Close sprint selector when clicking outside
   useEffect(() => {
+    if (!showSprintSelector) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (sprintSelectorRef.current && !sprintSelectorRef.current.contains(event.target as Node)) {
-        setShowSprintSelector(null);
-        setSprintSelectorCoords(null);
-        setSprintSearchTerm('');
-        setHighlightedSprintIndex(-1);
-      }
+      const target = event.target as Node;
+      if (sprintSelectorRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-task-sprint-trigger]')) return;
+      closeSprintSelector();
     };
 
-    if (showSprintSelector) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
+    const timeoutId = window.setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
   }, [showSprintSelector]);
 
   // Reset highlighted index when search term changes
@@ -2488,6 +2502,7 @@ export default function ListView({
                             <div
                               role="button"
                               tabIndex={0}
+                              data-task-sprint-trigger="true"
                               aria-label={t('listView.clickToSelectSprint')}
                               className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full p-1 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                               onKeyDown={(e) => {
@@ -2690,6 +2705,7 @@ export default function ListView({
                             const validation = getDateValidation(task);
                             return (
                               <span 
+                                data-task-date-trigger="true"
                                 className={`text-xs font-mono cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/60 rounded px-1 py-0.5 text-gray-700 dark:text-gray-300 ${
                                   !validation.startDateValid ? 'font-semibold ring-1 ring-red-400' : ''
                                 }`}
@@ -2748,6 +2764,7 @@ export default function ListView({
                             
                             return (
                               <span 
+                                data-task-date-trigger="true"
                                 className={className}
                                 onClick={(e) => handleDateRangeClick(task.id, e)}
                                 onMouseEnter={(e) => {
@@ -2773,6 +2790,7 @@ export default function ListView({
                           })()
                         ) : (
                           <span 
+                            data-task-date-trigger="true"
                             className="inline-flex items-center text-gray-400 dark:text-gray-500 text-xs cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/60 rounded px-1 py-0.5 border border-dashed border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
                             onClick={(e) => handleDateRangeClick(task.id, e)}
                             title={t('listView.clickToSetDate')}

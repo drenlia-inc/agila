@@ -207,7 +207,7 @@ interface BoardTabsProps {
   getFilteredTaskCount?: (board: Board) => number;
   /** Active-work count for board WIP (excludes finished/archived). */
   getBoardWipTaskCount?: (board: Board) => number;
-  /** Active-work effort sum (excludes finished/archived), same scope as board WIP. */
+  /** Filtered active-work effort (excludes finished/archived); pill hidden when 0. */
   getBoardWipEffort?: (board: Board) => number;
   /** Unfiltered board total; delete confirmations must not report only visible tasks. */
   getTotalTaskCount?: (board: Board) => number;

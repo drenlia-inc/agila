@@ -366,15 +366,15 @@ export const useGanttScrollPosition = ({ boardId, currentUser }: UseGanttScrollP
    */
   const calculateScrollPosition = useCallback((
     targetDate: Date, 
-    dateRange: any[]
+    dateRange: any[],
+    dayColumnWidth = 40
   ): number => {
     const targetIndex = dateRange.findIndex(d => 
       formatLocalDate(d.date) === formatLocalDate(targetDate)
     );
     
     if (targetIndex >= 0) {
-      // Position the target date as the leftmost visible cell
-      return targetIndex * 40; // 40px per column
+      return targetIndex * dayColumnWidth;
     }
     
     return 0;

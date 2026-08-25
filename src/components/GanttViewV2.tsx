@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect, startTransition } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
@@ -18,7 +18,11 @@ import { useGanttScrollPosition, getLeftmostVisibleDateFromDOM } from '../hooks/
 import {
   clampGanttTaskColumnWidth,
   GANTT_TASK_COLUMN_DEFAULT_WIDTH,
+  GANTT_DAY_COLUMN_PX,
   ganttBarBoxInDateRange,
+  ganttDayGridTemplate,
+  normalizeGanttDayColumnWidth,
+  stepGanttDayColumnWidth,
 } from './gantt/ganttLayout';
 import { toast } from '../utils/toast';
 import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
@@ -55,7 +59,9 @@ interface GanttViewV2Props {
   onReorderTaskInColumn?: (taskId: string, columnId: string, targetIndex: number) => Promise<void>;
   availablePriorities?: PriorityOption[];
   availableTags?: Tag[];
-  availableSprints?: Array<{ id: string; name: string }>;
+  availableSprints?: Array<{ id: string; name: string; start_date?: string; end_date?: string; is_active?: boolean | number }>;
+  /** Board sprint filter — badge hidden when a sprint/backlog filter is active. */
+  selectedSprintId?: string | null;
   boards?: Board[];
   checkedTaskIds?: Set<string>;
   onReplaceCheckedTaskIds?: (taskIds: string[]) => void;
@@ -142,6 +148,7 @@ const GanttViewV2 = ({
   availablePriorities = [],
   availableTags = [],
   availableSprints = [],
+  selectedSprintId = null,
   boards = [],
   checkedTaskIds,
   onReplaceCheckedTaskIds,
@@ -178,6 +185,10 @@ const GanttViewV2 = ({
   const activeDragItemRef = useRef<any>(null);
   const [currentHoverDate, setCurrentHoverDate] = useState<string | null>(null);
   const [taskColumnWidth, setTaskColumnWidth] = useState(GANTT_TASK_COLUMN_DEFAULT_WIDTH);
+  const [dayColumnWidth, setDayColumnWidth] = useState(GANTT_DAY_COLUMN_PX);
+  const dayColumnWidthRef = useRef(GANTT_DAY_COLUMN_PX);
+  const zoomAnchorRef = useRef<{ index: number; fraction: number } | null>(null);
+  const dayZoomHydratedRef = useRef(false);
   const [isResizing, setIsResizing] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<string[]>(
     () => Array.from(checkedTaskIds || [])
@@ -586,13 +597,14 @@ const GanttViewV2 = ({
           Math.min(containerRect.right, safeRight) - containerRect.left
         );
         let scrollPosition;
+        const col = dayColumnWidthRef.current;
         
         if (position === 'start') {
-          scrollPosition = targetIndex * 40;
+          scrollPosition = targetIndex * col;
         } else if (position === 'end') {
-          scrollPosition = (targetIndex * 40) - visibleWidth + 40;
+          scrollPosition = (targetIndex * col) - visibleWidth + col;
         } else {
-          scrollPosition = (targetIndex * 40) - (visibleWidth / 2) + 20;
+          scrollPosition = (targetIndex * col) - (visibleWidth / 2) + col / 2;
         }
         
         container.scrollLeft = Math.max(0, scrollPosition);
@@ -980,7 +992,7 @@ const GanttViewV2 = ({
                 // Adjust scroll position
                 requestAnimationFrame(() => {
                   if (timeline) {
-                    timeline.scrollLeft = Math.max(0, scrollLeft - (toRemove * 40));
+                    timeline.scrollLeft = Math.max(0, scrollLeft - (toRemove * dayColumnWidthRef.current));
                   }
                 });
               }
@@ -1024,7 +1036,7 @@ const GanttViewV2 = ({
               // Adjust scroll position to maintain view
               requestAnimationFrame(() => {
                 if (timeline) {
-                  timeline.scrollLeft = currentScrollLeft + (BUFFER_DAYS * 40);
+                  timeline.scrollLeft = currentScrollLeft + (BUFFER_DAYS * dayColumnWidthRef.current);
                 }
               });
               
@@ -1068,8 +1080,11 @@ const GanttViewV2 = ({
       try {
         const preferences = await loadUserPreferencesAsync();
         setTaskColumnWidth(clampGanttTaskColumnWidth(preferences.ganttTaskColumnWidth));
+        setDayColumnWidth(normalizeGanttDayColumnWidth(preferences.ganttDayColumnWidth));
       } catch (error) {
         // Keep default value
+      } finally {
+        dayZoomHydratedRef.current = true;
       }
     };
     loadPreferences();
@@ -1117,6 +1132,76 @@ const GanttViewV2 = ({
     
     return () => clearTimeout(timeoutId);
   }, [taskColumnWidth]);
+
+  useEffect(() => {
+    dayColumnWidthRef.current = dayColumnWidth;
+  }, [dayColumnWidth]);
+
+  useEffect(() => {
+    const persist = async () => {
+      try {
+        const currentPreferences = await loadUserPreferencesAsync();
+        await saveUserPreferences({
+          ...currentPreferences,
+          ganttDayColumnWidth: dayColumnWidth,
+        });
+      } catch {
+        // Silent fail
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      if (!dayZoomHydratedRef.current) return;
+      void persist();
+    }, 800);
+
+    return () => clearTimeout(timeoutId);
+  }, [dayColumnWidth]);
+
+  const applyDayZoom = useCallback((nextWidth: number) => {
+    if (nextWidth === dayColumnWidth) return;
+    const container = scrollContainerRef.current;
+    if (container && dayColumnWidth > 0) {
+      const containerRect = container.getBoundingClientRect();
+      const { safeRight } = getTaskDetailsSafeViewport();
+      const visibleWidth = Math.max(
+        160,
+        Math.min(containerRect.right, safeRight) - containerRect.left
+      );
+      const center = container.scrollLeft + visibleWidth / 2;
+      const index = Math.floor(center / dayColumnWidth);
+      const fraction = center / dayColumnWidth - index;
+      zoomAnchorRef.current = { index, fraction };
+    }
+    setDayColumnWidth(nextWidth);
+  }, [dayColumnWidth]);
+
+  const handleZoomIn = useCallback(() => {
+    applyDayZoom(stepGanttDayColumnWidth(dayColumnWidth, 1));
+  }, [applyDayZoom, dayColumnWidth]);
+
+  const handleZoomOut = useCallback(() => {
+    applyDayZoom(stepGanttDayColumnWidth(dayColumnWidth, -1));
+  }, [applyDayZoom, dayColumnWidth]);
+
+  const handleZoomReset = useCallback(() => {
+    applyDayZoom(GANTT_DAY_COLUMN_PX);
+  }, [applyDayZoom]);
+
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current;
+    const container = scrollContainerRef.current;
+    if (!anchor || !container) return;
+    zoomAnchorRef.current = null;
+    const containerRect = container.getBoundingClientRect();
+    const { safeRight } = getTaskDetailsSafeViewport();
+    const visibleWidth = Math.max(
+      160,
+      Math.min(containerRect.right, safeRight) - containerRect.left
+    );
+    const center = (anchor.index + anchor.fraction) * dayColumnWidth;
+    container.scrollLeft = Math.max(0, center - visibleWidth / 2);
+  }, [dayColumnWidth]);
 
   // Handle task column resizing
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -1330,7 +1415,8 @@ const GanttViewV2 = ({
             if (scrollContainerRef.current) {
               const scrollPosition = calculateScrollPosition(
                 targetDate, 
-                initialRange
+                initialRange,
+                dayColumnWidthRef.current
               );
               
               scrollContainerRef.current.scrollLeft = scrollPosition;
@@ -1467,10 +1553,11 @@ const GanttViewV2 = ({
         160,
         Math.min(containerRect.right, safeRight) - containerRect.left
       );
-      const firstVisible = Math.max(0, Math.floor(container.scrollLeft / 40));
+      const col = dayColumnWidth;
+      const firstVisible = Math.max(0, Math.floor(container.scrollLeft / col));
       const lastVisible = Math.min(
         dateRange.length - 1,
-        Math.floor((container.scrollLeft + visibleWidth - 1) / 40)
+        Math.floor((container.scrollLeft + visibleWidth - 1) / col)
       );
       if (firstVisible >= dateRange.length) return;
 
@@ -1501,7 +1588,7 @@ const GanttViewV2 = ({
       setHighlightedTaskId(targetId);
       setTimeout(() => setHighlightedTaskId(null), 1200);
     },
-    [dateRange, ganttTasks, navigateToDate]
+    [dateRange, dayColumnWidth, ganttTasks, navigateToDate]
   );
 
   /** Bring an off-screen row back into view from the header indicators. */
@@ -1613,7 +1700,8 @@ const GanttViewV2 = ({
         task.startDate,
         task.endDate,
         dateRange,
-        dateToIndexMap
+        dateToIndexMap,
+        dayColumnWidth
       );
       if (!bar) return;
 
@@ -1627,7 +1715,7 @@ const GanttViewV2 = ({
     });
 
     setTaskPositions(positions);
-  }, [ganttTasks, dateRange, dateToIndexMap]);
+  }, [ganttTasks, dateRange, dateToIndexMap, dayColumnWidth]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -2255,6 +2343,10 @@ const GanttViewV2 = ({
               ? (permanent) => setDeleteConfirmMode(permanent ? 'permanent' : 'soft')
               : undefined
           }
+          dayColumnWidth={dayColumnWidth}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onZoomReset={handleZoomReset}
         />
       </div>
       
@@ -2313,7 +2405,7 @@ const GanttViewV2 = ({
                           // Trigger the lazy loading
                           container.scrollLeft = 100;
                           setTimeout(() => {
-                            container.scrollLeft = currentScroll + (60 * 40); // Adjust for new dates
+                            container.scrollLeft = currentScroll + (60 * dayColumnWidthRef.current); // Adjust for new dates
                           }, 100);
                         } else {
                           // Normal scroll
@@ -2408,14 +2500,14 @@ const GanttViewV2 = ({
             <div 
               className="absolute"
               style={{ 
-                width: `${dateRange.length * 40}px`,
+                width: `${dateRange.length * dayColumnWidth}px`,
                 transform: `translateX(0px)`,
                 willChange: 'transform'
               }}>
               {/* Month/Year Row */}
               <div 
                 className="h-6 grid border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"
-                style={{ gridTemplateColumns: `repeat(${dateRange.length}, 40px)` }}
+                style={{ gridTemplateColumns: ganttDayGridTemplate(dateRange.length, dayColumnWidth) }}
                 data-gantt-month-row="true"
               >
                 {dateRange.map((dateCol, index) => (
@@ -2435,13 +2527,15 @@ const GanttViewV2 = ({
               {/* Day Numbers Row */}
               <div 
                 className="h-8 grid border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"
-                style={{ gridTemplateColumns: `repeat(${dateRange.length}, 40px)` }}
+                style={{ gridTemplateColumns: ganttDayGridTemplate(dateRange.length, dayColumnWidth) }}
                 data-gantt-day-row="true"
               >
                 {dateRange.map((dateCol, index) => (
                   <div
                     key={`day-${index}`}
-                    className={`text-xs text-center border-r border-gray-300 dark:border-gray-600 flex items-center justify-center ${
+                    className={`${
+                      dayColumnWidth < 32 ? 'text-[10px]' : 'text-xs'
+                    } text-center border-r border-gray-300 dark:border-gray-600 flex items-center justify-center ${
                       dateCol.isToday ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-semibold' :
                       dateCol.isWeekend ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'
                     }`}
@@ -2457,6 +2551,7 @@ const GanttViewV2 = ({
                 timelineRef={scrollContainerRef}
                 headerRef={timelineHeaderRef}
                 onJumpToTask={scrollRowIntoView}
+                dayColumnWidth={dayColumnWidth}
               />
             </div>
           </div>
@@ -2495,6 +2590,9 @@ const GanttViewV2 = ({
           canMutate={canMutate}
           onReorderTask={onReorderTaskInColumn}
           onMoveTaskToColumn={onMoveTaskToColumn}
+          selectedSprintId={selectedSprintId}
+          availableSprints={availableSprints}
+          onUpdateTask={onUpdateTaskProp}
         />
 
         {/* Timeline (horizontal date move / resize only) */}
@@ -2528,6 +2626,7 @@ const GanttViewV2 = ({
             onDeleteRelationship={handleDeleteRelationship}
             columns={columns}
             siteSettings={siteSettings}
+            dayColumnWidth={dayColumnWidth}
           />
       </div>
       </DndContext>

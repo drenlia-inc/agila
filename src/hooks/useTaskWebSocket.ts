@@ -5,6 +5,7 @@ import { feDebug } from '../utils/clientDebug';
 import { dedupeTasksInColumns, stripTaskFromAllColumns, applyRestoredTaskToColumns } from '../utils/taskReorderingUtils';
 import { isTaskSoftDeleted } from '../utils/taskUtils';
 import { scheduleSettledBoardRefresh } from '../utils/boardRestoredRefresh';
+import { sprintIdFromTaskPayload, getTaskSprintId } from '../utils/columnFilters';
 
 function wsHookLog(...args: unknown[]) {
   if (feDebug('FE_DEBUG_WEBSOCKET')) console.log(...args);
@@ -29,6 +30,7 @@ interface UseTaskWebSocketProps {
   // Task filters hook
   taskFilters: {
     setFilteredColumns: React.Dispatch<React.SetStateAction<Columns>>;
+    applyFiltersToColumns: (columnsToFilter: Columns) => Columns;
     viewModeRef: RefObject<'kanban' | 'list' | 'gantt' | 'calendar'>;
     shouldIncludeTaskRef: RefObject<(task: Task) => boolean>;
   };
@@ -321,7 +323,7 @@ export const useTaskWebSocket = ({
             priorityId: data.task.hasOwnProperty('priorityId') ? (data.task.priorityId ?? null) : fullTaskData.priorityId,
             priorityName: data.task.hasOwnProperty('priorityName') ? (data.task.priorityName ?? null) : fullTaskData.priorityName,
             priorityColor: data.task.hasOwnProperty('priorityColor') ? (data.task.priorityColor ?? null) : fullTaskData.priorityColor,
-            sprintId: data.task.hasOwnProperty('sprintId') ? data.task.sprintId : fullTaskData.sprintId,
+            sprintId: sprintIdFromTaskPayload(data.task, getTaskSprintId(fullTaskData)),
             columnEnteredAt: data.task.hasOwnProperty('columnEnteredAt')
               ? data.task.columnEnteredAt
               : fullTaskData.columnEnteredAt,
@@ -367,7 +369,7 @@ export const useTaskWebSocket = ({
             requesterId: data.task.requesterId || null,
             effort: data.task.effort ?? 0,
             priority: data.task.priority || null,
-            sprintId: data.task.sprintId || null,
+            sprintId: sprintIdFromTaskPayload(data.task, null),
             startDate: data.task.startDate || null,
             dueDate: data.task.dueDate || null,
             createdAt: data.task.createdAt || new Date().toISOString(),
@@ -429,7 +431,7 @@ export const useTaskWebSocket = ({
         }
       }
       
-      
+      taskFilters.setFilteredColumns(taskFilters.applyFiltersToColumns(normalizedColumns));
       return normalizedColumns;
     });
     }
@@ -511,7 +513,7 @@ export const useTaskWebSocket = ({
                   priorityColor: has('priorityColor') ? patch.priorityColor : base.priorityColor,
                   startDate: has('startDate') ? patch.startDate : base.startDate,
                   dueDate: has('dueDate') ? patch.dueDate : base.dueDate,
-                  sprintId: has('sprintId') ? patch.sprintId : base.sprintId,
+                  sprintId: sprintIdFromTaskPayload(patch, getTaskSprintId(base)),
                   comments: has('comments') && Array.isArray(patch.comments) ? patch.comments : (base.comments || []),
                   watchers: has('watchers') && Array.isArray(patch.watchers) ? patch.watchers : (base.watchers || []),
                   collaborators: has('collaborators') && Array.isArray(patch.collaborators) ? patch.collaborators : (base.collaborators || []),
@@ -557,23 +559,11 @@ export const useTaskWebSocket = ({
       console.warn(`⚠️ [Batch] Task ${currentSelectedTask.id} was updated but not found in columns for selectedTask update`);
     }
     
-    // NOTE: We don't manually update filteredColumns here
-    // The useTaskFilters hook has a useEffect that automatically recalculates filteredColumns
-    // whenever columns changes. This ensures filtering is always correct and consistent.
-    // Manual updates could cause race conditions or inconsistencies with the filter logic.
-    // 
-    // The useTaskFilters effect will run after setColumns completes and will:
-    // 1. Read the updated columns state (with all our batch updates)
-    // 2. Apply filters to determine which tasks should be visible
-    // 3. Update filteredColumns automatically
-    // 
-    // This is the correct approach because:
-    // - It ensures filter logic is always consistent
-    // - It handles all filter types (sprint, search, members, etc.)
-    // - It avoids race conditions between manual updates and effect updates
+    // NOTE: filteredColumns is synced inside setColumns above via applyFiltersToColumns
+    // so sprint/search filters stay correct immediately (not after the 400ms WS delay).
     }, 0); // Defer to next tick to break up heavy work
     });
-  }, [setColumns, setSelectedTask, setBoards, recentlyDeletedTasksRef]);
+  }, [setColumns, setSelectedTask, setBoards, recentlyDeletedTasksRef, taskFilters]);
   
   // Helper function to schedule batch processing (defined early so it can be used by getMessageChannel)
   const scheduleBatchProcessing = useCallback((data: any) => {

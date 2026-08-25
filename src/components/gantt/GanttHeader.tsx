@@ -1,7 +1,13 @@
 import React from 'react';
-import { CheckSquare, ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react';
+import { CheckSquare, ChevronLeft, ChevronRight, Minus, Plus, Trash2, X } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
 import { TaskJumpDropdown } from './TaskJumpDropdown';
+import { KanbanChromeTooltip } from '../KanbanChromeTooltip';
+import {
+  GANTT_DAY_COLUMN_PX,
+  GANTT_DAY_ZOOM_STEPS,
+  ganttDayZoomPercent,
+} from './ganttLayout';
 
 interface GanttTask {
   id: string;
@@ -59,6 +65,10 @@ interface GanttHeaderProps {
   deleteBusy?: boolean;
   canPermanentDelete?: boolean;
   onDeleteSelectedTasks?: (permanent: boolean) => void;
+  dayColumnWidth?: number;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onZoomReset?: () => void;
 }
 
 export const GanttHeader: React.FC<GanttHeaderProps> = ({
@@ -86,6 +96,10 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
   deleteBusy = false,
   canPermanentDelete = false,
   onDeleteSelectedTasks,
+  dayColumnWidth = GANTT_DAY_COLUMN_PX,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
 }) => {
   const { t } = useTranslation('common');
 
@@ -355,6 +369,55 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
+          </div>
+
+          <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-md border border-gray-300 bg-white px-0.5 dark:border-gray-600 dark:bg-gray-800">
+            <KanbanChromeTooltip label={t('gantt.zoomOut')} placement="bottom">
+              <button
+                type="button"
+                onClick={onZoomOut}
+                disabled={
+                  !onZoomOut ||
+                  dayColumnWidth <= GANTT_DAY_ZOOM_STEPS[0]
+                }
+                className="flex h-7 w-7 items-center justify-center rounded text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-gray-300 dark:hover:bg-gray-700"
+                aria-label={t('gantt.zoomOut')}
+              >
+                <Minus size={14} aria-hidden />
+              </button>
+            </KanbanChromeTooltip>
+            <KanbanChromeTooltip
+              label={
+                dayColumnWidth === GANTT_DAY_COLUMN_PX
+                  ? t('gantt.zoomLevel', { percent: ganttDayZoomPercent(dayColumnWidth) })
+                  : t('gantt.zoomReset')
+              }
+              placement="bottom"
+            >
+              <button
+                type="button"
+                onClick={onZoomReset}
+                disabled={!onZoomReset}
+                className="min-w-[2.75rem] px-1 text-center text-xs font-medium tabular-nums text-gray-700 dark:text-gray-200"
+                aria-label={t('gantt.zoomReset')}
+              >
+                {ganttDayZoomPercent(dayColumnWidth)}%
+              </button>
+            </KanbanChromeTooltip>
+            <KanbanChromeTooltip label={t('gantt.zoomIn')} placement="bottom">
+              <button
+                type="button"
+                onClick={onZoomIn}
+                disabled={
+                  !onZoomIn ||
+                  dayColumnWidth >= GANTT_DAY_ZOOM_STEPS[GANTT_DAY_ZOOM_STEPS.length - 1]
+                }
+                className="flex h-7 w-7 items-center justify-center rounded text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-gray-300 dark:hover:bg-gray-700"
+                aria-label={t('gantt.zoomIn')}
+              >
+                <Plus size={14} aria-hidden />
+              </button>
+            </KanbanChromeTooltip>
           </div>
 
           {/* Loading Indicator - Fixed position to prevent layout shift */}

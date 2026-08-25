@@ -112,6 +112,12 @@ import {
 import { feDebug } from './utils/clientDebug';
 import { dndLog } from './utils/dndDebug';
 import {
+  columnsAfterSprintTransfer,
+  boardsAfterSprintTransfer,
+  taskAfterSprintTransfer,
+  type SprintsUpdatedDetail,
+} from './utils/sprintActiveWorkTransfer';
+import {
   findBoardRelationshipEdge,
   getBoardRelationshipCounterpartIds,
   getBoardRelationshipType,
@@ -527,6 +533,7 @@ function AppContent() {
   const [availablePriorities, setAvailablePriorities] = useState<PriorityOption[]>([]);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [availableSprints, setAvailableSprints] = useState<any[]>([]);
+  const [sprintsReady, setSprintsReady] = useState(false);
   
   // Column visibility state for each board
   const [boardColumnVisibility, setBoardColumnVisibility] = useState<{[boardId: string]: string[]}>({});
@@ -675,6 +682,8 @@ function AppContent() {
     setBoards([]);
     setColumns({});
     setSelectedBoard(null);
+    setAvailableSprints([]);
+    setSprintsReady(false);
     // Note: selectedMembers will be cleared via taskFilters hook
     },
     onAdminRefresh: () => {
@@ -794,6 +803,7 @@ function AppContent() {
     members,
     boards,
     sprints: availableSprints,
+    sprintsReady,
     linkedTaskIds,
     userId: currentUser?.id ?? null,
     updateCurrentUserPreference,
@@ -1557,6 +1567,7 @@ function AppContent() {
     pendingSelfTaskRestoresRef,
     taskFilters: {
       setFilteredColumns: taskFilters.setFilteredColumns,
+      applyFiltersToColumns: taskFilters.applyFiltersToColumns,
       viewModeRef: taskFilters.viewModeRef,
       shouldIncludeTaskRef: taskFilters.shouldIncludeTaskRef,
     },
@@ -1946,6 +1957,7 @@ function AppContent() {
       setAvailablePriorities(loadedPriorities || []);
       setAvailableTags(loadedTags || []);
       setAvailableSprints(loadedSprints || []);
+      setSprintsReady(true);
       // Settings are now loaded by SettingsContext - no need to fetch here
 
       // Refresh board data (includes all boards, columns, and tasks)
@@ -2827,6 +2839,7 @@ function AppContent() {
           setAvailablePriorities(loadedPriorities || []);
           setAvailableTags(loadedTags || []);
           setAvailableSprints(loadedSprints || []);
+          setSprintsReady(true);
           // Settings are now loaded by SettingsContext - no need to fetch here
           activityFeed.setActivities(loadedActivities || []);
           
@@ -2873,6 +2886,7 @@ function AppContent() {
           // Member selection is now handled by a separate useEffect
         } catch (error) {
           // console.error('Failed to load initial data:', error);
+          setSprintsReady(true);
         }
       });
       await fetchQueryLogs();
@@ -2951,10 +2965,33 @@ function AppContent() {
 
   // Listen for sprint updates from admin panel
   useEffect(() => {
-    const handleSprintsUpdated = async () => {
+    const handleSprintsUpdated = async (event: Event) => {
       try {
+        const detail = (event as CustomEvent<SprintsUpdatedDetail>)?.detail || {};
+        const selectSprintId = detail.selectSprintId;
+        const fromSprintId = detail.transferredFromSprintId;
+        const toSprintId = detail.transferredToSprintId;
+        // Remap before the header filter switches, otherwise the new sprint shows 0 tasks.
+        if (fromSprintId && toSprintId) {
+          setColumns((prev) => columnsAfterSprintTransfer(prev, fromSprintId, toSprintId));
+          setBoards((prev) => boardsAfterSprintTransfer(prev, fromSprintId, toSprintId));
+          taskFilters.setFilteredColumns((prev) =>
+            columnsAfterSprintTransfer(prev, fromSprintId, toSprintId)
+          );
+          setSelectedTask((prev) =>
+            prev ? taskAfterSprintTransfer(prev, fromSprintId, toSprintId) : prev
+          );
+        }
         const loadedSprints = await getAllSprints();
         setAvailableSprints(loadedSprints || []);
+        setSprintsReady(true);
+        if (selectSprintId) {
+          const sprint = (loadedSprints || []).find((s: { id: string }) => s.id === selectSprintId);
+          if (sprint) {
+            taskFilters.setSelectedSprintId(sprint.id);
+            updateCurrentUserPreference('selectedSprintId', sprint.id);
+          }
+        }
       } catch (error) {
         console.error('Failed to refresh sprints after admin update:', error);
       }
@@ -2964,7 +3001,7 @@ function AppContent() {
     return () => {
       window.removeEventListener('sprints-updated', handleSprintsUpdated);
     };
-  }, []);
+  }, [taskFilters.setSelectedSprintId, updateCurrentUserPreference]);
 
   // Track board switching state to prevent task count flashing
   const [isSwitchingBoard, setIsSwitchingBoard] = useState(false);
@@ -3708,6 +3745,7 @@ function AppContent() {
     }
     // Optimistic update
     const previousColumns = { ...columns };
+    const previousBoards = boards;
     const previousFilteredColumns = { ...(taskFilters.filteredColumns || {}) };
     const previousSelectedTask = selectedTask;
 
@@ -3789,9 +3827,19 @@ function AppContent() {
       return updatedColumns;
     };
 
-    // Update both columns and filteredColumns so the visible card refreshes immediately
-    setColumns(patchTaskInColumns);
-    taskFilters.setFilteredColumns(patchTaskInColumns);
+    // Update columns, boards, and filtered view together so sprint/search filters stay correct
+    setColumns((prev) => {
+      const next = patchTaskInColumns(prev);
+      taskFilters.setFilteredColumns(taskFilters.applyFiltersToColumns(next));
+      return next;
+    });
+    setBoards((prev) =>
+      prev.map((board) => {
+        const taskBoardId = task.boardId || selectedBoard;
+        if (board.id !== taskBoardId || !board.columns) return board;
+        return { ...board, columns: patchTaskInColumns(board.columns) };
+      })
+    );
 
     // Update selectedTask if this is the selected task
     if (selectedTask && selectedTask.id === task.id) {
@@ -3821,13 +3869,14 @@ function AppContent() {
       }
 
       setColumns(previousColumns);
+      setBoards(previousBoards);
       taskFilters.setFilteredColumns(previousFilteredColumns);
       if (previousSelectedTask) {
         setSelectedTask(previousSelectedTask);
       }
       toast.error(t('errors.updateTaskTitle'), t('errors.updateTaskMessage'));
     }
-  }, [withLoading, fetchQueryLogs, columns, selectedTask, taskFilters, t, canMutate]);
+  }, [withLoading, fetchQueryLogs, columns, boards, selectedBoard, selectedTask, taskFilters, t, canMutate]);
 
   const handleCopyTask = async (task: Task, options?: { skipEmail?: boolean }) => {
     if (!canMutate) {
@@ -5510,28 +5559,21 @@ function AppContent() {
     hasColumnFilters ||
     taskFilters.selectedSprintId !== null ||
     (siteSettings?.AI_ENABLED === 'true' && !taskFilters.showAgentTasks);
-  const getTaskCountForBoard = (board: Board) => {
-    // During board switching, return the last calculated count to prevent flashing
-    if (isSwitchingBoard && lastTaskCountsRef.current[board.id] !== undefined) {
-      return lastTaskCountsRef.current[board.id];
-    }
-
-    // Prefer live columns for the selected board; otherwise use board snapshot
-    const boardColumnsRaw: Columns =
-      board.id === selectedBoard ? columns : (board.columns || {});
-    const boardColumns = dedupeTasksInColumns(boardColumnsRaw);
-
-    // Explicit visibility list (user toggled columns). Default: all non-archived.
+  const visibleColumnIdsForBoard = (board: Board, boardColumns: Columns) => {
     const explicitVisibility = boardColumnVisibility[board.id];
-    const visibleColumnIds = explicitVisibility
+    return explicitVisibility
       ? explicitVisibility
       : Object.values(boardColumns)
           .filter((col) => col && !Boolean(col.is_archived))
           .map((col) => col.id);
+  };
 
-    const visibleSet = new Set(visibleColumnIds);
+  /** Search / member / sprint / agent filters — same set as live board cards. */
+  const getFilteredColumnsForBoard = (board: Board): Columns => {
+    const boardColumnsRaw: Columns =
+      board.id === selectedBoard ? columns : (board.columns || {});
+    const boardColumns = dedupeTasksInColumns(boardColumnsRaw);
 
-    // Selected board: filteredColumns already has search/member/sprint/agent applied — count visible cols only
     if (board.id === selectedBoard && taskFilters.filteredColumns && Object.keys(taskFilters.filteredColumns).length > 0) {
       const currentBoardData = boards.find((b) => b.id === selectedBoard);
       const currentBoardColumnIds = currentBoardData ? Object.keys(currentBoardData.columns || {}) : [];
@@ -5542,20 +5584,11 @@ function AppContent() {
         currentBoardColumnIds.every((id) => filteredColumnIds.includes(id));
 
       if (isValidForCurrentBoard) {
-        const dedupedFiltered = dedupeTasksInColumns(taskFilters.filteredColumns);
-        let totalCount = 0;
-        Object.values(dedupedFiltered).forEach((column) => {
-          if (visibleSet.has(column.id)) {
-            totalCount += column.tasks?.length || 0;
-          }
-        });
-        lastTaskCountsRef.current[board.id] = totalCount;
-        return totalCount;
+        return dedupeTasksInColumns(taskFilters.filteredColumns);
       }
     }
 
-    // Other boards (or fallback): same filters as the live board (incl. role-only with no member picked)
-    const filteredForCount = applyActiveColumnFilters(
+    return applyActiveColumnFilters(
       boardColumns,
       {
         selectedSprintId: taskFilters.selectedSprintId,
@@ -5574,9 +5607,22 @@ function AppContent() {
       boards,
       availableSprints
     );
+  };
+
+  const getTaskCountForBoard = (board: Board) => {
+    // During board switching, return the last calculated count to prevent flashing
+    if (isSwitchingBoard && lastTaskCountsRef.current[board.id] !== undefined) {
+      return lastTaskCountsRef.current[board.id];
+    }
+
+    const boardColumnsRaw: Columns =
+      board.id === selectedBoard ? columns : (board.columns || {});
+    const boardColumns = dedupeTasksInColumns(boardColumnsRaw);
+    const visibleSet = new Set(visibleColumnIdsForBoard(board, boardColumns));
+    const filtered = getFilteredColumnsForBoard(board);
 
     let totalCount = 0;
-    Object.values(filteredForCount).forEach((column) => {
+    Object.values(filtered).forEach((column) => {
       if (!column?.tasks || !visibleSet.has(column.id)) return;
       totalCount += column.tasks.length;
     });
@@ -5605,11 +5651,23 @@ function AppContent() {
     return getBoardWipTaskCount(dedupeTasksInColumns(boardColumnsRaw));
   };
 
-  /** Active-work effort: same column scope as board WIP (excludes finished/archived). */
+  /**
+   * Active-work effort on board tabs: same sprint/search/member filters as task
+   * counts, then only unfinished/non-archived columns. Hide the pill when 0.
+   * Board WIP *count* stays unfiltered (soft capacity of the real board).
+   */
   const getBoardWipEffortForBoard = (board: Board) => {
     const boardColumnsRaw: Columns =
       board.id === selectedBoard ? columns : (board.columns || {});
-    return sumTaskEffort(getBoardWipTasks(dedupeTasksInColumns(boardColumnsRaw)) as Task[]);
+    const boardColumns = dedupeTasksInColumns(boardColumnsRaw);
+    const visibleSet = new Set(visibleColumnIdsForBoard(board, boardColumns));
+    const visibleFiltered: Columns = {};
+    Object.values(getFilteredColumnsForBoard(board)).forEach((column) => {
+      if (column && visibleSet.has(column.id)) {
+        visibleFiltered[column.id] = column;
+      }
+    });
+    return sumTaskEffort(getBoardWipTasks(visibleFiltered) as Task[]);
   };
 
   const warnIfBoardWipSoftLimit = (board: Board | undefined, nextActiveCount: number) => {
@@ -5851,6 +5909,7 @@ function AppContent() {
         onJumpToTask={handleJumpToTask}
         boards={boards}
         sprints={availableSprints}
+        sprintsReady={sprintsReady}
       />
 
       <MobileUnoptimizedBanner enabled={currentPage === 'kanban'} />
@@ -6072,6 +6131,7 @@ function AppContent() {
           }}
           siteSettings={siteSettings}
           boards={boards}
+          sprints={availableSprints}
           canMutate={canMutate}
           onJumpToTask={handleJumpToTask}
         />

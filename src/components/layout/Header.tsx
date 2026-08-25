@@ -25,6 +25,7 @@ import {
   isPublicBrandAssetPath,
 } from '../../constants';
 import { userIsAdmin, userIsViewer } from '../../utils/permissions';
+import { requestAdminNavigation } from '../../utils/adminNavigation';
 import {
   isSystemPanelAvailable as readSystemPanelAvailable,
   TROUBLESHOOTING_VISIBILITY_EVENT,
@@ -95,7 +96,7 @@ interface HeaderProps {
   members: TeamMember[];
   onProfileClick: () => void;
   onLogout: () => void;
-  onPageChange: (page: 'kanban' | 'admin' | 'reports') => void;
+  onPageChange: (page: 'kanban' | 'admin' | 'reports', options?: { hash?: string }) => void;
   /** Kept for callers; manual refresh control removed from the header UI. */
   onRefresh?: () => Promise<void>;
   onHelpClick: () => void;
@@ -124,6 +125,8 @@ interface HeaderProps {
     };
   }>;
   sprints?: Array<{ id: string; name: string; start_date: string; end_date: string }>; // Optional: sprints passed from parent (avoids duplicate API calls)
+  /** False until GET sprints has finished so the selector does not flash "All Sprints". */
+  sprintsReady?: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -148,6 +151,7 @@ const Header: React.FC<HeaderProps> = ({
   onJumpToTask,
   boards = [],
   sprints: propSprints,
+  sprintsReady = true,
 }) => {
   const isDemoMode = process.env.DEMO_ENABLED === 'true';
   const { theme } = useTheme();
@@ -700,6 +704,12 @@ const Header: React.FC<HeaderProps> = ({
                 onSprintChange={onSprintChange || (() => {})}
                 tasks={allTasks}
                 sprints={propSprints}
+                sprintsReady={sprintsReady}
+                canCreateSprint={userIsAdmin(currentUser)}
+                onGoToSprints={() => {
+                  onPageChange('admin', { hash: 'admin#project-settings#sprint-settings' });
+                  requestAdminNavigation('admin#project-settings#sprint-settings');
+                }}
               />
             </div>
           )}
@@ -741,7 +751,7 @@ const Header: React.FC<HeaderProps> = ({
                       : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                 >
-                  {t('navigation.kanban')}
+                  {t('navigation.boards')}
                 </button>
                 {reportsEnabled && (reportsVisibleTo === 'all' || currentUser.roles?.includes('admin')) && (
                   <button
@@ -771,7 +781,7 @@ const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
 
-              {/* Compact app nav: Kanban / Reports / Admin / Invite */}
+              {/* Compact app nav: Boards / Reports / Admin / Invite */}
               <div className="relative lg:hidden" ref={appNavMenuRef}>
                 <KanbanChromeTooltip label={t('navigation.menu')}>
                   <button
@@ -796,7 +806,7 @@ const Header: React.FC<HeaderProps> = ({
                         ? t('navigation.admin')
                         : currentPage === 'reports'
                           ? t('navigation.reports')
-                          : t('navigation.kanban')}
+                          : t('navigation.boards')}
                     </span>
                   </button>
                 </KanbanChromeTooltip>
@@ -814,7 +824,7 @@ const Header: React.FC<HeaderProps> = ({
                       }}
                       className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between gap-2"
                     >
-                      <span>{t('navigation.kanban')}</span>
+                      <span>{t('navigation.boards')}</span>
                       {currentPage === 'kanban' && <Check size={14} className="text-blue-600" />}
                     </button>
                     {reportsEnabled && (reportsVisibleTo === 'all' || currentUser.roles?.includes('admin')) && (
