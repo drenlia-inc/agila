@@ -136,6 +136,11 @@ export function useKanbanMultiSelect({
     setCheckedTaskIds(new Set());
   }, []);
 
+  const replaceCheckedTaskIds = useCallback((taskIds: string[]) => {
+    lastAnchorIdRef.current = taskIds[taskIds.length - 1] || null;
+    setCheckedTaskIds(new Set(taskIds));
+  }, []);
+
   const clearBulkUndo = useCallback(() => {
     setBulkUndo(null);
   }, []);
@@ -1050,6 +1055,7 @@ export function useKanbanMultiSelect({
   return {
     checkedTaskIds,
     setCheckedTaskIds,
+    replaceCheckedTaskIds,
     clearAllChecked,
     toggleTaskChecked,
     toggleColumnChecked,

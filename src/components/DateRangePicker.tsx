@@ -103,9 +103,10 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
   // Close on outside click and handle ESC key
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
-        onClose();
-      }
+      const target = event.target as Node;
+      if (pickerRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-task-date-trigger]')) return;
+      onClose();
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -114,10 +115,14 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleKeyDown);
+    const timeoutId = window.setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true);
+      document.addEventListener('keydown', handleKeyDown);
+    }, 0);
+
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      window.clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside, true);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose]);

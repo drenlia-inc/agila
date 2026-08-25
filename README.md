@@ -104,7 +104,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
    1. The site name and URL in Site Settings
    2. In the App Settings, choose the default language (FR/EN)
    3. Review the Project Settings (and **Features** for board indicators / effort / overdue)
-   4. Add sprints in the Sprint Settings
+   4. Add sprints in **Project Settings → Sprints**
    5. Review Reports Settings
 3. Create team members in the Users Tab
 4. Go to Kanban View and set up your boards and columns

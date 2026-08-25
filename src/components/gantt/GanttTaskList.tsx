@@ -1,6 +1,7 @@
 import React, { memo, useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useColumnDisplayTitle } from '../../utils/columnDisplayTitle';
 import {
   DndContext,
   DragEndEvent,
@@ -21,7 +22,10 @@ import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import { Copy, Trash2, GripVertical, ChevronDown } from 'lucide-react';
 import { Task, Columns, Column } from '../../types';
+import { GanttTaskSelectOptions } from './types';
 import { ganttRowBoxStyle, ganttRowPaddingClass } from './ganttLayout';
+import TaskSprintBadgePicker, { type TaskSprintOption } from '../ui/TaskSprintBadgePicker';
+import { formatToYYYYMMDD } from '../../utils/dateUtils';
 
 interface GanttTaskListProps {
   columns: Columns;
@@ -35,7 +39,7 @@ interface GanttTaskListProps {
   taskColumnWidth: number;
   taskViewMode: string;
   onSelectTask: (task: Task | null) => void;
-  onTaskSelect: (taskId: string) => void;
+  onTaskSelect: (taskId: string, options?: GanttTaskSelectOptions) => void;
   onCopyTask?: (task: Task) => Promise<void>;
   onRemoveTask?: (taskId: string, event?: React.MouseEvent) => Promise<void>;
   highlightedTaskId?: string | null;
@@ -44,7 +48,21 @@ interface GanttTaskListProps {
   canMutate?: boolean;
   onReorderTask?: (taskId: string, columnId: string, targetIndex: number) => Promise<void>;
   onMoveTaskToColumn?: (taskId: string, targetColumnId: string) => Promise<void>;
+  selectedSprintId?: string | null;
+  availableSprints?: TaskSprintOption[];
+  onUpdateTask?: (task: Task) => void;
 }
+
+const formatTaskDateForApi = (value: string | Date | null | undefined): string => {
+  if (!value) return '';
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return String(value).split('T')[0];
+};
 
 const boardColumnsFromColumns = (columns: Columns): Column[] =>
   Object.values(columns).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
@@ -85,6 +103,9 @@ const SortableTaskRow = memo(({
   canMutate = true,
   reorderEnabled,
   onStatusClick,
+  selectedSprintId = null,
+  availableSprints = [],
+  onUpdateTask,
 }: any) => {
   const { t } = useTranslation('common');
   const isTaskDetailsOpen = selectedTask?.id === task.id;
@@ -117,8 +138,19 @@ const SortableTaskRow = memo(({
       return;
     }
 
+    if (canMutate && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+      e.preventDefault();
+      window.getSelection()?.removeAllRanges();
+      onTaskSelect(task.id, {
+        additive: e.ctrlKey || e.metaKey,
+        range: e.shiftKey,
+        source: 'list',
+      });
+      return;
+    }
+
     if (isMultiSelectMode) {
-      onTaskSelect(task.id);
+      onTaskSelect(task.id, { source: 'list' });
     } else {
       if (selectedTask && selectedTask.id === task.id) {
         onSelectTask(null);
@@ -161,9 +193,15 @@ const SortableTaskRow = memo(({
       className={`relative shrink-0 border-b border-gray-200 dark:border-gray-600
       ${taskIndex % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}
       hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors duration-200 ease-out ${
-        isRelationshipMode ? 'cursor-default' : ''
+        isRelationshipMode ? 'cursor-default' : 'cursor-pointer select-none'
       } ${isDragging ? 'shadow-2xl ring-2 ring-blue-400 bg-white dark:bg-gray-800 scale-[1.01] z-[60]' : ''}`}
       title={isRelationshipMode ? t('gantt.linkUseTaskBars') : undefined}
+      onMouseDown={(e) => {
+        // Modifier+click is selection, not text drag: block the native range.
+        if (canMutate && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+          e.preventDefault();
+        }
+      }}
       onClick={handleClick}
     >
       <div
@@ -202,24 +240,57 @@ const SortableTaskRow = memo(({
                   {task.title}
                 </div>
               )}
-              {canMutate && onStatusClick ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-0.5 text-[11px] leading-none text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded -ml-0.5 w-fit max-w-full"
-                  title={t('gantt.changeStatus')}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStatusClick(task.id, e.currentTarget as HTMLElement);
-                  }}
-                >
-                  <span className="truncate">📋 {task.status}</span>
-                  <ChevronDown size={10} className="opacity-70 shrink-0" />
-                </button>
-              ) : (
-                <div className="text-[11px] leading-none text-gray-500 dark:text-gray-400 truncate">
-                  📋 {task.status}
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-1 min-w-0">
+                {canMutate && onStatusClick ? (
+                  <button
+                    type="button"
+                    data-gantt-status-trigger="true"
+                    className="inline-flex items-center gap-0.5 text-[11px] leading-none text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded -ml-0.5 w-fit max-w-full"
+                    title={t('gantt.changeStatus')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStatusClick(task.id, e.currentTarget as HTMLElement);
+                    }}
+                  >
+                    <span className="truncate">📋 {task.status}</span>
+                    <ChevronDown size={10} className="opacity-70 shrink-0" />
+                  </button>
+                ) : (
+                  <div className="text-[11px] leading-none text-gray-500 dark:text-gray-400 truncate">
+                    📋 {task.status}
+                  </div>
+                )}
+                {taskViewMode === 'expand' && onUpdateTask && (
+                  <TaskSprintBadgePicker
+                    variant="inline"
+                    task={task}
+                    sprints={availableSprints}
+                    selectedSprintId={selectedSprintId}
+                    disabled={!canMutate}
+                    onSprintSelect={(sprint) => {
+                      const base: Task = {
+                        ...task,
+                        startDate: formatTaskDateForApi(task.startDate),
+                        dueDate: formatTaskDateForApi(task.endDate || task.dueDate),
+                      };
+                      if (!sprint) {
+                        onUpdateTask({ ...base, sprintId: null });
+                        return;
+                      }
+                      onUpdateTask({
+                        ...base,
+                        sprintId: sprint.id,
+                        startDate: sprint.start_date
+                          ? formatToYYYYMMDD(sprint.start_date)
+                          : base.startDate,
+                        dueDate: sprint.end_date
+                          ? formatToYYYYMMDD(sprint.end_date)
+                          : base.dueDate,
+                      });
+                    }}
+                  />
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -282,8 +353,12 @@ const GanttTaskList = memo(({
   canMutate = true,
   onReorderTask,
   onMoveTaskToColumn,
+  selectedSprintId = null,
+  availableSprints = [],
+  onUpdateTask,
 }: GanttTaskListProps) => {
   const { t } = useTranslation('common');
+  const columnDisplayTitle = useColumnDisplayTitle();
   const [statusDropdown, setStatusDropdown] = useState<{ taskId: string; left: number; top: number } | null>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -318,19 +393,20 @@ const GanttTaskList = memo(({
     if (!statusDropdown) return;
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (statusDropdownRef.current && !statusDropdownRef.current.contains(target)) {
-        setStatusDropdown(null);
-      }
+      if (statusDropdownRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-gantt-status-trigger]')) return;
+      setStatusDropdown(null);
     };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setStatusDropdown(null);
     };
-    setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
+    const timeoutId = window.setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true);
       document.addEventListener('keydown', handleEscape);
     }, 0);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      window.clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside, true);
       document.removeEventListener('keydown', handleEscape);
     };
   }, [statusDropdown]);
@@ -418,6 +494,9 @@ const GanttTaskList = memo(({
                   canMutate={canMutate}
                   reorderEnabled={reorderEnabled}
                   onStatusClick={canMutate && onMoveTaskToColumn ? handleStatusClick : undefined}
+                  selectedSprintId={selectedSprintId}
+                  availableSprints={availableSprints}
+                  onUpdateTask={onUpdateTask}
                 />
               ))}
             </SortableContext>
@@ -473,7 +552,7 @@ const GanttTaskList = memo(({
                     statusTask?.columnId === col.id ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : ''
                   }`}
                 >
-                  {col.title}
+                  {columnDisplayTitle(col)}
                   {statusTask?.columnId === col.id && (
                     <span className="ml-2 text-blue-600 dark:text-blue-400">✓</span>
                   )}

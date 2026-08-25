@@ -8,7 +8,7 @@ export type DefaultBoardColumnRow = {
 export const BUILTIN_DEFAULT_BOARD_COLUMNS: DefaultBoardColumnRow[] = [
   { id: 'todo', titleEn: 'To Do', titleFr: 'À faire', isFinished: false },
   { id: 'progress', titleEn: 'In Progress', titleFr: 'En cours', isFinished: false },
-  { id: 'testing', titleEn: 'Testing', titleFr: 'Test', isFinished: false },
+  { id: 'testing', titleEn: 'Testing', titleFr: 'En test', isFinished: false },
   { id: 'completed', titleEn: 'Completed', titleFr: 'Terminé', isFinished: true },
 ];
 

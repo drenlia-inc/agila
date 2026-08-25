@@ -10,6 +10,13 @@ export const DRAG_TYPES = {
 
 export type DragType = typeof DRAG_TYPES[keyof typeof DRAG_TYPES];
 
+/** Options for Gantt multi-select clicks. */
+export type GanttTaskSelectOptions = {
+  range?: boolean;
+  additive?: boolean;
+  source?: 'list' | 'bar';
+};
+
 // Data passed during drag operations
 export interface TaskDragData {
   taskId: string;

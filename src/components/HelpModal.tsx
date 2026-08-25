@@ -147,7 +147,7 @@ const HELP_DELIVERY_KEYS = [
   'help.delivery.features', 'help.delivery.featuresIntro',
   'help.delivery.features1', 'help.delivery.features2', 'help.delivery.features3', 'help.delivery.features4', 'help.delivery.featuresAdvice',
   'help.delivery.hygiene', 'help.delivery.hygieneDone', 'help.delivery.hygieneDelete', 'help.delivery.hygienePurge',
-  'help.delivery.hygieneArchive', 'help.delivery.hygieneRetention',
+  'help.delivery.hygieneArchive', 'help.delivery.hygieneFind', 'help.delivery.hygieneRetention',
   'help.delivery.antiPatterns',
   'help.delivery.antiPattern1', 'help.delivery.antiPattern2', 'help.delivery.antiPattern3', 'help.delivery.antiPattern4',
   'help.delivery.antiPattern6', 'help.delivery.antiPattern7',
@@ -1279,7 +1279,7 @@ export default function HelpModal({
         [],
         [
           'help.delivery.hygieneDone', 'help.delivery.hygieneDelete', 'help.delivery.hygienePurge',
-          'help.delivery.hygieneArchive', 'help.delivery.hygieneRetention',
+          'help.delivery.hygieneArchive', 'help.delivery.hygieneFind', 'help.delivery.hygieneRetention',
         ],
         Trash2,
         'text-amber-600 dark:text-amber-400',
@@ -1599,7 +1599,7 @@ export default function HelpModal({
       renderSectionWithList(
         'help.list.columnConfiguration',
         [],
-        ['help.list.showHideColumns', 'help.list.defaultColumns', 'help.list.columnPersistence', 'help.list.horizontalScrolling'],
+        ['help.list.showHideColumns', 'help.list.taskDependencies', 'help.list.defaultColumns', 'help.list.columnPersistence', 'help.list.horizontalScrolling'],
         Settings,
         'text-purple-600 dark:text-purple-400',
         'bg-purple-50 dark:bg-purple-900/40'
@@ -1619,6 +1619,14 @@ export default function HelpModal({
         ClipboardList,
         'text-emerald-600 dark:text-emerald-400',
         'bg-emerald-50 dark:bg-emerald-900/40'
+      ),
+      renderSectionWithList(
+        'help.list.multiSelect',
+        [],
+        ['help.list.multiSelectTasks', 'help.list.multiSelectActions', 'help.list.multiSelectUndo'],
+        CheckSquare,
+        'text-blue-600 dark:text-blue-400',
+        'bg-blue-50 dark:bg-blue-900/40'
       ),
       renderSectionWithList(
         'help.list.dataDisplay',
@@ -1661,7 +1669,7 @@ export default function HelpModal({
       renderSectionWithList(
         'help.gantt.timelineNavigation',
         [],
-        ['help.gantt.scrollNavigation', 'help.gantt.todayButton', 'help.gantt.taskNavigation', 'help.gantt.relationshipMode'],
+        ['help.gantt.scrollNavigation', 'help.gantt.todayButton', 'help.gantt.taskNavigation', 'help.gantt.offscreenIndicators', 'help.gantt.relationshipMode'],
         ArrowRight,
         'text-emerald-600 dark:text-emerald-400',
         'bg-emerald-50 dark:bg-emerald-900/40'
@@ -1671,6 +1679,7 @@ export default function HelpModal({
         [],
         [
           'help.gantt.createTasks', 'help.gantt.editTasks', 'help.gantt.resizeTasks', 'help.gantt.moveTasks',
+          'help.gantt.reorderTasks', 'help.gantt.multiSelect', 'help.gantt.multiSelectPersists',
           'help.gantt.copyTasks',
           isAdmin ? 'help.gantt.deleteTasksAdmin' : 'help.gantt.deleteTasks',
         ],
@@ -1732,6 +1741,7 @@ export default function HelpModal({
           'help.calendar.previousNext',
           'help.calendar.openDayFromGrid',
           'help.calendar.todayButton',
+          'help.calendar.statusFilter',
         ],
         ArrowRight,
         'text-indigo-600 dark:text-indigo-400',
@@ -1743,6 +1753,7 @@ export default function HelpModal({
         [
           'help.calendar.dateOnlyMove',
           'help.calendar.barColors',
+          'help.calendar.barDoneLate',
           'help.calendar.barPreview',
           'help.calendar.commentsBubble',
           'help.calendar.taskDetailsToggle',
@@ -1756,7 +1767,12 @@ export default function HelpModal({
       renderSectionWithList(
         'help.calendar.multiSelect',
         [],
-        ['help.calendar.multiSelectMode', 'help.calendar.arrowNudge', 'help.calendar.exitMultiSelect'],
+        [
+          'help.calendar.multiSelectMode',
+          'help.calendar.multiSelectPersists',
+          'help.calendar.arrowNudge',
+          'help.calendar.exitMultiSelect',
+        ],
         CheckSquare,
         'text-purple-600 dark:text-purple-400',
         'bg-purple-50 dark:bg-purple-900/40'
@@ -2214,10 +2230,11 @@ export default function HelpModal({
         break;
       case 'list':
         tabKeys.push('help.list.overview', 'help.list.overviewDesc1', 'help.list.overviewDesc2', 'help.list.overviewDesc3',
-          'help.list.columnConfiguration', 'help.list.showHideColumns', 'help.list.defaultColumns', 'help.list.columnPersistence',
+          'help.list.columnConfiguration', 'help.list.showHideColumns', 'help.list.taskDependencies', 'help.list.defaultColumns', 'help.list.columnPersistence',
           'help.list.horizontalScrolling', 'help.list.sortingFiltering', 'help.list.sortByColumn',
           'help.list.searchIntegration', 'help.list.savedFilters', 'help.list.advancedFiltering', 'help.list.taskActions',
           'help.list.statusChanges', 'help.list.directEditing', 'help.list.taskDetails',
+          'help.list.multiSelect', 'help.list.multiSelectTasks', 'help.list.multiSelectActions', 'help.list.multiSelectUndo',
           'help.list.dataDisplay', 'help.list.richText', 'help.list.dateFormatting', 'help.list.priorityIndicators',
           'help.list.memberAvatars', 'help.list.tagDisplay', 'help.list.commentCounts', 'help.list.statusIndicators');
         tabKeys.push(isAdmin ? 'help.list.quickActionsAdmin' : 'help.list.quickActions');
@@ -2229,8 +2246,9 @@ export default function HelpModal({
       case 'gantt':
         tabKeys.push('help.gantt.overview', 'help.gantt.overviewDesc1', 'help.gantt.overviewDesc2', 'help.gantt.overviewDesc3',
           'help.gantt.timelineNavigation', 'help.gantt.scrollNavigation', 'help.gantt.todayButton', 'help.gantt.taskNavigation',
-          'help.gantt.relationshipMode', 'help.gantt.taskManagement', 'help.gantt.createTasks', 'help.gantt.editTasks',
-          'help.gantt.resizeTasks', 'help.gantt.moveTasks', 'help.gantt.copyTasks',
+          'help.gantt.offscreenIndicators', 'help.gantt.relationshipMode', 'help.gantt.taskManagement', 'help.gantt.createTasks', 'help.gantt.editTasks',
+          'help.gantt.resizeTasks', 'help.gantt.moveTasks', 'help.gantt.reorderTasks', 'help.gantt.multiSelect',
+          'help.gantt.multiSelectPersists', 'help.gantt.copyTasks',
           'help.gantt.dependencies', 'help.gantt.createDependencies', 'help.gantt.dependencyTypes',
           'help.gantt.visualArrows', 'help.gantt.cycleDetection', 'help.gantt.taskRelationships', 'help.gantt.timelineFeatures',
           'help.gantt.timelineNavigationDesc', 'help.gantt.todayIndicator', 'help.gantt.lateBadge', 'help.gantt.columnOrganization',
@@ -2243,12 +2261,12 @@ export default function HelpModal({
           'help.calendar.overview', 'help.calendar.overviewDesc1', 'help.calendar.overviewDesc2', 'help.calendar.overviewDesc3',
           'help.calendar.views', 'help.calendar.monthView', 'help.calendar.weekView', 'help.calendar.dayView',
           'help.calendar.navigation', 'help.calendar.previousNext', 'help.calendar.openDayFromGrid',
-          'help.calendar.todayButton',
+          'help.calendar.todayButton', 'help.calendar.statusFilter',
           'help.calendar.taskManagement', 'help.calendar.dateOnlyMove', 'help.calendar.barColors',
-          'help.calendar.barPreview', 'help.calendar.commentsBubble',
+          'help.calendar.barDoneLate', 'help.calendar.barPreview', 'help.calendar.commentsBubble',
           'help.calendar.taskDetailsToggle', 'help.calendar.emptyDayCreate',
           'help.calendar.priorityAssigneeMenu', 'help.calendar.multiSelect', 'help.calendar.multiSelectMode',
-          'help.calendar.arrowNudge', 'help.calendar.exitMultiSelect',
+          'help.calendar.multiSelectPersists', 'help.calendar.arrowNudge', 'help.calendar.exitMultiSelect',
           'help.calendar.keyboardShortcuts', 'help.calendar.keyboardShortcutsDesc'
         );
         break;

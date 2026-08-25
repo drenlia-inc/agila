@@ -36,6 +36,7 @@ import {
   KANBAN_COLUMN_HEADER_PORTAL_STYLE,
   useStickyKanbanColumnHeader,
 } from '../hooks/useStickyKanbanColumnHeader';
+import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
 
 interface KanbanColumnProps {
   column: Column;
@@ -139,8 +140,8 @@ interface KanbanColumnProps {
   onBulkSprint?: (taskIds: string[], sprintId: string | null) => void;
   onBulkPriority?: (taskIds: string[], priorityId: string) => void;
   onBulkMoveToBoard?: (taskIds: string[], boardId: string) => void;
-  onBulkAssignee?: (taskIds: string[], memberId: string) => void;
-  onBulkRequester?: (taskIds: string[], memberId: string) => void;
+  onBulkAssignee?: (taskIds: string[], memberId: string | null) => void;
+  onBulkRequester?: (taskIds: string[], memberId: string | null) => void;
   onBulkAddWatcher?: (taskIds: string[], memberId: string) => void;
   onBulkRemoveWatcher?: (taskIds: string[], memberId: string) => void;
   onBulkAddCollaborator?: (taskIds: string[], memberId: string) => void;
@@ -252,9 +253,11 @@ function KanbanColumn({
   columnHeaderStickyTopPx,
 }: KanbanColumnProps) {
   const { t, i18n } = useTranslation(['tasks', 'common']);
+  const columnDisplayTitle = useColumnDisplayTitle();
+  const displayTitle = columnDisplayTitle(column);
   const [isEditing, setIsEditing] = useState(false);
   const [sprintAssignBusy, setSprintAssignBusy] = useState(false);
-  const [title, setTitle] = useState(column.title);
+  const [title, setTitle] = useState(displayTitle);
   const [isFinished, setIsFinished] = useState(column.is_finished || false);
   const [isArchived, setIsArchived] = useState(column.is_archived || false);
   const [wipLimitInput, setWipLimitInput] = useState(
@@ -299,7 +302,7 @@ function KanbanColumn({
       // Mark that we've started editing
       editingStartedRef.current = true;
       
-      setTitle(column.title);
+      setTitle(displayTitle);
       setIsFinished(column.is_finished || false);
       setIsArchived(column.is_archived || false);
       setWipLimitInput(column.wip_limit != null ? String(column.wip_limit) : '');
@@ -320,18 +323,18 @@ function KanbanColumn({
       // Reset the flag when we exit editing mode
       editingStartedRef.current = false;
     }
-  }, [isEditing, column.title, column.is_finished, column.is_archived, column.wip_limit, column.policy_text, siteSettings]);
+  }, [isEditing, displayTitle, column.title, column.is_finished, column.is_archived, column.wip_limit, column.policy_text, siteSettings]);
   
   // Sync state with props when NOT editing
   useEffect(() => {
     if (!isEditing) {
-      setTitle(column.title);
+      setTitle(displayTitle);
       setIsFinished(column.is_finished || false);
       setIsArchived(column.is_archived || false);
       setWipLimitInput(column.wip_limit != null ? String(column.wip_limit) : '');
       setPolicyText(column.policy_text || '');
     }
-  }, [column.title, column.is_finished, column.is_archived, column.wip_limit, column.policy_text, isEditing]);
+  }, [displayTitle, column.is_finished, column.is_archived, column.wip_limit, column.policy_text, isEditing]);
 
   // Auto-detect finished column names when title changes during editing
   useEffect(() => {
@@ -719,7 +722,7 @@ function KanbanColumn({
           t('column.wipSoftWarningBody', {
             count: count + 1,
             limit: column.wip_limit,
-            column: column.title,
+            column: displayTitle,
           })
         );
       }
@@ -930,7 +933,7 @@ function KanbanColumn({
           }}
         >
           <div className="text-2xl mb-2">📋</div>
-          <div className="text-sm font-medium">{column.title}</div>
+          <div className="text-sm font-medium">{displayTitle}</div>
           <div className="text-xs mt-1">{taskCount} {taskCount === 1 ? t('column.task') : t('column.tasks')}</div>
         </div>
       ];
@@ -1135,7 +1138,7 @@ function KanbanColumn({
     }
 
     return taskElements;
-    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, column.title, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
+    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, displayTitle, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
 
   const setColumnRef = (node: HTMLElement | null) => {
     columnElRef.current = node;
@@ -1343,7 +1346,7 @@ function KanbanColumn({
                 disabled={isSubmitting}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
-                    setTitle(column.title);
+                    setTitle(displayTitle);
                     setIsFinished(column.is_finished || false);
                     setIsArchived(column.is_archived || false);
                     setWipLimitInput(column.wip_limit != null ? String(column.wip_limit) : '');
@@ -1499,7 +1502,7 @@ function KanbanColumn({
                 <button
                   type="button"
                   onClick={() => {
-                    setTitle(column.title);
+                    setTitle(displayTitle);
                     setIsFinished(column.is_finished || false);
                     setIsArchived(column.is_archived || false);
                     setWipLimitInput(column.wip_limit != null ? String(column.wip_limit) : '');
@@ -1538,7 +1541,7 @@ function KanbanColumn({
                       }
                     }}
                   >
-                    {column.title}
+                    {displayTitle}
                   </h3>
                 );
                 if (!isAdmin) return <div className="min-w-0">{titleEl}</div>;

@@ -23,6 +23,21 @@ export function getTaskSprintId(task: Task | Record<string, unknown>): string | 
   return sprintId ?? null;
 }
 
+/** Prefer payload sprint fields when present (`sprintId` or `sprint_id`), else keep fallback. */
+export function sprintIdFromTaskPayload(
+  payload: Record<string, unknown> | null | undefined,
+  fallback?: string | null
+): string | null {
+  if (!payload) return fallback ?? null;
+  const hasCamel = Object.prototype.hasOwnProperty.call(payload, 'sprintId');
+  const hasSnake = Object.prototype.hasOwnProperty.call(payload, 'sprint_id');
+  if (!hasCamel && !hasSnake) return fallback ?? null;
+  const value =
+    (payload as { sprintId?: string | null }).sprintId ??
+    (payload as { sprint_id?: string | null }).sprint_id;
+  return value ?? null;
+}
+
 export function taskMatchesSelectedSprint(
   task: Task | Record<string, unknown>,
   selectedSprintId: string | null

@@ -19,17 +19,32 @@ import {
   Calendar,
   ArrowUpDown,
   ArrowRight,
+  Trash2,
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
-import type { Task, Columns, TeamMember, PriorityOption, Comment } from '../types';
+import type {
+  Task,
+  Columns,
+  TeamMember,
+  PriorityOption,
+  Comment,
+  CurrentUser,
+  Board,
+  Tag,
+} from '../types';
 import type { TaskViewMode, CalendarSubView } from '../utils/userPreferences';
+import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
 import { loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
 import { GanttLegend } from './gantt/GanttLegend';
 import { TaskJumpDropdown } from './gantt/TaskJumpDropdown';
 import { TaskBarTooltip } from './gantt/TaskBarTooltip';
+import ColumnFilterDropdown from './ColumnFilterDropdown';
 import MemberAvatar from './ui/MemberAvatar';
 import AddCommentModal from './AddCommentModal';
-import { CHROME_TOOLTIP_PANEL_SURFACE_CLASS } from './KanbanChromeTooltip';
+import {
+  CHROME_TOOLTIP_PANEL_SURFACE_CLASS,
+  KanbanChromeTooltip,
+} from './KanbanChromeTooltip';
 import { createComment, batchUpdateTasks } from '../api';
 import { parseLocalDate } from '../utils/dateUtils';
 import { getTagDisplayStyle, getTextColorForBackground } from '../utils/tagUtils';
@@ -48,16 +63,41 @@ import {
   placeBarsForDays,
   type PlacedBar,
 } from '../utils/calendarDateUtils';
+import TaskBulkActionGutter from './TaskBulkActionGutter';
+import {
+  defaultVisibleColumnIds,
+  isArchivedColumnFlag,
+  reconcileVisibleColumnIds,
+} from '../utils/columnUtils';
 
 const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 /** App header height the page sticks under (matches the Gantt view's `top-16`). */
 const PAGE_HEADER_OFFSET = 64;
-const BAR_H = 26;
-const LANE_GAP = 2;
-const DAY_BAR_H = 64;
-const DAY_LANE_GAP = 8;
+const CALENDAR_DAY_DENSITY = {
+  expand: { barHeight: 112, laneGap: 8 },
+  shrink: { barHeight: 64, laneGap: 8 },
+  compact: { barHeight: 36, laneGap: 4 },
+} satisfies Record<TaskViewMode, { barHeight: number; laneGap: number }>;
+/** Plus cursor on day numbers so create is distinct from the Day-view arrow. */
+const CREATE_TASK_CURSOR: React.CSSProperties = {
+  cursor: `url("data:image/svg+xml,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.25" fill="white" stroke="#111827" stroke-width="1.5"/><path d="M12 7v10M7 12h10" fill="none" stroke="#111827" stroke-width="2" stroke-linecap="round"/></svg>'
+  )}") 12 12, cell`,
+};
 /** Bars are tinted by assignee; unassigned work falls back to a neutral gray. */
 const UNASSIGNED_BAR_COLOR = '#6B7280';
+
+const CALENDAR_DENSITY = {
+  expand: { barHeight: 26, laneGap: 2, monthMinHeight: 88 },
+  shrink: { barHeight: 16, laneGap: 2, monthMinHeight: 72 },
+  compact: { barHeight: 10, laneGap: 0, monthMinHeight: 52 },
+} satisfies Record<
+  TaskViewMode,
+  { barHeight: number; laneGap: number; monthMinHeight: number }
+>;
+
+const selectionSignatureOf = (ids: Iterable<string>): string =>
+  Array.from(ids).sort().join('\u0000');
 
 type TaskUpdateHandler = (
   task: Task,
@@ -66,16 +106,42 @@ type TaskUpdateHandler = (
 
 export interface CalendarViewProps {
   columns: Columns;
-  onSelectTask: (task: Task | null) => void;
+  onSelectTask: (task: Task | null, options?: { scrollToComments?: boolean }) => void;
   selectedTask?: Task | null;
   taskViewMode?: TaskViewMode;
   onUpdateTask?: TaskUpdateHandler;
   boardId?: string | null;
   onAddTask?: (columnId: string, startDate?: string, dueDate?: string) => Promise<void>;
-  currentUser?: { id?: string } | null;
+  currentUser?: CurrentUser | null;
   members?: TeamMember[];
   canMutate?: boolean;
   availablePriorities?: PriorityOption[];
+  bulkBusy?: boolean;
+  onBulkDelete?: (taskIds: string[]) => void | Promise<void>;
+  onBulkPermanentDelete?: (taskIds: string[]) => void | Promise<void>;
+  availableTags?: Tag[];
+  availableSprints?: Array<{ id: string; name: string }>;
+  boards?: Board[];
+  checkedTaskIds?: Set<string>;
+  onReplaceCheckedTaskIds?: (taskIds: string[]) => void;
+  onBulkAddTag?: (taskIds: string[], tagId: string) => void;
+  onBulkCopy?: (taskIds: string[]) => void;
+  onBulkArchive?: (taskIds: string[]) => void;
+  onBulkSprint?: (taskIds: string[], sprintId: string | null) => void;
+  onBulkPriority?: (taskIds: string[], priorityId: string) => void;
+  onBulkMoveToBoard?: (taskIds: string[], boardId: string) => void;
+  onBulkAssignee?: (taskIds: string[], memberId: string | null) => void;
+  onBulkRequester?: (taskIds: string[], memberId: string | null) => void;
+  onBulkAddWatcher?: (taskIds: string[], memberId: string) => void;
+  onBulkRemoveWatcher?: (taskIds: string[], memberId: string) => void;
+  onBulkAddCollaborator?: (taskIds: string[], memberId: string) => void;
+  onBulkRemoveCollaborator?: (taskIds: string[], memberId: string) => void;
+  bulkUndoTaskIds?: string[] | null;
+  bulkUndoLabelKey?: string;
+  onBulkUndo?: () => void;
+  onClearBulkUndo?: () => void;
+  hasArchiveColumn?: boolean;
+  siteSettings?: { [key: string]: string };
 }
 
 type DragMode = 'move' | 'resize-start' | 'resize-end';
@@ -94,6 +160,11 @@ interface DragState {
   grabOffsetDays: number;
   /** Day the bar was grabbed on; only that row keeps the pinned lane. */
   grabYmd: string | null;
+}
+
+interface TaskCreationState {
+  anchorYmd: string;
+  currentYmd: string;
 }
 
 /** Pointer travel before a press on a bar becomes a drag instead of a click. */
@@ -118,9 +189,27 @@ function flattenTasks(columns: Columns): Task[] {
   return Object.values(columns).flatMap((col) => col.tasks || []);
 }
 
-function defaultColumnId(columns: Columns): string | null {
-  const cols = Object.values(columns);
-  const live = cols.find((c) => !c.is_archived && !c.is_finished);
+function calendarBarStatus(
+  task: Task,
+  column: { is_finished?: boolean; is_archived?: boolean | number } | undefined,
+  highlightOverdue: boolean
+): 'done' | 'late' | null {
+  if (!column || isArchivedColumnFlag(column)) return null;
+  if (column.is_finished) return 'done';
+  if (!highlightOverdue || !task.dueDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = parseLocalDate(task.dueDate);
+  due.setHours(0, 0, 0, 0);
+  return due < today ? 'late' : null;
+}
+
+function defaultColumnId(columns: Columns, allowedIds?: string[]): string | null {
+  const allowed = allowedIds ? new Set(allowedIds) : null;
+  const cols = Object.values(columns)
+    .filter((column) => (allowed ? allowed.has(column.id) : true))
+    .sort((a, b) => (a.position || 0) - (b.position || 0));
+  const live = cols.find((c) => !isArchivedColumnFlag(c) && !c.is_finished);
   return (live || cols[0])?.id ?? null;
 }
 
@@ -172,6 +261,15 @@ function dateFromIsoWeek(value: string): Date | null {
  */
 function ymdFromPoint(clientX: number, clientY: number, root: HTMLElement | null): string | null {
   if (!root) return null;
+  // The date-number strip sits above each row's bar layer. Resolve its actual
+  // day cell first so a press there cannot snap to the previous week's layer.
+  const hitDay = document
+    .elementFromPoint(clientX, clientY)
+    ?.closest<HTMLElement>('[data-calendar-day]');
+  if (hitDay && root.contains(hitDay) && hitDay.dataset.calendarDay) {
+    return hitDay.dataset.calendarDay;
+  }
+
   const layers = Array.from(root.querySelectorAll<HTMLElement>('[data-calendar-days]'));
   let bestLayer: HTMLElement | null = null;
   let bestRect: DOMRect | null = null;
@@ -208,13 +306,142 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   taskViewMode = 'expand',
   onUpdateTask,
   onAddTask,
+  boardId,
   currentUser,
   members = [],
   canMutate = true,
   availablePriorities = [],
+  bulkBusy = false,
+  onBulkDelete,
+  onBulkPermanentDelete,
+  availableTags = [],
+  availableSprints = [],
+  boards = [],
+  checkedTaskIds,
+  onReplaceCheckedTaskIds,
+  onBulkAddTag,
+  onBulkCopy,
+  onBulkArchive,
+  onBulkSprint,
+  onBulkPriority,
+  onBulkMoveToBoard,
+  onBulkAssignee,
+  onBulkRequester,
+  onBulkAddWatcher,
+  onBulkRemoveWatcher,
+  onBulkAddCollaborator,
+  onBulkRemoveCollaborator,
+  bulkUndoTaskIds = null,
+  bulkUndoLabelKey,
+  onBulkUndo,
+  onClearBulkUndo,
+  hasArchiveColumn = false,
+  siteSettings,
 }) => {
   const { t, i18n } = useTranslation('common');
+  const columnDisplayTitle = useColumnDisplayTitle();
   const prefs = useMemo(() => loadUserPreferences(), []);
+  const hydratedColumnBoardRef = useRef<string | null | undefined>(undefined);
+  const orderedColumnIds = useMemo(
+    () =>
+      Object.values(columns)
+        .sort((a, b) => (a.position || 0) - (b.position || 0))
+        .map((column) => column.id),
+    [columns]
+  );
+  const defaultCalendarColumnIds = useMemo(
+    () => defaultVisibleColumnIds(columns),
+    [columns]
+  );
+  /**
+   * `null` means "no saved choice" so the calendar tracks the default (every
+   * active status), the same way Kanban does when a board has no override.
+   */
+  const [calendarVisibleColumnIds, setCalendarVisibleColumnIds] = useState<string[] | null>(
+    () => {
+      const saved = boardId
+        ? loadUserPreferences(currentUser?.id).calendarColumnVisibility?.[boardId]
+        : undefined;
+      return reconcileVisibleColumnIds(saved, columns);
+    }
+  );
+  const knownColumnIdsRef = useRef<Set<string>>(new Set());
+
+  const effectiveCalendarColumnIds = useMemo(
+    () => calendarVisibleColumnIds ?? defaultCalendarColumnIds,
+    [calendarVisibleColumnIds, defaultCalendarColumnIds]
+  );
+
+  const persistCalendarColumns = useCallback(
+    (ids: string[] | null) => {
+      setCalendarVisibleColumnIds(ids);
+      if (!boardId) return;
+      const current = {
+        ...(loadUserPreferences(currentUser?.id).calendarColumnVisibility || {}),
+      };
+      if (ids) current[boardId] = ids;
+      else delete current[boardId];
+      void updateUserPreference(
+        'calendarColumnVisibility',
+        current,
+        currentUser?.id ?? null
+      );
+    },
+    [boardId, currentUser?.id]
+  );
+
+  useEffect(() => {
+    if (orderedColumnIds.length === 0) return;
+
+    // Columns arrive after mount and lag a beat behind a board switch, so a set
+    // sharing no id with the previous one means "different board" — read the
+    // saved choice for it instead of diffing against the other board's columns.
+    const known = knownColumnIdsRef.current;
+    const isDifferentColumnSet =
+      known.size === 0 || !orderedColumnIds.some((id) => known.has(id));
+    if (hydratedColumnBoardRef.current !== boardId || isDifferentColumnSet) {
+      hydratedColumnBoardRef.current = boardId;
+      knownColumnIdsRef.current = new Set(orderedColumnIds);
+      const saved = boardId
+        ? loadUserPreferences(currentUser?.id).calendarColumnVisibility?.[boardId]
+        : undefined;
+      setCalendarVisibleColumnIds(reconcileVisibleColumnIds(saved, columns));
+      return;
+    }
+
+    // A status created while the calendar is open starts visible, so a new
+    // column never lands silently in the hidden set.
+    const created = orderedColumnIds.filter(
+      (id) => !known.has(id) && !isArchivedColumnFlag(columns[id])
+    );
+    knownColumnIdsRef.current = new Set(orderedColumnIds);
+
+    const prev = calendarVisibleColumnIds;
+    if (!prev) return;
+
+    const next = reconcileVisibleColumnIds([...prev, ...created], columns);
+    if (next === null) {
+      persistCalendarColumns(null);
+      return;
+    }
+    if (next.length === prev.length && next.every((id, index) => id === prev[index])) return;
+    persistCalendarColumns(next);
+  }, [
+    boardId,
+    columns,
+    currentUser?.id,
+    orderedColumnIds,
+    calendarVisibleColumnIds,
+    persistCalendarColumns,
+  ]);
+
+  const visibleColumns = useMemo(() => {
+    const next: Columns = {};
+    effectiveCalendarColumnIds.forEach((id) => {
+      if (columns[id]) next[id] = columns[id];
+    });
+    return Object.keys(next).length > 0 ? next : columns;
+  }, [effectiveCalendarColumnIds, columns]);
 
   const [subView, setSubView] = useState<CalendarSubView>(
     () => prefs.calendarSubView || 'month'
@@ -231,8 +458,48 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     return new Date(n.getFullYear(), n.getMonth(), n.getDate());
   });
 
-  const [multiSelectMode, setMultiSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [multiSelectMode, setMultiSelectMode] = useState(
+    () => Boolean(checkedTaskIds?.size)
+  );
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    () => Array.from(checkedTaskIds || [])
+  );
+  const calendarRootRef = useRef<HTMLDivElement>(null);
+  const sharedSelectionSignature = selectionSignatureOf(checkedTaskIds || []);
+  const sharedSelectionSignatureRef = useRef(sharedSelectionSignature);
+  const pullingSharedSelectionRef = useRef(false);
+
+  // Keep the board-level selection consistent when moving among Kanban, List,
+  // Gantt, and Calendar. A non-empty incoming selection engages Select mode.
+  useEffect(() => {
+    if (!checkedTaskIds) return;
+    if (sharedSelectionSignatureRef.current === sharedSelectionSignature) return;
+    sharedSelectionSignatureRef.current = sharedSelectionSignature;
+    const shared = Array.from(checkedTaskIds);
+    pullingSharedSelectionRef.current = true;
+    setSelectedIds(shared);
+    if (shared.length > 0) setMultiSelectMode(true);
+  }, [checkedTaskIds, sharedSelectionSignature]);
+
+  useEffect(() => {
+    if (!onReplaceCheckedTaskIds) return;
+    if (pullingSharedSelectionRef.current) {
+      pullingSharedSelectionRef.current = false;
+      return;
+    }
+    const shared = checkedTaskIds || new Set<string>();
+    const same =
+      shared.size === selectedIds.length && selectedIds.every((id) => shared.has(id));
+    if (!same) {
+      sharedSelectionSignatureRef.current = selectionSignatureOf(selectedIds);
+      onReplaceCheckedTaskIds(selectedIds);
+    }
+  }, [checkedTaskIds, onReplaceCheckedTaskIds, selectedIds]);
+
+  useEffect(() => {
+    if (selectedIds.length > 0) onClearBulkUndo?.();
+  }, [onClearBulkUndo, selectedIds.length]);
+
   const [drag, setDrag] = useState<DragState | null>(null);
   const [commentTaskId, setCommentTaskId] = useState<string | null>(null);
   const [hoverCommentId, setHoverCommentId] = useState<string | null>(null);
@@ -244,7 +511,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const [assigneeMenuTaskId, setAssigneeMenuTaskId] = useState<string | null>(null);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [daySort, setDaySort] = useState<DaySort>('kanban');
+  const [deleteConfirmMode, setDeleteConfirmMode] = useState<'soft' | 'permanent' | null>(
+    null
+  );
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
+  const [taskCreation, setTaskCreation] = useState<TaskCreationState | null>(null);
   const [nudgeDates, setNudgeDates] = useState<
     Record<string, { startDate: string; dueDate?: string }>
   >({});
@@ -254,12 +526,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   const suppressBarClickRef = useRef(false);
   const selectedTaskRef = useRef(selectedTask);
+  const selectionAnchorRef = useRef<string | null>(null);
   const arrowLockRef = useRef(false);
   const nudgeCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nudgeDatesRef = useRef(nudgeDates);
   const dragRef = useRef<DragState | null>(null);
+  const taskCreationRef = useRef<TaskCreationState | null>(null);
+  const taskCreationPendingRef = useRef(false);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const weekdayRowRef = useRef<HTMLDivElement | null>(null);
   const periodPickerRef = useRef<HTMLInputElement | null>(null);
   const assigneeMenuRef = useRef<HTMLDivElement | null>(null);
   const assigneeAnchorRectRef = useRef<DOMRect | null>(null);
@@ -324,7 +600,22 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     return new Date(n.getFullYear(), n.getMonth(), n.getDate());
   }, []);
 
-  const tasks = useMemo(() => flattenTasks(columns), [columns]);
+  const tasks = useMemo(() => flattenTasks(visibleColumns), [visibleColumns]);
+
+  /**
+   * The selection survives bulk actions, so actions that remove bars (delete,
+   * archive, move to another board) must not leave phantom ids behind —
+   * keyboard nudges would target tasks that are no longer on the board.
+   */
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.length === 0) return prev;
+      const live = new Set(tasks.map((task) => task.id));
+      const next = prev.filter((id) => live.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [tasks]);
+
   const datedTasks = useMemo(
     () => tasks.filter((task) => getTaskDateSpan(task)),
     [tasks]
@@ -480,6 +771,50 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       kanbanTaskRank,
       members,
       subView,
+    ]
+  );
+
+  /**
+   * Stable range order for Shift+click. Calendar has no single column order, so
+   * follow the timeline from left to right and use Kanban order for ties.
+   */
+  const selectionOrderedIds = useMemo(
+    () => {
+      const visibleDays =
+        subView === 'month' ? monthCells : subView === 'week' ? weekCells : dayCells;
+      const visibleStart = visibleDays[0]?.getTime() ?? Number.NEGATIVE_INFINITY;
+      const visibleEnd =
+        visibleDays[visibleDays.length - 1]?.getTime() ?? Number.POSITIVE_INFINITY;
+
+      return displayedDatedTasks
+        .filter((task) => {
+          const span = getTaskDateSpan(task);
+          return Boolean(
+            span && span.end.getTime() >= visibleStart && span.start.getTime() <= visibleEnd
+          );
+        })
+        .sort((a, b) => {
+          const aSpan = getTaskDateSpan(a);
+          const bSpan = getTaskDateSpan(b);
+          const startOrder =
+            (aSpan?.start.getTime() ?? Number.MAX_SAFE_INTEGER) -
+            (bSpan?.start.getTime() ?? Number.MAX_SAFE_INTEGER);
+          if (startOrder !== 0) return startOrder;
+          const endOrder =
+            (aSpan?.end.getTime() ?? Number.MAX_SAFE_INTEGER) -
+            (bSpan?.end.getTime() ?? Number.MAX_SAFE_INTEGER);
+          if (endOrder !== 0) return endOrder;
+          return compareCalendarTasks(a, b);
+        })
+        .map((task) => task.id);
+    },
+    [
+      compareCalendarTasks,
+      dayCells,
+      displayedDatedTasks,
+      monthCells,
+      subView,
+      weekCells,
     ]
   );
 
@@ -700,14 +1035,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           title: task.title,
           startDate: span.start,
           endDate: span.end,
-          status: column?.title || task.status || '',
+          status: column ? columnDisplayTitle(column) : task.status || '',
           priority: task.priorityName || task.priority || '',
           columnId: task.columnId,
           columnPosition: column?.position || 0,
           taskPosition: task.position || 0,
         }];
       }),
-    [columns, datedTasks]
+    [columns, datedTasks, columnDisplayTitle]
   );
 
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
@@ -816,6 +1151,32 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     }
   };
 
+  /**
+   * Jumping to today only changes the focus date, which is invisible when the
+   * page is scrolled away from today's cell. Bring it back into view, staying
+   * clear of the sticky app header, toolbar, and weekday row.
+   */
+  const scrollTodayIntoView = useCallback(() => {
+    const cell = gridRef.current?.querySelector<HTMLElement>('[data-calendar-today="true"]');
+    if (!cell) return;
+
+    const stickyBottom =
+      PAGE_HEADER_OFFSET + toolbarHeight + (weekdayRowRef.current?.offsetHeight ?? 0);
+    const rect = cell.getBoundingClientRect();
+    if (rect.top >= stickyBottom && rect.bottom <= window.innerHeight) return;
+
+    window.scrollTo({
+      top: Math.max(0, window.scrollY + rect.top - stickyBottom - 8),
+      behavior: 'smooth',
+    });
+  }, [toolbarHeight]);
+
+  const goToToday = useCallback(() => {
+    setFocusPersist(today);
+    // The cell for today may not exist until the new focus date renders.
+    requestAnimationFrame(scrollTodayIntoView);
+  }, [scrollTodayIntoView, setFocusPersist, today]);
+
   const periodStartFor = useCallback((date: Date, view: CalendarSubView): Date => {
     if (view === 'month') return new Date(date.getFullYear(), date.getMonth(), 1);
     if (view === 'week') return buildWeekCells(date)[0];
@@ -921,7 +1282,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   );
 
   const beginDrag = (mode: DragMode, task: Task, e: React.MouseEvent, lane: number) => {
-    if (!canMutate || multiSelectMode) return;
+    if (!canMutate) return;
+    // Modifiers are reserved for range/additive selection, not movement:
+    // block the native text range instead of starting a drag.
+    if (e.metaKey || e.ctrlKey || e.shiftKey) {
+      e.preventDefault();
+      return;
+    }
+    if (multiSelectMode) return;
     // The second press of a double-click must stay a double-click, not a drag.
     if (e.detail >= 2) return;
     if (e.button !== 0) return;
@@ -1023,13 +1391,67 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       suppressBarClickRef.current = false;
       return;
     }
+    const liveTask = tasks.find((candidate) => candidate.id === task.id) ?? task;
+    const additive = e.ctrlKey || e.metaKey;
+    const range = e.shiftKey;
+
+    if (additive || range) {
+      e.preventDefault();
+      window.getSelection()?.removeAllRanges();
+
+      const baseIds =
+        selectedIds.length > 0
+          ? selectedIds
+          : selectedTaskRef.current
+            ? [selectedTaskRef.current.id]
+            : [];
+      const next = new Set(baseIds);
+
+      if (range) {
+        const anchor =
+          selectionAnchorRef.current ||
+          selectedTaskRef.current?.id ||
+          baseIds[baseIds.length - 1] ||
+          task.id;
+        const anchorIndex = selectionOrderedIds.indexOf(anchor);
+        const taskIndex = selectionOrderedIds.indexOf(task.id);
+        if (anchorIndex >= 0 && taskIndex >= 0) {
+          const start = Math.min(anchorIndex, taskIndex);
+          const end = Math.max(anchorIndex, taskIndex);
+          selectionOrderedIds.slice(start, end + 1).forEach((id) => next.add(id));
+        } else {
+          next.add(task.id);
+        }
+      } else if (next.has(task.id)) {
+        next.delete(task.id);
+      } else {
+        next.add(task.id);
+      }
+
+      const nextIds = [...next];
+      selectionAnchorRef.current = task.id;
+      setSelectedIds(nextIds);
+      if (nextIds.length > 1) {
+        setMultiSelectMode(true);
+        onSelectTask(null);
+      } else if (nextIds.length === 1) {
+        const remaining = tasks.find((candidate) => candidate.id === nextIds[0]) ?? liveTask;
+        onSelectTask(remaining);
+      } else {
+        onSelectTask(null);
+      }
+      return;
+    }
+
     if (multiSelectMode) {
+      selectionAnchorRef.current = task.id;
       setSelectedIds((prev) =>
         prev.includes(task.id) ? prev.filter((id) => id !== task.id) : [...prev, task.id]
       );
       return;
     }
-    const liveTask = tasks.find((tk) => tk.id === task.id) ?? task;
+    selectionAnchorRef.current = task.id;
+    setSelectedIds([]);
     // A second click in a double-click would otherwise toggle the panel closed.
     if (e.detail >= 2) {
       onSelectTask(liveTask);
@@ -1043,15 +1465,101 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   const handleEmptyDay = async (day: Date) => {
     if (!canMutate || !onAddTask || multiSelectMode) return;
-    const colId = defaultColumnId(columns);
+    const colId = defaultColumnId(columns, effectiveCalendarColumnIds);
     if (!colId) return;
     const ymd = formatLocalYmd(day);
     await onAddTask(colId, ymd, ymd);
   };
 
+  const beginTaskCreation = useCallback(
+    (event: React.MouseEvent, anchorYmd: string) => {
+      if (
+        event.button !== 0 ||
+        subView === 'day' ||
+        !canMutate ||
+        !onAddTask ||
+        multiSelectMode ||
+        taskCreationPendingRef.current
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      closeBarMenus();
+      const initial = { anchorYmd, currentYmd: anchorYmd };
+      taskCreationRef.current = initial;
+      setTaskCreation(initial);
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+      document.body.style.cursor = CREATE_TASK_CURSOR.cursor as string;
+      document.body.style.userSelect = 'none';
+
+      const restorePointer = () => {
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+      };
+
+      const onMove = (moveEvent: MouseEvent) => {
+        const currentYmd = ymdFromPoint(moveEvent.clientX, moveEvent.clientY, gridRef.current);
+        if (!currentYmd) return;
+        const previous = taskCreationRef.current;
+        if (!previous || previous.currentYmd === currentYmd) return;
+        const next = { ...previous, currentYmd };
+        taskCreationRef.current = next;
+        setTaskCreation(next);
+      };
+
+      const onUp = async (upEvent: MouseEvent) => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        restorePointer();
+
+        const finalCreation = taskCreationRef.current;
+        taskCreationRef.current = null;
+        setTaskCreation(null);
+        if (!finalCreation) return;
+
+        upEvent.preventDefault();
+        const startYmd =
+          finalCreation.anchorYmd <= finalCreation.currentYmd
+            ? finalCreation.anchorYmd
+            : finalCreation.currentYmd;
+        const dueYmd =
+          finalCreation.anchorYmd <= finalCreation.currentYmd
+            ? finalCreation.currentYmd
+            : finalCreation.anchorYmd;
+        const colId = defaultColumnId(columns, effectiveCalendarColumnIds);
+        if (!colId) return;
+
+        taskCreationPendingRef.current = true;
+        try {
+          await onAddTask(colId, startYmd, dueYmd);
+        } catch (error) {
+          console.error('Failed to create calendar task:', error);
+        } finally {
+          taskCreationPendingRef.current = false;
+        }
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    [
+      canMutate,
+      closeBarMenus,
+      columns,
+      effectiveCalendarColumnIds,
+      multiSelectMode,
+      onAddTask,
+      subView,
+    ]
+  );
+
   useEffect(() => {
     if (!multiSelectMode) return;
     const onKey = (event: KeyboardEvent) => {
+      if (deleteConfirmMode) return;
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -1065,6 +1573,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         event.preventDefault();
         setMultiSelectMode(false);
         setSelectedIds([]);
+        selectionAnchorRef.current = null;
         return;
       }
       if (
@@ -1123,7 +1632,56 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [multiSelectMode, selectedIds, canMutate, tasks]);
+  }, [multiSelectMode, selectedIds, canMutate, tasks, deleteConfirmMode]);
+
+  useEffect(() => {
+    if (!deleteConfirmMode) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || deleteSubmitting) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setDeleteConfirmMode(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [deleteConfirmMode, deleteSubmitting]);
+
+  const actionSelectedIds = useMemo(
+    () =>
+      selectedIds.length > 0
+        ? selectedIds
+        : selectedTask
+          ? [selectedTask.id]
+          : [],
+    [selectedIds, selectedTask]
+  );
+
+  const confirmSelectedTaskDelete = useCallback(async () => {
+    if (!deleteConfirmMode || actionSelectedIds.length === 0 || deleteSubmitting) return;
+    const taskIds = [...actionSelectedIds];
+    const handler =
+      deleteConfirmMode === 'permanent' ? onBulkPermanentDelete : onBulkDelete;
+    if (!handler) return;
+    setDeleteSubmitting(true);
+    try {
+      await handler(taskIds);
+      // Selection empties because the bars are gone, but Select mode is the
+      // user's to leave — matches taking the same action from the gutter.
+      setSelectedIds([]);
+      selectionAnchorRef.current = null;
+      onSelectTask(null);
+      setDeleteConfirmMode(null);
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  }, [
+    deleteConfirmMode,
+    deleteSubmitting,
+    onBulkDelete,
+    onBulkPermanentDelete,
+    actionSelectedIds,
+    onSelectTask,
+  ]);
 
   const submitComment = async (task: Task, text: string) => {
     if (!text.trim() || !currentUser?.id) return;
@@ -1154,7 +1712,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const renderAssigneeControl = (
     task: Task,
     member: TeamMember | undefined,
-    size: 'sm' | 'lg'
+    size: 'xs' | 'sm' | 'lg'
   ) => {
     if (!canMutate || multiSelectMode) {
       return member ? (
@@ -1220,8 +1778,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const barFill = member?.color || UNASSIGNED_BAR_COLOR;
     const barText = getTextColorForBackground(barFill);
     const isDayBar = subView === 'day' && dayCount === 1;
-    const column = Object.values(columns).find((candidate) => candidate.id === task.columnId);
-    const statusLabel = column?.title || task.status || '';
+    const column = columns[task.columnId] || Object.values(columns).find((candidate) => candidate.id === task.columnId);
+    const statusLabel = column ? columnDisplayTitle(column) : task.status || '';
+    const barStatus = calendarBarStatus(
+      task,
+      column,
+      siteSettings?.HIGHLIGHT_OVERDUE_TASKS === 'true'
+    );
+    const statusStampLabel =
+      barStatus === 'done' ? t('gantt.done') : barStatus === 'late' ? t('gantt.late') : null;
     const priorityLabel =
       availablePriorities.find(
         (priority) =>
@@ -1235,24 +1800,82 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const highlighted = highlightedTaskId === task.id;
     const leftPct = (bar.startIndex / dayCount) * 100;
     const widthPct = ((bar.endIndex - bar.startIndex + 1) / dayCount) * 100;
-    const barHeight = isDayBar ? DAY_BAR_H : BAR_H;
-    const laneGap = isDayBar ? DAY_LANE_GAP : LANE_GAP;
+    const density = CALENDAR_DENSITY[taskViewMode];
+    const dayDensity = CALENDAR_DAY_DENSITY[taskViewMode];
+    const barHeight = isDayBar ? dayDensity.barHeight : density.barHeight;
+    const laneGap = isDayBar ? dayDensity.laneGap : density.laneGap;
     const top = bar.lane * (barHeight + laneGap);
     const hasComments = (task.comments?.length || 0) > 0;
-    const dense = taskViewMode === 'compact';
+    const isPreviewBar = !isDayBar && taskViewMode === 'shrink';
+    const isMinimalBar = !isDayBar && taskViewMode === 'compact';
+    const isDayFull = isDayBar && taskViewMode === 'expand';
+    const isDayMinimal = isDayBar && taskViewMode === 'compact';
+    const showInlineBarMeta = !isMinimalBar;
+    const dayTagLimit = isDayMinimal ? 1 : 3;
+    const dayDescriptionPlain = isDayFull
+      ? String(task.description || '')
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+      : '';
+    const dayDescriptionHtml =
+      isDayFull && dayDescriptionPlain ? DOMPurify.sanitize(task.description || '') : '';
+    const statusStamp = statusStampLabel ? (
+      <span
+        className={`shrink-0 font-bold uppercase tracking-wide text-white ${
+          barStatus === 'done' ? 'bg-green-500' : 'bg-red-500'
+        } ${
+          isDayBar
+            ? 'rounded-full px-1.5 py-0.5 text-[10px]'
+            : isPreviewBar
+              ? 'rounded px-1 py-px text-[8px] leading-none'
+              : 'rounded-full px-1 py-px text-[9px] leading-none'
+        }`}
+      >
+        {statusStampLabel}
+      </span>
+    ) : null;
     // Day view is a read-only list of the day's work: no move, no resize.
     const barDraggable = canMutate && !multiSelectMode && !isDayBar;
     const menuOpen = menuTaskId === task.id || assigneeMenuTaskId === task.id;
     // A task crossing rows repeats on each one; avatar and comments belong to the
     // segment that carries the due date, not to every slice of the same task.
     const showBarMeta = isDayBar || !bar.clippedEnd;
+    const commentBubble =
+      hasComments && showInlineBarMeta && showBarMeta ? (
+        <button
+          type="button"
+          className="relative z-[1] flex shrink-0 items-center gap-px rounded-full p-px hover:bg-black/20"
+          onClick={(e) => {
+            e.preventDefault();
+            handleBarClick(task, e);
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseEnter={(e) => showCommentPreview(task.id, e.currentTarget)}
+          onMouseLeave={hideCommentPreview}
+          aria-label={t('taskCard.hoverToViewComments', { ns: 'tasks' })}
+        >
+          <MessageCircle size={isPreviewBar || isDayMinimal ? 10 : 12} />
+          <span className={`${isPreviewBar || isDayMinimal ? 'text-[8px]' : 'text-[9px]'} font-semibold`}>
+            {task.comments.length}
+          </span>
+        </button>
+      ) : null;
     const showStartHandle = barDraggable && !bar.clippedStart;
     const showEndHandle = barDraggable && !bar.clippedEnd;
-    // Fill carries the assignee, so priority moves to a dot at the start of the task.
+    // Fill carries the assignee. Minimal repeats a tiny priority pill on every
+    // visible row segment, so multi-week tasks retain the legend cue even when
+    // their true start is outside the current row or period.
     const priorityDot = (
       <span
         className={`shrink-0 rounded-full ${
-          isDayBar ? 'h-3 w-3' : 'mr-1 inline-block h-2.5 w-2.5 align-[-1px]'
+          isDayMinimal
+            ? 'h-2 w-2'
+            : isDayBar
+              ? 'h-3 w-3'
+              : isMinimalBar
+              ? 'absolute left-0.5 top-1/2 z-[2] h-1 w-2 -translate-y-1/2'
+              : 'mr-1 inline-block h-2.5 w-2.5 align-[-1px]'
         }`}
         style={{
           backgroundColor: color,
@@ -1269,10 +1892,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       <div
         key={task.id}
         data-calendar-task-id={task.id}
-        className={`absolute flex items-center rounded cursor-pointer select-none overflow-visible ${
+        className={`group absolute flex rounded cursor-pointer select-none overflow-visible ${
+          isDayFull ? 'items-start' : 'items-center'
+        } ${
           isDayBar
-            ? 'px-3 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm'
-            : 'px-1 text-[11px] leading-tight shadow-sm'
+            ? `${isDayMinimal ? 'px-2' : 'px-3'} ${isDayFull ? 'py-2' : ''} text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm`
+            : isMinimalBar
+              ? ''
+              : `px-1 leading-tight shadow-sm ${isPreviewBar ? 'text-[10px]' : 'text-[11px]'}`
         } ${
           selected ? 'ring-2 ring-offset-1 ring-blue-500 dark:ring-offset-gray-900' : ''
         } ${
@@ -1287,11 +1914,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           height: barHeight,
           ...(!isDayBar
             ? {
-                backgroundColor: barFill,
+                backgroundColor: isMinimalBar ? 'transparent' : barFill,
                 color: barText,
                 // Keep title, avatar, and comment count clear of the resize grips.
-                paddingLeft: showStartHandle ? 14 : 4,
-                paddingRight: showEndHandle ? 14 : 4,
+                paddingLeft: isMinimalBar ? 0 : showStartHandle ? 14 : 4,
+                paddingRight: isMinimalBar ? 0 : showEndHandle ? 14 : 4,
               }
             : {}),
           // Bars stack in DOM order, so a bar with an open menu has to outrank the
@@ -1313,9 +1940,44 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         <TaskBarTooltip
           task={task}
           formatDate={formatBarTooltipDate}
-          disabled={Boolean(drag) || menuOpen || hoverCommentId === task.id}
-          wrapperClassName="flex h-full w-full min-w-0 items-center"
+          disabled={isDayBar || Boolean(drag) || menuOpen || hoverCommentId === task.id}
+          wrapperClassName={`flex h-full w-full min-w-0 gap-0.5 ${
+            isDayFull ? 'items-start' : 'items-center'
+          }`}
+          meta={
+            // Always identify the assignee in the popup. This is especially
+            // important when a multi-week task's avatar is on another segment.
+            <>
+              <MemberAvatar member={member ?? null} size="xs" showViewerBadge={false} />
+              <span className="truncate">{member?.name || t('calendar.unassigned')}</span>
+              {statusStampLabel && (
+                <span
+                  className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-bold text-white ${
+                    barStatus === 'done' ? 'bg-green-500' : 'bg-red-500'
+                  }`}
+                >
+                  {statusStampLabel}
+                </span>
+              )}
+            </>
+          }
         >
+        {isMinimalBar && (
+          <span
+            className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full shadow-sm"
+            style={{ backgroundColor: barFill }}
+            aria-hidden
+          />
+        )}
+        {isMinimalBar && barStatus && (
+          <span
+            className={`pointer-events-none absolute right-0 top-1/2 z-[3] h-1.5 w-2.5 -translate-y-1/2 rounded-full shadow-sm ${
+              barStatus === 'done' ? 'bg-green-500' : 'bg-red-500'
+            }`}
+            title={statusStampLabel || undefined}
+            aria-hidden
+          />
+        )}
         {isDayBar && (
           <span
             className="absolute inset-y-0 left-0 w-1 rounded-l"
@@ -1346,16 +2008,27 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             multi-row task gets from the grid are not dates. */}
         {showStartHandle && (
           <span
-            className="absolute left-0 top-0 z-30 flex h-full w-3 cursor-w-resize items-center justify-center rounded-l opacity-60 transition-all hover:opacity-90"
+            className={`absolute left-0 top-0 z-30 flex h-full cursor-w-resize items-center justify-center rounded-l transition-all hover:opacity-90 ${
+              isMinimalBar || isPreviewBar
+                ? 'w-2 opacity-0 group-hover:opacity-75'
+                : 'w-3 opacity-60'
+            }`}
             style={{ backgroundColor: barFill }}
             onMouseDown={(e) => beginDrag('resize-start', task, e, bar.lane)}
           >
-            <span className="h-3 w-0.5 rounded bg-white opacity-80" aria-hidden />
+            <span
+              className={`${isMinimalBar ? 'h-1.5' : 'h-3'} w-0.5 rounded bg-white opacity-80`}
+              aria-hidden
+            />
           </span>
         )}
         <span
           className={`flex-1 min-w-0 relative z-[1] ${
-            isDayBar ? 'flex items-center gap-3 pl-1 pr-3' : 'truncate px-1'
+            isDayBar
+              ? `flex h-full min-h-0 ${isDayFull ? 'items-start' : 'items-center'} ${
+                  isDayMinimal ? 'gap-2 pl-0.5 pr-1' : 'gap-3 pl-1 pr-3'
+                }`
+              : 'truncate px-1'
           }`}
           onMouseDown={(e) => {
             if (barDraggable && e.button === 0) {
@@ -1366,15 +2039,46 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           {isDayBar ? (
             <>
               {priorityDot}
-              {renderAssigneeControl(task, member, 'lg')}
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold">
-                  {task.title}
-                </span>
-                <span className="mt-1 block truncate text-[11px] text-gray-500 dark:text-gray-400">
-                  {[task.ticket, `${bar.startYmd} → ${bar.endYmd}`].filter(Boolean).join(' · ')}
-                </span>
+              {renderAssigneeControl(task, member, isDayMinimal ? 'xs' : 'lg')}
+              <span className="min-w-0 flex-1">
+                {isDayMinimal ? (
+                  <span className="block truncate text-xs font-medium">
+                    {task.title}
+                    <span className="ml-1.5 font-normal text-[11px] text-gray-500 dark:text-gray-400">
+                      {[task.ticket, `${bar.startYmd} → ${bar.endYmd}`]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </span>
+                ) : (
+                  <>
+                    <span className="block truncate text-sm font-semibold">
+                      {task.title}
+                    </span>
+                    <span className="mt-1 block truncate text-[11px] text-gray-500 dark:text-gray-400">
+                      {[task.ticket, `${bar.startYmd} → ${bar.endYmd}`]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                    {dayDescriptionHtml ? (
+                      <div
+                        className="mt-1.5 line-clamp-3 text-[11px] leading-snug text-gray-600 dark:text-gray-300 [&_img]:hidden [&_p]:my-0 [&_ul]:my-0 [&_ol]:my-0"
+                        onClick={(e) => {
+                          if ((e.target as HTMLElement).closest('a')) {
+                            e.stopPropagation();
+                          }
+                        }}
+                        dangerouslySetInnerHTML={{ __html: dayDescriptionHtml }}
+                      />
+                    ) : null}
+                  </>
+                )}
               </span>
+              {statusStamp}
+            </>
+          ) : isMinimalBar ? (
+            <>
+              {priorityDot}
             </>
           ) : (
             <>
@@ -1383,55 +2087,59 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             </>
           )}
         </span>
+        {!isDayBar && !isMinimalBar && statusStamp}
         {isDayBar && (
-          <span className="relative z-[1] flex max-w-[55%] shrink-0 items-center justify-end gap-1.5 overflow-hidden">
-            {(task.tags || []).slice(0, 3).map((tag) => (
+          <span
+            className={`relative z-[1] flex max-w-[55%] shrink-0 justify-end gap-1.5 ${
+              isDayFull ? 'items-start pt-0.5' : 'items-center'
+            }`}
+          >
+            {(task.tags || []).slice(0, dayTagLimit).map((tag) => (
               <span
                 key={tag.id}
-                className="max-w-28 truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
+                className={`max-w-28 truncate rounded font-medium ${
+                  isDayMinimal ? 'px-1 py-px text-[9px]' : 'px-1.5 py-0.5 text-[10px]'
+                }`}
                 style={getTagDisplayStyle(tag)}
                 onMouseEnter={(e) => applyClippedTitleTooltip(e, tag.tag)}
               >
                 {tag.tag}
               </span>
             ))}
-            {(task.tags?.length || 0) > 3 && (
+            {(task.tags?.length || 0) > dayTagLimit && (
               <span className="shrink-0 text-[10px] text-gray-500 dark:text-gray-400">
-                +{(task.tags?.length || 0) - 3}
+                +{(task.tags?.length || 0) - dayTagLimit}
               </span>
             )}
+            {commentBubble}
             {statusLabel && (
-              <span className="max-w-32 shrink-0 truncate rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 ring-1 ring-inset ring-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:ring-gray-600">
+              <span
+                className={`max-w-32 shrink-0 truncate rounded bg-gray-100 font-medium text-gray-700 ring-1 ring-inset ring-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:ring-gray-600 ${
+                  isDayMinimal ? 'px-1 py-px text-[9px]' : 'px-1.5 py-0.5 text-[10px]'
+                }`}
+              >
                 {statusLabel}
               </span>
             )}
           </span>
         )}
-        {!isDayBar && !dense && showBarMeta && renderAssigneeControl(task, member, 'sm')}
-        {hasComments && showBarMeta && (
-          <button
-            type="button"
-            className="relative z-[1] flex shrink-0 items-center gap-0.5 rounded-full p-0.5 hover:bg-black/20"
-            onClick={(e) => {
-              e.preventDefault();
-              handleBarClick(task, e);
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onMouseEnter={(e) => showCommentPreview(task.id, e.currentTarget)}
-            onMouseLeave={hideCommentPreview}
-            aria-label={t('taskCard.hoverToViewComments', { ns: 'tasks' })}
-          >
-            <MessageCircle size={12} />
-            <span className="text-[9px] font-semibold">{task.comments.length}</span>
-          </button>
-        )}
+        {!isDayBar && showInlineBarMeta && showBarMeta &&
+          renderAssigneeControl(task, member, isPreviewBar ? 'xs' : 'sm')}
+        {!isDayBar && commentBubble}
         {showEndHandle && (
           <span
-            className="absolute right-0 top-0 z-30 flex h-full w-3 cursor-e-resize items-center justify-center rounded-r opacity-60 transition-all hover:opacity-90"
+            className={`absolute right-0 top-0 z-30 flex h-full cursor-e-resize items-center justify-center rounded-r transition-all hover:opacity-90 ${
+              isMinimalBar || isPreviewBar
+                ? 'w-2 opacity-0 group-hover:opacity-75'
+                : 'w-3 opacity-60'
+            }`}
             style={{ backgroundColor: barFill }}
             onMouseDown={(e) => beginDrag('resize-end', task, e, bar.lane)}
           >
-            <span className="h-3 w-0.5 rounded bg-white opacity-80" aria-hidden />
+            <span
+              className={`${isMinimalBar ? 'h-1.5' : 'h-3'} w-0.5 rounded bg-white opacity-80`}
+              aria-hidden
+            />
           </span>
         )}
         </TaskBarTooltip>
@@ -1500,12 +2208,36 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const renderWeekRow = (days: Date[], key: string, minHeight: number) => {
     // Every dated task is shown; the row grows so the real workload is visible.
     const placed = barsForDays(days);
+    const dayYmds = days.map(formatLocalYmd);
     const maxLane = placed.reduce((m, b) => Math.max(m, b.lane), -1);
-    const contentH = Math.max(minHeight, (maxLane + 1) * (BAR_H + LANE_GAP) + 36);
+    const density = CALENDAR_DENSITY[taskViewMode];
+    const contentH = Math.max(
+      minHeight,
+      (maxLane + 1) * (density.barHeight + density.laneGap) + 36
+    );
     // Later rows paint over earlier ones, so the row holding an open menu comes first.
     const rowHasOpenMenu = placed.some(
       (b) => b.task.id === menuTaskId || b.task.id === assigneeMenuTaskId
     );
+    const creationPreview = (() => {
+      if (!taskCreation) return null;
+      const rangeStart =
+        taskCreation.anchorYmd <= taskCreation.currentYmd
+          ? taskCreation.anchorYmd
+          : taskCreation.currentYmd;
+      const rangeEnd =
+        taskCreation.anchorYmd <= taskCreation.currentYmd
+          ? taskCreation.currentYmd
+          : taskCreation.anchorYmd;
+      const visibleStart = rangeStart < dayYmds[0] ? dayYmds[0] : rangeStart;
+      const visibleEnd =
+        rangeEnd > dayYmds[dayYmds.length - 1] ? dayYmds[dayYmds.length - 1] : rangeEnd;
+      if (visibleStart > visibleEnd) return null;
+      return {
+        startIndex: dayYmds.indexOf(visibleStart),
+        endIndex: dayYmds.indexOf(visibleEnd),
+      };
+    })();
 
     return (
       <div
@@ -1518,9 +2250,19 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           const isWeekend = day.getDay() === 0 || day.getDay() === 6;
           const inMonth = day.getMonth() === focusDate.getMonth();
           const muted = subView === 'month' && !inMonth;
-          return (
+              const canCreateFromDayNumber = Boolean(
+                canMutate && onAddTask && !multiSelectMode
+              );
+              const dayNumberClass = `transition-transform duration-150 group-hover:translate-x-0.5 ${
+                isToday
+                  ? 'inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-600 px-1 font-semibold text-white dark:bg-blue-500'
+                  : 'inline-flex h-6 min-w-6 items-center justify-center px-1'
+              }`;
+              return (
             <div
               key={formatLocalYmd(day)}
+              data-calendar-day={formatLocalYmd(day)}
+              data-calendar-today={isToday ? 'true' : undefined}
               className={`border-r border-gray-200 dark:border-gray-700 last:border-r-0 p-1 relative ${
                 isToday
                   ? 'bg-blue-50 dark:bg-blue-900/40'
@@ -1528,44 +2270,65 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                     ? 'bg-gray-50 dark:bg-gray-800/60'
                     : 'bg-white dark:bg-gray-900'
               } ${muted ? 'opacity-50' : ''}`}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                void handleEmptyDay(day);
-              }}
             >
               <div
-                className={`text-xs mb-1 ${
+                className={`relative z-20 text-xs mb-1 ${
                   isToday
                     ? 'text-blue-700 dark:text-blue-300 font-semibold'
                     : 'text-gray-600 dark:text-gray-400'
                 }`}
               >
-                <button
-                  type="button"
-                  className="group inline-flex items-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openDayView(day);
-                  }}
-                  onDoubleClick={(e) => e.stopPropagation()}
-                  title={openDayLabelFor(day)}
-                  aria-label={openDayLabelFor(day)}
-                >
-                  <span
-                    className={`transition-transform duration-150 group-hover:translate-x-0.5 ${
-                      isToday
-                        ? 'inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-600 px-1 font-semibold text-white dark:bg-blue-500'
-                        : 'inline-flex h-6 min-w-6 items-center justify-center px-1'
-                    }`}
+                <span className="group inline-flex items-center gap-0.5 rounded">
+                  {canCreateFromDayNumber ? (
+                    <KanbanChromeTooltip
+                      label={t('calendar.createTaskDrag')}
+                      placement="bottom"
+                      wrapperClassName="relative inline-flex"
+                    >
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className={`${dayNumberClass} select-none`}
+                        style={CREATE_TASK_CURSOR}
+                        aria-label={t('calendar.createTaskDrag')}
+                        onMouseDown={(e) =>
+                          beginTaskCreation(e, formatLocalYmd(day))
+                        }
+                      >
+                        {day.getDate()}
+                      </span>
+                    </KanbanChromeTooltip>
+                  ) : (
+                    <button
+                      type="button"
+                      className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDayView(day);
+                      }}
+                      aria-label={openDayLabelFor(day)}
+                    >
+                      <span className={dayNumberClass}>{day.getDate()}</span>
+                    </button>
+                  )}
+                  <KanbanChromeTooltip
+                    label={openDayLabelFor(day)}
+                    placement="bottom"
+                    wrapperClassName="relative inline-flex pointer-events-none group-hover:pointer-events-auto"
                   >
-                    {day.getDate()}
-                  </span>
-                  <ArrowRight
-                    size={12}
-                    className="-translate-x-1 opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100"
-                    aria-hidden
-                  />
-                </button>
+                    <button
+                      type="button"
+                      className="inline-flex cursor-pointer items-center rounded p-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-blue-500"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDayView(day);
+                      }}
+                      aria-label={openDayLabelFor(day)}
+                    >
+                      <ArrowRight size={12} aria-hidden />
+                    </button>
+                  </KanbanChromeTooltip>
+                </span>
               </div>
             </div>
           );
@@ -1581,6 +2344,25 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             {placed.map((b) => renderBar(b, 7))}
           </div>
         </div>
+        {/* Drawn across the date-number strip, above the bars, so the range being
+            created stays readable no matter how full or dense the row is. */}
+        {creationPreview &&
+          creationPreview.startIndex >= 0 &&
+          creationPreview.endIndex >= 0 && (
+            <div
+              className="pointer-events-none absolute z-30 flex items-center justify-end overflow-hidden rounded border border-blue-500 bg-blue-400/70 px-1 text-[10px] font-medium text-white shadow-sm dark:border-blue-300 dark:bg-blue-500/70"
+              style={{
+                left: `calc(${(creationPreview.startIndex / 7) * 100}% + 3px)`,
+                width: `calc(${
+                  ((creationPreview.endIndex - creationPreview.startIndex + 1) / 7) * 100
+                }% - 6px)`,
+                top: 4,
+                height: 22,
+              }}
+            >
+              <span className="truncate">{t('gantt.newTask')}</span>
+            </div>
+          )}
       </div>
     );
   };
@@ -1594,7 +2376,58 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     : null;
 
   return (
-    <div className="relative flex min-h-96 flex-col overflow-visible rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+    <div
+      ref={calendarRootRef}
+      className="relative flex min-h-96 flex-col overflow-visible rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+    >
+      <TaskBulkActionGutter
+        anchorRef={calendarRootRef}
+        controlId="calendar-view"
+        selectedTaskIds={selectedIds}
+        tasks={tasks}
+        retainSelectionAfterAction
+        onRetainSelection={onReplaceCheckedTaskIds}
+        onClearSelection={() => {
+          // Unselecting from the gutter means "done selecting": leave the mode too.
+          setSelectedIds([]);
+          setMultiSelectMode(false);
+          selectionAnchorRef.current = null;
+        }}
+        canMutate={canMutate}
+        busy={bulkBusy}
+        currentUser={currentUser}
+        members={members}
+        availableTags={availableTags}
+        availablePriorities={availablePriorities}
+        availableSprints={availableSprints}
+        boards={boards}
+        currentBoardId={boardId}
+        hasArchiveColumn={hasArchiveColumn}
+        onBulkAddTag={onBulkAddTag}
+        onBulkCopy={onBulkCopy}
+        onBulkArchive={onBulkArchive}
+        onBulkDelete={onBulkDelete}
+        onBulkPermanentDelete={onBulkPermanentDelete}
+        onBulkSprint={onBulkSprint}
+        onBulkPriority={onBulkPriority}
+        onBulkMoveToBoard={onBulkMoveToBoard}
+        onBulkAssignee={onBulkAssignee}
+        onBulkRequester={onBulkRequester}
+        onBulkAddWatcher={onBulkAddWatcher}
+        onBulkRemoveWatcher={onBulkRemoveWatcher}
+        onBulkAddCollaborator={onBulkAddCollaborator}
+        onBulkRemoveCollaborator={onBulkRemoveCollaborator}
+        bulkUndoTaskIds={bulkUndoTaskIds}
+        bulkUndoLabelKey={bulkUndoLabelKey}
+        onBulkUndo={async () => {
+          const restored = bulkUndoTaskIds || [];
+          await onBulkUndo?.();
+          // Restored bars are worth keeping actionable, so re-arm the mode.
+          if (restored.length > 0) setMultiSelectMode(true);
+          setSelectedIds(restored);
+        }}
+        onClearBulkUndo={onClearBulkUndo}
+      />
       <div
         ref={toolbarRef}
         className="sticky z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 px-3 py-2 space-y-1.5"
@@ -1602,7 +2435,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       >
         <GanttLegend
           priorities={prioritiesForLegend}
-          prioritySwatchShape="circle"
+          prioritySwatchShape={taskViewMode === 'compact' ? 'pill' : 'circle'}
           className="max-w-full overflow-x-auto"
         />
 
@@ -1636,8 +2469,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({
               if (multiSelectMode) {
                 setMultiSelectMode(false);
                 setSelectedIds([]);
+                selectionAnchorRef.current = null;
               } else {
                 setMultiSelectMode(true);
+                const currentId = selectedTaskRef.current?.id;
+                setSelectedIds(currentId ? [currentId] : []);
+                selectionAnchorRef.current = currentId || null;
                 onSelectTask(null);
               }
             }}
@@ -1660,6 +2497,35 @@ const CalendarView: React.FC<CalendarViewProps> = ({
               </span>
             )}
           </button>
+          {canMutate &&
+            actionSelectedIds.length > 0 &&
+            onBulkDelete &&
+            (selectedIds.length === 0 || !onBulkAddTag) && (
+            <button
+              type="button"
+              disabled={bulkBusy || deleteSubmitting}
+              onClick={(event) => {
+                const permanent =
+                  event.shiftKey &&
+                  currentUser?.roles?.includes('admin') &&
+                  Boolean(onBulkPermanentDelete);
+                setDeleteConfirmMode(permanent ? 'permanent' : 'soft');
+              }}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 dark:border-red-900/70 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-950/40"
+              title={
+                currentUser?.roles?.includes('admin') && onBulkPermanentDelete
+                  ? t('kanbanSelect.deleteAdminHint', { ns: 'tasks' })
+                  : t('kanbanSelect.delete', { ns: 'tasks' })
+              }
+              aria-label={
+                currentUser?.roles?.includes('admin') && onBulkPermanentDelete
+                  ? t('kanbanSelect.deleteAdminHint', { ns: 'tasks' })
+                  : t('kanbanSelect.delete', { ns: 'tasks' })
+              }
+            >
+              <Trash2 size={15} aria-hidden />
+            </button>
+          )}
 
           <div className="flex shrink-0 items-center gap-1 rounded-md border border-gray-300 px-1 dark:border-gray-600">
             <button
@@ -1758,7 +2624,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             <button
               type="button"
               className="ml-1 inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-blue-500 px-2.5 text-xs font-medium text-white hover:bg-blue-600"
-              onClick={() => setFocusPersist(today)}
+              onClick={goToToday}
               title={t('gantt.today')}
             >
               <Calendar size={14} aria-hidden />
@@ -1766,14 +2632,28 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             </button>
           </div>
 
+          <ColumnFilterDropdown
+            columns={columns}
+            visibleColumns={effectiveCalendarColumnIds}
+            onColumnsChange={persistCalendarColumns}
+            selectedBoard={boardId || null}
+            compact
+            enableHelpReveal={false}
+            triggerTitle={t('calendar.filterStatuses')}
+            onResetToDefault={() => persistCalendarColumns(null)}
+          />
+
           {subView === 'day' && (
-            <label className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-gray-300 bg-white px-2 text-gray-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-              <ArrowUpDown size={13} aria-hidden />
+            <label
+              className="relative flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              title={t('calendar.daySort.label')}
+            >
+              <ArrowUpDown size={14} className="pointer-events-none" aria-hidden />
               <span className="sr-only">{t('calendar.daySort.label')}</span>
               <select
                 value={daySort}
                 onChange={(event) => setDaySort(event.target.value as DaySort)}
-                className="bg-transparent text-xs font-medium text-gray-700 outline-none dark:text-gray-200"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 aria-label={t('calendar.daySort.label')}
               >
                 {(['kanban', 'priority', 'status', 'assignee', 'title'] as DaySort[]).map(
@@ -1790,7 +2670,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           <TaskJumpDropdown
             tasks={calendarSearchTasks}
             onTaskSelect={jumpToCalendarTask}
-            className="ml-auto w-72"
+            className="ml-auto w-52"
           />
         </div>
 
@@ -1803,6 +2683,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
       {subView !== 'day' && (
         <div
+          ref={weekdayRowRef}
           className="sticky z-30 grid grid-cols-7 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
           style={{ top: PAGE_HEADER_OFFSET + toolbarHeight }}
         >
@@ -1845,7 +2726,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         {subView === 'month' &&
           Array.from({ length: 6 }, (_, week) => {
             const days = monthCells.slice(week * 7, week * 7 + 7);
-            return renderWeekRow(days, `m-${week}`, 88);
+            return renderWeekRow(
+              days,
+              `m-${week}`,
+              CALENDAR_DENSITY[taskViewMode].monthMinHeight
+            );
           })}
 
         {subView === 'week' && renderWeekRow(weekCells, 'week', 320)}
@@ -1853,42 +2738,60 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         {subView === 'day' &&
           (() => {
             const days = dayCells;
-            const placed = barsForDays(days);
+            // Day cards all overlap the same single-day slot. Assign lanes directly
+            // from the chosen order so changing the selector always reorders the list.
+            const placed = [...barsForDays(days)]
+              .sort((a, b) => compareCalendarTasks(a.task, b.task))
+              .map((bar, lane) => ({ ...bar, lane }));
             const maxLane = placed.reduce((m, b) => Math.max(m, b.lane), -1);
+            const dayDensity = CALENDAR_DAY_DENSITY[taskViewMode];
             const h = Math.max(
               360,
-              (maxLane + 1) * (DAY_BAR_H + DAY_LANE_GAP) + 64
+              (maxLane + 1) * (dayDensity.barHeight + dayDensity.laneGap) + 64
             );
             const isToday = isSameDayLocal(days[0], today);
             return (
               <div
+                data-calendar-today={isToday ? 'true' : undefined}
                 className={`relative border-b border-gray-200 dark:border-gray-700 ${
                   isToday ? 'bg-blue-50 dark:bg-blue-900/40' : 'bg-white dark:bg-gray-900'
                 }`}
                 style={{ minHeight: h }}
-                onDoubleClick={() => void handleEmptyDay(days[0])}
               >
                 <div className="flex items-center gap-1 p-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-                  {new Intl.DateTimeFormat(locale, {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                  })
-                    .formatToParts(days[0])
-                    .map((part, index) =>
-                      part.type === 'day' && isToday ? (
-                        <span
-                          key={`${part.type}-${index}`}
-                          className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-blue-600 px-1 font-semibold text-white dark:bg-blue-500"
-                        >
-                          {part.value}
-                        </span>
-                      ) : (
-                        <React.Fragment key={`${part.type}-${index}`}>
-                          {part.value}
-                        </React.Fragment>
-                      )
-                    )}
+                  <span className="min-w-0">
+                    {new Intl.DateTimeFormat(locale, {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                    })
+                      .formatToParts(days[0])
+                      .map((part, index) =>
+                        part.type === 'day' && isToday ? (
+                          <span
+                            key={`${part.type}-${index}`}
+                            className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-blue-600 px-1 font-semibold text-white dark:bg-blue-500"
+                          >
+                            {part.value}
+                          </span>
+                        ) : (
+                          <React.Fragment key={`${part.type}-${index}`}>
+                            {part.value}
+                          </React.Fragment>
+                        )
+                      )}
+                  </span>
+                  {canMutate && onAddTask && !multiSelectMode && (
+                    <button
+                      type="button"
+                      className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+                      onClick={() => void handleEmptyDay(days[0])}
+                      title={t('column.addTask', { ns: 'tasks' })}
+                      aria-label={t('column.addTask', { ns: 'tasks' })}
+                    >
+                      <Plus size={16} aria-hidden />
+                    </button>
+                  )}
                 </div>
                 <div className="relative px-2" style={{ minHeight: h - 40 }}>
                   <div
@@ -1908,6 +2811,73 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             );
           })()}
       </div>
+
+      {deleteConfirmMode &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[9991] flex items-center justify-center bg-black/45 p-4"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget && !deleteSubmitting) {
+                setDeleteConfirmMode(null);
+              }
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="calendar-bulk-delete-title"
+              className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+            >
+              <div className="mb-4 flex items-start gap-3">
+                <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400">
+                  <Trash2 size={18} aria-hidden />
+                </span>
+                <div>
+                  <h2
+                    id="calendar-bulk-delete-title"
+                    className="text-base font-semibold text-gray-900 dark:text-gray-100"
+                  >
+                    {deleteConfirmMode === 'permanent'
+                      ? t('kanbanSelect.deleteConfirmPermanentTitle', { ns: 'tasks' })
+                      : t('kanbanSelect.deleteConfirmTitle', { ns: 'tasks' })}
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                    {deleteConfirmMode === 'permanent'
+                      ? t('kanbanSelect.deleteConfirmPermanent', {
+                          ns: 'tasks',
+                          count: actionSelectedIds.length,
+                        })
+                      : t('kanbanSelect.deleteConfirm', {
+                          ns: 'tasks',
+                          count: actionSelectedIds.length,
+                        })}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={deleteSubmitting}
+                  className="rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800"
+                  onClick={() => setDeleteConfirmMode(null)}
+                >
+                  {t('buttons.cancel')}
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteSubmitting || bulkBusy}
+                  className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  onClick={() => void confirmSelectedTaskDelete()}
+                >
+                  {deleteConfirmMode === 'permanent'
+                    ? t('kanbanSelect.deleteForever', { ns: 'tasks' })
+                    : t('kanbanSelect.delete', { ns: 'tasks' })}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {assigneeMenuTask &&
         canMutate &&
@@ -2037,7 +3007,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   className="rounded bg-blue-600 px-2 py-1 text-xs text-white transition-colors hover:bg-blue-700"
                   onClick={() => {
                     setHoverCommentId(null);
-                    onSelectTask(hoverCommentTask);
+                    onSelectTask(hoverCommentTask, { scrollToComments: true });
                   }}
                 >
                   {t('taskCard.open', { ns: 'tasks' })}

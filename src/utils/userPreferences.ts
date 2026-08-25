@@ -78,6 +78,8 @@ export interface UserPreferences {
   showAgentTasks: boolean;
   taskDetailsWidth: number;
   ganttTaskColumnWidth: number;
+  /** Gantt timeline day column width in pixels (zoom). */
+  ganttDayColumnWidth: number;
   kanbanColumnWidth: number; // User-adjustable width for Kanban columns (default: 300px)
   ganttScrollPositions: { [boardId: string]: { date: string; sessionId: string } }; // Per-board scroll positions
   listViewColumnVisibility: ColumnVisibility;
@@ -92,6 +94,8 @@ export interface UserPreferences {
   timezone?: string | null;
   /** Per-board visible column IDs (includes Archive when the user unhides it). */
   boardColumnVisibility: { [boardId: string]: string[] };
+  /** Calendar-only column visibility; does not change Kanban/List/Gantt filters. */
+  calendarColumnVisibility: { [boardId: string]: string[] };
 
   /**
    * Preferred member chip / Meet-the-team order (people ids only).
@@ -166,6 +170,7 @@ const PREFS_STORAGE_PREFIX = 'easy-kanban-user-prefs-store';
 type BulkyLocalPreferences = {
   listViewColumnWidths: ListViewColumnWidthsByBoard;
   boardColumnVisibility: { [boardId: string]: string[] };
+  calendarColumnVisibility: { [boardId: string]: string[] };
   ganttScrollPositions: UserPreferences['ganttScrollPositions'];
 };
 
@@ -222,6 +227,7 @@ const writeBulkyPreferencesLocal = (
     const payload: BulkyLocalPreferences = {
       listViewColumnWidths: preferences.listViewColumnWidths || {},
       boardColumnVisibility: preferences.boardColumnVisibility || {},
+      calendarColumnVisibility: preferences.calendarColumnVisibility || {},
       ganttScrollPositions: preferences.ganttScrollPositions || {},
     };
     localStorage.setItem(getBulkyLocalStorageKey(userId), JSON.stringify(payload));
@@ -234,6 +240,7 @@ const readBulkyPreferencesLocal = (userId: string | null): BulkyLocalPreferences
   const empty: BulkyLocalPreferences = {
     listViewColumnWidths: {},
     boardColumnVisibility: {},
+    calendarColumnVisibility: {},
     ganttScrollPositions: {},
   };
   try {
@@ -243,6 +250,7 @@ const readBulkyPreferencesLocal = (userId: string | null): BulkyLocalPreferences
     return {
       listViewColumnWidths: parsed?.listViewColumnWidths || {},
       boardColumnVisibility: parsed?.boardColumnVisibility || {},
+      calendarColumnVisibility: parsed?.calendarColumnVisibility || {},
       ganttScrollPositions: parsed?.ganttScrollPositions || {},
     };
   } catch {
@@ -341,6 +349,7 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
   showAgentTasks: true, // Default: show Agent-assigned tasks on the board
   taskDetailsWidth: 480, // Default width in pixels (30rem equivalent)
   ganttTaskColumnWidth: 320, // Default Gantt task column width in pixels
+  ganttDayColumnWidth: 40, // Default Gantt day column width (100% zoom)
   kanbanColumnWidth: 300, // Default Kanban column width in pixels
   ganttScrollPositions: {}, // Per-board Gantt scroll positions (empty by default)
   selectedSprintId: null, // Default to "All Sprints" (no filter)
@@ -348,6 +357,7 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
   language: 'en', // Default to English
   timezone: null, // Detected from browser and synced to user_settings
   boardColumnVisibility: {}, // Default: no overrides (archived columns hidden by Kanban UI)
+  calendarColumnVisibility: {},
   memberDisplayOrder: [], // Empty = A→Z default
   listViewColumnVisibility: {
     // Default column visibility - all columns visible except some less important ones
@@ -531,6 +541,7 @@ const stripBulkyFromStoredPayload = (preferences: UserPreferences): UserPreferen
   ...preferences,
   listViewColumnWidths: BASE_DEFAULT_PREFERENCES.listViewColumnWidths,
   boardColumnVisibility: BASE_DEFAULT_PREFERENCES.boardColumnVisibility,
+  calendarColumnVisibility: BASE_DEFAULT_PREFERENCES.calendarColumnVisibility,
   ganttScrollPositions: BASE_DEFAULT_PREFERENCES.ganttScrollPositions,
 });
 
@@ -679,6 +690,7 @@ export const saveUserPreferences = async (preferences: UserPreferences, userId: 
           saveIfDefined('calendarFocusDate', preferences.calendarFocusDate),
           saveIfDefined('taskDetailsWidth', preferences.taskDetailsWidth),
           saveIfDefined('ganttTaskColumnWidth', preferences.ganttTaskColumnWidth),
+          saveIfDefined('ganttDayColumnWidth', preferences.ganttDayColumnWidth),
           saveIfDefined('kanbanColumnWidth', preferences.kanbanColumnWidth),
           
           // App Settings (only save if explicitly set)
@@ -702,6 +714,7 @@ export const saveUserPreferences = async (preferences: UserPreferences, userId: 
           saveIfDefined('listViewColumnWidths', JSON.stringify(preferences.listViewColumnWidths)),
           saveIfDefined('listViewShowDependencies', preferences.listViewShowDependencies),
           saveIfDefined('boardColumnVisibility', JSON.stringify(preferences.boardColumnVisibility)),
+          saveIfDefined('calendarColumnVisibility', JSON.stringify(preferences.calendarColumnVisibility)),
           
           // Member Filter Preferences
           saveIfDefined('includeAssignees', preferences.includeAssignees),
@@ -803,6 +816,10 @@ const readLocalPreferences = (userId: string | null = null): UserPreferences => 
           ...defaults.boardColumnVisibility,
           ...bulkyLocal.boardColumnVisibility
         },
+        calendarColumnVisibility: {
+          ...defaults.calendarColumnVisibility,
+          ...bulkyLocal.calendarColumnVisibility
+        },
         listViewColumnVisibility: {
           ...defaults.listViewColumnVisibility,
           ...loadedPrefs.listViewColumnVisibility
@@ -878,6 +895,10 @@ const readLocalPreferences = (userId: string | null = null): UserPreferences => 
       boardColumnVisibility: {
         ...defaults.boardColumnVisibility,
         ...bulkyLocal.boardColumnVisibility
+      },
+      calendarColumnVisibility: {
+        ...defaults.calendarColumnVisibility,
+        ...bulkyLocal.calendarColumnVisibility
       },
       listViewColumnWidths: {
         ...defaults.listViewColumnWidths,
@@ -980,6 +1001,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
         ),
         taskDetailsWidth: smartMerge(preferences.taskDetailsWidth, dbSettings.taskDetailsWidth, defaults.taskDetailsWidth),
         ganttTaskColumnWidth: smartMerge(preferences.ganttTaskColumnWidth, dbSettings.ganttTaskColumnWidth, defaults.ganttTaskColumnWidth),
+        ganttDayColumnWidth: smartMerge(preferences.ganttDayColumnWidth, dbSettings.ganttDayColumnWidth, defaults.ganttDayColumnWidth),
         kanbanColumnWidth: smartMerge(preferences.kanbanColumnWidth, dbSettings.kanbanColumnWidth, defaults.kanbanColumnWidth),
         
         // Member Filter Preferences  
@@ -1120,6 +1142,22 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
             preferences.boardColumnVisibility || {},
             dbVis,
             defaults.boardColumnVisibility
+          );
+        })(),
+
+        calendarColumnVisibility: (() => {
+          let dbVis: { [boardId: string]: string[] } | undefined;
+          try {
+            dbVis = dbSettings.calendarColumnVisibility
+              ? JSON.parse(dbSettings.calendarColumnVisibility)
+              : undefined;
+          } catch {
+            dbVis = undefined;
+          }
+          return smartMergeBulky(
+            preferences.calendarColumnVisibility || {},
+            dbVis,
+            defaults.calendarColumnVisibility
           );
         })(),
         
@@ -1321,6 +1359,7 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
         'calendarFocusDate': 'calendarFocusDate',
         'taskDetailsWidth': 'taskDetailsWidth',
         'ganttTaskColumnWidth': 'ganttTaskColumnWidth',
+        'ganttDayColumnWidth': 'ganttDayColumnWidth',
         'kanbanColumnWidth': 'kanbanColumnWidth',
         'isSearchActive': 'isSearchActive',
         'isAdvancedSearchExpanded': 'isAdvancedSearchExpanded',
@@ -1341,6 +1380,7 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
         'listViewColumnWidths': 'listViewColumnWidths',
         'listViewShowDependencies': 'listViewShowDependencies',
         'boardColumnVisibility': 'boardColumnVisibility',
+        'calendarColumnVisibility': 'calendarColumnVisibility',
         'ganttScrollPositions': 'ganttScrollPositions',
         'language': 'language',
         'timezone': 'timezone',
@@ -1365,6 +1405,7 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
         dbKey === 'listViewColumnVisibility' ||
         dbKey === 'listViewColumnWidths' ||
         dbKey === 'boardColumnVisibility' ||
+        dbKey === 'calendarColumnVisibility' ||
         dbKey === 'ganttScrollPositions' ||
         dbKey === 'searchFilters' ||
         dbKey === 'notifications'

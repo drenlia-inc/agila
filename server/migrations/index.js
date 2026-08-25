@@ -988,6 +988,38 @@ const migrations = [
       await dbExec(db, `ALTER TABLE tasks ALTER COLUMN memberid DROP NOT NULL`);
       console.log('✅ Migration 44: tasks.memberid nullable');
     }
+  },
+  {
+    version: 45,
+    name: 'default_testing_column_title_fr_en_test',
+    description: 'Rename the builtin Testing column French title from Test to En test',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const { DEFAULT_BOARD_COLUMNS_SETTING_KEY, parseDefaultBoardColumns } = await import(
+        '../utils/defaultBoardColumns.js'
+      );
+      const existing = await settingsQueries.getSettingByKey(db, DEFAULT_BOARD_COLUMNS_SETTING_KEY);
+      if (!existing?.value) {
+        console.log('✅ Migration 45: no DEFAULT_BOARD_COLUMNS to update');
+        return;
+      }
+      const rows = parseDefaultBoardColumns(existing.value);
+      let changed = false;
+      const next = rows.map((row) => {
+        if (row.id !== 'testing') return row;
+        if (String(row.titleFr || '').trim() !== 'Test') return row;
+        changed = true;
+        return { ...row, titleFr: 'En test' };
+      });
+      if (changed) {
+        await settingsQueries.updateSetting(db, DEFAULT_BOARD_COLUMNS_SETTING_KEY, JSON.stringify(next));
+      }
+      console.log(
+        changed
+          ? '✅ Migration 45: Testing French default is now En test'
+          : '✅ Migration 45: Testing French title already customized or updated'
+      );
+    }
   }
 ];
 

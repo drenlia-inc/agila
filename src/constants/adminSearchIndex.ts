@@ -166,7 +166,7 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
     tab: 'project-settings',
     hash: '#admin#project-settings#sprint-settings',
     labelKey: 'tabs.sprintSettings',
-    aliases: ['sprint', 'agile'],
+    aliases: ['sprint', 'sprints', 'agile'],
   },
   {
     id: 'tab-reporting',

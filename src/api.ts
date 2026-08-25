@@ -4,6 +4,7 @@ import { versionDetection } from './utils/versionDetection';
 import { handleAuthError } from './utils/authErrorHandler';
 import { feDebug } from './utils/clientDebug';
 import { clearMediaSession } from './utils/mediaSession';
+import { normalizeTaskSoftDelete } from './utils/taskUtils';
 import {
   readTroubleshootingUnlocked,
   TROUBLESHOOTING_REQUEST_HEADER,
@@ -442,7 +443,7 @@ export const copyTask = async (
 // Tasks
 export const getTaskById = async (id: string) => {
   const { data } = await api.get<Task>(`/tasks/${id}`);
-  return data;
+  return normalizeTaskSoftDelete(data);
 };
 
 export const createTask = async (task: Task) => {
@@ -524,6 +525,18 @@ export const getBoardTrash = async (boardId: string) => {
 export const getBoardTrashCount = async (boardId: string) => {
   const { data } = await api.get<{ count: number }>(`/boards/${boardId}/trash/count`);
   return typeof data?.count === 'number' ? data.count : 0;
+};
+
+/** Trashed tasks matching a query, across boards (header search). */
+export const searchTrashedTasks = async (
+  q: string,
+  options?: { limit?: number; signal?: AbortSignal }
+) => {
+  const { data } = await api.get<{ tasks?: Task[] }>('/tasks/trash/search', {
+    params: { q, limit: options?.limit },
+    signal: options?.signal,
+  });
+  return Array.isArray(data?.tasks) ? data.tasks : [];
 };
 
 export const restoreBoard = async (id: string) => {
@@ -1131,9 +1144,55 @@ export const createSprint = async (sprint: {
   end_date: string;
   is_active?: boolean;
   description?: string;
+  transfer_active_work?: boolean;
 }) => {
   const { data } = await api.post('/admin/sprints', sprint);
   return data;
+};
+
+export const updateSprint = async (
+  sprintId: string,
+  sprint: {
+    name: string;
+    start_date: string;
+    end_date: string;
+    is_active?: boolean;
+    description?: string | null;
+    transfer_active_work?: boolean;
+  }
+) => {
+  const { data } = await api.put(`/admin/sprints/${sprintId}`, sprint);
+  return data;
+};
+
+export const getActiveSprint = async (): Promise<{
+  id: string;
+  name: string;
+  start_date?: string;
+  end_date?: string;
+} | null> => {
+  try {
+    const { data } = await api.get('/admin/sprints/active');
+    return data;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404) return null;
+    throw err;
+  }
+};
+
+export const getSprintActiveWorkCount = async (sprintId: string): Promise<number> => {
+  const { data } = await api.get(`/admin/sprints/${sprintId}/active-work-count`);
+  return Number(data?.active ?? data?.count) || 0;
+};
+
+export const getSprintTransferWorkCounts = async (
+  sprintId: string
+): Promise<{ active: number; total: number }> => {
+  const { data } = await api.get(`/admin/sprints/${sprintId}/active-work-count`);
+  const active = Number(data?.active ?? data?.count) || 0;
+  const total = Number(data?.total) || 0;
+  return { active, total: Math.max(total, active) };
 };
 
 export const getSprintUsage = async (sprintId: string) => {

@@ -18,6 +18,7 @@
     "failedToReorderColumn": "Failed to reorder column",
     "failedToRenumberColumns": "Failed to renumber columns",
     "taskNotFound": "Task not found",
+    "taskInTrash": "This task is in Trash and cannot be edited until it is restored",
     "failedToCreateTask": "Failed to create task",
     "failedToUpdateTask": "Failed to update task",
     "failedToDeleteTask": "Failed to delete task",

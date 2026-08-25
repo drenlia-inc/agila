@@ -1,7 +1,7 @@
 {
   "name": "kanban-board",
   "private": true,
-  "version": "0.9-beta",
+  "version": "0.99-beta",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"vite --host 0.0.0.0 --port 3010\" \"node server/index.js\"",

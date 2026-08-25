@@ -1,7 +1,13 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CheckSquare, ChevronLeft, ChevronRight, Minus, Plus, Trash2, X } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
 import { TaskJumpDropdown } from './TaskJumpDropdown';
+import { KanbanChromeTooltip } from '../KanbanChromeTooltip';
+import {
+  GANTT_DAY_COLUMN_PX,
+  GANTT_DAY_ZOOM_STEPS,
+  ganttDayZoomPercent,
+} from './ganttLayout';
 
 interface GanttTask {
   id: string;
@@ -28,7 +34,8 @@ interface GanttHeaderProps {
   scrollToToday: () => void;
   scrollEarlier: () => void;
   scrollLater: () => void;
-  scrollToTask: (startDate: Date, endDate: Date, position?: string) => void;
+  /** Steps to the nearest task before / after the visible timeline window. */
+  onNavigateToAdjacentTask: (dir: -1 | 1) => void;
   
   // Relationship mode
   isRelationshipMode: boolean;
@@ -54,6 +61,14 @@ interface GanttHeaderProps {
 
   /** When false, Select / Link mode toggles are disabled (viewers). */
   canMutate?: boolean;
+  deleteSelectedTaskCount?: number;
+  deleteBusy?: boolean;
+  canPermanentDelete?: boolean;
+  onDeleteSelectedTasks?: (permanent: boolean) => void;
+  dayColumnWidth?: number;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onZoomReset?: () => void;
 }
 
 export const GanttHeader: React.FC<GanttHeaderProps> = ({
@@ -63,7 +78,7 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
   scrollToToday,
   scrollEarlier,
   scrollLater,
-  scrollToTask,
+  onNavigateToAdjacentTask,
   isRelationshipMode,
   setIsRelationshipMode,
   isMultiSelectMode,
@@ -77,6 +92,14 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
   selectedParentTask,
   setSelectedParentTask,
   canMutate = true,
+  deleteSelectedTaskCount = 0,
+  deleteBusy = false,
+  canPermanentDelete = false,
+  onDeleteSelectedTasks,
+  dayColumnWidth = GANTT_DAY_COLUMN_PX,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
 }) => {
   const { t } = useTranslation('common');
 
@@ -144,9 +167,11 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                 }`}
                 title={isMultiSelectMode ? t('gantt.exitMultiSelectMode') : t('gantt.selectMultipleTasks')}
               >
-            <svg className="w-4 h-4 mr-1.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            {isMultiSelectMode ? (
+              <X size={14} className="mr-1.5 inline" />
+            ) : (
+              <CheckSquare size={14} className="mr-1.5 inline" />
+            )}
             {isMultiSelectMode ? t('gantt.exit') : t('gantt.select')}
             {selectedTasks.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 text-xs bg-green-200 text-green-800 rounded-full">
@@ -241,25 +266,39 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
               </p>
             </div>
           </div>
+
+          {canMutate && deleteSelectedTaskCount > 0 && onDeleteSelectedTasks && (
+            <button
+              type="button"
+              disabled={deleteBusy}
+              onClick={(event) =>
+                onDeleteSelectedTasks(event.shiftKey && canPermanentDelete)
+              }
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 dark:border-red-900/70 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-950/40"
+              title={
+                canPermanentDelete
+                  ? t('kanbanSelect.deleteAdminHint', { ns: 'tasks' })
+                  : t('kanbanSelect.delete', { ns: 'tasks' })
+              }
+              aria-label={
+                canPermanentDelete
+                  ? t('kanbanSelect.deleteAdminHint', { ns: 'tasks' })
+                  : t('kanbanSelect.delete', { ns: 'tasks' })
+              }
+            >
+              <Trash2 size={15} aria-hidden />
+            </button>
+          )}
           
           {/* Task Navigation: < Task > */}
           <div className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-gray-300 px-1 dark:border-gray-600">
             <button
               type="button"
-              onClick={() => {
-                if (ganttTasks.length > 0) {
-                  const earliestTask = ganttTasks.reduce((earliest, task) =>
-                    (!earliest.startDate || (task.startDate && task.startDate < earliest.startDate)) ? task : earliest
-                  );
-                  if (earliestTask.startDate) {
-                    scrollToTask(earliestTask.startDate, earliestTask.endDate || earliestTask.startDate, 'start-left');
-                  }
-                }
-              }}
+              onClick={() => onNavigateToAdjacentTask(-1)}
               disabled={ganttTasks.length === 0}
               className="flex h-7 w-7 items-center justify-center rounded text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-gray-300 dark:hover:bg-gray-800"
-              title={t('gantt.jumpToEarliestTask')}
-              aria-label={t('gantt.jumpToEarliestTask')}
+              title={t('gantt.jumpToPreviousTask')}
+              aria-label={t('gantt.jumpToPreviousTask')}
             >
               <ChevronLeft size={16} />
             </button>
@@ -268,20 +307,11 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
             </span>
             <button
               type="button"
-              onClick={() => {
-                if (ganttTasks.length > 0) {
-                  const latestTask = ganttTasks.reduce((latest, task) =>
-                    (!latest.endDate || (task.endDate && task.endDate > latest.endDate)) ? task : latest
-                  );
-                  if (latestTask.endDate) {
-                    scrollToTask(latestTask.startDate || latestTask.endDate, latestTask.endDate, 'end-right');
-                  }
-                }
-              }}
+              onClick={() => onNavigateToAdjacentTask(1)}
               disabled={ganttTasks.length === 0}
               className="flex h-7 w-7 items-center justify-center rounded text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-gray-300 dark:hover:bg-gray-800"
-              title={t('gantt.jumpToLatestTask')}
-              aria-label={t('gantt.jumpToLatestTask')}
+              title={t('gantt.jumpToNextTask')}
+              aria-label={t('gantt.jumpToNextTask')}
             >
               <ChevronRight size={16} />
             </button>
@@ -339,6 +369,55 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
+          </div>
+
+          <div className="flex h-8 shrink-0 items-center gap-0.5 rounded-md border border-gray-300 bg-white px-0.5 dark:border-gray-600 dark:bg-gray-800">
+            <KanbanChromeTooltip label={t('gantt.zoomOut')} placement="bottom">
+              <button
+                type="button"
+                onClick={onZoomOut}
+                disabled={
+                  !onZoomOut ||
+                  dayColumnWidth <= GANTT_DAY_ZOOM_STEPS[0]
+                }
+                className="flex h-7 w-7 items-center justify-center rounded text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-gray-300 dark:hover:bg-gray-700"
+                aria-label={t('gantt.zoomOut')}
+              >
+                <Minus size={14} aria-hidden />
+              </button>
+            </KanbanChromeTooltip>
+            <KanbanChromeTooltip
+              label={
+                dayColumnWidth === GANTT_DAY_COLUMN_PX
+                  ? t('gantt.zoomLevel', { percent: ganttDayZoomPercent(dayColumnWidth) })
+                  : t('gantt.zoomReset')
+              }
+              placement="bottom"
+            >
+              <button
+                type="button"
+                onClick={onZoomReset}
+                disabled={!onZoomReset}
+                className="min-w-[2.75rem] px-1 text-center text-xs font-medium tabular-nums text-gray-700 dark:text-gray-200"
+                aria-label={t('gantt.zoomReset')}
+              >
+                {ganttDayZoomPercent(dayColumnWidth)}%
+              </button>
+            </KanbanChromeTooltip>
+            <KanbanChromeTooltip label={t('gantt.zoomIn')} placement="bottom">
+              <button
+                type="button"
+                onClick={onZoomIn}
+                disabled={
+                  !onZoomIn ||
+                  dayColumnWidth >= GANTT_DAY_ZOOM_STEPS[GANTT_DAY_ZOOM_STEPS.length - 1]
+                }
+                className="flex h-7 w-7 items-center justify-center rounded text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-gray-300 dark:hover:bg-gray-700"
+                aria-label={t('gantt.zoomIn')}
+              >
+                <Plus size={14} aria-hidden />
+              </button>
+            </KanbanChromeTooltip>
           </div>
 
           {/* Loading Indicator - Fixed position to prevent layout shift */}

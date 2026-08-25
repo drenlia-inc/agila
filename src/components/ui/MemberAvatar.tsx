@@ -48,6 +48,8 @@ interface MemberAvatarProps {
   size?: AvatarSize;
   className?: string;
   title?: string;
+  /** Native `title` tooltip (default on). Set false when a chrome tooltip already names the member. */
+  nativeTitle?: boolean;
   /** Viewer eye overlay (default on). */
   showViewerBadge?: boolean;
 }
@@ -62,6 +64,7 @@ export default function MemberAvatar({
   size = 'md',
   className = '',
   title,
+  nativeTitle = true,
   showViewerBadge = true,
 }: MemberAvatarProps) {
   const { t } = useTranslation('common');
@@ -74,7 +77,7 @@ export default function MemberAvatar({
     return (
       <div
         className={`${SIZE_CLASS[size]} rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center shrink-0 text-gray-500 dark:text-gray-300 ${className}`}
-        title={unassignedLabel}
+        title={nativeTitle ? unassignedLabel : undefined}
         aria-label={unassignedLabel}
       >
         <User size={USER_PX[size]} strokeWidth={2} aria-hidden />
@@ -92,12 +95,14 @@ export default function MemberAvatar({
 
   let inner: React.ReactElement;
 
+  const nativeLabel = nativeTitle ? label : undefined;
+
   if (member.id === SYSTEM_MEMBER_ID) {
     inner = (
       <div
         className={`${sizeClass} rounded-full flex items-center justify-center shrink-0 ${className}`}
         style={{ backgroundColor: member.color || '#1E40AF' }}
-        title={label}
+        title={nativeLabel}
       >
         🤖
       </div>
@@ -107,7 +112,7 @@ export default function MemberAvatar({
       <img
         src={getAgentAvatarSrc(member)}
         alt={member.name}
-        title={label}
+        title={nativeLabel}
         className={`${sizeClass} rounded-full object-cover shrink-0 ${className}`}
       />
     );
@@ -117,14 +122,14 @@ export default function MemberAvatar({
       <img
         src={getAuthenticatedAvatarUrl(avatarSrc)}
         alt={member.name}
-        title={label}
+        title={nativeLabel}
         className={`${sizeClass} rounded-full object-cover shrink-0 ${className}`}
       />
     ) : (
       <div
         className={`${sizeClass} rounded-full flex items-center justify-center font-medium text-white shrink-0 ${className}`}
         style={{ backgroundColor: member.color || '#6B7280' }}
-        title={label}
+        title={nativeLabel}
       >
         {(member.name || '?').charAt(0).toUpperCase()}
       </div>
@@ -136,7 +141,7 @@ export default function MemberAvatar({
   }
 
   return (
-    <span className={`relative inline-flex ${sizeClass} shrink-0`} title={label}>
+    <span className={`relative inline-flex ${sizeClass} shrink-0`} title={nativeLabel}>
       {inner}
       <span
         className={`absolute flex items-center justify-center rounded-full bg-sky-100 text-sky-700 ring-1 ring-white dark:bg-sky-950 dark:text-sky-300 dark:ring-gray-800 ${BADGE_CLASS[size]}`}

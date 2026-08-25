@@ -1,16 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckSquare2, ChevronDown, ChevronUp, RotateCcw, Square, Trash2 } from 'lucide-react';
-import { Column, Columns, Task } from '../types';
+import { CheckSquare2, RotateCcw, Square, Trash2 } from 'lucide-react';
+import { Column, Columns, Task, TeamMember } from '../types';
 import { formatToYYYYMMDDHHmm } from '../utils/dateUtils';
+import { TaskViewMode } from '../utils/userPreferences';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { ModernCheckbox } from './ModernCheckbox';
+import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
+import MemberAvatar from './ui/MemberAvatar';
 
 interface BoardTrashViewProps {
   tasks: Task[];
   /** Same visible columns (ordered) as the live board beneath. */
   displayColumns: Column[];
   columns: Columns;
+  members?: TeamMember[];
   isAdmin: boolean;
   /** When false, hide select/restore/purge actions (viewers). */
   canMutate?: boolean;
@@ -28,42 +32,115 @@ interface BoardTrashViewProps {
   onPurgeSelected: (taskIds: string[]) => Promise<void>;
   /** Hide the trash panel (same as toggling trash off in BoardTabs). */
   onClose?: () => void;
+  /** Same Full / Preview / Minimal density as the live board. */
+  taskViewMode?: TaskViewMode;
 }
 
 function TrashedTaskCard({
   task,
+  members,
   isAdmin,
   canMutate,
   checked,
   isDetailsOpen,
-  expanded,
+  taskViewMode,
   restoring,
   purging,
   bulkBusy,
   onOpen,
   onToggleCheck,
-  onToggleExpanded,
   onRestore,
   onPurge,
 }: {
   task: Task;
+  members: TeamMember[];
   isAdmin: boolean;
   canMutate: boolean;
   checked: boolean;
   isDetailsOpen: boolean;
-  expanded: boolean;
+  taskViewMode: TaskViewMode;
   restoring: boolean;
   purging: boolean;
   bulkBusy: boolean;
   onOpen: () => void;
   onToggleCheck: () => void;
-  onToggleExpanded: () => void;
   onRestore: () => void;
   onPurge: () => void;
 }) {
   const { t } = useTranslation(['tasks', 'common']);
   const deletedLabel = task.deletedAt ? formatToYYYYMMDDHHmm(task.deletedAt) : '';
   const deletedByName = (task as any).deletedByName || t('trash.unknownUser');
+  const isMinimal = taskViewMode === 'compact';
+  const isFull = taskViewMode === 'expand';
+  const titleText = task.title || t('trash.untitled');
+  const deletionSummary = [
+    task.ticket,
+    titleText,
+    `${t('trash.deletedBy')}: ${deletedByName}`,
+    deletedLabel ? `${t('trash.deletedOn')}: ${deletedLabel}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const showActions = canMutate && (!bulkBusy || restoring || purging);
+  const assigneeTooltip =
+    members.find((member) => member.id === task.memberId)?.name || t('taskCard.noAssignee');
+
+  const restoreButton = !bulkBusy && !purging && (
+    <button
+      type="button"
+      disabled={restoring}
+      onClick={() => void onRestore()}
+      className={
+        isMinimal
+          ? 'inline-flex h-6 w-6 items-center justify-center rounded bg-blue-700 text-white transition-colors hover:bg-blue-800 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600'
+          : 'inline-flex items-center gap-1 rounded-md bg-blue-700 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-800 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600'
+      }
+      aria-label={t('trash.restore')}
+    >
+      <RotateCcw size={isMinimal ? 11 : 12} className={restoring ? 'animate-spin' : ''} />
+      {!isMinimal && t('trash.restore')}
+    </button>
+  );
+
+  const purgeButton = isAdmin && !bulkBusy && !restoring && (
+    <button
+      type="button"
+      disabled={purging}
+      onClick={() => void onPurge()}
+      className={
+        isMinimal
+          ? 'inline-flex h-6 w-6 items-center justify-center rounded bg-red-600 text-white transition-colors hover:bg-red-700 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500'
+          : 'inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500'
+      }
+      aria-label={t('trash.purge')}
+    >
+      <Trash2 size={isMinimal ? 11 : 12} />
+      {!isMinimal && t('trash.purge')}
+    </button>
+  );
+
+  const actionCluster = showActions && (
+    <div
+      className={`flex items-center ${isMinimal ? 'shrink-0 gap-0.5' : 'mt-2 flex-wrap gap-1.5'}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {isMinimal && restoreButton ? (
+        <KanbanChromeTooltip label={t('trash.restore')} delayMs={0}>
+          {restoreButton}
+        </KanbanChromeTooltip>
+      ) : (
+        restoreButton
+      )}
+      {isMinimal && purgeButton ? (
+        <KanbanChromeTooltip label={t('trash.purge')} delayMs={0}>
+          {purgeButton}
+        </KanbanChromeTooltip>
+      ) : (
+        purgeButton
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -76,61 +153,70 @@ function TrashedTaskCard({
           onOpen();
         }
       }}
-      className={`group relative rounded-lg bg-[var(--task-card-bg,#fff)] p-2.5 shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800 ${
-        isDetailsOpen
-          ? 'ring-1 ring-amber-400 dark:ring-amber-500'
-          : ''
-      }`}
+      className={`group relative rounded-lg bg-[var(--task-card-bg,#fff)] shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800 ${
+        isMinimal ? 'px-1.5 py-1' : 'p-2.5'
+      } ${isDetailsOpen ? 'ring-1 ring-amber-400 dark:ring-amber-500' : ''}`}
       data-tour-id={`trash-task-${task.id}`}
+      data-task-id={task.id}
     >
-      <div className="flex items-start gap-2">
-        {/* Invisible padding enlarges the hit target; checkbox visual size stays 14px. */}
+      <div className={`flex gap-2 ${isMinimal ? 'items-center' : 'items-start'}`}>
         {canMutate && (
-        <label
-          className="relative -m-2 flex shrink-0 cursor-pointer items-start p-2"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          <ModernCheckbox
-            checked={checked}
-            disabled={bulkBusy}
-            onChange={onToggleCheck}
-            size="sm"
-            aria-label={t('trash.selectTask')}
-            data-tour-id={`trash-task-select-${task.id}`}
-          />
-        </label>
-        )}
-        <div className="min-w-0 flex-1">
-          {task.ticket && (
-            <div className="mb-0.5 font-mono text-xs text-blue-600 dark:text-blue-400">
-              {task.ticket}
-            </div>
-          )}
-          <h3 className="line-clamp-2 text-sm font-medium text-gray-800 dark:text-gray-100">
-            {task.title || t('trash.untitled')}
-          </h3>
-        </div>
-        <KanbanChromeTooltip
-          label={expanded ? t('trash.collapseTask') : t('trash.expandTask')}
-          delayMs={0}
-        >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleExpanded();
-            }}
-            className="-m-1 shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-            aria-label={expanded ? t('trash.collapseTask') : t('trash.expandTask')}
-            aria-expanded={expanded}
+          <label
+            className={`relative flex shrink-0 cursor-pointer ${
+              isMinimal ? '-m-1 items-center p-1' : '-m-2 items-start p-2'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
-            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+            <ModernCheckbox
+              checked={checked}
+              disabled={bulkBusy}
+              onChange={onToggleCheck}
+              size="sm"
+              aria-label={t('trash.selectTask')}
+              data-tour-id={`trash-task-select-${task.id}`}
+            />
+          </label>
+        )}
+        {isMinimal ? (
+          <KanbanChromeTooltip label={deletionSummary} delayMs={0} wrapperClassName="relative min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-1.5">
+              {task.ticket && (
+                <span className="shrink-0 font-mono text-[10px] text-blue-600 dark:text-blue-400">
+                  {task.ticket}
+                </span>
+              )}
+              <h3 className="min-w-0 truncate text-xs font-medium text-gray-800 dark:text-gray-100">
+                {titleText}
+              </h3>
+            </div>
+          </KanbanChromeTooltip>
+        ) : (
+          <div className="min-w-0 flex-1">
+            {task.ticket && (
+              <div className="mb-0.5 font-mono text-xs text-blue-600 dark:text-blue-400">
+                {task.ticket}
+              </div>
+            )}
+            <h3 className="line-clamp-2 text-sm font-medium text-gray-800 dark:text-gray-100">
+              {titleText}
+            </h3>
+          </div>
+        )}
+        <KanbanChromeTooltip label={assigneeTooltip} delayMs={0}>
+          <div className="shrink-0">
+            <MemberAvatar
+              memberId={task.memberId}
+              members={members}
+              size={isMinimal ? 'xs' : 'sm'}
+              nativeTitle={false}
+            />
+          </div>
         </KanbanChromeTooltip>
+        {isMinimal && actionCluster}
       </div>
 
-      {expanded && (
+      {isFull && (
         <div className="space-y-0.5 pt-2 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
           <div>
             {t('trash.deletedBy')}:{' '}
@@ -145,34 +231,7 @@ function TrashedTaskCard({
         </div>
       )}
 
-      {canMutate && (!bulkBusy || restoring || purging) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {!bulkBusy && !purging && (
-            <button
-              type="button"
-              disabled={restoring}
-              onClick={() => void onRestore()}
-              className="inline-flex items-center gap-1 rounded-md bg-blue-700 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-800 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600"
-              aria-label={t('trash.restore')}
-            >
-              <RotateCcw size={12} className={restoring ? 'animate-spin' : ''} />
-              {t('trash.restore')}
-            </button>
-          )}
-          {isAdmin && !bulkBusy && !restoring && (
-            <button
-              type="button"
-              disabled={purging}
-              onClick={() => void onPurge()}
-              className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
-              aria-label={t('trash.purge')}
-            >
-              <Trash2 size={12} />
-              {t('trash.purge')}
-            </button>
-          )}
-        </div>
-      )}
+      {!isMinimal && actionCluster}
     </div>
   );
 }
@@ -181,6 +240,7 @@ export default function BoardTrashView({
   tasks,
   displayColumns,
   columns,
+  members = [],
   isAdmin,
   canMutate = true,
   detailsTaskId = null,
@@ -193,13 +253,14 @@ export default function BoardTrashView({
   onRestoreSelected,
   onPurgeSelected,
   onClose,
+  taskViewMode = 'expand',
 }: BoardTrashViewProps) {
   const { t } = useTranslation(['tasks', 'common']);
+  const columnDisplayTitle = useColumnDisplayTitle();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<'restore' | 'purge' | null>(null);
   const [purgeConfirmId, setPurgeConfirmId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkConfirm, setBulkConfirm] = useState<'purgeSelected' | 'emptyTrash' | null>(null);
   const bulkConfirmRef = useRef<HTMLDivElement>(null);
@@ -247,14 +308,6 @@ export default function BoardTrashView({
   // Drop selection for tasks that left trash; never keep stale ids.
   useEffect(() => {
     setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      const next = new Set<string>();
-      taskIds.forEach((id) => {
-        if (prev.has(id)) next.add(id);
-      });
-      return next.size === prev.size ? prev : next;
-    });
-    setExpandedIds((prev) => {
       if (prev.size === 0) return prev;
       const next = new Set<string>();
       taskIds.forEach((id) => {
@@ -328,26 +381,6 @@ export default function BoardTrashView({
       const next = new Set(prev);
       if (next.has(taskId)) next.delete(taskId);
       else next.add(taskId);
-      return next;
-    });
-  };
-
-  const toggleExpanded = (taskId: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) next.delete(taskId);
-      else next.add(taskId);
-      return next;
-    });
-  };
-
-  const setColumnExpanded = (columnTasks: Task[], expanded: boolean) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      columnTasks.forEach((task) => {
-        if (expanded) next.add(task.id);
-        else next.delete(task.id);
-      });
       return next;
     });
   };
@@ -441,7 +474,7 @@ export default function BoardTrashView({
         className="relative mb-3 rounded-xl border border-amber-200/80 bg-amber-50/40 py-2 dark:border-amber-900/50 dark:bg-amber-950/20"
         data-tour-id="board-trash-view"
       >
-        <div className="relative z-10 mb-2 flex min-h-[1.75rem] items-center justify-between gap-2 px-1">
+        <div className="relative z-10 mb-2 flex min-h-[1.75rem] items-center gap-1.5 px-1">
           <h3 className="shrink-0 whitespace-nowrap text-sm font-semibold text-gray-800 dark:text-gray-100">
             {t('trash.title')}
           </h3>
@@ -457,22 +490,22 @@ export default function BoardTrashView({
   }
 
   const renderColumnCards = (columnTasks: Task[]) => (
-    <div className="space-y-2">
+    <div className={taskViewMode === 'compact' ? 'space-y-1' : 'space-y-2'}>
       {columnTasks.map((task) => (
         <div key={task.id} className="relative">
           <TrashedTaskCard
             task={task}
+            members={members}
             isAdmin={isAdmin}
             canMutate={canMutate}
             checked={selectedIds.has(task.id)}
             isDetailsOpen={detailsTaskId === task.id}
-            expanded={expandedIds.has(task.id)}
+            taskViewMode={taskViewMode}
             restoring={busyId === task.id && busyAction === 'restore'}
             purging={busyId === task.id && busyAction === 'purge'}
             bulkBusy={bulkBusy}
             onOpen={() => onSelectTask(task)}
             onToggleCheck={() => toggleSelect(task.id)}
-            onToggleExpanded={() => toggleExpanded(task.id)}
             onRestore={() => handleRestore(task.id)}
             onPurge={() => {
               setBulkConfirm(null);
@@ -513,11 +546,8 @@ export default function BoardTrashView({
   );
 
   const renderColumnHeader = (title: string, columnTasks: Task[]) => {
-    const allExpanded =
-      columnTasks.length > 0 && columnTasks.every((task) => expandedIds.has(task.id));
     const columnAllSelected =
       columnTasks.length > 0 && columnTasks.every((task) => selectedIds.has(task.id));
-    const expandLabel = allExpanded ? t('trash.collapseColumn') : t('trash.expandColumn');
     const selectLabel = columnAllSelected ? t('trash.unselectColumn') : t('trash.selectColumn');
 
     return (
@@ -528,34 +558,18 @@ export default function BoardTrashView({
             ({columnTasks.length})
           </span>
         </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {columnTasks.length > 0 && (
-            <>
-              <KanbanChromeTooltip label={expandLabel} delayMs={0} placement="top">
-                <button
-                  type="button"
-                  onClick={() => setColumnExpanded(columnTasks, !allExpanded)}
-                  className="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                  aria-label={expandLabel}
-                >
-                  {allExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                </button>
-              </KanbanChromeTooltip>
-              {canMutate && !bulkBusy && (
-                <KanbanChromeTooltip label={selectLabel} delayMs={0} placement="top">
-                  <button
-                    type="button"
-                    onClick={() => toggleColumnSelected(columnTasks)}
-                    className="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-400"
-                    aria-label={selectLabel}
-                  >
-                    {columnAllSelected ? <CheckSquare2 size={13} /> : <Square size={13} />}
-                  </button>
-                </KanbanChromeTooltip>
-              )}
-            </>
-          )}
-        </div>
+        {columnTasks.length > 0 && canMutate && !bulkBusy && (
+          <KanbanChromeTooltip label={selectLabel} delayMs={0} placement="top">
+            <button
+              type="button"
+              onClick={() => toggleColumnSelected(columnTasks)}
+              className="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-400"
+              aria-label={selectLabel}
+            >
+              {columnAllSelected ? <CheckSquare2 size={13} /> : <Square size={13} />}
+            </button>
+          </KanbanChromeTooltip>
+        )}
       </div>
     );
   };
@@ -572,6 +586,7 @@ export default function BoardTrashView({
             {tasks.length}
           </span>
         </h3>
+        {closeButton}
         <div className="flex shrink-0 items-center gap-1.5">
           {canMutate && !bulkBusy && (
             <button
@@ -631,7 +646,6 @@ export default function BoardTrashView({
         <p className="shrink-0 whitespace-nowrap text-right text-xs text-gray-500 dark:text-gray-400">
           {t('trash.subtitle')}
         </p>
-        <div className="shrink-0">{closeButton}</div>
       </div>
 
       {bulkConfirm && (
@@ -685,7 +699,7 @@ export default function BoardTrashView({
             const columnTasks = tasksByColumn.get(column.id) || [];
             return (
               <div key={column.id} className="relative min-w-0 self-start">
-                {renderColumnHeader(column.title, columnTasks)}
+                {renderColumnHeader(columnDisplayTitle(column), columnTasks)}
                 {columnTasks.length > 0 ? (
                   renderColumnCards(columnTasks)
                 ) : (

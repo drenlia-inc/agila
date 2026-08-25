@@ -6,6 +6,7 @@ import { generateUUID } from '../utils/uuid';
 import websocketClient from '../services/websocketClient';
 import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { userCanMutate } from '../utils/permissions';
+import { isTaskSoftDeleted } from '../utils/taskUtils';
 
 interface UseTaskDetailsProps {
   task: Task;
@@ -175,6 +176,7 @@ export const useTaskDetails = ({
       console.error('Cannot save task: missing id');
       return;
     }
+    if (isTaskSoftDeleted(payload)) return;
 
     try {
       isSavingRef.current = true;
@@ -291,6 +293,7 @@ export const useTaskDetails = ({
   // Handle task field updates
   const handleTaskUpdate = useCallback((updates: Partial<Task>) => {
     if (!canMutateRef.current) return;
+    if (isTaskSoftDeleted(editedTaskRef.current)) return;
 
     const normalizeRichText = (html: string | null | undefined) => {
       const trimmed = (html || '').trim();

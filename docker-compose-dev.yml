@@ -45,7 +45,7 @@ services:
       # Example: If TENANT_DOMAIN=agila.dev, then customer1.agila.dev -> tenant ID: customer1
       - TENANT_DOMAIN=agila.dev
       # Application version (optional, will override database value if set)
-      - APP_VERSION=0.9-beta
+      - APP_VERSION=0.99-beta
       # Push agent runner (optional — enable AI in Admin → App Settings)
       - AI_RUNNER_URL=http://agila-runner:8080
       - AI_CALLBACK_BASE_URL=http://agila-app:3222

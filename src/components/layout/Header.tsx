@@ -1,11 +1,12 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Bug, Github, HelpCircle, Lightbulb, LogOut, User, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check, Eye, Shield } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CurrentUser, SiteSettings, TeamMember, Task } from '../../types';
 import type { HeaderSearchTask } from './HeaderTaskSearch';
 import ThemeToggle from '../ThemeToggle';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getSystemInfo } from '../../api';
+import { getSystemInfo, searchTrashedTasks } from '../../api';
+import { isArchivedColumnFlag } from '../../utils/columnUtils';
 import SprintSelector from '../SprintSelector';
 import HeaderTaskSearch from './HeaderTaskSearch';
 import { updateAppSettingsPreference, updateUserPreference, loadUserPreferences, loadUserPreferencesAsync } from '../../utils/userPreferences';
@@ -13,6 +14,7 @@ import { setExplicitGuestLanguage } from '../../utils/guestLanguage';
 import { feDebug } from '../../utils/clientDebug';
 import ResetCountdown from '../ResetCountdown';
 import { KanbanChromeTooltip } from '../KanbanChromeTooltip';
+import { TOOLS_HEADER_SLOT_ID } from '../Tools';
 import { toast } from '../../utils/toast';
 import { getAuthenticatedAvatarUrl } from '../../utils/authImageUrl';
 import {
@@ -23,10 +25,12 @@ import {
   isPublicBrandAssetPath,
 } from '../../constants';
 import { userIsAdmin, userIsViewer } from '../../utils/permissions';
+import { requestAdminNavigation } from '../../utils/adminNavigation';
 import {
   isSystemPanelAvailable as readSystemPanelAvailable,
   TROUBLESHOOTING_VISIBILITY_EVENT,
 } from '../../utils/troubleshootingAccess';
+import { useColumnDisplayTitle } from '../../utils/columnDisplayTitle';
 
 interface SystemInfo {
   memory: {
@@ -92,7 +96,7 @@ interface HeaderProps {
   members: TeamMember[];
   onProfileClick: () => void;
   onLogout: () => void;
-  onPageChange: (page: 'kanban' | 'admin' | 'reports') => void;
+  onPageChange: (page: 'kanban' | 'admin' | 'reports', options?: { hash?: string }) => void;
   /** Kept for callers; manual refresh control removed from the header UI. */
   onRefresh?: () => Promise<void>;
   onHelpClick: () => void;
@@ -109,15 +113,20 @@ interface HeaderProps {
   onJumpToTask?: (task: Task) => void | Promise<void>;
   boards?: Array<{
     id: string;
+    title?: string;
     columns?: {
       [columnId: string]: {
         id: string;
         title?: string;
+        boardId?: string;
+        is_archived?: boolean | number;
         tasks?: Array<Task & { sprintId?: string | null }>;
       };
     };
   }>;
   sprints?: Array<{ id: string; name: string; start_date: string; end_date: string }>; // Optional: sprints passed from parent (avoids duplicate API calls)
+  /** False until GET sprints has finished so the selector does not flash "All Sprints". */
+  sprintsReady?: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -142,9 +151,11 @@ const Header: React.FC<HeaderProps> = ({
   onJumpToTask,
   boards = [],
   sprints: propSprints,
+  sprintsReady = true,
 }) => {
   const isDemoMode = process.env.DEMO_ENABLED === 'true';
   const { theme } = useTheme();
+  const columnDisplayTitle = useColumnDisplayTitle();
   const [systemPanelUnlocked, setSystemPanelUnlocked] = useState(() =>
     readSystemPanelAvailable(siteSettings)
   );
@@ -183,7 +194,11 @@ const Header: React.FC<HeaderProps> = ({
           void onJumpToTask({
             ...full,
             boardId: full.boardId || board.id,
-            status: full.status || column.title,
+            status: columnDisplayTitle({
+              ...column,
+              title: column.title || '',
+              boardId: column.boardId || board.id,
+            }),
           });
           return;
         }
@@ -199,13 +214,19 @@ const Header: React.FC<HeaderProps> = ({
     boards.forEach((board) => {
       if (!board.columns) return;
       Object.values(board.columns).forEach((column) => {
+        const archived = isArchivedColumnFlag(column);
         (column.tasks || []).forEach((task) => {
           if (task.deletedAt) return;
           found.push({
+            archived,
             id: task.id,
             title: task.title,
             ticket: task.ticket,
-            status: task.status || column.title,
+            status: columnDisplayTitle({
+              ...column,
+              title: column.title || '',
+              boardId: column.boardId || board.id,
+            }),
             priority: task.priority,
             priorityName: task.priorityName,
             priorityColor: task.priorityColor,
@@ -224,7 +245,38 @@ const Header: React.FC<HeaderProps> = ({
       });
     });
     return found;
-  }, [boards, members]);
+  }, [boards, members, columnDisplayTitle]);
+
+  /**
+   * Trashed tasks are not part of the board payload, so the dropdown asks the
+   * server for them. Board title is used as the row's status line since the
+   * task's column no longer means anything once it is in the Trash.
+   */
+  const searchTrashedForHeader = useCallback(
+    async (query: string, signal: AbortSignal): Promise<HeaderSearchTask[]> => {
+      const memberName = (id?: string | null) =>
+        id ? members.find((m) => m.id === id)?.name : undefined;
+      const rows = await searchTrashedTasks(query, { signal });
+      return rows.map((task) => ({
+        id: task.id,
+        title: task.title,
+        ticket: task.ticket,
+        status: boards.find((board) => board.id === task.boardId)?.title,
+        priority: task.priority,
+        priorityName: task.priorityName,
+        priorityColor: task.priorityColor,
+        boardId: task.boardId,
+        startDate: task.startDate,
+        dueDate: task.dueDate,
+        columnId: task.columnId,
+        deletedAt: task.deletedAt,
+        descriptionText: htmlToSearchText(task.description),
+        assigneeName: memberName(task.memberId),
+        requesterName: memberName(task.requesterId),
+      }));
+    },
+    [boards, members]
+  );
   const [showInviteDropdown, setShowInviteDropdown] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
@@ -571,7 +623,17 @@ const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-[60] bg-white dark:bg-gray-800 shadow-sm border-b border-gray-100 dark:border-gray-700" data-tour-id="navigation">
       {/* Gutter outside shell — same nesting as MainLayout so brand aligns with page content */}
       <div className="app-page-inline-gutter">
-      <div className="app-page-shell py-2.5 flex justify-between items-center gap-2 min-w-0 max-w-full">
+      <div className="app-page-shell relative py-2.5 flex justify-between items-center gap-2 min-w-0 max-w-full">
+        {/*
+          Board view / density controls land here once Tools scrolls away. Absolute
+          + right-full parks them in the empty header margin left of the logo, so
+          the brand never shifts; ToolsHeaderControls skips them when that margin
+          is too narrow.
+        */}
+        <div
+          id={TOOLS_HEADER_SLOT_ID}
+          className="hidden md:flex absolute inset-y-0 right-full mr-2 items-center"
+        />
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
           <a
             href={siteHomeHref}
@@ -642,6 +704,12 @@ const Header: React.FC<HeaderProps> = ({
                 onSprintChange={onSprintChange || (() => {})}
                 tasks={allTasks}
                 sprints={propSprints}
+                sprintsReady={sprintsReady}
+                canCreateSprint={userIsAdmin(currentUser)}
+                onGoToSprints={() => {
+                  onPageChange('admin', { hash: 'admin#project-settings#sprint-settings' });
+                  requestAdminNavigation('admin#project-settings#sprint-settings');
+                }}
               />
             </div>
           )}
@@ -663,6 +731,7 @@ const Header: React.FC<HeaderProps> = ({
                       onChange={onTaskSearchTextChange}
                       tasks={searchableTasks}
                       onJumpToTask={jumpToSearchTask}
+                      onSearchTrashed={searchTrashedForHeader}
                     />
                   </div>
                   <div
@@ -682,7 +751,7 @@ const Header: React.FC<HeaderProps> = ({
                       : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                 >
-                  {t('navigation.kanban')}
+                  {t('navigation.boards')}
                 </button>
                 {reportsEnabled && (reportsVisibleTo === 'all' || currentUser.roles?.includes('admin')) && (
                   <button
@@ -712,7 +781,7 @@ const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
 
-              {/* Compact app nav: Kanban / Reports / Admin / Invite */}
+              {/* Compact app nav: Boards / Reports / Admin / Invite */}
               <div className="relative lg:hidden" ref={appNavMenuRef}>
                 <KanbanChromeTooltip label={t('navigation.menu')}>
                   <button
@@ -737,7 +806,7 @@ const Header: React.FC<HeaderProps> = ({
                         ? t('navigation.admin')
                         : currentPage === 'reports'
                           ? t('navigation.reports')
-                          : t('navigation.kanban')}
+                          : t('navigation.boards')}
                     </span>
                   </button>
                 </KanbanChromeTooltip>
@@ -755,7 +824,7 @@ const Header: React.FC<HeaderProps> = ({
                       }}
                       className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between gap-2"
                     >
-                      <span>{t('navigation.kanban')}</span>
+                      <span>{t('navigation.boards')}</span>
                       {currentPage === 'kanban' && <Check size={14} className="text-blue-600" />}
                     </button>
                     {reportsEnabled && (reportsVisibleTo === 'all' || currentUser.roles?.includes('admin')) && (

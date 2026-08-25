@@ -39,6 +39,7 @@ interface TaskDependencyArrowsProps {
   relationships?: TaskRelationship[]; // Add relationships prop for auto-sync
   dateRange?: { date: Date }[]; // Add date range for position calculation
   taskViewMode?: 'compact' | 'shrink' | 'expand';
+  dayColumnWidth?: number;
 }
 
 interface DependencyArrow {
@@ -65,8 +66,7 @@ interface PendingArrow {
 }
 
 const BAR_HEIGHT = 24;
-const COLUMN_WIDTH = 40;
-const GAP = COLUMN_WIDTH * 1.5;
+const GAP_RATIO = 1.5;
 const LANE_X_STEP = 12;
 const LANE_Y_STEP = 10;
 const TYPE_Y_OFFSET = 8;
@@ -314,14 +314,16 @@ const buildRouteDraft = (
   fromLane: number,
   toLane: number,
   outgoingCount: number,
-  incomingCount: number
+  incomingCount: number,
+  columnWidth: number
 ): RouteDraft => {
+  const gap = columnWidth * GAP_RATIO;
   const fromY = endpointYOnBar(arrow.fromPos, fromLane, outgoingCount);
   const toY = endpointYOnBar(arrow.toPos, toLane, incomingCount);
   const fromX = arrow.fromPos.x + arrow.fromPos.width;
   const toX = arrow.toPos.x;
-  const stepOutX = fromX + GAP + fromLane * LANE_X_STEP;
-  const approachX = toX - GAP - toLane * LANE_X_STEP;
+  const stepOutX = fromX + gap + fromLane * LANE_X_STEP;
+  const approachX = toX - gap - toLane * LANE_X_STEP;
   const routeY = computeBaseRouteY(arrow, fromY, toY, fromLane);
 
   return {
@@ -363,7 +365,8 @@ const TaskDependencyArrows: React.FC<TaskDependencyArrowsProps> = ({
   onDeleteRelationship,
   relationships = [],
   dateRange = [],
-  taskViewMode = 'expand'
+  taskViewMode = 'expand',
+  dayColumnWidth = 40,
 }) => {
   
   
@@ -514,7 +517,7 @@ const TaskDependencyArrows: React.FC<TaskDependencyArrowsProps> = ({
       const inLane = toLane.get(arrow.id) ?? 0;
       const outCount = outgoing.get(arrow.fromTaskId)?.length ?? 1;
       const inCount = incoming.get(arrow.toTaskId)?.length ?? 1;
-      return buildRouteDraft(arrow, outLane, inLane, outCount, inCount);
+      return buildRouteDraft(arrow, outLane, inLane, outCount, inCount, dayColumnWidth);
     });
 
     const trunkBumps = deconflictTrunkLanes(drafts);
@@ -532,7 +535,7 @@ const TaskDependencyArrows: React.FC<TaskDependencyArrowsProps> = ({
     }));
 
     setArrows(newArrows);
-  }, [localRelationships, ganttTasks, taskPositions, positionKey]);
+  }, [localRelationships, ganttTasks, taskPositions, positionKey, dayColumnWidth]);
 
   // Arrow marker definition
   const ArrowMarker = ({ id, color }: { id: string; color: string }) => (

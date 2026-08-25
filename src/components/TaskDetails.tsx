@@ -37,7 +37,7 @@ import { useFileUpload, getUploadErrorMessage } from '../hooks/useFileUpload';
 import { toast } from '../utils/toast';
 import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
 import TaskRelationshipLinker from './TaskRelationshipLinker';
-import { getLocalISOString, formatToYYYYMMDDHHmmss } from '../utils/dateUtils';
+import { getLocalISOString, formatToYYYYMMDDHHmmss, formatToYYYYMMDD } from '../utils/dateUtils';
 import { generateUUID } from '../utils/uuid';
 import { loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
 import { generateTaskUrl } from '../utils/routingUtils';
@@ -55,6 +55,8 @@ import MemberPicker from './ui/MemberPicker';
 import WatchThisTaskButton from './ui/WatchThisTaskButton';
 import MemberAvatar from './ui/MemberAvatar';
 import PriorityPicker from './ui/PriorityPicker';
+import TaskStatusSelect from './ui/TaskStatusSelect';
+import SprintSelector from './SprintSelector';
 import AgentStatusButton from './AgentStatusButton';
 import {
   AGENT_MEMBER_ID,
@@ -102,6 +104,14 @@ interface TaskDetailsProps {
   onUpdate: (updatedTask: Task, options?: TaskUpdateOptions) => void;
   siteSettings?: { [key: string]: string };
   boards?: any[]; // To get project identifier from board
+  /** Sprint catalog for assignment (from App); SprintSelector fetches if omitted. */
+  sprints?: Array<{
+    id: string;
+    name: string;
+    start_date: string;
+    end_date: string;
+    is_active: boolean | number;
+  }>;
   scrollToComments?: boolean;
   /** When true (or task is soft-deleted), disable all writers and show restore/purge. */
   readOnly?: boolean;
@@ -121,6 +131,7 @@ export default function TaskDetails({
   onUpdate,
   siteSettings,
   boards,
+  sprints,
   scrollToComments,
   readOnly = false,
   canMutate = true,
@@ -2016,6 +2027,39 @@ export default function TaskDetails({
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                {t('labels.sprint')}
+              </label>
+              <SprintSelector
+                mode="assign"
+                className="w-full"
+                selectedSprintId={editedTask.sprintId ?? null}
+                sprints={sprints}
+                disabled={isSubmitting || isWritersLocked}
+                onSprintChange={(sprint) => {
+                  if (isSubmitting || isWritersLocked) return;
+                  if (!sprint) {
+                    void handleUpdate({ sprintId: null });
+                    return;
+                  }
+                  const startDate = sprint.start_date
+                    ? formatToYYYYMMDD(sprint.start_date)
+                    : editedTask.startDate;
+                  const dueDate = sprint.end_date
+                    ? formatToYYYYMMDD(sprint.end_date)
+                    : editedTask.dueDate;
+                  if (startDate) setLocalStartDate(startDate);
+                  if (dueDate) setLocalDueDate(dueDate);
+                  void handleUpdate({
+                    sprintId: sprint.id,
+                    startDate: startDate ?? editedTask.startDate,
+                    dueDate: dueDate ?? editedTask.dueDate,
+                  });
+                }}
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
@@ -2091,6 +2135,20 @@ export default function TaskDetails({
                   }`}
                 />
               </div>
+
+              <TaskStatusSelect
+                boardId={editedTask.boardId}
+                columnId={editedTask.columnId}
+                statusTitle={editedTask.status}
+                disabled={isSubmitting || isWritersLocked}
+                onChange={(column) =>
+                  handleUpdate({ columnId: column.id, status: column.title })
+                }
+                labelClassName="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
+                selectClassName={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 ${
+                  isSubmitting || isWritersLocked ? 'cursor-default' : ''
+                }`}
+              />
 
               <div className="col-span-2">
                 <div className="flex items-center justify-between gap-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">

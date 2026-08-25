@@ -5,7 +5,7 @@ interface GanttLegendProps {
   priorities: Array<{ id: string; priority: string; color: string }>;
   className?: string;
   /** Match the shape the view draws on its task bars. */
-  prioritySwatchShape?: 'square' | 'circle';
+  prioritySwatchShape?: 'square' | 'circle' | 'pill';
 }
 
 const SWATCH_CLASS =
@@ -31,7 +31,13 @@ export const GanttLegend: React.FC<GanttLegendProps> = ({
 }) => {
   const { t } = useTranslation('common');
   const prioritySwatchClass =
-    prioritySwatchShape === 'circle' ? 'rounded-full' : 'rounded-sm';
+    prioritySwatchShape === 'circle'
+      ? 'rounded-full'
+      : prioritySwatchShape === 'pill'
+        ? 'rounded-full'
+        : 'rounded-sm';
+  const prioritySwatchSize =
+    prioritySwatchShape === 'pill' ? { width: '0.5rem', height: '0.25rem' } : undefined;
 
   return (
     <div
@@ -47,6 +53,11 @@ export const GanttLegend: React.FC<GanttLegendProps> = ({
         <LegendEntry
           label={t('gantt.weekends')}
           swatchClassName="rounded-sm bg-gray-100 dark:bg-gray-700"
+        />
+        <LegendEntry
+          label={t('gantt.offscreenTasks')}
+          swatchClassName="rounded-full border-transparent bg-gray-600/60 dark:bg-gray-300/60"
+          swatchStyle={{ height: '3px' }}
         />
       </div>
 
@@ -66,7 +77,7 @@ export const GanttLegend: React.FC<GanttLegendProps> = ({
                 key={priority.id}
                 label={priority.priority}
                 swatchClassName={prioritySwatchClass}
-                swatchStyle={{ backgroundColor: priority.color }}
+                swatchStyle={{ backgroundColor: priority.color, ...prioritySwatchSize }}
                 labelClassName="capitalize"
               />
             ))}

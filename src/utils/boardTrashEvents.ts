@@ -7,11 +7,18 @@ export const LIFECYCLE_DATA_CHANGED_EVENT = 'easy-kanban:lifecycle-data-changed'
 /** Ask Kanban chrome to close the live-board trash panel so a task card can scroll into view. */
 export const CLOSE_BOARD_TRASH_EVENT = 'easy-kanban:close-board-trash';
 
+/** Ask Kanban chrome to open the trash panel, e.g. when jumping to a soft-deleted task. */
+export const OPEN_BOARD_TRASH_EVENT = 'easy-kanban:open-board-trash';
+
 export type BoardTrashChangedDetail = {
   boardId: string;
 };
 
 export type CloseBoardTrashDetail = {
+  boardId: string;
+};
+
+export type OpenBoardTrashDetail = {
   boardId: string;
 };
 
@@ -54,6 +61,15 @@ export function closeBoardTrashView(boardId: string) {
   window.dispatchEvent(
     new CustomEvent(CLOSE_BOARD_TRASH_EVENT, {
       detail: { boardId } satisfies CloseBoardTrashDetail,
+    })
+  );
+}
+
+export function openBoardTrashView(boardId: string) {
+  writeBoardTrashOpenPreference(boardId, true);
+  window.dispatchEvent(
+    new CustomEvent(OPEN_BOARD_TRASH_EVENT, {
+      detail: { boardId } satisfies OpenBoardTrashDetail,
     })
   );
 }

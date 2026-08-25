@@ -58,7 +58,7 @@ export function getBoardWipTaskCount(
   return total;
 }
 
-/** Tasks in active (non-finished, non-archived) columns — for board WIP effort pills. */
+/** Tasks in active (non-finished, non-archived) columns — for board tab effort pills. */
 export function getBoardWipTasks(
   columns: Record<
     string,
