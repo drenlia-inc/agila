@@ -2,14 +2,15 @@ import React, { useState, useRef, useCallback, useMemo, useEffect, startTransiti
 import { useTranslation } from 'react-i18next';
 import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
 import { restrictToHorizontalAxis } from '@dnd-kit/modifiers';
-import { Task, Columns } from '../types';
+import { Task, Columns, type Board, type PriorityOption, type Tag } from '../types';
 import GanttTaskList from './gantt/GanttTaskList';
 import GanttTimeline from './gantt/GanttTimeline';
 import { createPortal } from 'react-dom';
 import TaskDependencyArrows from './gantt/TaskDependencyArrows';
-import { DRAG_TYPES, GanttDragItem } from './gantt/types';
+import { DRAG_TYPES, GanttDragItem, GanttTaskSelectOptions } from './gantt/types';
 import { GanttHeader } from './gantt/GanttHeader';
 import { GanttHeaderLegendPortal } from './gantt/GanttHeaderLegendPortal';
+import { GanttOffscreenTaskIndicators } from './gantt/GanttOffscreenTaskIndicators';
 import { getAllPriorities, addTaskRelationship, removeTaskRelationship, getUserSettings, batchUpdateTasks } from '../api';
 import websocketClient from '../services/websocketClient';
 import { loadUserPreferencesAsync, saveUserPreferences, loadUserPreferences } from '../utils/userPreferences';
@@ -17,11 +18,18 @@ import { useGanttScrollPosition, getLeftmostVisibleDateFromDOM } from '../hooks/
 import {
   clampGanttTaskColumnWidth,
   GANTT_TASK_COLUMN_DEFAULT_WIDTH,
+  ganttBarBoxInDateRange,
 } from './gantt/ganttLayout';
 import { toast } from '../utils/toast';
 import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
-import { scrollViewportToTaskWhenReady } from '../utils/scrollViewportToTask';
+import {
+  getTaskDetailsSafeViewport,
+  scrollViewportToTaskWhenReady,
+} from '../utils/scrollViewportToTask';
 import { completeTaskJump, subscribeTaskJump } from '../utils/taskJumpEvents';
+import TaskBulkActionGutter from './TaskBulkActionGutter';
+import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
+import { Trash2 } from 'lucide-react';
 
 interface GanttViewV2Props {
   columns: Columns;
@@ -45,6 +53,32 @@ interface GanttViewV2Props {
   canMutate?: boolean;
   onMoveTaskToColumn?: (taskId: string, targetColumnId: string) => Promise<void>;
   onReorderTaskInColumn?: (taskId: string, columnId: string, targetIndex: number) => Promise<void>;
+  availablePriorities?: PriorityOption[];
+  availableTags?: Tag[];
+  availableSprints?: Array<{ id: string; name: string }>;
+  boards?: Board[];
+  checkedTaskIds?: Set<string>;
+  onReplaceCheckedTaskIds?: (taskIds: string[]) => void;
+  bulkBusy?: boolean;
+  onBulkAddTag?: (taskIds: string[], tagId: string) => void;
+  onBulkCopy?: (taskIds: string[]) => void;
+  onBulkArchive?: (taskIds: string[]) => void;
+  onBulkDelete?: (taskIds: string[]) => void;
+  onBulkPermanentDelete?: (taskIds: string[]) => void;
+  onBulkSprint?: (taskIds: string[], sprintId: string | null) => void;
+  onBulkPriority?: (taskIds: string[], priorityId: string) => void;
+  onBulkMoveToBoard?: (taskIds: string[], boardId: string) => void;
+  onBulkAssignee?: (taskIds: string[], memberId: string | null) => void;
+  onBulkRequester?: (taskIds: string[], memberId: string | null) => void;
+  onBulkAddWatcher?: (taskIds: string[], memberId: string) => void;
+  onBulkRemoveWatcher?: (taskIds: string[], memberId: string) => void;
+  onBulkAddCollaborator?: (taskIds: string[], memberId: string) => void;
+  onBulkRemoveCollaborator?: (taskIds: string[], memberId: string) => void;
+  bulkUndoTaskIds?: string[] | null;
+  bulkUndoLabelKey?: string;
+  onBulkUndo?: () => void;
+  onClearBulkUndo?: () => void;
+  hasArchiveColumn?: boolean;
 }
 
 // Parse date helper
@@ -66,6 +100,15 @@ const parseLocalDate = (dateInput: string | Date): Date => {
   // Fallback
   return new Date();
 };
+
+/** Sub-pixel sticky offsets must not read as "rows are hidden above". */
+const STICKY_SHADOW_TOLERANCE_PX = 1;
+const selectionSignatureOf = (ids: Iterable<string>): string =>
+  Array.from(ids).sort().join('\u0000');
+
+/** Day-precision value, so timeline cells and task dates compare cleanly. */
+const startOfDayValue = (date: Date): number =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
 // Format date helper for local dates
 const formatLocalDate = (date: Date): string => {
@@ -96,8 +139,35 @@ const GanttViewV2 = ({
   canMutate = true,
   onMoveTaskToColumn,
   onReorderTaskInColumn,
+  availablePriorities = [],
+  availableTags = [],
+  availableSprints = [],
+  boards = [],
+  checkedTaskIds,
+  onReplaceCheckedTaskIds,
+  bulkBusy = false,
+  onBulkAddTag,
+  onBulkCopy,
+  onBulkArchive,
+  onBulkDelete,
+  onBulkPermanentDelete,
+  onBulkSprint,
+  onBulkPriority,
+  onBulkMoveToBoard,
+  onBulkAssignee,
+  onBulkRequester,
+  onBulkAddWatcher,
+  onBulkRemoveWatcher,
+  onBulkAddCollaborator,
+  onBulkRemoveCollaborator,
+  bulkUndoTaskIds = null,
+  bulkUndoLabelKey,
+  onBulkUndo,
+  onClearBulkUndo,
+  hasArchiveColumn = false,
 }: GanttViewV2Props) => {
   const { t } = useTranslation('common');
+  const columnDisplayTitle = useColumnDisplayTitle();
   const onUpdateTask = (task: Task) => {
     if (!canMutate || !onUpdateTaskProp) return;
     return onUpdateTaskProp(task);
@@ -109,13 +179,103 @@ const GanttViewV2 = ({
   const [currentHoverDate, setCurrentHoverDate] = useState<string | null>(null);
   const [taskColumnWidth, setTaskColumnWidth] = useState(GANTT_TASK_COLUMN_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
-  const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
-  const [isMultiSelectMode, setIsMultiSelectModeState] = useState(false);
+  const [selectedTasks, setSelectedTasks] = useState<string[]>(
+    () => Array.from(checkedTaskIds || [])
+  );
+  const [deleteConfirmMode, setDeleteConfirmMode] = useState<'soft' | 'permanent' | null>(
+    null
+  );
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const ganttRootRef = useRef<HTMLDivElement>(null);
+  const [isMultiSelectMode, setIsMultiSelectModeState] = useState(
+    () => Boolean(checkedTaskIds?.size)
+  );
+  const sharedSelectionSignature = selectionSignatureOf(checkedTaskIds || []);
+  const sharedSelectionSignatureRef = useRef(sharedSelectionSignature);
+  const pullingSharedSelectionRef = useRef(false);
+
+  useEffect(() => {
+    if (!deleteConfirmMode) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || deleteSubmitting) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setDeleteConfirmMode(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [deleteConfirmMode, deleteSubmitting]);
+
+  const actionSelectedIds = useMemo(
+    () =>
+      selectedTasks.length > 0
+        ? selectedTasks
+        : selectedTask
+          ? [selectedTask.id]
+          : [],
+    [selectedTasks, selectedTask]
+  );
+
+  const confirmSelectedTaskDelete = useCallback(async () => {
+    if (!deleteConfirmMode || actionSelectedIds.length === 0 || deleteSubmitting) return;
+    const handler =
+      deleteConfirmMode === 'permanent' ? onBulkPermanentDelete : onBulkDelete;
+    if (!handler) return;
+    setDeleteSubmitting(true);
+    try {
+      await handler([...actionSelectedIds]);
+      setSelectedTasks([]);
+      onSelectTask(null);
+      setDeleteConfirmMode(null);
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  }, [
+    deleteConfirmMode,
+    actionSelectedIds,
+    deleteSubmitting,
+    onBulkPermanentDelete,
+    onBulkDelete,
+    onSelectTask,
+  ]);
+
+  // Selection belongs to the board, not the active view. Pull changes made in
+  // Kanban/List into Gantt, and publish Gantt changes back to the same set.
+  useEffect(() => {
+    if (!checkedTaskIds) return;
+    if (sharedSelectionSignatureRef.current === sharedSelectionSignature) return;
+    sharedSelectionSignatureRef.current = sharedSelectionSignature;
+    const shared = Array.from(checkedTaskIds);
+    pullingSharedSelectionRef.current = true;
+    setSelectedTasks(shared);
+    if (shared.length > 0) setIsMultiSelectModeState(true);
+  }, [checkedTaskIds, sharedSelectionSignature]);
+
+  useEffect(() => {
+    if (!onReplaceCheckedTaskIds) return;
+    if (pullingSharedSelectionRef.current) {
+      pullingSharedSelectionRef.current = false;
+      return;
+    }
+    const shared = checkedTaskIds || new Set<string>();
+    const same =
+      shared.size === selectedTasks.length &&
+      selectedTasks.every((id) => shared.has(id));
+    if (!same) {
+      sharedSelectionSignatureRef.current = selectionSignatureOf(selectedTasks);
+      onReplaceCheckedTaskIds(selectedTasks);
+    }
+  }, [checkedTaskIds, onReplaceCheckedTaskIds, selectedTasks]);
+
+  useEffect(() => {
+    if (selectedTasks.length > 0) onClearBulkUndo?.();
+  }, [onClearBulkUndo, selectedTasks.length]);
   
   // Custom setter that also updates the immediate ref
   const setIsMultiSelectMode = useCallback((value: boolean) => {
     setIsMultiSelectModeState(value);
     isMultiSelectModeImmediateRef.current = value;
+    if (!value) selectionAnchorRef.current = null;
   }, []);
   
   const [isRelationshipMode, setIsRelationshipMode] = useState(false);
@@ -235,6 +395,10 @@ const GanttViewV2 = ({
   
   const selectedTasksRef = useRef(selectedTasks);
   selectedTasksRef.current = selectedTasks;
+  const selectionAnchorRef = useRef<string | null>(null);
+  const selectedTaskIdRef = useRef<string | null>(selectedTask?.id ?? null);
+  selectedTaskIdRef.current = selectedTask?.id ?? null;
+  const ganttDisplayOrderIdsRef = useRef<string[]>([]);
   
   // Debouncing for arrow key navigation
   const arrowKeyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -286,6 +450,53 @@ const GanttViewV2 = ({
   const headerScrollRef = useRef<HTMLDivElement>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
   const ganttStickyHeaderRef = useRef<HTMLDivElement>(null);
+  const timelineHeaderRef = useRef<HTMLDivElement>(null);
+  const [rowsHiddenAboveHeader, setRowsHiddenAboveHeader] = useState(false);
+
+  /**
+   * The date header is sticky, so rows slide underneath it once the page
+   * scrolls. Comparing the row band's top with the header's bottom tells us
+   * when taskbars are hidden above, which earns the header a drop shadow.
+   */
+  useEffect(() => {
+    const readHidden = (): boolean => {
+      const header = timelineHeaderRef.current;
+      const rows = mainContentRef.current;
+      if (!header || !rows) return false;
+      const headerBottom = header.getBoundingClientRect().bottom;
+      const rowsBox = rows.getBoundingClientRect();
+      // Only while the row band is still the thing under the header.
+      if (rowsBox.bottom <= headerBottom) return false;
+      return rowsBox.top < headerBottom - STICKY_SHADOW_TOLERANCE_PX;
+    };
+
+    let frame: number | null = null;
+    const sync = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        const next = readHidden();
+        setRowsHiddenAboveHeader((prev) => (prev === next ? prev : next));
+      });
+    };
+
+    sync();
+    window.addEventListener('scroll', sync, { capture: true, passive: true });
+    window.addEventListener('resize', sync);
+
+    const observer =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(sync) : null;
+    if (mainContentRef.current) observer?.observe(mainContentRef.current);
+    // A taller header (wrapped legend) moves the band without resizing it.
+    if (timelineHeaderRef.current) observer?.observe(timelineHeaderRef.current);
+
+    return () => {
+      window.removeEventListener('scroll', sync, true);
+      window.removeEventListener('resize', sync);
+      observer?.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, []);
 
   // Date range (simplified for now)
   const [dateRange, setDateRange] = useState<any[]>([]);
@@ -365,14 +576,23 @@ const GanttViewV2 = ({
       
       if (targetIndex >= 0 && scrollContainerRef.current) {
         const container = scrollContainerRef.current;
+        // Task Details is a fixed panel drawn over the timeline, so the usable
+        // width ends at its left edge. Measuring against clientWidth would center
+        // the target date behind the panel.
+        const containerRect = container.getBoundingClientRect();
+        const { safeRight } = getTaskDetailsSafeViewport();
+        const visibleWidth = Math.max(
+          160,
+          Math.min(containerRect.right, safeRight) - containerRect.left
+        );
         let scrollPosition;
         
         if (position === 'start') {
           scrollPosition = targetIndex * 40;
         } else if (position === 'end') {
-          scrollPosition = (targetIndex * 40) - container.clientWidth + 40;
+          scrollPosition = (targetIndex * 40) - visibleWidth + 40;
         } else {
-          scrollPosition = (targetIndex * 40) - (container.clientWidth / 2) + 20;
+          scrollPosition = (targetIndex * 40) - (visibleWidth / 2) + 20;
         }
         
         container.scrollLeft = Math.max(0, scrollPosition);
@@ -459,6 +679,7 @@ const GanttViewV2 = ({
   // Combined keyboard handler for ESC/Enter and arrow key navigation
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (deleteConfirmMode) return;
       // Handle ESC key to exit relationship mode and multi-select mode
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -684,7 +905,14 @@ const GanttViewV2 = ({
         clearTimeout(updateBatchTimeoutRef.current);
       }
     };
-  }, [isRelationshipMode, isMultiSelectMode, selectedParentTask, selectedTasks, onUpdateTask]);
+  }, [
+    deleteConfirmMode,
+    isRelationshipMode,
+    isMultiSelectMode,
+    selectedParentTask,
+    selectedTasks,
+    onUpdateTask,
+  ]);
   
   // Initialize date range with a reasonable default (only if no boardId)
   useEffect(() => {
@@ -1199,7 +1427,7 @@ const GanttViewV2 = ({
           startDate,
           endDate,
           dueDate: effectiveTask.dueDate || effectiveTask.startDate || '', // Keep original string format
-          status: column.title,
+          status: columnDisplayTitle(column),
           priority: priorityName,
           priorityId: task.priorityId,
           priorityName: priorityName,
@@ -1221,7 +1449,67 @@ const GanttViewV2 = ({
       }
       return 0;
     });
-  }, [columns, localDragState, priorities]);
+  }, [columns, localDragState, priorities, columnDisplayTitle]);
+
+  /**
+   * Step to the nearest task outside the current viewport rather than the
+   * absolute earliest / latest one, so the arrows walk the timeline from where
+   * the user is standing (same model as the calendar's task navigation).
+   */
+  const navigateToAdjacentTask = useCallback(
+    (dir: -1 | 1) => {
+      const container = scrollContainerRef.current;
+      if (!container || dateRange.length === 0 || ganttTasks.length === 0) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const { safeRight } = getTaskDetailsSafeViewport();
+      const visibleWidth = Math.max(
+        160,
+        Math.min(containerRect.right, safeRight) - containerRect.left
+      );
+      const firstVisible = Math.max(0, Math.floor(container.scrollLeft / 40));
+      const lastVisible = Math.min(
+        dateRange.length - 1,
+        Math.floor((container.scrollLeft + visibleWidth - 1) / 40)
+      );
+      if (firstVisible >= dateRange.length) return;
+
+      const leftEdge = startOfDayValue(dateRange[firstVisible].date);
+      const rightEdge = startOfDayValue(dateRange[lastVisible].date);
+
+      let targetId: string | null = null;
+      let targetDate: Date | null = null;
+      let targetValue = 0;
+
+      for (const task of ganttTasks) {
+        // Going right, a task is "next" once it starts past the viewport;
+        // going left, once it has already finished before the viewport.
+        const edgeDate: Date | null = dir > 0 ? task.startDate : task.endDate || task.startDate;
+        if (!edgeDate) continue;
+        const edgeValue = startOfDayValue(edgeDate);
+        if (dir > 0 ? edgeValue <= rightEdge : edgeValue >= leftEdge) continue;
+        if (!targetDate || (dir > 0 ? edgeValue < targetValue : edgeValue > targetValue)) {
+          targetId = task.id;
+          targetDate = edgeDate;
+          targetValue = edgeValue;
+        }
+      }
+
+      if (!targetId || !targetDate) return;
+
+      navigateToDate(targetDate, dir > 0 ? 'start' : 'end');
+      setHighlightedTaskId(targetId);
+      setTimeout(() => setHighlightedTaskId(null), 1200);
+    },
+    [dateRange, ganttTasks, navigateToDate]
+  );
+
+  /** Bring an off-screen row back into view from the header indicators. */
+  const scrollRowIntoView = useCallback((taskId: string) => {
+    setHighlightedTaskId(taskId);
+    void scrollViewportToTaskWhenReady(taskId, { maxAttempts: 10 });
+    setTimeout(() => setHighlightedTaskId(null), 1800);
+  }, []);
 
   useEffect(
     () =>
@@ -1249,6 +1537,21 @@ const GanttViewV2 = ({
     [handleJumpToTask]
   );
 
+  /**
+   * The selection survives bulk actions, so actions that remove bars (delete,
+   * archive, move to another board) must not leave phantom ids behind —
+   * keyboard nudges would target tasks that are no longer on the board.
+   */
+  useEffect(() => {
+    if (isBoardLoading || isSwitchingBoards || isInitializing) return;
+    setSelectedTasks((prev) => {
+      if (prev.length === 0) return prev;
+      const live = new Set(ganttTasks.map((task) => task.id));
+      const next = prev.filter((id) => live.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [ganttTasks, isBoardLoading, isSwitchingBoards, isInitializing]);
+
   // Group tasks by column
   const groupedTasks = useMemo(() => {
     const groups: { [columnId: string]: any[] } = {};
@@ -1273,64 +1576,65 @@ const GanttViewV2 = ({
     return groups;
   }, [ganttTasks, columns]);
 
+  useEffect(() => {
+    ganttDisplayOrderIdsRef.current = Object.values(groupedTasks).flatMap((tasks) =>
+      tasks.map((task) => task.id)
+    );
+  }, [groupedTasks]);
+
+  const dateToIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    dateRange.forEach((dateObj, index) => {
+      const year = dateObj.date.getFullYear();
+      const month = String(dateObj.date.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.date.getDate()).padStart(2, '0');
+      map.set(`${year}-${month}-${day}`, index);
+    });
+    return map;
+  }, [dateRange]);
 
   // Calculate task positions for dependency arrows
   const calculateTaskPositions = useCallback(() => {
     const positions = new Map<string, {x: number, y: number, width: number, height: number}>();
-    
-    ganttTasks.forEach(task => {
-      const taskElement = document.querySelector(`[data-task-id="${task.id}"]`);
-      if (taskElement && task.startDate && task.endDate) {
-        const rect = taskElement.getBoundingClientRect();
-        const container = scrollContainerRef.current;
-        if (container) {
-          const containerRect = container.getBoundingClientRect();
+    const container = scrollContainerRef.current;
+    if (!container) {
+      setTaskPositions(positions);
+      return;
+    }
 
-          const startIndex = dateRange.findIndex(d =>
-            d.date.toDateString() === task.startDate.toDateString()
-          );
-          const endIndex = dateRange.findIndex(d =>
-            d.date.toDateString() === task.endDate.toDateString()
-          );
+    const containerRect = container.getBoundingClientRect();
 
-          if (startIndex >= 0 && endIndex >= 0) {
-            positions.set(task.id, {
-              x: startIndex * 40,
-              y: rect.top - containerRect.top + container.scrollTop,
-              width: (endIndex - startIndex + 1) * 40,
-              height: rect.height
-            });
-          }
-        }
-      }
+    ganttTasks.forEach((task) => {
+      if (!task.startDate || !task.endDate) return;
+      const taskElement = container.querySelector(`[data-task-id="${task.id}"]`);
+      if (!taskElement) return;
+
+      const bar = ganttBarBoxInDateRange(
+        task.startDate,
+        task.endDate,
+        dateRange,
+        dateToIndexMap
+      );
+      if (!bar) return;
+
+      const rect = taskElement.getBoundingClientRect();
+      positions.set(task.id, {
+        x: bar.x,
+        y: rect.top - containerRect.top + container.scrollTop,
+        width: bar.width,
+        height: rect.height,
+      });
     });
-    
-    setTaskPositions(positions);
-  }, [ganttTasks, dateRange]);
 
-  // Calculate task positions when tasks change or view mode changes
+    setTaskPositions(positions);
+  }, [ganttTasks, dateRange, dateToIndexMap]);
+
   useEffect(() => {
-    // Wait for DOM to update
     const timer = setTimeout(() => {
       calculateTaskPositions();
     }, 100);
-    
     return () => clearTimeout(timer);
   }, [ganttTasks, calculateTaskPositions, taskViewMode]);
-
-  // Create a memoized date-to-index map for O(1) lookups
-  const dateToIndexMap = useMemo(() => {
-    const map = new Map<string, number>();
-    dateRange.forEach((dateObj, index) => {
-      // Use local date format instead of UTC to avoid timezone issues
-      const year = dateObj.date.getFullYear();
-      const month = String(dateObj.date.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.date.getDate()).padStart(2, '0');
-      const localDateStr = `${year}-${month}-${day}`;
-      map.set(localDateStr, index);
-    });
-    return map;
-  }, [dateRange]);
 
   // Get task bar grid position - optimized with O(1) lookup
   const getTaskBarGridPosition = useCallback((task: any) => {
@@ -1373,23 +1677,63 @@ const GanttViewV2 = ({
   }, [dateToIndexMap]);
 
   // Task selection
-  const handleTaskSelect = useCallback((taskId: string) => {
-    // Prevent task selection if we're in the process of exiting multi-select mode
-    if (isExitingMultiSelectRef.current) {
-      return;
+  const handleTaskSelect = useCallback((taskId: string, options?: GanttTaskSelectOptions) => {
+    if (isExitingMultiSelectRef.current) return;
+    if (!canMutate) return;
+
+    const fromList = options?.source === 'list';
+    const range = Boolean(options?.range);
+    const additive = Boolean(options?.additive);
+    const inSelect = isMultiSelectModeImmediateRef.current;
+
+    // Bars only participate after Select is on. The left list can start a
+    // selection with Ctrl/Cmd or Shift without that extra click.
+    if (!inSelect && !fromList) return;
+    if (!inSelect && fromList && !range && !additive) return;
+
+    if (!inSelect) {
+      setIsRelationshipMode(false);
+      setSelectedParentTask(null);
+      setIsMultiSelectMode(true);
     }
-    
-    // Only allow task selection if we're actually in multi-select mode
-    if (!isMultiSelectModeImmediateRef.current) {
-      return;
+
+    const orderedIds = ganttDisplayOrderIdsRef.current;
+    const previous = selectedTasksRef.current;
+    const detailsId = selectedTaskIdRef.current;
+    const next = new Set(previous);
+
+    if (range) {
+      if (previous.length === 0 && detailsId) next.add(detailsId);
+      const anchor =
+        selectionAnchorRef.current ||
+        detailsId ||
+        previous[previous.length - 1] ||
+        taskId;
+      const from = orderedIds.indexOf(anchor);
+      const to = orderedIds.indexOf(taskId);
+      if (from >= 0 && to >= 0) {
+        const start = Math.min(from, to);
+        const end = Math.max(from, to);
+        orderedIds.slice(start, end + 1).forEach((id) => next.add(id));
+      } else {
+        next.add(taskId);
+      }
+    } else if (previous.length === 0) {
+      if (detailsId && detailsId !== taskId) next.add(detailsId);
+      next.add(taskId);
+    } else if (next.has(taskId)) {
+      next.delete(taskId);
+    } else {
+      next.add(taskId);
     }
-    setSelectedTasks(prev => {
-      const newTasks = prev.includes(taskId) 
-        ? prev.filter(id => id !== taskId)
-        : [...prev, taskId];
-      return newTasks;
-    });
-  }, []); // No dependencies needed since we use refs
+
+    const nextIds = [...next];
+    selectionAnchorRef.current = taskId;
+    setSelectedTasks(nextIds);
+    if (nextIds.length > 1) {
+      onSelectTask(null);
+    }
+  }, [canMutate, onSelectTask, setIsMultiSelectMode]);
 
   // Reset arrow key state to prevent frozen tasks
   const resetArrowKeyState = useCallback(() => {
@@ -1807,8 +2151,58 @@ const GanttViewV2 = ({
 
   return (
     <>
+    <TaskBulkActionGutter
+      anchorRef={ganttRootRef}
+      controlId="gantt-view"
+      selectedTaskIds={selectedTasks}
+      tasks={ganttTasks}
+      retainSelectionAfterAction
+      onRetainSelection={onReplaceCheckedTaskIds}
+      onClearSelection={() => {
+        // Unselecting from the gutter means "done selecting": leave the mode too.
+        setSelectedTasks([]);
+        setIsMultiSelectMode(false);
+      }}
+      canMutate={canMutate}
+      busy={bulkBusy}
+      currentUser={currentUser}
+      members={members}
+      availableTags={availableTags}
+      availablePriorities={availablePriorities}
+      availableSprints={availableSprints}
+      boards={boards}
+      currentBoardId={boardId}
+      hasArchiveColumn={hasArchiveColumn}
+      onBulkAddTag={onBulkAddTag}
+      onBulkCopy={onBulkCopy}
+      onBulkArchive={onBulkArchive}
+      onBulkDelete={onBulkDelete}
+      onBulkPermanentDelete={onBulkPermanentDelete}
+      onBulkSprint={onBulkSprint}
+      onBulkPriority={onBulkPriority}
+      onBulkMoveToBoard={onBulkMoveToBoard}
+      onBulkAssignee={onBulkAssignee}
+      onBulkRequester={onBulkRequester}
+      onBulkAddWatcher={onBulkAddWatcher}
+      onBulkRemoveWatcher={onBulkRemoveWatcher}
+      onBulkAddCollaborator={onBulkAddCollaborator}
+      onBulkRemoveCollaborator={onBulkRemoveCollaborator}
+      bulkUndoTaskIds={bulkUndoTaskIds}
+      bulkUndoLabelKey={bulkUndoLabelKey}
+      onBulkUndo={async () => {
+        const restored = bulkUndoTaskIds || [];
+        await onBulkUndo?.();
+        // Restored bars are worth keeping actionable, so re-arm the mode.
+        if (restored.length > 0) setIsMultiSelectMode(true);
+        setSelectedTasks(restored);
+      }}
+      onClearBulkUndo={onClearBulkUndo}
+    />
 
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-visible relative">
+    <div
+      ref={ganttRootRef}
+      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-visible relative"
+    >
 
       {/* Board Loading Overlay */}
       {isBoardLoading && (
@@ -1835,10 +2229,7 @@ const GanttViewV2 = ({
           scrollToToday={() => navigateToDate(new Date(), 'center')}
           scrollEarlier={() => navigateToDate(new Date(dateRange[0].date.getTime() - 30 * 24 * 60 * 60 * 1000), 'end')}
           scrollLater={() => navigateToDate(new Date(dateRange[dateRange.length - 1].date.getTime() + 30 * 24 * 60 * 60 * 1000), 'start')}
-          scrollToTask={(startDate: Date, endDate: Date, position?: string) => {
-            const pos = position === 'start-left' ? 'start' : position === 'end-right' ? 'end' : 'center';
-            navigateToDate(startDate, pos);
-          }}
+          onNavigateToAdjacentTask={navigateToAdjacentTask}
           isRelationshipMode={isRelationshipMode}
           setIsRelationshipMode={setIsRelationshipMode}
           isMultiSelectMode={isMultiSelectMode}
@@ -1852,11 +2243,31 @@ const GanttViewV2 = ({
           selectedParentTask={selectedParentTask}
           setSelectedParentTask={setSelectedParentTask}
           canMutate={canMutate}
+          deleteSelectedTaskCount={
+            selectedTasks.length === 0 || !onBulkAddTag ? actionSelectedIds.length : 0
+          }
+          deleteBusy={bulkBusy || deleteSubmitting}
+          canPermanentDelete={Boolean(
+            currentUser?.roles?.includes('admin') && onBulkPermanentDelete
+          )}
+          onDeleteSelectedTasks={
+            onBulkDelete
+              ? (permanent) => setDeleteConfirmMode(permanent ? 'permanent' : 'soft')
+              : undefined
+          }
         />
       </div>
       
       {/* Timeline header - sticky under Gantt header */}
-      <div className="sticky top-[169px] z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700" data-gantt-timeline-header="true">
+      <div
+        ref={timelineHeaderRef}
+        className={`sticky top-[169px] z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-shadow duration-200 ${
+          rowsHiddenAboveHeader
+            ? 'shadow-[0_6px_8px_-4px_rgba(15,23,42,0.28)] dark:shadow-[0_6px_8px_-4px_rgba(0,0,0,0.6)]'
+            : ''
+        }`}
+        data-gantt-timeline-header="true"
+      >
         <div className="flex">
           <div 
             className="sticky left-0 z-30 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700"
@@ -2039,6 +2450,14 @@ const GanttViewV2 = ({
                   </div>
                 ))}
               </div>
+
+              <GanttOffscreenTaskIndicators
+                dateRange={dateRange}
+                ganttTasks={ganttTasks}
+                timelineRef={scrollContainerRef}
+                headerRef={timelineHeaderRef}
+                onJumpToTask={scrollRowIntoView}
+              />
             </div>
           </div>
         </div>
@@ -2167,6 +2586,73 @@ const GanttViewV2 = ({
       </div>,
       document.body
     )}
+
+    {deleteConfirmMode &&
+      createPortal(
+        <div
+          className="fixed inset-0 z-[9991] flex items-center justify-center bg-black/45 p-4"
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget && !deleteSubmitting) {
+              setDeleteConfirmMode(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gantt-delete-title"
+            className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+          >
+            <div className="mb-4 flex items-start gap-3">
+              <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400">
+                <Trash2 size={18} aria-hidden />
+              </span>
+              <div>
+                <h2
+                  id="gantt-delete-title"
+                  className="text-base font-semibold text-gray-900 dark:text-gray-100"
+                >
+                  {deleteConfirmMode === 'permanent'
+                    ? t('kanbanSelect.deleteConfirmPermanentTitle', { ns: 'tasks' })
+                    : t('kanbanSelect.deleteConfirmTitle', { ns: 'tasks' })}
+                </h2>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                  {deleteConfirmMode === 'permanent'
+                    ? t('kanbanSelect.deleteConfirmPermanent', {
+                        ns: 'tasks',
+                        count: actionSelectedIds.length,
+                      })
+                    : t('kanbanSelect.deleteConfirm', {
+                        ns: 'tasks',
+                        count: actionSelectedIds.length,
+                      })}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleteSubmitting}
+                className="rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800"
+                onClick={() => setDeleteConfirmMode(null)}
+              >
+                {t('buttons.cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={deleteSubmitting || bulkBusy}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                onClick={() => void confirmSelectedTaskDelete()}
+              >
+                {deleteConfirmMode === 'permanent'
+                  ? t('kanbanSelect.deleteForever', { ns: 'tasks' })
+                  : t('kanbanSelect.delete', { ns: 'tasks' })}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     
     </>
   );

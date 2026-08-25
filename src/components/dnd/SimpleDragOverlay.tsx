@@ -6,6 +6,7 @@ import { Task, TeamMember } from '../../types';
 import DOMPurify from 'dompurify';
 import { getAuthenticatedAttachmentUrl } from '../../utils/authImageUrl';
 import type { TaskViewMode } from '../../utils/userPreferences';
+import { useColumnDisplayTitle } from '../../utils/columnDisplayTitle';
 
 import { Column } from '../../types';
 
@@ -216,16 +217,18 @@ const TaskDragPreview: React.FC<{
 
 // Column drag preview
 const ColumnDragPreview: React.FC<{ column: Column }> = ({ column }) => {
+  const { t } = useTranslation('common');
+  const columnDisplayTitle = useColumnDisplayTitle();
   const taskCount = column.tasks?.length || 0;
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl border-2 border-blue-400 p-4 w-64 transform rotate-2 scale-105 opacity-95 ring-2 ring-blue-300">
       <div className="flex flex-col items-center justify-center py-4">
         <div className="text-3xl mb-2">📋</div>
         <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 text-center mb-1">
-          {column.title}
+          {columnDisplayTitle(column)}
         </div>
         <div className="text-xs text-gray-500 dark:text-gray-400">
-          {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
+          {taskCount} {taskCount === 1 ? t('column.task') : t('column.tasks')}
         </div>
       </div>
     </div>

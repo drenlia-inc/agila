@@ -58,6 +58,17 @@ function cardLog(...args: unknown[]) {
   if (feDebug('FE_DEBUG_TASK_CARD')) console.log(...args);
 }
 
+/**
+ * The tag row spans the full card width, so only a hit on a tag chip (or its
+ * removal menu) counts as a tag interaction. Empty space beside the tags stays
+ * card surface and opens Task Details like the rest of the card.
+ */
+const isTagChipTarget = (target: EventTarget | null): boolean => {
+  const el = target as HTMLElement | null;
+  if (!el || typeof el.closest !== 'function') return false;
+  return Boolean(el.closest('[data-tag-chip], [data-tag-removal-menu]'));
+};
+
 // Helper function to get priority colors from hex
 const getPriorityColors = (hexColor: string) => {
   // Convert hex to RGB
@@ -1603,11 +1614,11 @@ const TaskCard = React.memo(function TaskCard({
         {...listeners}
         onClickCapture={(e) => {
           // Use capture phase to detect tag clicks BEFORE onClick fires.
-          // Only the dedicated tag container — do NOT treat every rounded-full
+          // Only actual tag chips — do NOT treat every rounded-full
           // (priority/member chips) as a tag, or the clickable strip beside an
           // overlapping activity feed becomes dead.
           const target = e.target as HTMLElement;
-          if (target.closest('[data-tag-container]')) {
+          if (isTagChipTarget(e.target)) {
             if (clickTimerRef.current) {
               clearTimeout(clickTimerRef.current);
               clickTimerRef.current = null;
@@ -1670,8 +1681,8 @@ const TaskCard = React.memo(function TaskCard({
             return;
           }
           
-          // Tags only — container already stopPropagates; keep this as a safety net
-          if (target.closest('[data-tag-container]')) {
+          // Tags only — the chip already stopPropagates; keep this as a safety net
+          if (isTagChipTarget(e.target)) {
             if (clickTimerRef.current) {
               clearTimeout(clickTimerRef.current);
               clickTimerRef.current = null;
@@ -2349,7 +2360,6 @@ const TaskCard = React.memo(function TaskCard({
               }}
               onMouseEnter={() => {
                 setShowAllTags(true);
-                isInteractingWithTagRef.current = true; // Mark that user is interacting with tags
               }}
               onMouseLeave={() => {
                 setShowAllTags(false);
@@ -2359,6 +2369,8 @@ const TaskCard = React.memo(function TaskCard({
                 }, 300);
               }}
               onClick={(e) => {
+                // Empty space in this row belongs to the card, not to the tags
+                if (!isTagChipTarget(e.target)) return;
                 // CRITICAL: Stop propagation to prevent card onClick from firing
                 e.stopPropagation();
                 e.preventDefault();
@@ -2375,6 +2387,7 @@ const TaskCard = React.memo(function TaskCard({
                 }, 500);
               }}
               onMouseDown={(e) => {
+                if (!isTagChipTarget(e.target)) return;
                 // Set flag immediately on mousedown (before click)
                 isInteractingWithTagRef.current = true;
                 e.stopPropagation();
@@ -2385,6 +2398,7 @@ const TaskCard = React.memo(function TaskCard({
                 }
               }}
               onMouseUp={(e) => {
+                if (!isTagChipTarget(e.target)) return;
                 // Keep flag set on mouseup
                 isInteractingWithTagRef.current = true;
                 e.stopPropagation();
@@ -2399,6 +2413,7 @@ const TaskCard = React.memo(function TaskCard({
                     label={allowMutations ? t('taskCard.clickToRemoveTag') : tag.tag}
                   >
                     <span
+                      data-tag-chip="true"
                       className={`px-1.5 py-0.5 rounded-full text-xs font-medium transition-opacity ${
                         allowMutations ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
                       }`}
@@ -2451,7 +2466,10 @@ const TaskCard = React.memo(function TaskCard({
                   </KanbanChromeTooltip>
                 ))}
               {!showAllTags && liveTags.length > 3 && (
-                <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-400 text-white">
+                <span
+                  data-tag-chip="true"
+                  className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-400 text-white"
+                >
                   +{liveTags.length - 3}
                 </span>
               )}

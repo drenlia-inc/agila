@@ -196,7 +196,9 @@ function buildEntries() {
     const source = fs.readFileSync(file, 'utf8');
     const fileRel = path.relative(ROOT, file);
     for (const { attr, kind } of ATTRS) {
-      const re = new RegExp(`${attr}=(?:\\{)?["'\`]([^"'\`]+)["'\`](?:\\})?`, 'g');
+      // Matches literals (attr="x") and conditional attributes (attr={cond ? 'x' : undefined});
+      // the brace-free lead-in keeps the match inside a single JSX expression.
+      const re = new RegExp(`${attr}=(?:\\{[^{}]{0,80}?)?["'\`]([^"'\`]+)["'\`]`, 'g');
       let m;
       while ((m = re.exec(source))) {
         if (kind === 'setting' || kind === 'ownerSetup') {
@@ -225,6 +227,12 @@ function buildEntries() {
         }
         if (!en && fromNearby[0]) en = fromNearby[0].en;
         if (!fr && fromNearby[0]) fr = fromNearby[0].fr;
+        if (value === 'view-modes') {
+          // Anchor is the board Tools panel; pin its label so nearby-key order cannot change it
+          const lab = lookupLocale(locales, 'common.tools.title');
+          en = lab.en || en;
+          fr = lab.fr || fr;
+        }
         if (value === 'profile-activity-feed') {
           const lab = lookupLocale(locales, 'common.profile.activityFeed');
           en = lab.en || en;

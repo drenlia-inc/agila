@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Undo2 } from 'lucide-react';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
@@ -10,6 +11,11 @@ export type ColumnBulkUndoFabProps = {
   labelKey?: string;
   onUndo: () => void;
   onDismiss: () => void;
+  placement?: 'column' | 'fixed-left';
+  /** `fixed-left` only: viewport x offset, so the control can hug the table edge. */
+  fixedLeftPx?: number | null;
+  /** `fixed-left` only: viewport right offset; anchors the control's right edge exactly. */
+  fixedRightPx?: number | null;
 };
 
 const btnClass =
@@ -26,6 +32,9 @@ export default function ColumnBulkUndoFab({
   labelKey = 'kanbanSelect.undoBulk',
   onUndo,
   onDismiss,
+  placement = 'column',
+  fixedLeftPx = null,
+  fixedRightPx = null,
 }: ColumnBulkUndoFabProps) {
   const { t } = useTranslation('tasks');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -43,11 +52,21 @@ export default function ColumnBulkUndoFab({
 
   const tooltip = t(labelKey, { count });
 
-  return (
+  const undoControl = (
     <div
       ref={rootRef}
-      className="pointer-events-auto absolute top-full z-20 mt-1 flex -translate-x-1/2 flex-col gap-1 items-center"
-      style={{ left: 'calc(-1rem)' }}
+      className={
+        placement === 'fixed-left'
+          ? 'pointer-events-auto fixed top-1/2 z-[70] flex -translate-y-1/2 flex-col items-center gap-1'
+          : 'pointer-events-auto absolute top-full z-20 mt-1 flex -translate-x-1/2 flex-col gap-1 items-center'
+      }
+      style={
+        placement === 'column'
+          ? { left: 'calc(-1rem)' }
+          : fixedRightPx !== null
+            ? { right: fixedRightPx }
+            : { left: fixedLeftPx ?? 8 }
+      }
       data-testid={`column-bulk-undo-${columnId}`}
     >
       <div
@@ -69,4 +88,8 @@ export default function ColumnBulkUndoFab({
       </KanbanChromeTooltip>
     </div>
   );
+
+  return placement === 'fixed-left'
+    ? createPortal(undoControl, document.body)
+    : undoControl;
 }

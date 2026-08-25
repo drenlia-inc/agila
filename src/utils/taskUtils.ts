@@ -60,6 +60,24 @@ export const isTaskSoftDeleted = (task: Task | null | undefined): boolean => {
   return deletedAt != null && deletedAt !== '';
 };
 
+/** Copy snake_case / Date delete markers onto camelCase so every surface agrees. */
+export const normalizeTaskSoftDelete = <T extends Task | Record<string, unknown>>(task: T): T => {
+  const raw = task as T & {
+    deletedAt?: unknown;
+    deleted_at?: unknown;
+    deletedBy?: unknown;
+    deleted_by?: unknown;
+  };
+  const deletedAt = raw.deletedAt ?? raw.deleted_at ?? null;
+  const deletedBy = raw.deletedBy ?? raw.deleted_by ?? null;
+  return {
+    ...task,
+    deletedAt:
+      deletedAt instanceof Date ? deletedAt.toISOString() : (deletedAt as string | null),
+    deletedBy,
+  } as T;
+};
+
 /** Clear soft-delete fields so TaskDetails cannot stay stuck in read-only after restore. */
 export const clearTaskSoftDelete = <T extends Task | Record<string, unknown>>(task: T): T => {
   const next = { ...task } as T & {

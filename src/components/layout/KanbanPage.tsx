@@ -25,7 +25,7 @@ import {
 import { buildTaskRelationshipSummaryMap } from '../../utils/taskRelationshipSummary';
 import { ModernCheckbox } from '../ModernCheckbox';
 import TeamMembers from '../TeamMembers';
-import Tools from '../Tools';
+import Tools, { ToolsHeaderControls } from '../Tools';
 import BoardMetrics from '../BoardMetrics';
 import SearchInterface from '../SearchInterface';
 import KanbanColumn from '../Column';
@@ -49,8 +49,10 @@ import websocketClient from '../../services/websocketClient';
 import {
   BOARD_TRASH_CHANGED_EVENT,
   CLOSE_BOARD_TRASH_EVENT,
+  OPEN_BOARD_TRASH_EVENT,
   type BoardTrashChangedDetail,
   type CloseBoardTrashDetail,
+  type OpenBoardTrashDetail,
   readBoardTrashOpenPreference,
   writeBoardTrashOpenPreference,
 } from '../../utils/boardTrashEvents';
@@ -225,6 +227,7 @@ interface KanbanPageProps {
 
   // Kanban multi-select / bulk actions
   checkedTaskIds?: Set<string>;
+  onReplaceCheckedTaskIds?: (taskIds: string[]) => void;
   onToggleTaskChecked?: (taskId: string, options?: ToggleTaskCheckedOptions) => void;
   onToggleColumnChecked?: (columnId: string, taskIds: string[], selectAll: boolean) => void;
   onClearAllChecked?: () => void;
@@ -238,8 +241,8 @@ interface KanbanPageProps {
   onBulkSprint?: (taskIds: string[], sprintId: string | null) => void;
   onBulkPriority?: (taskIds: string[], priorityId: string) => void;
   onBulkMoveToBoard?: (taskIds: string[], boardId: string) => void;
-  onBulkAssignee?: (taskIds: string[], memberId: string) => void;
-  onBulkRequester?: (taskIds: string[], memberId: string) => void;
+  onBulkAssignee?: (taskIds: string[], memberId: string | null) => void;
+  onBulkRequester?: (taskIds: string[], memberId: string | null) => void;
   onBulkAddWatcher?: (taskIds: string[], memberId: string) => void;
   onBulkRemoveWatcher?: (taskIds: string[], memberId: string) => void;
   onBulkAddCollaborator?: (taskIds: string[], memberId: string) => void;
@@ -379,6 +382,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   availableSprints = [],
   onTaskRestoredLocally,
   checkedTaskIds,
+  onReplaceCheckedTaskIds,
   onToggleTaskChecked,
   onToggleColumnChecked,
   onClearAllChecked,
@@ -525,8 +529,17 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
       if (!boardId || boardId !== selectedBoard) return;
       setTrashOpen(false);
     };
+    const onOpenTrash = (event: Event) => {
+      const boardId = (event as CustomEvent<OpenBoardTrashDetail>).detail?.boardId;
+      if (!boardId || boardId !== selectedBoard) return;
+      setTrashOpen(true);
+    };
     window.addEventListener(CLOSE_BOARD_TRASH_EVENT, onCloseTrash);
-    return () => window.removeEventListener(CLOSE_BOARD_TRASH_EVENT, onCloseTrash);
+    window.addEventListener(OPEN_BOARD_TRASH_EVENT, onOpenTrash);
+    return () => {
+      window.removeEventListener(CLOSE_BOARD_TRASH_EVENT, onCloseTrash);
+      window.removeEventListener(OPEN_BOARD_TRASH_EVENT, onOpenTrash);
+    };
   }, [selectedBoard]);
 
   // Recompute badge when sprint filter changes (trash list may already be loaded).
@@ -814,6 +827,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           ...full,
           deletedAt: full.deletedAt || (full as any).deleted_at || task.deletedAt || null,
           deletedBy: full.deletedBy || (full as any).deleted_by || task.deletedBy || null,
+          deletedBy: full.deletedBy || (full as any).deleted_by || task.deletedBy || null,
           columnId: full.columnId || (full as any).columnid,
           boardId: full.boardId || (full as any).boardid,
           memberId: full.memberId || (full as any).memberid,
@@ -1082,6 +1096,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     scrollRight: () => void;
   } | null>(null);
   const appHeaderStickyTopPx = useAppHeaderStickyTop();
+  const toolsPanelRef = useRef<HTMLDivElement>(null);
+  const boardViewContentRef = useRef<HTMLDivElement>(null);
   const trashScrollContainerRef = useRef<HTMLDivElement>(null);
   const syncingHorizontalScrollRef = useRef(false);
   const scrollSyncFrameRef = useRef<number | null>(null);
@@ -1099,11 +1115,12 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
 
   // Align “back to top” with the horizontal right-chevron gutter (-right-12).
   // Prefer this over a fixed viewport `right-6`: same board chrome lane, stays clear of cards.
+  // Anchored to the shared view wrapper so Kanban, List, Gantt and Calendar all match.
   const syncScrollToTopGutter = useCallback(() => {
-    const container = columnsContainerRef.current;
+    const container = boardViewContentRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
-    // Match Tailwind `-right-12` (3rem): button right edge sits 48px past the scroller.
+    // Match Tailwind `-right-12` (3rem): button right edge sits 48px past the content.
     setScrollToTopRightPx(Math.max(8, window.innerWidth - rect.right - 48));
   }, []);
 
@@ -1119,7 +1136,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   useEffect(() => {
     syncScrollToTopGutter();
     window.addEventListener('resize', syncScrollToTopGutter);
-    const container = columnsContainerRef.current;
+    const container = boardViewContentRef.current;
     const resizeObserver =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncScrollToTopGutter()) : null;
     if (container && resizeObserver) resizeObserver.observe(container);
@@ -1386,9 +1403,18 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
 
   return (
     <>
+      <ToolsHeaderControls
+        toolsPanelRef={toolsPanelRef}
+        headerTopPx={appHeaderStickyTopPx}
+        enabled={showBoardToolbar}
+        taskViewMode={taskViewMode}
+        onTaskViewModeChange={onTaskViewModeChange}
+        viewMode={viewMode}
+        onViewModeChange={onViewModeChange}
+      />
       {showBoardToolbar ? (
         <div className="flex items-stretch gap-4 mb-1">
-          <div className="hidden md:flex w-[160px] shrink-0">
+          <div ref={toolsPanelRef} className="hidden md:flex w-[160px] shrink-0">
             <Tools 
               taskViewMode={taskViewMode}
               onTaskViewModeChange={onTaskViewModeChange}
@@ -1517,6 +1543,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 .filter((column) => column && column.id)
                 .sort((a, b) => (a.position || 0) - (b.position || 0))}
               columns={columns}
+              members={members}
               isAdmin={isAdmin && canMutate}
               canMutate={canMutate}
               detailsTaskId={selectedTask?.id ?? null}
@@ -1529,16 +1556,33 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               onRestoreSelected={handleRestoreTrashSelected}
               onPurgeSelected={handlePurgeTrashSelected}
               onClose={() => setTrashOpenPersisted(false)}
+              taskViewMode={taskViewMode}
           />
         </BoardTrashCollapse>
       )}
 
       {selectedBoard && (
-        <div className="relative">
+        <div className="relative" ref={boardViewContentRef}>
           {(loading.tasks || loading.boards || loading.columns) && (
             <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 z-10 flex items-center justify-center">
               <LoadingSpinner size="medium" />
             </div>
+          )}
+
+          {/* Back to top — same chrome lane in every board view */}
+          {showScrollToTop && (
+            <button
+              type="button"
+              onClick={() => {
+                void scrollKanbanPageToTopFastSmooth();
+              }}
+              className="fixed z-40 bottom-6 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-50 hover:opacity-100 hover:scale-110"
+              style={{ right: scrollToTopRightPx }}
+              title={t('boardTabs.scrollToTop', { ns: 'common' })}
+              aria-label={t('boardTabs.scrollToTop', { ns: 'common' })}
+            >
+              <ChevronUp size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
+            </button>
           )}
           
           {/* Conditional View Rendering */}
@@ -1598,6 +1642,31 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 boardRelationships={boardRelationships}
                 selectedSprintId={selectedSprintId}
                 canMutate={canMutate}
+                checkedTaskIds={checkedTaskIds}
+                onToggleTaskChecked={onToggleTaskChecked}
+                onClearAllChecked={onClearAllChecked}
+                bulkBusy={bulkBusy}
+                onBulkAddTag={onBulkAddTag}
+                onBulkCopy={onBulkCopy}
+                onBulkArchive={onBulkArchive}
+                onBulkDelete={onBulkDelete}
+                onBulkPermanentDelete={onBulkPermanentDelete}
+                onBulkSprint={onBulkSprint}
+                onBulkPriority={onBulkPriority}
+                onBulkMoveToBoard={onBulkMoveToBoard}
+                onBulkAssignee={onBulkAssignee}
+                onBulkRequester={onBulkRequester}
+                onBulkAddWatcher={onBulkAddWatcher}
+                onBulkRemoveWatcher={onBulkRemoveWatcher}
+                onBulkAddCollaborator={onBulkAddCollaborator}
+                onBulkRemoveCollaborator={onBulkRemoveCollaborator}
+                bulkUndoTaskIds={bulkUndoTaskIds}
+                bulkUndoLabelKey={bulkUndoLabelKey}
+                onBulkUndo={onBulkUndo}
+                onClearBulkUndo={onClearBulkUndo}
+                hasArchiveColumn={Object.values(columns).some((column) =>
+                  isArchivedColumnFlag(column)
+                )}
               />
             </div>
           ) : viewMode === 'gantt' ? (
@@ -1623,12 +1692,40 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 canMutate={canMutate}
                 onMoveTaskToColumn={onMoveTaskToColumn}
                 onReorderTaskInColumn={onGanttReorderTask}
+                availablePriorities={availablePriorities}
+                availableTags={availableTags}
+                availableSprints={availableSprints}
+                boards={boards}
+                checkedTaskIds={checkedTaskIds}
+                onReplaceCheckedTaskIds={onReplaceCheckedTaskIds}
+                bulkBusy={bulkBusy}
+                onBulkAddTag={onBulkAddTag}
+                onBulkCopy={onBulkCopy}
+                onBulkArchive={onBulkArchive}
+                onBulkDelete={onBulkDelete}
+                onBulkPermanentDelete={onBulkPermanentDelete}
+                onBulkSprint={onBulkSprint}
+                onBulkPriority={onBulkPriority}
+                onBulkMoveToBoard={onBulkMoveToBoard}
+                onBulkAssignee={onBulkAssignee}
+                onBulkRequester={onBulkRequester}
+                onBulkAddWatcher={onBulkAddWatcher}
+                onBulkRemoveWatcher={onBulkRemoveWatcher}
+                onBulkAddCollaborator={onBulkAddCollaborator}
+                onBulkRemoveCollaborator={onBulkRemoveCollaborator}
+                bulkUndoTaskIds={bulkUndoTaskIds}
+                bulkUndoLabelKey={bulkUndoLabelKey}
+                onBulkUndo={onBulkUndo}
+                onClearBulkUndo={onClearBulkUndo}
+                hasArchiveColumn={Object.values(columns).some((column) =>
+                  isArchivedColumnFlag(column)
+                )}
               />
             </Suspense>
           ) : viewMode === 'calendar' ? (
             <Suspense fallback={<div className="flex items-center justify-center h-64"><LoadingSpinner /></div>}>
               <CalendarView
-                columns={getFullyFilteredColumns}
+                columns={filteredColumns}
                 onSelectTask={onSelectTask}
                 selectedTask={selectedTask}
                 taskViewMode={taskViewMode}
@@ -1639,6 +1736,34 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 members={members}
                 canMutate={canMutate}
                 availablePriorities={availablePriorities}
+                availableTags={availableTags}
+                availableSprints={availableSprints}
+                boards={boards}
+                checkedTaskIds={checkedTaskIds}
+                onReplaceCheckedTaskIds={onReplaceCheckedTaskIds}
+                bulkBusy={bulkBusy}
+                onBulkDelete={onBulkDelete}
+                onBulkPermanentDelete={onBulkPermanentDelete}
+                onBulkAddTag={onBulkAddTag}
+                onBulkCopy={onBulkCopy}
+                onBulkArchive={onBulkArchive}
+                onBulkSprint={onBulkSprint}
+                onBulkPriority={onBulkPriority}
+                onBulkMoveToBoard={onBulkMoveToBoard}
+                onBulkAssignee={onBulkAssignee}
+                onBulkRequester={onBulkRequester}
+                onBulkAddWatcher={onBulkAddWatcher}
+                onBulkRemoveWatcher={onBulkRemoveWatcher}
+                onBulkAddCollaborator={onBulkAddCollaborator}
+                onBulkRemoveCollaborator={onBulkRemoveCollaborator}
+                bulkUndoTaskIds={bulkUndoTaskIds}
+                bulkUndoLabelKey={bulkUndoLabelKey}
+                onBulkUndo={onBulkUndo}
+                onClearBulkUndo={onClearBulkUndo}
+                hasArchiveColumn={Object.values(columns).some((column) =>
+                  isArchivedColumnFlag(column)
+                )}
+                siteSettings={siteSettings}
               />
             </Suspense>
           ) : (
@@ -1689,21 +1814,6 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               </div>
             )}
 
-            {showScrollToTop && (
-              <button
-                type="button"
-                onClick={() => {
-                  void scrollKanbanPageToTopFastSmooth();
-                }}
-                className="fixed z-40 bottom-6 p-2 bg-white/60 dark:bg-gray-800/70 hover:bg-white/95 dark:hover:bg-gray-800/95 rounded-full shadow-sm hover:shadow-lg transition-all duration-200 opacity-50 hover:opacity-100 hover:scale-110"
-                style={{ right: scrollToTopRightPx }}
-                title={t('boardTabs.scrollToTop', { ns: 'common' })}
-                aria-label={t('boardTabs.scrollToTop', { ns: 'common' })}
-              >
-                <ChevronUp size={18} className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100" />
-              </button>
-            )}
-            
             {/* Scrollable columns container */}
             <div
               ref={columnsContainerRef}

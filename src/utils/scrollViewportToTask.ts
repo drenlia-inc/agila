@@ -1,6 +1,6 @@
 import type { Board, Columns } from '../types';
 
-function getTaskDetailsSafeViewport(): { safeLeft: number; safeRight: number } {
+export function getTaskDetailsSafeViewport(): { safeLeft: number; safeRight: number } {
   const margin = 16;
   const details = document.querySelector('[data-task-details]');
   if (details instanceof HTMLElement) {
@@ -54,12 +54,8 @@ function flashJumpHighlight(el: HTMLElement): void {
   window.setTimeout(() => el.classList.remove(JUMP_HIGHLIGHT_CLASS), JUMP_HIGHLIGHT_MS);
 }
 
-/**
- * Scroll the board (or list/gantt) so a task card is in view.
- * Kanban virtualization keeps the selected task mounted (`pinnedIndex`).
- */
-export function scrollViewportToTask(taskId: string): boolean {
-  if (typeof document === 'undefined' || !taskId) return false;
+function findTaskElement(taskId: string): HTMLElement | null {
+  if (typeof document === 'undefined' || !taskId) return null;
 
   const escaped =
     typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
@@ -69,10 +65,18 @@ export function scrollViewportToTask(taskId: string): boolean {
   const kanban = document.querySelector(
     `[data-kanban-task-row][data-task-id="${escaped}"]`
   );
-  const el =
+  return (
     (kanban instanceof HTMLElement ? kanban : null) ||
-    (document.querySelector(`[data-task-id="${escaped}"]`) as HTMLElement | null);
+    (document.querySelector(`[data-task-id="${escaped}"]`) as HTMLElement | null)
+  );
+}
 
+/**
+ * Scroll the board (or list/gantt) so a task card is in view.
+ * Kanban virtualization keeps the selected task mounted (`pinnedIndex`).
+ */
+export function scrollViewportToTask(taskId: string): boolean {
+  const el = findTaskElement(taskId);
   if (!el) return false;
 
   const boardScroller = document.querySelector('.kanban-scrollable-container');
@@ -91,6 +95,52 @@ export function scrollViewportToTask(taskId: string): boolean {
   return true;
 }
 
+const SETTLE_INTERVAL_MS = 50;
+const SETTLE_TIMEOUT_MS = 700;
+
+/**
+ * Wait for the card to stop moving before scrolling to it. A jump often clears
+ * the header text filter, and the board re-renders with every task restored a
+ * frame or two later — scrolling before that lands on a position the card has
+ * already left, and the highlight fires off screen.
+ */
+function scrollWhenSettled(taskId: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let waited = 0;
+    let stableSamples = 0;
+    let previous: { top: number; left: number } | null = null;
+
+    const step = () => {
+      const el = findTaskElement(taskId);
+      const timedOut = waited >= SETTLE_TIMEOUT_MS;
+
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        const held =
+          previous !== null &&
+          Math.abs(rect.top - previous.top) < 1 &&
+          Math.abs(rect.left - previous.left) < 1;
+        previous = { top: rect.top, left: rect.left };
+        stableSamples = held ? stableSamples + 1 : 0;
+
+        if (stableSamples >= 2 || timedOut) {
+          resolve(scrollViewportToTask(taskId));
+          return;
+        }
+      } else if (timedOut) {
+        // Re-render unmounted the row (virtualization) and it never came back.
+        resolve(false);
+        return;
+      }
+
+      waited += SETTLE_INTERVAL_MS;
+      window.setTimeout(step, SETTLE_INTERVAL_MS);
+    };
+
+    step();
+  });
+}
+
 export function scrollViewportToTaskWhenReady(
   taskId: string,
   options?: { maxAttempts?: number; intervalMs?: number }
@@ -101,8 +151,8 @@ export function scrollViewportToTaskWhenReady(
   return new Promise((resolve) => {
     let attempts = 0;
     const tryScroll = () => {
-      if (scrollViewportToTask(taskId)) {
-        resolve(true);
+      if (findTaskElement(taskId)) {
+        void scrollWhenSettled(taskId).then(resolve);
         return;
       }
       attempts += 1;

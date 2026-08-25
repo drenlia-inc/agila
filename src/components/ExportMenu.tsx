@@ -4,6 +4,7 @@ import { Download, FileText, Table } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ExcelJS from 'exceljs';
 import { Board, TeamMember, Tag, PriorityOption } from '../types';
+import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { 
   convertToCSV,
   generateFilename, 
@@ -235,19 +236,20 @@ export default function ExportMenu({
 
   return (
     <div className="relative" ref={menuRef}>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        disabled={isExporting}
-        className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-opacity disabled:opacity-50"
-        title={t('export.title')}
-        aria-label={t('export.title')}
-        aria-expanded={isOpen}
-        data-tour-id="export-menu"
-      >
-        <Download size={14} />
-      </button>
+      <KanbanChromeTooltip label={isOpen ? '' : t('export.title')} delayMs={0}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          disabled={isExporting}
+          className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-opacity disabled:opacity-50"
+          aria-label={t('export.title')}
+          aria-expanded={isOpen}
+          data-tour-id="export-menu"
+        >
+          <Download size={14} />
+        </button>
+      </KanbanChromeTooltip>
 
       {isOpen && menuCoords && createPortal(
         <div

@@ -122,6 +122,7 @@ The **Tools** card on the Kanban page controls board layout and card density.
 - **Card density** (dropdown): Full · Preview · Minimal
   - **Compact** (tickets only) hides descriptions on cards and shows a **red dot** on the density button as a reminder
   - Tooltips describe the current mode (including that compact hides descriptions)
+- **Scrolled header controls**: After Tools scrolls under the page header, compact view and card-density buttons fade into the empty header margin left of the logo — the logo and the rest of the header stay put, and nothing covers board content or the column navigators. They fade back out when the Tools panel scrolls into view, and are skipped entirely when the window is too narrow to leave a margin
 
 ---
 
@@ -152,6 +153,8 @@ The **Tools** card on the Kanban page controls board layout and card density.
 
 The application offers three different views for managing tasks (switch via the Tools panel):
 
+- **Back to top**: Once the page is scrolled down, a chevron button appears in the right chrome lane (level with the horizontal scroll arrows) in every board view — Kanban, List, Gantt and Calendar — and jumps back to the top of the page
+
 ### Kanban View
 
 [Screenshot: Kanban board with columns and tasks]
@@ -160,6 +163,7 @@ The Kanban view displays tasks as cards in columns, representing different stage
 
 #### Column Management
 - **Column Headers**: Show column name and task count
+- **Localized default names**: Untouched columns created from the bilingual project defaults follow each user's English/French UI language. Once an admin renames a column, that custom name is shown unchanged in every language
 - **Soft WIP limits**: Warn when at/over limit (moves still allowed)
 - **Policy notes**: Short entry/exit guidance on the column
 - **Add Column Button** (Admin Only): `+` button at the end of columns
@@ -178,6 +182,7 @@ The Kanban view displays tasks as cards in columns, representing different stage
 
 #### Task Cards
 - **Task Title**: Click to open task details
+- **Card surface**: Clicking empty space on the card also opens task details, including the space beside the tags — only the tag chips themselves stay reserved for tag actions
 - **Task Description**: Shown in expand/shrink modes (hidden in compact)
 - **Priority Indicator**: Color-coded priority level
 - **Assignee**: User avatar and name (including the **Agent** when AI is enabled)
@@ -190,6 +195,7 @@ The Kanban view displays tasks as cards in columns, representing different stage
 - **Checkbox**: Multi-select for bulk actions
 
 #### Multi-select & bulk actions
+- **Shared selection**: The current board selection follows you across Kanban, List, Gantt, and Calendar. Opening Gantt or Calendar with selected tasks automatically engages its selection mode; exiting that mode clears the shared selection in every view
 - **Select all** (per column): Checkbox strip above columns
 - **Bulk action bar**: Tag, copy, sprint, priority, move to board (admin), archive, delete; unselect all. Admins: **Shift+click** delete to permanently purge selected tasks (skips trash; always confirms)
 - **Bulk move**: Drag one selected card to move all checked cards in that column together
@@ -212,8 +218,8 @@ The List view displays tasks in a table format for detailed data management.
 
 #### Table Columns
 - **Row Number**: Sequential numbering
-- **Actions**: View, Copy, Delete buttons (appear on hover). Admins: **Shift+click** Delete to permanently purge (skips trash; always confirms)
-- **Task Title**: Click to open task details
+- **Actions**: Selection checkmark, Copy, and Delete buttons. Copy/Delete appear on hover; checked rows keep their controls visible. Admins: **Shift+click** Delete to permanently purge (skips trash; always confirms)
+- **Task Title**: Double-click to edit; a normal click on any inactive part of the row opens task details
 - **Assignee**: User avatar and name
 - **Priority**: Color-coded priority level
 - **Tags**: Color-coded tags
@@ -221,6 +227,10 @@ The List view displays tasks in a table format for detailed data management.
 - **Due Date**: Task due date
 - **Status**: Current column/status
 - **Time**: Time since last update
+
+#### Dependencies
+- **Show/hide**: The branch control in the ID column header nests parent–child tasks as a tree
+- **Related**: Tasks with related links get a small yellow link mark beside the ticket (hover to see those tickets). Related tasks are not nested in the tree
 
 #### Inline Editing
 - **Assignee**: Click to change assignee via dropdown
@@ -232,6 +242,13 @@ The List view displays tasks in a table format for detailed data management.
 - **Column Headers**: Click to sort by that column
 - **Search**: Use the search bar to filter tasks
 - **Advanced Filters**: Use the filter panel for detailed filtering
+
+#### Multi-select & bulk actions
+- **Modifier selection**: **Ctrl/Cmd+click** an inactive part of a row to toggle it. **Shift+click** selects the visible sorted range from the last selected task
+- **Selection feedback**: Checked rows are highlighted and show a checkmark beside the row actions
+- **Bulk action gutter**: A fixed control bar stays visible in the page's left gutter while scrolling. It provides the same tag, copy, sprint, priority, member, move-board, archive, and delete actions as Kanban multi-select
+- **Undo**: Supported bulk actions replace the action bar with a one-shot Undo control for 60 seconds
+- **Clear selection**: Use the unselect control in the gutter or press **Escape**
 
 ### Gantt View
 
@@ -250,7 +267,12 @@ The Gantt view displays tasks on a timeline showing project schedules and depend
 - **Edit Tasks**: Click on task bars to edit
 - **Move Tasks**: Drag task bars to change dates
 - **Resize Tasks**: Drag ends of task bars to change duration
-- **Delete Task**: Soft-delete from the task list trash control. Admins: **Shift+click** to permanently purge (skips trash; always confirms)
+- **Select tasks**: **Ctrl/Cmd+click** or **Shift+click** in the left task list to add or range-select without pressing Select first. After **Select** is on, the same clicks work on the timeline bars
+- **Bulk action gutter**: Selected tasks expose the fixed action bar 3px left of the task list, with tag, copy, sprint, priority, member, move-board, archive, and delete actions
+- **Selection persists**: Applying an action keeps the same bars selected and stays in selection mode, so **←** / **→** nudges and follow-up actions keep working. Actions that remove the bars (delete, archive, move to another board) drop them from the selection
+- **Undo**: Supported bulk actions offer a one-shot Undo for 60 seconds — inside the action bar while tasks stay selected, or in place of the bar once the selection is empty
+- **Leave selection mode**: The gutter's unselect control clears the selection *and* exits selection mode; **Escape** or **Enter** does the same
+- **Delete Task**: Clicking one bar opens Task Details and reveals a trash button between **Link** and **Task** in the Gantt header; selected groups use the gutter trash action. Admins can **Shift+click** either delete control to permanently purge (skips trash; always confirms)
 
 #### View Modes (Tools → card density)
 - **Expand**: Full task details with titles
@@ -263,12 +285,15 @@ The Gantt view displays tasks on a timeline showing project schedules and depend
 - **Today Button**: Jump to current date
 - **Later Button**: Jump to the next timeline
 - **Earlier Button**: Jump to the previous timeline
-- **&gt; Button**: Jump to the latest task on the board horizontally
-- **&lt; Button**: Jump to earliest task on the board horizontally
+- **Task &gt; Button**: Jump to the nearest task that starts after the visible timeline window
+- **Task &lt; Button**: Jump to the nearest task that ends before the visible timeline window
+- **Earliest / latest task**: The double-chevron buttons in the Tasks column header still jump to the first and last dated task on the board
+- **Off-screen task hints**: Faint gray marks just above and below the day numbers mark the days whose tasks sit above or below the visible rows; denser stretches read darker, and the marks disappear once everything is in view. Click a mark to scroll to the nearest off-screen task on that day
 
 #### Dependencies
 - **Create Links**: Connect tasks to show relationships
-- **Parent-Child**: Hierarchical task relationships
+- **Parent-Child**: Hierarchical task relationships (solid arrows)
+- **Related**: Dotted lines. If the other task is outside the loaded date window, the line still meets that row at the left or right edge of the timeline
 
 ### Calendar View
 
@@ -279,7 +304,7 @@ The Calendar view displays dated tasks on Month, Week, or Day grids for schedule
 #### Sub-views
 - **Month**: Full-month grid with task bars spanning start–due dates; every dated task is shown, so busy weeks grow taller rather than hiding work
 - **Week**: Seven-day strip centered on the focus date
-- **Day**: Single-day list with larger rows for detailed work on one date
+- **Day**: Single-day list; Tools density applies. Preview is the standard read-only row (title, dates, avatar, tags, comments). Minimal compresses the same data onto one line. Full adds the task description under the dates. Cards cannot be moved or resized
 
 #### URL / routing
 - **`#calendar`**: Open Calendar view for the current board
@@ -288,9 +313,10 @@ The Calendar view displays dated tasks on Month, Week, or Day grids for schedule
 #### Navigation
 - **Period arrows**: Arrows around the displayed month, week range, or day move exactly one period
 - **Period picker**: The calendar icon beside the period opens a small picker — a month/year field in Month view, a week field in Week view, or a date field in Day view — with **‹ ›** buttons on either side that step a full year at a time
-- **Open a day**: Hover a day number in Month view — or a weekday name in the Week view header — and an arrow slides in; click it to open Day view for that date
+- **Open a day**: Hover a day number in Month view — or a weekday name in the Week view header — and click the arrow that slides in to open Day view for that date. The day number is used to create tasks, not to open Day view.
 - **Task arrows**: Arrows around **Task** jump to the nearest earlier or later period containing dated work
-- **Today**: Return to the current date; the current day keeps its tinted background and circled date
+- **Today**: Return to the current date; the current day keeps its tinted background and circled date. If today's cell is scrolled out of sight, the page scrolls it back into view below the sticky header
+- **Status filter**: The Status control between Today and Jump to task opens the same picker as Tools. Choices apply only to Calendar; other views keep their own status visibility. Newly created statuses start visible, and Reset restores the default (archive hidden)
 - **Task search**: Search by ticket, title, or status to open the task's period and briefly highlight its calendar bar
 
 #### Task bars
@@ -298,24 +324,36 @@ The Calendar view displays dated tasks on Month, Week, or Day grids for schedule
 - **Ordering**: Month and Week bars follow their Kanban column/task position; Day view can sort by Kanban order, priority, status, assignee, or title
 - **Move / resize** (Month and Week): Drag a bar to shift dates, or drag its edges to change start or due date — **dates only**; column and position on the Kanban board are unchanged. Day view is a read-only list of that day's work, so its cards cannot be moved or resized
 - **Continues past the edge**: A bar that runs beyond the row or the visible period has a faded edge and a square corner; while dragging, a badge shows the live start and due dates so a clipped bar is not mistaken for a resize
-- **Colors**: Month and Week bars are filled with the assignee's team color (gray when unassigned); Day view shows that color as a left stripe. Priority appears as a small colored dot at the start of the bar
-- **Priority legend**: Color key at the top of the sticky header, shown as dots to match the bars (same priority colors as Gantt)
+- **Colors**: Month and Week bars are filled with the assignee's team color (gray when unassigned); Day view shows that color as a left stripe. Priority appears as a small colored dot at the start of Full and Preview bars; Minimal repeats a tiny priority pill on every visible segment so multi-week tasks keep their priority cue
+- **Done / Late**: Full, Preview, and Day bars use the same DONE / LATE stamps as Gantt, placed after the title so they do not cover avatars or comments (Late follows the admin overdue-highlight setting). Month and Week Minimal is too thin for the words, so it uses a green or red cap on the hairline instead; hover preview still names Done or Late
+- **Priority legend**: Color key at the top of the sticky header (same priority colors as Gantt); its markers change from dots to tiny pills in Minimal view to match the bars
 
 #### Interaction
-- **Comments**: Hover the comment bubble on a bar to preview recent comments; reply inline or open the task for more
-- **Task preview**: Hover a bar to see ticket, title, dates, and description (same preview as Gantt)
+- **Create by date range**: In Month or Week view, hover a day number (the pointer becomes a plus) and click and drag to the end date. A light-blue preview follows the selected range across the date-number strip; release to create the task with the board's default priority. Clicking empty space in a day does not create a task.
+- **Comments**: Hover the comment bubble on a Full or Preview bar — and on Day rows in every density — to preview recent comments; reply inline, or choose **Open** to show Task Details scrolled to its comments
+- **Task preview**: In Month or Week view, hover a bar to see ticket, title, dates, assignee, and description (same preview as Gantt). Move the pointer onto the preview to keep it open and select or copy its text and links; it closes when the pointer leaves, and pressing the bar dismisses it. Day cards do not show this hover preview; click a card to open Task Details
 - **Task Details**: Click a bar to open or toggle the Task Details side panel and edit the task there
-- **Empty day**: In Day view, use **Add task** on an empty day to create a task with that date
+- **Day task**: In Day view, use the **+** button beside the date to create a task for that day
 - **Assignee**: Click the avatar on a bar to pick a different assignee (or unassign)
 - **Priority / assignee**: Open the bar context menu to change priority or assignee
 
 #### Multi-select
-- **Select mode**: Toolbar **Select** button; click bars to toggle selection
+- **Single selection**: A normal click opens Task Details and shows the trash button beside **Select**, allowing that task to be deleted without entering multi-select
+- **Modifier selection**: **Ctrl/Cmd+click** toggles individual bars. **Shift+click** selects the visible dated range from the last selected task, following start date and Kanban order
+- **Select mode**: The toolbar **Select** button enters selection mode explicitly; if Task Details is open, that task becomes the first selection. Once several tasks are selected, **Select** becomes **Exit**
+- **Bulk action gutter**: Selected tasks expose the fixed action bar 3px left of the calendar, with tag, copy, sprint, priority, member, move-board, archive, and delete actions
+- **Selection persists**: Applying an action keeps the same bars selected and stays in selection mode, so date nudges and follow-up actions keep working. Actions that remove the bars (delete, archive, move to another board) drop them from the selection
+- **Undo**: Supported bulk actions offer a one-shot Undo for 60 seconds — inside the action bar while tasks stay selected, or in place of the bar once the selection is empty
 - **Date nudge**: With tasks selected, **←** / **→** shifts all selected tasks by one day
-- **Exit**: **Escape** or **Enter** leaves multi-select mode
+- **Delete**: The gutter trash action soft-deletes selected tasks. Admins can **Shift+click** it to permanently purge the selection; both actions require confirmation
+- **Exit**: The gutter's unselect control clears the selection *and* exits multi-select mode; **Escape** or **Enter** does the same
 
 #### View Modes (Tools → card density)
-- **Expand**, **Shrink**, and **Compact** affect bar density in Calendar the same way as Gantt
+- **Full**: Month and Week show the complete assignee-colored bar with priority dot, title, avatar, comments, and resize handles. Day shows the standard card plus the task description
+- **Preview**: Month and Week use thinner titled bars with a compact avatar and comment bubble; resize handles appear on hover. Day uses the standard read-only card (title, dates, avatar, tags, comments)
+- **Minimal**: Month and Week reduce tasks to member-colored timeline lines with a tiny priority pill on every visible row segment; hover still opens the task preview. Done/Late show as a green or red cap rather than the stamp text. Day compresses the same card data onto one line
+- **Assignee on hover**: Every density shows the assignee in the hover preview (avatar and name, or *Unassigned*), so multi-week tasks remain identifiable even when the on-bar avatar is on another segment
+- **Day** remains a read-only list: cards cannot be moved or resized in any density
 
 ---
 
@@ -341,6 +379,7 @@ When you click on a task, the Task Details page opens with comprehensive task ma
 - **Tags**: Assigned tags (add/remove)
 - **Dates**: Start date and due date (date pickers)
 - **Effort**: Estimated effort (type freely; commits on blur)
+- **Status**: Column on the task's board (dropdown next to Effort; follows the user's English/French UI language for untouched default names)
 
 #### Comments Section
 - **Add Comments**: Rich text editor for comments
@@ -577,7 +616,20 @@ Developer details (APIs, `task_work`, runner): [`docs/AI_INTEGRATION.md`](docs/A
 - **Blocked**: Toggle to show only tasks marked blocked
 - **Sprint filter**: Multi-select sprints (and backlog) in Search & Filter — works across boards; combine with header sprint filter by setting header to **All sprints**
 - **Stalled**: Minimum days in the current column (card aging)
-- **Column visibility**: Show/hide columns on the board (not the same as filtering by status)
+- **Status visibility**: Show/hide workflow statuses on the current view. **All** selects every active status and leaves Archive off; tick Archive separately when you want it
+
+#### Header Search (jump to a task)
+The search box in the app header does two things, and typing does neither on its own — it only fills the dropdown, leaving the board untouched. From there, press **Enter** to apply the text as a board filter, or pick a task from the dropdown to jump straight to it (which clears the text). Each row shows which field matched — ticket, title, description, comments, assignee, or requester.
+
+Because the dropdown searches every board while the filter only applies to the one you are on, filtering as you type used to empty the current board while the match you wanted sat elsewhere. Emptying the box (or the **X** / **Escape**) clears an applied filter right away, so the board is never left filtered by text that is no longer in the box.
+
+The dropdown deliberately reaches past what the board is currently showing, so work you archived or deleted is still findable:
+
+- **Active tasks** come first.
+- **Archived columns**: tasks living in a column flagged as Archive are grouped under an *Archived columns* heading with an amber **Archived** badge. Jumping to one reveals that column for the current visit only — your saved column layout and the hidden-by-default rule for Archive are untouched, and a notice tells you which column was revealed. Toggling column visibility yourself (or using the reset button) clears the temporary reveal.
+- **Trash**: soft-deleted tasks are looked up across boards, grouped under a *Trash* heading with a red **In trash** badge and a struck-through title. Jumping to one switches to that board, opens its Trash panel, and highlights the card so you can Restore or Delete forever from there.
+
+Board tab counters keep counting only what the board actually shows, so a dropdown hit badged Archived or In trash will not be reflected in those numbers.
 
 #### Saved Filters
 - **Save Filter**: Save frequently used filter combinations (includes overdue, blocked, sprint, stalled, and linked toggles)
@@ -610,11 +662,13 @@ Soft delete is separate from the Archive column: deleted items leave the active 
 
 #### Soft-delete vs permanent purge
 - **Normal delete** (trash icon / bulk delete): Soft-deletes the task into board trash (recoverable)
-- **Admin Shift+click delete**: Permanently purges the task immediately (Kanban card, multi-select bulk bar, List view, and Gantt task list). Skips trash; always asks for confirmation. Non-admins: Shift is ignored
+- **Admin Shift+click delete**: Permanently purges the task immediately (Kanban card, multi-select bulk bar, List view, Gantt task list, and Calendar selection). Skips trash; always asks for confirmation. Non-admins: Shift is ignored
 
 #### Board trash
 - **Open trash**: Toggle from the board tabs area
 - **Restore / purge**: Per task or in bulk for the current board
+- **Assignee**: Each trash card shows the assignee avatar, matching live Kanban cards
+- **Density**: Trash cards follow Full / Preview / Minimal. Full shows who deleted the task and when; Preview is the compact card; Minimal is a single-line row (hover the title for deletion details)
 - **Empty trash**: Permanently delete all trashed tasks on the board (admin)
 
 #### Admin Lifecycle
@@ -705,6 +759,11 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 ### Admin
 - **/** or **Ctrl/Cmd+K**: Focus settings search
 
+### List View
+- **Ctrl/Cmd + click** on an inactive part of a row: Add or remove one task from the selection
+- **Shift + click** on an inactive part of a row: Select the visible sorted range from the last selected task
+- **Escape**: Clear the current multi-selection or dismiss the available bulk undo
+
 ### Gantt View
 - **Escape**: Exit relationship mode, exit multi-select mode
 - **Enter**: Exit relationship mode, exit multi-select mode
@@ -713,6 +772,8 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 ### Calendar View
 - **Escape**: Exit multi-select mode
 - **Enter**: Exit multi-select mode
+- **Ctrl/Cmd + click**: Add or remove one task from the selection
+- **Shift + click**: Select the visible dated range from the last selected task
 - **← / →**: In multi-select mode, shift selected task dates by one day
 
 ### Text Editor

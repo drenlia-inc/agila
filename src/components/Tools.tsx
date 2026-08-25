@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { Minimize2, Maximize2, Search, Minus, LayoutGrid, List, Calendar, CalendarDays, ChevronUp, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { TaskViewMode, ViewMode } from '../utils/userPreferences';
@@ -21,12 +22,23 @@ interface ToolsProps {
 }
 
 type OpenMenu = 'view' | 'density' | null;
+type ControlsLayout = 'row' | 'stack';
+type ControlsSize = 'md' | 'sm';
 
 const ICON_SIZE = 16;
 const ICON_STROKE = 2;
+// Keep in sync with the `duration-200` transition on the header controls.
+const SLIDE_DURATION_MS = 200;
+/** Two compact buttons plus their gap; below this the header margin stays empty. */
+const HEADER_CONTROLS_MIN_ROOM_PX = 88;
 
-const buttonBaseClass =
-  'w-10 h-10 shrink-0 flex items-center justify-center rounded-md transition-all relative border';
+/** Empty placeholder the app header renders left of the logo (see Header.tsx). */
+export const TOOLS_HEADER_SLOT_ID = 'tools-header-controls-slot';
+
+const buttonShapeClass =
+  'shrink-0 flex items-center justify-center rounded-md transition-all relative border';
+const buttonBaseClass = `w-10 h-10 ${buttonShapeClass}`;
+const buttonCompactClass = `w-8 h-8 ${buttonShapeClass}`;
 const buttonActiveClass =
   'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700';
 const buttonIdleClass =
@@ -52,40 +64,8 @@ function TooltipWithShortcut({
   );
 }
 
-export default function Tools({
-  taskViewMode,
-  onTaskViewModeChange,
-  viewMode,
-  onViewModeChange,
-  isSearchActive,
-  onToggleSearch,
-  hasActiveFilters = false,
-  activeFilterTooltip = '',
-  onHideToolbar,
-}: ToolsProps) {
+function useToolsOptions(viewMode: ViewMode, taskViewMode: TaskViewMode) {
   const { t } = useTranslation('common');
-  const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!openMenu) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpenMenu(null);
-      }
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpenMenu(null);
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [openMenu]);
 
   const viewModeOptions: {
     mode: ViewMode;
@@ -134,6 +114,71 @@ export default function Tools({
       ? t('tools.currentShrinkView')
       : t('tools.currentExpandView');
 
+  return {
+    viewModeOptions,
+    densityOptions,
+    currentViewOption,
+    currentDensityOption,
+    isCompact,
+    viewTooltip,
+    densityTooltip,
+  };
+}
+
+function ToolsViewDensityControls({
+  layout,
+  taskViewMode,
+  onTaskViewModeChange,
+  viewMode,
+  onViewModeChange,
+  tooltipPlacement = 'bottom',
+  middle = null,
+  size = 'md',
+  withTourIds = false,
+}: {
+  layout: ControlsLayout;
+  taskViewMode: TaskViewMode;
+  onTaskViewModeChange: (mode: TaskViewMode) => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+  tooltipPlacement?: 'bottom' | 'top';
+  middle?: React.ReactNode;
+  size?: ControlsSize;
+  /** Only the board Tools panel carries tour ids, so duplicates never appear. */
+  withTourIds?: boolean;
+}) {
+  const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const {
+    viewModeOptions,
+    densityOptions,
+    currentViewOption,
+    currentDensityOption,
+    isCompact,
+    viewTooltip,
+    densityTooltip,
+  } = useToolsOptions(viewMode, taskViewMode);
+
+  useEffect(() => {
+    if (!openMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenMenu(null);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [openMenu]);
+
   const renderMenuItem = (
     key: string,
     selected: boolean,
@@ -153,7 +198,6 @@ export default function Tools({
           : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
       }`}
     >
-      {/* Same footprint as the toolbar button so icons line up under the trigger */}
       <span
         className={`${buttonBaseClass} border-transparent bg-transparent rounded-none ${
           selected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'
@@ -169,9 +213,234 @@ export default function Tools({
     </button>
   );
 
+  const controlButtonClass = size === 'sm' ? buttonCompactClass : buttonBaseClass;
+  const compactDotClass =
+    size === 'sm'
+      ? 'absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-red-500 ring-1 ring-white dark:ring-gray-800'
+      : 'absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 ring-1 ring-white dark:ring-gray-800';
+
+  const menuClass =
+    layout === 'stack'
+      ? 'absolute left-full top-0 z-[61] ml-1 min-w-[9.5rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden'
+      : 'absolute left-0 top-full z-[60] mt-1 min-w-[9.5rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden';
+
   return (
     <div
       ref={containerRef}
+      className={
+        layout === 'stack'
+          ? 'flex flex-col gap-2 items-center'
+          : size === 'sm'
+            ? 'flex gap-1.5 items-center'
+            : 'flex gap-2 justify-center items-center flex-1 min-h-[2.5rem]'
+      }
+    >
+      <div className="relative shrink-0">
+        <KanbanChromeTooltip label={viewTooltip} placement={tooltipPlacement}>
+          <button
+            type="button"
+            onClick={() => setOpenMenu(openMenu === 'view' ? null : 'view')}
+            className={`${controlButtonClass} ${
+              viewMode !== 'kanban' ? buttonActiveClass : buttonIdleClass
+            }`}
+            aria-haspopup="menu"
+            aria-expanded={openMenu === 'view'}
+            data-tour-id={withTourIds ? 'view-mode-toggle' : undefined}
+          >
+            <ToolIcon icon={currentViewOption.icon} />
+          </button>
+        </KanbanChromeTooltip>
+        {openMenu === 'view' && (
+          <div role="menu" className={menuClass}>
+            {viewModeOptions.map((option) =>
+              renderMenuItem(
+                option.mode,
+                viewMode === option.mode,
+                option.icon,
+                option.label,
+                option.shortcut,
+                () => {
+                  onViewModeChange(option.mode);
+                  setOpenMenu(null);
+                }
+              )
+            )}
+          </div>
+        )}
+      </div>
+
+      {middle}
+
+      <div className="relative shrink-0">
+        <KanbanChromeTooltip label={densityTooltip} placement={tooltipPlacement}>
+          <button
+            type="button"
+            onClick={() => setOpenMenu(openMenu === 'density' ? null : 'density')}
+            className={`${controlButtonClass} ${
+              taskViewMode !== 'expand' ? buttonActiveClass : buttonIdleClass
+            }`}
+            aria-haspopup="menu"
+            aria-expanded={openMenu === 'density'}
+            data-tour-id={withTourIds ? 'task-view-mode-toggle' : undefined}
+          >
+            <ToolIcon icon={currentDensityOption.icon} />
+            {isCompact && <span className={compactDotClass} aria-hidden="true" />}
+          </button>
+        </KanbanChromeTooltip>
+        {openMenu === 'density' && (
+          <div role="menu" className={menuClass}>
+            {densityOptions.map((option) =>
+              renderMenuItem(
+                option.mode,
+                taskViewMode === option.mode,
+                option.icon,
+                option.label,
+                option.shortcut,
+                () => {
+                  onTaskViewModeChange(option.mode);
+                  setOpenMenu(null);
+                }
+              )
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Compact view / density controls that appear in the app header, left of the
+ * logo, once the board Tools panel has scrolled under the header. They live in
+ * the header row so they never cover board content or the column navigators.
+ */
+export function ToolsHeaderControls({
+  toolsPanelRef,
+  headerTopPx,
+  enabled,
+  taskViewMode,
+  onTaskViewModeChange,
+  viewMode,
+  onViewModeChange,
+}: {
+  toolsPanelRef: RefObject<HTMLElement | null>;
+  headerTopPx: number;
+  enabled: boolean;
+  taskViewMode: TaskViewMode;
+  onTaskViewModeChange: (mode: TaskViewMode) => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+}) {
+  const { t } = useTranslation('common');
+  const [toolsOffscreen, setToolsOffscreen] = useState(false);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [hasHeaderRoom, setHasHeaderRoom] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [slidIn, setSlidIn] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) {
+      setToolsOffscreen(false);
+      setSlot(null);
+      return;
+    }
+    const headerSlot = document.getElementById(TOOLS_HEADER_SLOT_ID);
+    setSlot(headerSlot);
+
+    /**
+     * The slot hangs off the left edge of the centered header row, so the room
+     * available is whatever margin sits between the viewport and that row.
+     */
+    const measureRoom = () => {
+      const headerRow = headerSlot?.parentElement;
+      const roomPx = headerRow ? headerRow.getBoundingClientRect().left : 0;
+      setHasHeaderRoom(roomPx >= HEADER_CONTROLS_MIN_ROOM_PX);
+    };
+    measureRoom();
+
+    const node = toolsPanelRef.current;
+    const observer = node
+      ? new IntersectionObserver(
+          ([entry]) => setToolsOffscreen(!entry.isIntersecting),
+          { root: null, rootMargin: `-${headerTopPx}px 0px 0px 0px`, threshold: 0 }
+        )
+      : null;
+    if (node && observer) observer.observe(node);
+    else setToolsOffscreen(false);
+
+    const headerRow = headerSlot?.parentElement;
+    const resizeObserver = headerRow ? new ResizeObserver(measureRoom) : null;
+    if (headerRow && resizeObserver) resizeObserver.observe(headerRow);
+    window.addEventListener('resize', measureRoom);
+    return () => {
+      observer?.disconnect();
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', measureRoom);
+    };
+  }, [enabled, headerTopPx, toolsPanelRef]);
+
+  // Stay mounted through the fade-out so the controls animate both ways.
+  const active = enabled && toolsOffscreen && hasHeaderRoom;
+  useEffect(() => {
+    if (active) {
+      setMounted(true);
+      const frame = window.requestAnimationFrame(() => setSlidIn(true));
+      return () => window.cancelAnimationFrame(frame);
+    }
+    setSlidIn(false);
+    const timer = window.setTimeout(() => setMounted(false), SLIDE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [active]);
+
+  if (!mounted || !slot) return null;
+
+  return createPortal(
+    <div
+      className={`flex items-center transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none ${
+        slidIn
+          ? 'translate-x-0 opacity-100 pointer-events-auto'
+          : 'translate-x-3 opacity-0 pointer-events-none motion-reduce:translate-x-0'
+      }`}
+      role="group"
+      aria-hidden={!slidIn}
+      aria-label={t('tools.headerWhenScrolled')}
+    >
+      <ToolsViewDensityControls
+        layout="row"
+        size="sm"
+        taskViewMode={taskViewMode}
+        onTaskViewModeChange={onTaskViewModeChange}
+        viewMode={viewMode}
+        onViewModeChange={onViewModeChange}
+        tooltipPlacement="bottom"
+      />
+    </div>,
+    slot
+  );
+}
+
+export default function Tools({
+  taskViewMode,
+  onTaskViewModeChange,
+  viewMode,
+  onViewModeChange,
+  isSearchActive,
+  onToggleSearch,
+  hasActiveFilters = false,
+  activeFilterTooltip = '',
+  onHideToolbar,
+}: ToolsProps) {
+  const { t } = useTranslation('common');
+
+  const searchLabel =
+    hasActiveFilters && activeFilterTooltip
+      ? activeFilterTooltip
+      : isSearchActive
+        ? t('tools.hideSearchFilters')
+        : t('tools.showSearchFilters');
+
+  return (
+    <div
       className="p-3 bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-100 dark:border-gray-700 w-full flex-1 flex flex-col"
       data-tour-id="view-modes"
     >
@@ -194,54 +463,26 @@ export default function Tools({
         </div>
       </div>
 
-      <div className="flex gap-2 justify-center items-center flex-1 min-h-[2.5rem]">
-        {/* Board view dropdown */}
-        <div className="relative shrink-0">
-          <KanbanChromeTooltip label={viewTooltip}>
-            <button
-              type="button"
-              onClick={() => setOpenMenu(openMenu === 'view' ? null : 'view')}
-              className={`${buttonBaseClass} ${
-                viewMode !== 'kanban' ? buttonActiveClass : buttonIdleClass
-              }`}
-              aria-haspopup="menu"
-              aria-expanded={openMenu === 'view'}
-              data-tour-id="view-mode-toggle"
-            >
-              <ToolIcon icon={currentViewOption.icon} />
-            </button>
-          </KanbanChromeTooltip>
-          {openMenu === 'view' && (
-            <div
-              role="menu"
-              className="absolute left-0 top-full z-[60] mt-1 min-w-[9.5rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden"
-            >
-              {viewModeOptions.map((option) =>
-                renderMenuItem(
-                  option.mode,
-                  viewMode === option.mode,
-                  option.icon,
-                  option.label,
-                  option.shortcut,
-                  () => {
-                    onViewModeChange(option.mode);
-                    setOpenMenu(null);
-                  }
-                )
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Search Toggle — no dropdown; show S in tooltip */}
-        {(() => {
-          const searchLabel =
-            hasActiveFilters && activeFilterTooltip
-              ? activeFilterTooltip
-              : isSearchActive
-                ? t('tools.hideSearchFilters')
-                : t('tools.showSearchFilters');
-          const searchButton = (
+      <ToolsViewDensityControls
+        layout="row"
+        withTourIds
+        taskViewMode={taskViewMode}
+        onTaskViewModeChange={onTaskViewModeChange}
+        viewMode={viewMode}
+        onViewModeChange={onViewModeChange}
+        middle={
+          <KanbanChromeTooltip
+            content={
+              hasActiveFilters && activeFilterTooltip ? (
+                searchLabel
+              ) : (
+                <TooltipWithShortcut label={searchLabel} shortcut="S" />
+              )
+            }
+            delayMs={hasActiveFilters && activeFilterTooltip ? 0 : undefined}
+            placement="bottom"
+            wrapperClassName="relative shrink-0 inline-flex"
+          >
             <button
               type="button"
               onClick={onToggleSearch}
@@ -269,72 +510,9 @@ export default function Tools({
                 />
               )}
             </button>
-          );
-
-          return (
-            <KanbanChromeTooltip
-              content={
-                hasActiveFilters && activeFilterTooltip ? (
-                  searchLabel
-                ) : (
-                  <TooltipWithShortcut label={searchLabel} shortcut="S" />
-                )
-              }
-              delayMs={hasActiveFilters && activeFilterTooltip ? 0 : undefined}
-              placement="bottom"
-              wrapperClassName="relative shrink-0 inline-flex"
-            >
-              {searchButton}
-            </KanbanChromeTooltip>
-          );
-        })()}
-
-        {/* Task density dropdown */}
-        {(viewMode === 'kanban' || viewMode === 'list' || viewMode === 'gantt' || viewMode === 'calendar') && (
-          <div className="relative shrink-0">
-            <KanbanChromeTooltip label={densityTooltip}>
-              <button
-                type="button"
-                onClick={() => setOpenMenu(openMenu === 'density' ? null : 'density')}
-                className={`${buttonBaseClass} ${
-                  taskViewMode !== 'expand' ? buttonActiveClass : buttonIdleClass
-                }`}
-                aria-haspopup="menu"
-                aria-expanded={openMenu === 'density'}
-                data-tour-id="task-view-mode-toggle"
-              >
-                <ToolIcon icon={currentDensityOption.icon} />
-                {isCompact && (
-                  <span
-                    className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 ring-1 ring-white dark:ring-gray-800"
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
-            </KanbanChromeTooltip>
-            {openMenu === 'density' && (
-              <div
-                role="menu"
-                className="absolute left-0 top-full z-[60] mt-1 min-w-[9.5rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden"
-              >
-                {densityOptions.map((option) =>
-                  renderMenuItem(
-                    option.mode,
-                    taskViewMode === option.mode,
-                    option.icon,
-                    option.label,
-                    option.shortcut,
-                    () => {
-                      onTaskViewModeChange(option.mode);
-                      setOpenMenu(null);
-                    }
-                  )
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+          </KanbanChromeTooltip>
+        }
+      />
     </div>
   );
 }

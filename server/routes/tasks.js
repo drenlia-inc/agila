@@ -219,6 +219,8 @@ async function fetchTaskWithRelationships(db, taskId) {
     isBlocked: Boolean(task.is_blocked ?? task.isBlocked),
     blockedReason: task.blocked_reason || task.blockedReason || null,
     // Ensure columnid and boardid are in camelCase (frontend expects these)
+    deletedAt: task.deleted_at || task.deletedAt || null,
+    deletedBy: task.deleted_by || task.deletedBy || null,
     columnId: task.columnid || task.columnId,
     boardId: task.boardid || task.boardId,
     memberId: task.memberid || task.memberId,
@@ -426,6 +428,34 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * Search soft-deleted tasks for the header search dropdown. Trashed work is not
+ * part of the board payload the client already holds, so it needs a lookup to
+ * stay findable. Declared before `/:id` so the literal path wins.
+ */
+router.get('/trash/search', authenticateToken, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (query.length < 2) {
+      return res.json({ tasks: [] });
+    }
+
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 50)
+      : 20;
+
+    const tasks = await taskQueries.searchTrashedTasks(db, query, limit);
+    res.json({ tasks });
+  } catch (error) {
+    console.error('Error searching trashed tasks:', error);
+    const db = getRequestDatabase(req);
+    const tTranslator = await getTranslator(db);
+    res.status(500).json({ error: tTranslator('errors.failedToFetchTasks') });
+  }
+});
+
 // Get task by ID or ticket
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
@@ -536,6 +566,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
       requesterId: task.requesterid || task.requesterId || null,
       startDate: toDateString(rawStart),
       dueDate: toDateString(rawDue),
+      deletedAt: task.deleted_at || task.deletedAt || null,
+      deletedBy: task.deleted_by || task.deletedBy || null,
     };
     
     taskHttpLog(dbgHttp, '📦 [TASK API] Final task data:', {
@@ -1108,6 +1140,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
     if (!currentTask) {
       return res.status(404).json({ error: tTranslator('errors.taskNotFound') });
+    }
+    if (currentTask.deleted_at || currentTask.deletedAt) {
+      return res.status(409).json({
+        error: tTranslator('errors.taskInTrash'),
+        code: 'task_in_trash',
+      });
     }
     const id = currentTask.id;
     const validationStartTime = Date.now();

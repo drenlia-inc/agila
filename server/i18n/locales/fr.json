@@ -18,6 +18,7 @@
     "failedToReorderColumn": "Échec de la réorganisation de la colonne",
     "failedToRenumberColumns": "Échec de la renumérotation des colonnes",
     "taskNotFound": "Tâche introuvable",
+    "taskInTrash": "Cette tâche est dans la Corbeille et ne peut pas être modifiée tant qu'elle n'est pas restaurée",
     "failedToCreateTask": "Échec de la création de la tâche",
     "failedToUpdateTask": "Échec de la mise à jour de la tâche",
     "failedToDeleteTask": "Échec de la suppression de la tâche",
@@ -141,7 +142,7 @@
   "boardColumns": {
     "toDo": "À faire",
     "inProgress": "En cours",
-    "testing": "Test",
+    "testing": "En test",
     "completed": "Terminé",
     "archive": "Archive"
   },

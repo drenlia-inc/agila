@@ -1,6 +1,7 @@
 import React, { memo, useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useColumnDisplayTitle } from '../../utils/columnDisplayTitle';
 import {
   DndContext,
   DragEndEvent,
@@ -21,6 +22,7 @@ import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import { Copy, Trash2, GripVertical, ChevronDown } from 'lucide-react';
 import { Task, Columns, Column } from '../../types';
+import { GanttTaskSelectOptions } from './types';
 import { ganttRowBoxStyle, ganttRowPaddingClass } from './ganttLayout';
 
 interface GanttTaskListProps {
@@ -35,7 +37,7 @@ interface GanttTaskListProps {
   taskColumnWidth: number;
   taskViewMode: string;
   onSelectTask: (task: Task | null) => void;
-  onTaskSelect: (taskId: string) => void;
+  onTaskSelect: (taskId: string, options?: GanttTaskSelectOptions) => void;
   onCopyTask?: (task: Task) => Promise<void>;
   onRemoveTask?: (taskId: string, event?: React.MouseEvent) => Promise<void>;
   highlightedTaskId?: string | null;
@@ -117,8 +119,19 @@ const SortableTaskRow = memo(({
       return;
     }
 
+    if (canMutate && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+      e.preventDefault();
+      window.getSelection()?.removeAllRanges();
+      onTaskSelect(task.id, {
+        additive: e.ctrlKey || e.metaKey,
+        range: e.shiftKey,
+        source: 'list',
+      });
+      return;
+    }
+
     if (isMultiSelectMode) {
-      onTaskSelect(task.id);
+      onTaskSelect(task.id, { source: 'list' });
     } else {
       if (selectedTask && selectedTask.id === task.id) {
         onSelectTask(null);
@@ -164,6 +177,12 @@ const SortableTaskRow = memo(({
         isRelationshipMode ? 'cursor-default' : ''
       } ${isDragging ? 'shadow-2xl ring-2 ring-blue-400 bg-white dark:bg-gray-800 scale-[1.01] z-[60]' : ''}`}
       title={isRelationshipMode ? t('gantt.linkUseTaskBars') : undefined}
+      onMouseDown={(e) => {
+        // Modifier+click is selection, not text drag: block the native range.
+        if (canMutate && (e.ctrlKey || e.metaKey || e.shiftKey)) {
+          e.preventDefault();
+        }
+      }}
       onClick={handleClick}
     >
       <div
@@ -284,6 +303,7 @@ const GanttTaskList = memo(({
   onMoveTaskToColumn,
 }: GanttTaskListProps) => {
   const { t } = useTranslation('common');
+  const columnDisplayTitle = useColumnDisplayTitle();
   const [statusDropdown, setStatusDropdown] = useState<{ taskId: string; left: number; top: number } | null>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -473,7 +493,7 @@ const GanttTaskList = memo(({
                     statusTask?.columnId === col.id ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : ''
                   }`}
                 >
-                  {col.title}
+                  {columnDisplayTitle(col)}
                   {statusTask?.columnId === col.id && (
                     <span className="ml-2 text-blue-600 dark:text-blue-400">✓</span>
                   )}

@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify';
 import {
   CHROME_TOOLTIP_DIVIDER_CLASS,
   CHROME_TOOLTIP_MUTED_TEXT_CLASS,
-  CHROME_TOOLTIP_RICH_SURFACE_CLASS,
+  CHROME_TOOLTIP_RICH_INTERACTIVE_SURFACE_CLASS,
 } from '../KanbanChromeTooltip';
 
 interface TaskBarTooltipProps {
@@ -14,7 +14,12 @@ interface TaskBarTooltipProps {
   /** Hide the preview (e.g. while dragging or showing a comment popover). */
   disabled?: boolean;
   wrapperClassName?: string;
+  /** Extra line under the dates, for detail the bar itself has no room to show. */
+  meta?: React.ReactNode;
 }
+
+/** Long enough to move the pointer off the bar and onto the preview. */
+const HIDE_GRACE_MS = 180;
 
 export const TaskBarTooltip: React.FC<TaskBarTooltipProps> = ({
   task,
@@ -22,16 +27,40 @@ export const TaskBarTooltip: React.FC<TaskBarTooltipProps> = ({
   children,
   disabled = false,
   wrapperClassName = 'w-full h-full',
+  meta,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
   const [placement, setPlacement] = useState({ left: 0, top: 0, maxHeight: 0 });
   const targetRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerInPreviewRef = useRef(false);
+
+  const cancelHide = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  };
+
+  const scheduleHide = () => {
+    cancelHide();
+    hideTimerRef.current = setTimeout(() => {
+      hideTimerRef.current = null;
+      if (!pointerInPreviewRef.current) setIsVisible(false);
+    }, HIDE_GRACE_MS);
+  };
 
   useEffect(() => {
-    if (disabled) setIsVisible(false);
+    if (disabled) {
+      cancelHide();
+      pointerInPreviewRef.current = false;
+      setIsVisible(false);
+    }
   }, [disabled]);
+
+  useEffect(() => () => cancelHide(), []);
 
   // Measure before paint: a bar near the right or bottom edge would otherwise
   // push the preview off screen, where it is clipped or unreadable.
@@ -68,18 +97,15 @@ export const TaskBarTooltip: React.FC<TaskBarTooltipProps> = ({
 
   const handleMouseEnter = (e: React.MouseEvent) => {
     if (disabled) return;
+    cancelHide();
     setIsVisible(true);
     updatePosition(e);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isVisible && !disabled) {
-      updatePosition(e);
-    }
-  };
-
+  // Keep the preview alive briefly so the pointer can reach it; text and links
+  // inside are then selectable and clickable, like the comments popover.
   const handleMouseLeave = () => {
-    setIsVisible(false);
+    scheduleHide();
   };
 
   const updatePosition = (e: React.MouseEvent) => {
@@ -93,7 +119,7 @@ export const TaskBarTooltip: React.FC<TaskBarTooltipProps> = ({
   const tooltipContent = (
     <div
       ref={tooltipRef}
-      className={`fixed z-[9999] overflow-y-auto ${CHROME_TOOLTIP_RICH_SURFACE_CLASS}`}
+      className={`fixed z-[9999] overflow-y-auto ${CHROME_TOOLTIP_RICH_INTERACTIVE_SURFACE_CLASS}`}
       style={{
         left: `${placement.left}px`,
         top: `${placement.top}px`,
@@ -101,11 +127,30 @@ export const TaskBarTooltip: React.FC<TaskBarTooltipProps> = ({
         opacity: isVisible ? 1 : 0,
         transition: 'opacity 0.05s ease-in-out',
       }}
+      onMouseEnter={() => {
+        pointerInPreviewRef.current = true;
+        cancelHide();
+      }}
+      onMouseLeave={() => {
+        pointerInPreviewRef.current = false;
+        scheduleHide();
+      }}
+      // The portal still bubbles through the React tree, so selecting text or
+      // following a link here must not also click the bar underneath.
+      onMouseDown={(event) => event.stopPropagation()}
+      onMouseUp={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.stopPropagation()}
     >
       <div className="font-semibold mb-1">{heading}</div>
       {startDate && endDate && (
         <div className={`${CHROME_TOOLTIP_MUTED_TEXT_CLASS} mb-1`}>
           {formatDate(startDate)} - {formatDate(endDate)}
+        </div>
+      )}
+      {meta && (
+        <div className={`${CHROME_TOOLTIP_MUTED_TEXT_CLASS} mb-1 flex items-center gap-1.5`}>
+          {meta}
         </div>
       )}
       {task.description && (
@@ -123,9 +168,18 @@ export const TaskBarTooltip: React.FC<TaskBarTooltipProps> = ({
     <>
       <div
         ref={targetRef}
+        // Placement is taken once on entry and then held: a preview that keeps
+        // following the cursor slides out from under the pointer that is
+        // reaching for it, and covers the bars it is describing.
         onMouseEnter={handleMouseEnter}
-        onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
+        // Pressing the bar means acting on it (click, drag, resize) — drop the
+        // preview so it cannot sit under the pointer mid-gesture.
+        onMouseDown={() => {
+          cancelHide();
+          pointerInPreviewRef.current = false;
+          setIsVisible(false);
+        }}
         className={wrapperClassName}
       >
         {children}

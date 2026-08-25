@@ -1542,6 +1542,40 @@ export async function getLifecycleDeletedTasks(db, boardId = null, search = null
 }
 
 /**
+ * Soft-deleted tasks matching a text query, for the header search dropdown.
+ * Board-agnostic like the live corpus the client already holds, so trashed work
+ * stays findable; capped because this runs per keystroke batch.
+ */
+export async function searchTrashedTasks(db, search, limit = 20) {
+  const needle = `%${String(search).trim().toLowerCase()}%`;
+  const query = `
+    SELECT t.id, t.title, t.ticket, t.description,
+           t.memberid as "memberId", t.requesterid as "requesterId",
+           t.startdate as "startDate", t.duedate as "dueDate",
+           t.priority, t.priority_id as "priorityId",
+           t.columnid as "columnId", t.boardid as "boardId",
+           t.deleted_at as "deletedAt",
+           p.priority as "priorityName", p.color as "priorityColor",
+           b.title as "boardTitle",
+           c.title as "columnTitle"
+    FROM tasks t
+    LEFT JOIN priorities p ON (p.id = t.priority_id OR (t.priority_id IS NULL AND p.priority = t.priority))
+    LEFT JOIN boards b ON b.id = t.boardid
+    LEFT JOIN columns c ON c.id = t.columnid
+    WHERE t.deleted_at IS NOT NULL
+      AND (
+        LOWER(COALESCE(t.ticket, '')) LIKE $1
+        OR LOWER(t.title) LIKE $1
+        OR LOWER(COALESCE(t.description, '')) LIKE $1
+      )
+    ORDER BY t.deleted_at DESC
+    LIMIT $2
+  `;
+  const stmt = wrapQuery(db.prepare(query), 'SELECT');
+  return await stmt.all(needle, limit);
+}
+
+/**
  * Reassign soft-deleted tasks off a column before hard-deleting the column
  */
 export async function reassignTrashTasksFromColumn(db, columnId, fallbackColumnId) {

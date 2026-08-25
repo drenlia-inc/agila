@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback, forwardRef, u
 import { useAppHeaderStickyTop } from '../hooks/useAppHeaderStickyTop';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronUp, Eye, EyeOff, Menu, X, Check, Trash2, Copy, FileText, ChevronLeft, ChevronRight, MessageCircle, UserPlus, Plus, Paperclip, Calendar, GitBranch } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, EyeOff, Menu, X, Check, Trash2, Copy, FileText, ChevronLeft, ChevronRight, MessageCircle, UserPlus, Plus, Paperclip, Calendar, GitBranch, Link2 } from 'lucide-react';
 import { Task, TeamMember, Priority, PriorityOption, Tag, Columns, Board, CurrentUser } from '../types';
 import { TaskViewMode, getEffectiveUserPreferences, subscribeToUserPreferences, updateUserPreference, ColumnVisibility } from '../utils/userPreferences';
 import { formatToYYYYMMDD, formatToYYYYMMDDHHmmss, parseLocalDate } from '../utils/dateUtils';
@@ -36,6 +36,10 @@ import {
 } from '../utils/agentMemberUi';
 import { userCanExport } from '../utils/permissions';
 import SprintAssignmentCurrentPill from './ui/SprintAssignmentCurrentPill';
+import { ModernCheckbox } from './ModernCheckbox';
+import TaskBulkActionGutter from './TaskBulkActionGutter';
+import type { ToggleTaskCheckedOptions } from '../utils/kanbanMultiSelect';
+import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
 
 interface ListViewScrollControls {
   canScrollLeft: boolean;
@@ -63,12 +67,35 @@ interface ListViewProps {
   boards?: Board[]; // To get project identifier from board
   siteSettings?: { [key: string]: string }; // Site settings for badge system
   currentUser?: CurrentUser | null; // Current user for admin checks
-  /** Parent/child/related links for the current board (list view dependency tree uses parent edges only) */
+  /** Parent/child/related links for the current board (tree uses parent edges; related is a mark only) */
   boardRelationships?: BoardTaskRelationship[];
   /** When set (specific sprint or `backlog`), Sprint column is hidden (redundant). `null` = all sprints, show column per prefs. */
   selectedSprintId?: string | null;
   /** false for viewer — disable inline edits / row mutation actions */
   canMutate?: boolean;
+  checkedTaskIds?: Set<string>;
+  onToggleTaskChecked?: (taskId: string, options?: ToggleTaskCheckedOptions) => void;
+  onClearAllChecked?: () => void;
+  bulkBusy?: boolean;
+  onBulkAddTag?: (taskIds: string[], tagId: string) => void;
+  onBulkCopy?: (taskIds: string[]) => void;
+  onBulkArchive?: (taskIds: string[]) => void;
+  onBulkDelete?: (taskIds: string[]) => void;
+  onBulkPermanentDelete?: (taskIds: string[]) => void;
+  onBulkSprint?: (taskIds: string[], sprintId: string | null) => void;
+  onBulkPriority?: (taskIds: string[], priorityId: string) => void;
+  onBulkMoveToBoard?: (taskIds: string[], boardId: string) => void;
+  onBulkAssignee?: (taskIds: string[], memberId: string | null) => void;
+  onBulkRequester?: (taskIds: string[], memberId: string | null) => void;
+  onBulkAddWatcher?: (taskIds: string[], memberId: string) => void;
+  onBulkRemoveWatcher?: (taskIds: string[], memberId: string) => void;
+  onBulkAddCollaborator?: (taskIds: string[], memberId: string) => void;
+  onBulkRemoveCollaborator?: (taskIds: string[], memberId: string) => void;
+  bulkUndoTaskIds?: string[] | null;
+  bulkUndoLabelKey?: string;
+  onBulkUndo?: () => void;
+  onClearBulkUndo?: () => void;
+  hasArchiveColumn?: boolean;
 }
 
 /** Matches GET /boards/:boardId/relationships rows */
@@ -177,6 +204,27 @@ function buildListViewDependencyOrder(
   }
 
   return { ordered, metaById };
+}
+
+function buildRelatedPeerIdsByTask(
+  relationships: BoardTaskRelationship[] | undefined,
+  visibleTaskIds: Set<string>
+): Map<string, string[]> {
+  const sets = new Map<string, Set<string>>();
+  const add = (from: string, to: string) => {
+    if (!sets.has(from)) sets.set(from, new Set());
+    sets.get(from)!.add(to);
+  };
+  for (const rel of relationships || []) {
+    if (rel.relationship !== 'related') continue;
+    if (visibleTaskIds.has(rel.taskId)) add(rel.taskId, rel.toTaskId);
+    if (visibleTaskIds.has(rel.toTaskId)) add(rel.toTaskId, rel.taskId);
+  }
+  const map = new Map<string, string[]>();
+  for (const [id, peers] of sets) {
+    map.set(id, [...peers]);
+  }
+  return map;
 }
 
 function ListDependencyGutter({
@@ -323,8 +371,32 @@ export default function ListView({
   boardRelationships = [],
   selectedSprintId = null,
   canMutate = true,
+  checkedTaskIds = new Set<string>(),
+  onToggleTaskChecked,
+  onClearAllChecked,
+  bulkBusy = false,
+  onBulkAddTag,
+  onBulkCopy,
+  onBulkArchive,
+  onBulkDelete,
+  onBulkPermanentDelete,
+  onBulkSprint,
+  onBulkPriority,
+  onBulkMoveToBoard,
+  onBulkAssignee,
+  onBulkRequester,
+  onBulkAddWatcher,
+  onBulkRemoveWatcher,
+  onBulkAddCollaborator,
+  onBulkRemoveCollaborator,
+  bulkUndoTaskIds = null,
+  bulkUndoLabelKey,
+  onBulkUndo,
+  onClearBulkUndo,
+  hasArchiveColumn = false,
 }: ListViewProps) {
   const { t } = useTranslation(['tasks', 'common']);
+  const columnDisplayTitle = useColumnDisplayTitle();
   const onEditTask = async (task: Task) => {
     if (!canMutate) return;
     return onEditTaskProp(task);
@@ -410,8 +482,6 @@ export default function ListView({
   const [canScrollRight, setCanScrollRight] = useState(false);
   const stickyHeaderTopPx = useAppHeaderStickyTop();
   const [showListDependencyTree, setShowListDependencyTree] = useState(false);
-  const [depsToggleHovered, setDepsToggleHovered] = useState(false);
-  const [columnMenuTooltipHovered, setColumnMenuTooltipHovered] = useState(false);
   const [rowActionTooltip, setRowActionTooltip] = useState<{
     taskId: string;
     action: 'copy' | 'delete';
@@ -514,6 +584,7 @@ export default function ListView({
   }, [schedulePersistColumnWidths]);
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const listRootRef = useRef<HTMLDivElement>(null);
   const tableHeaderScrollRef = useRef<HTMLDivElement>(null);
   const isSyncingHorizontalScrollRef = useRef(false);
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -730,11 +801,12 @@ export default function ListView({
     if (filteredColumns && typeof filteredColumns === 'object') {
       Object.values(filteredColumns).forEach(column => {
         if (column && column.tasks && Array.isArray(column.tasks)) {
-          columnCounts[column.title] = column.tasks.length;
+          const displayTitle = columnDisplayTitle(column);
+          columnCounts[displayTitle] = column.tasks.length;
           column.tasks.forEach(task => {
             tasks.push({ 
               ...task, 
-              columnTitle: column.title,
+              columnTitle: displayTitle,
               columnPosition: column.position || 0
             });
           });
@@ -742,7 +814,7 @@ export default function ListView({
       });
     }
     return tasks;
-  }, [filteredColumns]);
+  }, [filteredColumns, columnDisplayTitle]);
 
   // Sort tasks with multi-level sorting
   const sortedTasks = useMemo(() => {
@@ -846,6 +918,49 @@ export default function ListView({
     return { tableTasks: ordered, listDepMetaById: metaById };
   }, [sortedTasks, boardRelationships, showListDependencyTree]);
 
+  const relatedPeerIdsByTask = useMemo(() => {
+    if (!showListDependencyTree) return new Map<string, string[]>();
+    return buildRelatedPeerIdsByTask(
+      boardRelationships,
+      new Set(sortedTasks.map((task) => task.id))
+    );
+  }, [boardRelationships, showListDependencyTree, sortedTasks]);
+
+  const taskById = useMemo(
+    () => new Map(allTasks.map((task) => [task.id, task])),
+    [allTasks]
+  );
+
+  const tableTaskIds = useMemo(() => tableTasks.map((task) => task.id), [tableTasks]);
+
+  const handleTaskContentClick = useCallback(
+    (task: Task, event: React.MouseEvent) => {
+      if ((event.target as HTMLElement).closest('a')) return;
+      event.stopPropagation();
+      const modifier = event.ctrlKey || event.metaKey || event.shiftKey;
+      if (modifier && canMutate && onToggleTaskChecked) {
+        event.preventDefault();
+        window.getSelection()?.removeAllRanges();
+        if (clickTimerRef.current) {
+          clearTimeout(clickTimerRef.current);
+          clickTimerRef.current = null;
+        }
+        onToggleTaskChecked(
+          task.id,
+          event.shiftKey ? { range: true, orderedIds: tableTaskIds } : undefined
+        );
+        return;
+      }
+
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = setTimeout(() => {
+        onSelectTask(selectedTask?.id === task.id ? null : task);
+        clickTimerRef.current = null;
+      }, 250);
+    },
+    [canMutate, onSelectTask, onToggleTaskChecked, selectedTask?.id, tableTaskIds]
+  );
+
   const ticketColumnWidthBoost = showListDependencyTree ? 140 : 0;
 
   const columnSizeStyle = (column: ColumnConfig, isLastColumn = false) => {
@@ -943,8 +1058,8 @@ export default function ListView({
       if (button) {
         const rect = button.getBoundingClientRect();
         setColumnMenuPosition({
-          top: rect.bottom + window.scrollY + 4, // 4px spacing
-          left: rect.left + window.scrollX
+          top: rect.bottom + 4,
+          left: rect.left,
         });
         setShowColumnMenu('rowNumber');
       }
@@ -1028,65 +1143,64 @@ export default function ListView({
     return sprint?.name || '';
   };
 
-  const getMemberDisplay = (memberId: string | null | undefined, task?: Task) => {
+  const getMemberDisplay = (memberId: string | null | undefined) => {
     const member = memberId ? resolveTaskMember(members, memberId) : undefined;
     if (!member) {
       return (
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            <MemberAvatar member={null} size="sm" />
-            <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
-              {t('taskCard.noAssignee')}
-            </span>
-          </div>
-          <div className="flex gap-1">
-            {task?.watchers && task.watchers.length > 0 && (
-              <KanbanChromeTooltip label={formatMembersTooltip(task.watchers, 'watcher')} delayMs={0} wrapperClassName="flex items-center">
-                <span className="flex items-center">
-                  <Eye size={10} className="text-blue-500" />
-                  <span className="text-[9px] text-blue-600 ml-0.5 font-medium">{task.watchers.length}</span>
-                </span>
-              </KanbanChromeTooltip>
-            )}
-            {task?.collaborators && task.collaborators.length > 0 && (
-              <KanbanChromeTooltip label={formatMembersTooltip(task.collaborators, 'collaborator')} delayMs={0} wrapperClassName="flex items-center">
-                <span className="flex items-center">
-                  <UserPlus size={10} className="text-blue-500" />
-                  <span className="text-[9px] text-blue-600 ml-0.5 font-medium">{task.collaborators.length}</span>
-                </span>
-              </KanbanChromeTooltip>
-            )}
-          </div>
+        <div className="flex items-center gap-1">
+          <MemberAvatar member={null} size="sm" />
+          <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+            {t('taskCard.noAssignee')}
+          </span>
         </div>
       );
     }
 
     return (
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          <MemberAvatar member={member} members={members} size="sm" />
-          <span className="text-xs text-gray-900 truncate">{truncateMemberName(member.name)}</span>
-        </div>
-        
-        {/* Watchers & Collaborators Icons */}
-        <div className="flex gap-1">
-          {task?.watchers && task.watchers.length > 0 && (
-            <KanbanChromeTooltip label={formatMembersTooltip(task.watchers, 'watcher')} delayMs={0} wrapperClassName="flex items-center">
-              <span className="flex items-center">
-                <Eye size={10} className="text-blue-500" />
-                <span className="text-[9px] text-blue-600 ml-0.5 font-medium">{task.watchers.length}</span>
+      <div className="flex items-center gap-1">
+        <MemberAvatar member={member} members={members} size="sm" />
+        <span className="text-xs text-gray-900 truncate">{truncateMemberName(member.name)}</span>
+      </div>
+    );
+  };
+
+  const renderWatchersCollaborators = (task: Task) => {
+    const watchers = task.watchers || [];
+    const collaborators = task.collaborators || [];
+    if (watchers.length === 0 && collaborators.length === 0) return null;
+
+    return (
+      <div
+        className="flex cursor-default gap-1"
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {watchers.length > 0 && (
+          <KanbanChromeTooltip
+            label={formatMembersTooltip(watchers, 'watcher')}
+            delayMs={0}
+            wrapperClassName="flex items-center"
+          >
+            <span className="flex items-center">
+              <Eye size={10} className="text-blue-500" />
+              <span className="ml-0.5 text-[9px] font-medium text-blue-600">{watchers.length}</span>
+            </span>
+          </KanbanChromeTooltip>
+        )}
+        {collaborators.length > 0 && (
+          <KanbanChromeTooltip
+            label={formatMembersTooltip(collaborators, 'collaborator')}
+            delayMs={0}
+            wrapperClassName="flex items-center"
+          >
+            <span className="flex items-center">
+              <UserPlus size={10} className="text-blue-500" />
+              <span className="ml-0.5 text-[9px] font-medium text-blue-600">
+                {collaborators.length}
               </span>
-            </KanbanChromeTooltip>
-          )}
-          {task?.collaborators && task.collaborators.length > 0 && (
-            <KanbanChromeTooltip label={formatMembersTooltip(task.collaborators, 'collaborator')} delayMs={0} wrapperClassName="flex items-center">
-              <span className="flex items-center">
-                <UserPlus size={10} className="text-blue-500" />
-                <span className="text-[9px] text-blue-600 ml-0.5 font-medium">{task.collaborators.length}</span>
-              </span>
-            </KanbanChromeTooltip>
-          )}
-        </div>
+            </span>
+          </KanbanChromeTooltip>
+        )}
       </div>
     );
   };
@@ -1119,23 +1233,27 @@ export default function ListView({
     }
   }, [editingCell]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (not on the field trigger — that toggles).
   useEffect(() => {
+    if (!showDropdown) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(null);
-        setAssigneeDropdownCoords(null);
-        setPriorityDropdownCoords(null);
-        setStatusDropdownCoords(null);
-        setTagsDropdownCoords(null);
-      }
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      if (target.closest('[data-list-dropdown-trigger]')) return;
+      setShowDropdown(null);
+      setAssigneeDropdownCoords(null);
+      setPriorityDropdownCoords(null);
+      setStatusDropdownCoords(null);
+      setTagsDropdownCoords(null);
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [showDropdown]);
 
   // Close column menu when clicking outside
   useEffect(() => {
@@ -1157,6 +1275,25 @@ export default function ListView({
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }
+  }, [showColumnMenu]);
+
+  useEffect(() => {
+    if (showColumnMenu !== 'rowNumber') return;
+    const updatePosition = () => {
+      const button = columnMenuButtonRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      setColumnMenuPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+      });
+    };
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
   }, [showColumnMenu]);
 
   // Inline editing functions
@@ -1873,8 +2010,49 @@ export default function ListView({
     </colgroup>
   );
 
+  const selectedBulkIds = Array.from(checkedTaskIds);
+
   return (
-    <div className="rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+    <>
+      <TaskBulkActionGutter
+        anchorRef={listRootRef}
+        controlId="list-view"
+        selectedTaskIds={selectedBulkIds}
+        tasks={allTasks}
+        onClearSelection={() => onClearAllChecked?.()}
+        canMutate={canMutate}
+        busy={bulkBusy}
+        currentUser={currentUser}
+        members={members}
+        availableTags={availableTags}
+        availablePriorities={availablePriorities}
+        availableSprints={propSprints || []}
+        boards={boards || []}
+        currentBoardId={selectedBoard}
+        hasArchiveColumn={hasArchiveColumn}
+        onBulkAddTag={onBulkAddTag}
+        onBulkCopy={onBulkCopy}
+        onBulkArchive={onBulkArchive}
+        onBulkDelete={onBulkDelete}
+        onBulkPermanentDelete={onBulkPermanentDelete}
+        onBulkSprint={onBulkSprint}
+        onBulkPriority={onBulkPriority}
+        onBulkMoveToBoard={onBulkMoveToBoard}
+        onBulkAssignee={onBulkAssignee}
+        onBulkRequester={onBulkRequester}
+        onBulkAddWatcher={onBulkAddWatcher}
+        onBulkRemoveWatcher={onBulkRemoveWatcher}
+        onBulkAddCollaborator={onBulkAddCollaborator}
+        onBulkRemoveCollaborator={onBulkRemoveCollaborator}
+        bulkUndoTaskIds={bulkUndoTaskIds}
+        bulkUndoLabelKey={bulkUndoLabelKey}
+        onBulkUndo={onBulkUndo}
+        onClearBulkUndo={onClearBulkUndo}
+      />
+    <div
+      ref={listRootRef}
+      className="rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+    >
         {/* Viewport sticky — must stay outside overflow-hidden/auto ancestors. */}
         <div
           className="sticky z-40 overflow-visible bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-700 shadow-sm"
@@ -1906,7 +2084,7 @@ export default function ListView({
                       isAdmin={currentUser?.roles?.includes('admin') || false}
                     />
                     )}
-                    <span className="relative inline-flex shrink-0">
+                    <KanbanChromeTooltip label={t('listView.showHideColumns')} delayMs={0}>
                       <button
                         ref={columnMenuButtonRef}
                         type="button"
@@ -1914,17 +2092,10 @@ export default function ListView({
                         className="opacity-60 hover:opacity-100 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-opacity"
                         aria-label={t('listView.showHideColumns')}
                         data-tour-id="column-visibility"
-                        onMouseEnter={() => setColumnMenuTooltipHovered(true)}
-                        onMouseLeave={() => setColumnMenuTooltipHovered(false)}
                       >
                         <Menu size={14} />
                       </button>
-                      {columnMenuTooltipHovered ? (
-                        <span className={LIST_VIEW_INSTANT_TOOLTIP_CLASS}>
-                          {t('listView.showHideColumns')}
-                        </span>
-                      ) : null}
-                    </span>
+                    </KanbanChromeTooltip>
                   </div>
                 </div>
 
@@ -1955,34 +2126,29 @@ export default function ListView({
                           onClick={e => e.stopPropagation()}
                           onKeyDown={e => e.stopPropagation()}
                         >
-                          <button
-                            type="button"
-                            aria-label={t('listView.showHideDependencies')}
-                            aria-pressed={showListDependencyTree}
-                            onMouseEnter={() => setDepsToggleHovered(true)}
-                            onMouseLeave={() => setDepsToggleHovered(false)}
-                            onClick={() => {
-                              const next = !showListDependencyTree;
-                              setShowListDependencyTree(next);
-                              void updateUserPreference(
-                                'listViewShowDependencies',
-                                next,
-                                currentUser?.id ?? null
-                              );
-                            }}
-                            className={`p-1 rounded transition-colors ${
-                              showListDependencyTree
-                                ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-                                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                            }`}
-                          >
-                            <GitBranch size={14} />
-                          </button>
-                          {depsToggleHovered ? (
-                            <span className={LIST_VIEW_INSTANT_TOOLTIP_CLASS}>
-                              {t('listView.showHideDependencies')}
-                            </span>
-                          ) : null}
+                          <KanbanChromeTooltip label={t('listView.showHideDependencies')} delayMs={0}>
+                            <button
+                              type="button"
+                              aria-label={t('listView.showHideDependencies')}
+                              aria-pressed={showListDependencyTree}
+                              onClick={() => {
+                                const next = !showListDependencyTree;
+                                setShowListDependencyTree(next);
+                                void updateUserPreference(
+                                  'listViewShowDependencies',
+                                  next,
+                                  currentUser?.id ?? null
+                                );
+                              }}
+                              className={`p-1 rounded transition-colors ${
+                                showListDependencyTree
+                                  ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                              }`}
+                            >
+                              <GitBranch size={14} />
+                            </button>
+                          </KanbanChromeTooltip>
                         </span>
                       )}
                       <span className="truncate">
@@ -1994,18 +2160,22 @@ export default function ListView({
                         sortDirection === 'asc' ? <ChevronUp size={14} className="shrink-0" /> : <ChevronDown size={14} className="shrink-0" />
                       )}
                       {!cannotHideLast && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleColumnVisibility(column.key);
-                          }}
-                          className="opacity-50 hover:opacity-100 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-opacity"
-                          aria-label={t('listView.hideColumn', { column: columnLabel })}
-                          title={t('listView.hideColumn', { column: columnLabel })}
+                        <KanbanChromeTooltip
+                          label={t('listView.hideColumn', { column: columnLabel })}
+                          delayMs={0}
                         >
-                          <X size={12} />
-                        </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleColumnVisibility(column.key);
+                            }}
+                            className="opacity-50 hover:opacity-100 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-opacity"
+                            aria-label={t('listView.hideColumn', { column: columnLabel })}
+                          >
+                            <X size={12} />
+                          </button>
+                        </KanbanChromeTooltip>
                       )}
                     </div>
                   </div>
@@ -2057,6 +2227,8 @@ export default function ListView({
               </tr>
             ) : (
               tableTasks.map((task, index) => {
+                const taskChecked = checkedTaskIds.has(task.id);
+                const relatedPeerIds = relatedPeerIdsByTask.get(task.id) || [];
                 // Animation classes based on phase
                 const getAnimationClasses = () => {
                   if (animatingTask !== task.id) return '';
@@ -2078,9 +2250,19 @@ export default function ListView({
                   {/* Main task row */}
                   <tr
                     data-task-id={task.id}
-                    className={`group hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 ${
-                      selectedTask?.id === task.id ? 'bg-blue-50 dark:bg-blue-900' : ''
+                    className={`group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 ${
+                      taskChecked
+                        ? 'bg-green-50 dark:bg-green-950/40'
+                        : selectedTask?.id === task.id
+                          ? 'bg-blue-50 dark:bg-blue-900'
+                          : ''
                     } ${getAnimationClasses()}`}
+                    onMouseDown={(event) => {
+                      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+                        event.preventDefault();
+                      }
+                    }}
+                    onClick={(event) => handleTaskContentClick(task, event)}
                   >
                   {/* Row number and actions cell */}
                   <td
@@ -2091,10 +2273,12 @@ export default function ListView({
                       <span className="text-xs text-gray-500 mr-1">{index + 1}</span>
                       {canMutate && (
                       <div
-                        className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className={`flex items-center gap-0.5 transition-opacity ${
+                          taskChecked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
                         onMouseLeave={() => setRowActionTooltip(null)}
                       >
-                        {/* View Details Button - REMOVED: Click title/description to open details */}
+                        {/* Copy / Delete — hover; selection checkbox when checked */}
                         <span className="relative inline-flex">
                           <button
                             type="button"
@@ -2145,6 +2329,19 @@ export default function ListView({
                             </span>
                           ) : null}
                         </span>
+                        {taskChecked && onToggleTaskChecked && (
+                          <span
+                            className="inline-flex shrink-0 pl-0.5"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <ModernCheckbox
+                              checked
+                              onChange={() => onToggleTaskChecked(task.id)}
+                              size="sm"
+                              aria-label={t('kanbanSelect.selectTask', { ns: 'tasks' })}
+                            />
+                          </span>
+                        )}
                       </div>
                       )}
                     </div>
@@ -2160,7 +2357,17 @@ export default function ListView({
                       style={columnSizeStyle(column, isLastColumn)}
                     >
                       {column.key === 'title' && (
-                        <div className="max-w-full">
+                        <div
+                          className="max-w-full -mx-4 -my-2 px-4 py-2 flex flex-col justify-center min-h-[2.75rem]"
+                          onDoubleClick={(event) => {
+                            if (event.ctrlKey || event.metaKey || event.shiftKey) return;
+                            if (clickTimerRef.current) {
+                              clearTimeout(clickTimerRef.current);
+                              clickTimerRef.current = null;
+                            }
+                            startEditing(task.id, 'title', task.title);
+                          }}
+                        >
                           {editingCell?.taskId === task.id && editingCell?.field === 'title' ? (
                             <input
                               ref={editInputRef}
@@ -2177,24 +2384,9 @@ export default function ListView({
                             <div 
                               className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 rounded px-1 py-0.5" 
                               title={task.title}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Delay opening/closing TaskDetails to allow double-click to cancel it
-                                if (clickTimerRef.current) {
-                                  clearTimeout(clickTimerRef.current);
-                                }
-                                clickTimerRef.current = setTimeout(() => {
-                                  // Toggle: if clicking the same task that's already selected, close TaskDetails
-                                  if (selectedTask && selectedTask.id === task.id) {
-                                    onSelectTask(null);
-                                  } else {
-                                    onSelectTask(task);
-                                  }
-                                  clickTimerRef.current = null;
-                                }, 250); // Wait 250ms to distinguish from double-click
-                              }}
                               onDoubleClick={(e) => {
                                 e.stopPropagation();
+                                if (e.ctrlKey || e.metaKey || e.shiftKey) return;
                                 // Cancel pending single-click timer to prevent TaskDetails from opening
                                 if (clickTimerRef.current) {
                                   clearTimeout(clickTimerRef.current);
@@ -2267,30 +2459,12 @@ export default function ListView({
                                 className={`text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/60 rounded px-1 py-0.5 prose prose-sm dark:prose-invert max-w-none ${
                                   taskViewMode === 'shrink' ? 'task-description-shrink line-clamp-2 overflow-hidden' : 'break-words'
                                 }`} 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if ((e.target as HTMLElement).closest('a')) {
-                                    return;
-                                  }
-                                  // Delay opening/closing TaskDetails to allow double-click to cancel it
-                                  if (clickTimerRef.current) {
-                                    clearTimeout(clickTimerRef.current);
-                                  }
-                                  clickTimerRef.current = setTimeout(() => {
-                                    // Toggle: if clicking the same task that's already selected, close TaskDetails
-                                    if (selectedTask && selectedTask.id === task.id) {
-                                      onSelectTask(null);
-                                    } else {
-                                      onSelectTask(task);
-                                    }
-                                    clickTimerRef.current = null;
-                                  }, 250); // Wait 250ms to distinguish from double-click
-                                }}
                                 onDoubleClick={(e) => {
                                   e.stopPropagation();
                                   if ((e.target as HTMLElement).closest('a')) {
                                     return;
                                   }
+                                  if (e.ctrlKey || e.metaKey || e.shiftKey) return;
                                   // Cancel pending single-click timer to prevent TaskDetails from opening
                                   if (clickTimerRef.current) {
                                     clearTimeout(clickTimerRef.current);
@@ -2377,25 +2551,59 @@ export default function ListView({
                               '-'
                             )}
                           </div>
+                          {showListDependencyTree && relatedPeerIds.length > 0 && (
+                              <KanbanChromeTooltip
+                                label={[
+                                  t('relationships.relatedTasks'),
+                                  ...relatedPeerIds.map((peerId) => {
+                                    const peer = taskById.get(peerId);
+                                    if (!peer) return peerId;
+                                    const ticket = peer.ticket?.trim();
+                                    const title = peer.title?.trim() || t('trash.untitled');
+                                    return ticket ? `${ticket} · ${title}` : title;
+                                  }),
+                                ].join('\n')}
+                                delayMs={0}
+                              >
+                                <span
+                                  className="inline-flex shrink-0 cursor-default items-center gap-0.5 text-amber-500 dark:text-amber-400"
+                                  onMouseDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => event.stopPropagation()}
+                                  aria-label={t('relationships.relatedTasks')}
+                                >
+                                  <Link2 size={12} strokeWidth={2.25} />
+                                  {relatedPeerIds.length > 1 && (
+                                    <span className="text-[9px] font-medium">
+                                      {relatedPeerIds.length}
+                                    </span>
+                                  )}
+                                </span>
+                              </KanbanChromeTooltip>
+                            )}
                         </div>
                       )}
                       {column.key === 'assignee' && (
-                        <div className="relative">
-                          <div 
+                        <div className="relative flex min-h-[1.75rem] items-center gap-2">
+                          <div
                             className="cursor-pointer"
+                            data-list-dropdown-trigger
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleDropdown(task.id, 'assignee', e);
                             }}
                           >
-                            {getMemberDisplay(task.memberId, task)}
+                            {getMemberDisplay(task.memberId)}
                           </div>
+                          {renderWatchersCollaborators(task)}
                         </div>
                       )}
                       {column.key === 'priority' && (
                         <div className="relative flex items-center min-h-[1.75rem]">
                           <div 
                             className="cursor-pointer inline-flex items-center"
+                            data-list-dropdown-trigger
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleDropdown(task.id, 'priority', e);
@@ -2465,6 +2673,8 @@ export default function ListView({
                         <div className="relative flex items-center min-h-[1.75rem]">
                           <span 
                             className="inline-flex items-center px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded text-xs cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
+                            data-list-dropdown-trigger
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleDropdown(task.id, 'column', e);
@@ -2576,6 +2786,8 @@ export default function ListView({
                         <div className="relative flex items-center min-h-[1.75rem]">
                           <div 
                             className="cursor-pointer inline-flex items-center"
+                            data-list-dropdown-trigger
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleDropdown(task.id, 'tags', e);
@@ -2932,7 +3144,7 @@ export default function ListView({
                         if (!task) return;
                         
                         // Find current column title
-                        const currentColumn = boardColumns.find(c => c.title === task.columnTitle);
+                        const currentColumn = boardColumns.find(c => c.id === task.columnId);
                         const targetColumn = col;
                         
                         // Only animate if actually moving to a different column
@@ -2987,11 +3199,14 @@ export default function ListView({
                       }
                     }}
                     className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-50 dark:hover:bg-gray-700 block text-gray-900 dark:text-gray-100 ${
-                      task?.columnTitle === col.title ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : ''
+                      task?.columnId === col.id ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : ''
                     }`}
                   >
-                    {col.title}
-                    {task?.columnTitle === col.title && (
+                    {columnDisplayTitle({
+                      ...col,
+                      boardId: selectedBoard || '',
+                    })}
+                    {task?.columnId === col.id && (
                       <span className="ml-auto text-blue-600 dark:text-blue-400">✓</span>
                     )}
                   </button>
@@ -3121,7 +3336,7 @@ export default function ListView({
       {showColumnMenu === 'rowNumber' && columnMenuPosition && createPortal(
         <div 
           data-column-menu-portal
-          className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg min-w-[160px] z-50"
+          className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg min-w-[160px] z-[10050]"
           style={{
             top: columnMenuPosition.top,
             left: columnMenuPosition.left,
@@ -3351,5 +3566,6 @@ export default function ListView({
         onSubmit={handleListCommentSubmit}
       />
     </div>
+    </>
   );
 }

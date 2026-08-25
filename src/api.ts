@@ -4,6 +4,7 @@ import { versionDetection } from './utils/versionDetection';
 import { handleAuthError } from './utils/authErrorHandler';
 import { feDebug } from './utils/clientDebug';
 import { clearMediaSession } from './utils/mediaSession';
+import { normalizeTaskSoftDelete } from './utils/taskUtils';
 import {
   readTroubleshootingUnlocked,
   TROUBLESHOOTING_REQUEST_HEADER,
@@ -442,7 +443,7 @@ export const copyTask = async (
 // Tasks
 export const getTaskById = async (id: string) => {
   const { data } = await api.get<Task>(`/tasks/${id}`);
-  return data;
+  return normalizeTaskSoftDelete(data);
 };
 
 export const createTask = async (task: Task) => {
@@ -524,6 +525,18 @@ export const getBoardTrash = async (boardId: string) => {
 export const getBoardTrashCount = async (boardId: string) => {
   const { data } = await api.get<{ count: number }>(`/boards/${boardId}/trash/count`);
   return typeof data?.count === 'number' ? data.count : 0;
+};
+
+/** Trashed tasks matching a query, across boards (header search). */
+export const searchTrashedTasks = async (
+  q: string,
+  options?: { limit?: number; signal?: AbortSignal }
+) => {
+  const { data } = await api.get<{ tasks?: Task[] }>('/tasks/trash/search', {
+    params: { q, limit: options?.limit },
+    signal: options?.signal,
+  });
+  return Array.isArray(data?.tasks) ? data.tasks : [];
 };
 
 export const restoreBoard = async (id: string) => {

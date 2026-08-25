@@ -15,14 +15,32 @@ function agilaDevFavicon(): Plugin {
 export default defineConfig({
   plugins: [react(), agilaDevFavicon()],
   envPrefix: ['VITE_', 'DEMO_', 'MULTI_'] as string[],
+  // A second React copy makes every hook call fail ("dispatcher is null")
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
   // Pre-bundle lazy-route deps. On the demo Vite server, discovering these on first
   // task/profile click invalidates the dep cache and full-reloads mid-render
   // (Firefox: "dispatcher is null" / Invalid hook call).
   optimizeDeps: {
     include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react-i18next',
+      'i18next',
+      'i18next-browser-languagedetector',
       'lucide-react',
       'react-image-crop',
+      '@dnd-kit/core',
+      '@dnd-kit/sortable',
+      '@dnd-kit/modifiers',
       '@dnd-kit/utilities',
+      'axios',
+      'dompurify',
+      'socket.io-client',
+      'recharts',
+      'react-joyride',
       'marked',
       'exceljs',
       '@tiptap/react',

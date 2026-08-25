@@ -127,6 +127,8 @@ router.get('/', async (req, res, next) => {
       'HIGHLIGHT_OVERDUE_TASKS',
       'EFFORT_UNIT',
       'DEFAULT_FINISHED_COLUMN_NAMES',
+      // Bilingual workflow labels used to localize untouched seeded columns.
+      'DEFAULT_BOARD_COLUMNS',
       // Preference defaults for all authenticated users (not admin-only secrets)
       'DEFAULT_VIEW_MODE',
       'DEFAULT_TASK_VIEW_MODE',

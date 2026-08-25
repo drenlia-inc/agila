@@ -12,6 +12,7 @@ import {
   Calendar,
   Flag,
   Plus,
+  Undo2,
   User,
   UserCircle,
   UserPlus,
@@ -55,6 +56,18 @@ export type ColumnBulkActionBarProps = {
   onRemoveWatcher?: (memberId: string) => void;
   onAddCollaborator?: (memberId: string) => void;
   onRemoveCollaborator?: (memberId: string) => void;
+  /**
+   * One-shot undo for the last bulk action, shown inside the bar for views that
+   * keep their selection afterwards (the standalone FAB needs an empty one).
+   */
+  undoCount?: number;
+  undoLabelKey?: string;
+  onUndo?: () => void;
+  placement?: 'column' | 'fixed-left';
+  /** `fixed-left` only: viewport x offset, so the bar can hug the table edge. */
+  fixedLeftPx?: number | null;
+  /** `fixed-left` only: viewport right offset; anchors the bar's right edge exactly. */
+  fixedRightPx?: number | null;
 };
 
 type MenuKind =
@@ -110,6 +123,9 @@ function unionMembersFromTasks(
 const btnClass =
   'inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700';
 
+const undoBtnClass =
+  'inline-flex h-7 w-7 items-center justify-center rounded-md border border-amber-300 bg-amber-50 text-amber-800 shadow-sm transition-colors hover:bg-amber-100 hover:text-amber-900 disabled:opacity-40 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200 dark:hover:bg-amber-900/60';
+
 const MEMBER_MENU_WIDTH = 280;
 
 export default function ColumnBulkActionBar({
@@ -141,6 +157,12 @@ export default function ColumnBulkActionBar({
   onRemoveWatcher,
   onAddCollaborator,
   onRemoveCollaborator,
+  undoCount = 0,
+  undoLabelKey = 'kanbanSelect.undoBulkKeepSelection',
+  onUndo,
+  placement = 'column',
+  fixedLeftPx = null,
+  fixedRightPx = null,
 }: ColumnBulkActionBarProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -644,12 +666,22 @@ export default function ColumnBulkActionBar({
       : null;
 
   const actionBar = (
-          <div
-            ref={rootRef}
-            className="pointer-events-auto absolute top-full z-20 mt-1 flex -translate-x-1/2 flex-col gap-1"
-            style={{ left: 'calc(-1rem)' }}
-            data-testid={`column-bulk-fab-${columnId}`}
-          >
+    <div
+      ref={rootRef}
+      className={
+        placement === 'fixed-left'
+          ? 'pointer-events-auto fixed top-1/2 z-[70] flex -translate-y-1/2 flex-col gap-1'
+          : 'pointer-events-auto absolute top-full z-20 mt-1 flex -translate-x-1/2 flex-col gap-1'
+      }
+      style={
+        placement === 'column'
+          ? { left: 'calc(-1rem)' }
+          : fixedRightPx !== null
+            ? { right: fixedRightPx }
+            : { left: fixedLeftPx ?? 8 }
+      }
+      data-testid={`column-bulk-fab-${columnId}`}
+    >
             <div className="flex flex-col gap-1 items-center">
               <KanbanChromeTooltip
                 label={overlayOpen ? '' : t('kanbanSelect.selectedCount', { count: selectedCount })}
@@ -663,6 +695,23 @@ export default function ColumnBulkActionBar({
                   {selectedCount}
                 </div>
               </KanbanChromeTooltip>
+              {onUndo && undoCount > 0 && (
+                <KanbanChromeTooltip
+                  label={overlayOpen ? '' : t(undoLabelKey, { count: undoCount })}
+                  delayMs={0}
+                  placement="top"
+                >
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className={undoBtnClass}
+                    onClick={onUndo}
+                    aria-label={t(undoLabelKey, { count: undoCount })}
+                  >
+                    <Undo2 size={14} />
+                  </button>
+                </KanbanChromeTooltip>
+              )}
               {showUnselectAll && (
                 <KanbanChromeTooltip
                   label={overlayOpen ? '' : t('kanbanSelect.unselectAll')}
@@ -893,12 +942,15 @@ export default function ColumnBulkActionBar({
                 </button>
               </KanbanChromeTooltip>
             </div>
-          </div>
+    </div>
   );
+
+  const placedActionBar =
+    placement === 'fixed-left' ? createPortal(actionBar, document.body) : actionBar;
 
   return (
     <>
-      {actionBar}
+      {placedActionBar}
       {menuPortal}
       {addTagModalPortal}
       {boardConfirmPortal}

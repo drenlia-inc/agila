@@ -21,9 +21,20 @@ export const CHROME_TOOLTIP_SURFACE_CLASS =
 export const CHROME_TOOLTIP_MULTILINE_SURFACE_CLASS =
   `px-2 py-1.5 text-xs font-normal normal-case tracking-normal whitespace-pre-line text-left max-w-[min(18rem,calc(100vw-2rem))] break-words leading-snug rounded shadow-lg ${CHROME_TOOLTIP_COLORS} ${CHROME_TOOLTIP_RING} pointer-events-none`;
 
+const CHROME_TOOLTIP_RICH_BASE_CLASS =
+  `px-3 py-2 text-xs font-normal normal-case tracking-normal text-left max-w-sm rounded-lg shadow-lg ${CHROME_TOOLTIP_COLORS} ${CHROME_TOOLTIP_RING}`;
+
 /** Rich / multi-block hover content (Gantt bars, activity details). */
 export const CHROME_TOOLTIP_RICH_SURFACE_CLASS =
-  `px-3 py-2 text-xs font-normal normal-case tracking-normal text-left max-w-sm rounded-lg shadow-lg ${CHROME_TOOLTIP_COLORS} ${CHROME_TOOLTIP_RING} pointer-events-none`;
+  `${CHROME_TOOLTIP_RICH_BASE_CLASS} pointer-events-none`;
+
+/**
+ * Same rich surface, but hoverable: the pointer can enter it to select text or
+ * follow a link (task bar preview). Only use where the owner keeps the popup
+ * open on hover, otherwise it will swallow pointer events over the anchor.
+ */
+export const CHROME_TOOLTIP_RICH_INTERACTIVE_SURFACE_CLASS =
+  `${CHROME_TOOLTIP_RICH_BASE_CLASS} pointer-events-auto select-text cursor-auto`;
 
 /**
  * Interactive preview panels (comment hover). Keep pointer events so users can scroll/click inside.

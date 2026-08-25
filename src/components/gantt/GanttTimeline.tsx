@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Task } from '../../types';
 import { TaskHandle } from './TaskHandle';
 import { MoveHandle } from './MoveHandle';
-import { DRAG_TYPES, GanttDragItem } from './types';
+import { DRAG_TYPES, GanttDragItem, GanttTaskSelectOptions } from './types';
 import { ganttRowBoxStyle } from './ganttLayout';
 import TaskDependencyArrows from './TaskDependencyArrows';
 import { TaskBarTooltip } from './TaskBarTooltip';
@@ -46,7 +46,7 @@ interface GanttTimelineProps {
   getPriorityColor: (priority: string) => string;
   getTaskBarGridPosition: (task: any) => { startDayIndex: number; endDayIndex: number } | null;
   onSelectTask: (task: Task) => void;
-  onTaskSelect: (taskId: string) => void;
+  onTaskSelect: (taskId: string, options?: GanttTaskSelectOptions) => void;
   onRelationshipClick: (taskId: string, shiftKey?: boolean) => void;
   onTaskCreationMouseDown: (e: React.MouseEvent, dateString: string) => void;
   onTaskCreationMouseEnter: (e: React.MouseEvent, dateString: string) => void;
@@ -213,7 +213,15 @@ const TaskBar = ({
     if (isRelationshipMode) {
       onRelationshipClick(task.id, e.shiftKey);
     } else if (isMultiSelectMode) {
-      onTaskSelect(task.id);
+      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        window.getSelection()?.removeAllRanges();
+      }
+      onTaskSelect(task.id, {
+        additive: e.ctrlKey || e.metaKey,
+        range: e.shiftKey,
+        source: 'bar',
+      });
     }
     // Removed TaskDetails opening - taskbars no longer open TaskDetails on click
   };
@@ -244,6 +252,13 @@ const TaskBar = ({
           pointerEvents: isDragging ? 'none' : 'auto'
         }}
         onClick={handleClick}
+        onMouseDown={(e) => {
+          if (isMultiSelectMode && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+            e.stopPropagation();
+            // Modifier+click is selection, not text drag: block the native range.
+            e.preventDefault();
+          }
+        }}
       >
       {/* Move handle — center grip; single-day bars have no side room for a narrow grip zone */}
       {task.startDate && task.endDate && (() => {
@@ -297,7 +312,7 @@ const TaskBar = ({
         <div className="flex items-center mr-3">
           <ModernCheckbox
             checked={isSelected}
-            onChange={() => onTaskSelect(task.id)}
+            onChange={() => onTaskSelect(task.id, { source: 'bar' })}
             size="sm"
             onClick={(e) => e.stopPropagation()}
           />
@@ -445,7 +460,8 @@ const GanttTimeline = ({
   return (
     <div 
       ref={scrollContainerRef}
-      className="flex-1 overflow-x-auto relative"
+      className="gantt-timeline-container flex-1 overflow-x-auto relative"
+      data-gantt-timeline="true"
       style={{ overscrollBehavior: 'contain auto' }}
     >
       <div style={{ 

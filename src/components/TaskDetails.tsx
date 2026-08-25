@@ -55,6 +55,7 @@ import MemberPicker from './ui/MemberPicker';
 import WatchThisTaskButton from './ui/WatchThisTaskButton';
 import MemberAvatar from './ui/MemberAvatar';
 import PriorityPicker from './ui/PriorityPicker';
+import TaskStatusSelect from './ui/TaskStatusSelect';
 import AgentStatusButton from './AgentStatusButton';
 import {
   AGENT_MEMBER_ID,
@@ -2091,6 +2092,20 @@ export default function TaskDetails({
                   }`}
                 />
               </div>
+
+              <TaskStatusSelect
+                boardId={editedTask.boardId}
+                columnId={editedTask.columnId}
+                statusTitle={editedTask.status}
+                disabled={isSubmitting || isWritersLocked}
+                onChange={(column) =>
+                  handleUpdate({ columnId: column.id, status: column.title })
+                }
+                labelClassName="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
+                selectClassName={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 ${
+                  isSubmitting || isWritersLocked ? 'cursor-default' : ''
+                }`}
+              />
 
               <div className="col-span-2">
                 <div className="flex items-center justify-between gap-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">

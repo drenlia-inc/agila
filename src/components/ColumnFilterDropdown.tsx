@@ -3,6 +3,7 @@ import { Columns, Check, ChevronDown, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { onHelpReveal, takeHelpReveal } from '../utils/helpGoThere';
 import type { Columns as BoardColumns } from '../types';
+import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
 
 interface ColumnFilterDropdownProps {
   columns: BoardColumns;
@@ -13,6 +14,12 @@ interface ColumnFilterDropdownProps {
   fullWidth?: boolean;
   /** Clear saved override — default visibility (non-archived columns only). */
   onResetToDefault?: () => void;
+  /** Icon-sized trigger for packed headers (Calendar). */
+  compact?: boolean;
+  /** Override the trigger tooltip. */
+  triggerTitle?: string;
+  /** Skip the Kanban help-reveal hook when this copy is not the Tools filter. */
+  enableHelpReveal?: boolean;
 }
 
 const isArchivedColumn = (column: { is_archived?: boolean | number }) =>
@@ -25,8 +32,12 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
   selectedBoard,
   fullWidth = false,
   onResetToDefault,
+  compact = false,
+  triggerTitle,
+  enableHelpReveal = true,
 }) => {
   const { t } = useTranslation('common');
+  const columnDisplayTitle = useColumnDisplayTitle();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -45,17 +56,22 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
   }, []);
 
   useEffect(() => {
+    if (!enableHelpReveal) return;
     const openFromHelp = () => {
       if (!takeHelpReveal('columnFilter')) return;
       window.setTimeout(() => setIsOpen(true), 0);
     };
     openFromHelp();
     return onHelpReveal(openFromHelp);
-  }, []);
+  }, [enableHelpReveal]);
 
   const columnList = Object.values(columns).sort((a, b) => (a.position || 0) - (b.position || 0));
-  const allVisible = columnList.length > 0 && visibleColumns.length === columnList.length;
-  const someVisible = visibleColumns.length > 0 && visibleColumns.length < columnList.length;
+  const liveVisibleColumns = useMemo(
+    () => visibleColumns.filter((id) => columns[id]),
+    [visibleColumns, columns]
+  );
+  const allVisible = columnList.length > 0 && liveVisibleColumns.length === columnList.length;
+  const someVisible = liveVisibleColumns.length > 0 && liveVisibleColumns.length < columnList.length;
 
   const defaultVisibleColumnIds = useMemo(
     () => columnList.filter((col) => !isArchivedColumn(col)).map((col) => col.id),
@@ -63,11 +79,11 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
   );
 
   const isCustomized = useMemo(() => {
-    const current = [...visibleColumns].sort();
+    const current = [...liveVisibleColumns].sort();
     const defaults = [...defaultVisibleColumnIds].sort();
     if (current.length !== defaults.length) return true;
     return current.some((id, index) => id !== defaults[index]);
-  }, [visibleColumns, defaultVisibleColumnIds]);
+  }, [liveVisibleColumns, defaultVisibleColumnIds]);
 
   const handleToggleColumn = (columnId: string) => {
     if (visibleColumns.includes(columnId)) {
@@ -82,14 +98,19 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
   };
 
   const handleSelectAll = () => {
-    const allColumnIds = columnList.map(col => col.id);
-    onColumnsChange(allColumnIds);
+    // Archive stays off unless the user ticks it — All means every active status.
+    onColumnsChange(
+      defaultVisibleColumnIds.length > 0
+        ? defaultVisibleColumnIds
+        : columnList.slice(0, 1).map((col) => col.id)
+    );
   };
 
   const handleSelectNone = () => {
-    // Keep at least one column visible
-    if (columnList.length > 0) {
-      onColumnsChange([columnList[0].id]);
+    const fallback =
+      defaultVisibleColumnIds[0] || columnList[0]?.id;
+    if (fallback) {
+      onColumnsChange([fallback]);
     }
   };
 
@@ -103,25 +124,36 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
     <div
       className={`relative${fullWidth ? ' w-full' : ''}`}
       ref={dropdownRef}
-      data-help-target="kanban-column-filter"
+      data-help-target={enableHelpReveal ? 'kanban-column-filter' : 'calendar-column-filter'}
     >
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`relative flex items-center gap-1.5 px-2 py-1 pr-6 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors${
-          fullWidth ? ' w-full' : ''
-        }`}
-        title={t('columnFilterDropdown.filterColumns')}
+        className={
+          compact
+            ? `relative inline-flex h-8 items-center justify-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors ${
+                isCustomized
+                  ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60'
+                  : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+              } ${isCustomized && onResetToDefault ? 'pr-6' : ''}`
+            : `relative flex items-center gap-1.5 px-2 py-1 pr-6 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors${
+                fullWidth ? ' w-full' : ''
+              }`
+        }
+        title={triggerTitle || t('columnFilterDropdown.filterColumns')}
+        aria-label={triggerTitle || t('columnFilterDropdown.filterColumns')}
+        aria-expanded={isOpen}
       >
         <Columns size={14} className="shrink-0" />
-        <span className="min-w-0 flex-1 truncate hidden sm:inline">
+        <span className={compact ? '' : 'min-w-0 flex-1 truncate hidden sm:inline'}>
           {t('columnFilterDropdown.columns')}
         </span>
         {someVisible && (
           <span className="shrink-0 px-1.5 py-0.5 text-xs leading-none bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full">
-            {visibleColumns.length}
+            {liveVisibleColumns.length}
           </span>
         )}
-        {!isCustomized && (
+        {!compact && !isCustomized && (
           <ChevronDown
             size={12}
             className={`pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -150,6 +182,7 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
                 <button
                   onClick={handleSelectAll}
                   className="px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded"
+                  title={t('columnFilterDropdown.allHint')}
                 >
                   {t('columnFilterDropdown.all')}
                 </button>
@@ -187,7 +220,7 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
                     {isVisible && <Check size={12} className="text-blue-600 dark:text-blue-400" />}
                   </div>
                   <span className={`truncate ${isArchived ? 'text-gray-500 dark:text-gray-400 italic' : 'text-gray-700 dark:text-gray-300'}`}>
-                    {column.title}
+                    {columnDisplayTitle(column)}
                     {isArchived && t('columnFilterDropdown.archive')}
                   </span>
                   {isDisabled && (

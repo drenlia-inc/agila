@@ -13,20 +13,78 @@ export interface HeaderSearchTask extends Pick<
   commentsText?: string;
   assigneeName?: string;
   requesterName?: string;
+  /** Lives in a column flagged as archived — hidden on the board by default. */
+  archived?: boolean;
+  /** Set for soft-deleted tasks, which only exist in the board's Trash. */
+  deletedAt?: string | null;
 }
 
 /** Which field produced the hit shown on the row. */
 type MatchReason = 'ticket' | 'title' | 'description' | 'comment' | 'assignee' | 'requester';
+
+/** Active work first, then the two easy-to-lose states. */
+type ResultGroup = 'live' | 'archived' | 'trash';
+
+interface ResultRow {
+  task: HeaderSearchTask;
+  score: number;
+  reason: MatchReason;
+  group: ResultGroup;
+}
 
 interface HeaderTaskSearchProps {
   value: string;
   onChange: (text: string) => void;
   tasks?: HeaderSearchTask[];
   onJumpToTask?: (task: HeaderSearchTask) => void;
+  /** Looks up soft-deleted tasks, which are not part of the board payload. */
+  onSearchTrashed?: (query: string, signal: AbortSignal) => Promise<HeaderSearchTask[]>;
 }
 
 const DEBOUNCE_MS = 250;
 const MAX_RESULTS = 40;
+const TRASH_MIN_QUERY = 2;
+
+/** Rank a task against the query, mirroring the fields the board filter uses. */
+function scoreTask(
+  task: HeaderSearchTask,
+  query: string
+): { score: number; reason: MatchReason } | null {
+  const ticket = (task.ticket || '').toLowerCase();
+  const title = (task.title || '').toLowerCase();
+  const ticketHit = ticket.includes(query);
+  const titleHit = title.includes(query);
+  if (ticketHit || titleHit) {
+    const exact = ticket === query || title === query;
+    const prefix = ticket.startsWith(query) || title.startsWith(query);
+    return {
+      score: exact ? 0 : prefix ? 1 : 2,
+      reason: ticketHit ? 'ticket' : 'title',
+    };
+  }
+  if ((task.assigneeName || '').toLowerCase().includes(query)) {
+    return { score: 3, reason: 'assignee' };
+  }
+  if ((task.requesterName || '').toLowerCase().includes(query)) {
+    return { score: 4, reason: 'requester' };
+  }
+  if ((task.descriptionText || '').toLowerCase().includes(query)) {
+    return { score: 5, reason: 'description' };
+  }
+  if ((task.commentsText || '').toLowerCase().includes(query)) {
+    return { score: 6, reason: 'comment' };
+  }
+  return null;
+}
+
+const byScoreThenLabel = (a: ResultRow, b: ResultRow) => {
+  if (a.score !== b.score) return a.score - b.score;
+  return (a.task.ticket || a.task.title).localeCompare(
+    b.task.ticket || b.task.title,
+    undefined,
+    { numeric: true, sensitivity: 'base' }
+  );
+};
 
 /**
  * Compact board search bound to searchFilters.text (same pipeline as Tools filter).
@@ -38,6 +96,7 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
   onChange,
   tasks = [],
   onJumpToTask,
+  onSearchTrashed,
 }) => {
   const { t } = useTranslation();
   const [draft, setDraft] = useState(value);
@@ -52,7 +111,7 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
     width: number;
     maxHeight: number;
   } | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [trashedTasks, setTrashedTasks] = useState<HeaderSearchTask[]>([]);
   const lastEmittedRef = useRef(value);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,48 +119,31 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
 
   const query = draft.trim().toLowerCase();
 
-  // Same fields the board filter searches, so the dropdown count lines up with
-  // the column counters instead of showing a narrower ticket/title subset.
+  // Same fields the board filter searches, so the dropdown lines up with the
+  // column counters instead of showing a narrower ticket/title subset. Archived
+  // and trashed hits are kept but pushed below active work.
   const matches = useMemo(() => {
     if (!query) return [];
-    const scored: Array<{ task: HeaderSearchTask; score: number; reason: MatchReason }> = [];
+    const live: ResultRow[] = [];
+    const archived: ResultRow[] = [];
     for (const task of tasks) {
-      const ticket = (task.ticket || '').toLowerCase();
-      const title = (task.title || '').toLowerCase();
-      const ticketHit = ticket.includes(query);
-      const titleHit = title.includes(query);
-      let score = -1;
-      let reason: MatchReason | null = null;
-      if (ticketHit || titleHit) {
-        const exact = ticket === query || title === query;
-        const prefix = ticket.startsWith(query) || title.startsWith(query);
-        score = exact ? 0 : prefix ? 1 : 2;
-        reason = ticketHit ? 'ticket' : 'title';
-      } else if ((task.assigneeName || '').toLowerCase().includes(query)) {
-        score = 3;
-        reason = 'assignee';
-      } else if ((task.requesterName || '').toLowerCase().includes(query)) {
-        score = 4;
-        reason = 'requester';
-      } else if ((task.descriptionText || '').toLowerCase().includes(query)) {
-        score = 5;
-        reason = 'description';
-      } else if ((task.commentsText || '').toLowerCase().includes(query)) {
-        score = 6;
-        reason = 'comment';
-      }
-      if (reason) scored.push({ task, score, reason });
+      const hit = scoreTask(task, query);
+      if (!hit) continue;
+      (task.archived ? archived : live).push({ task, ...hit, group: task.archived ? 'archived' : 'live' });
     }
-    scored.sort((a, b) => {
-      if (a.score !== b.score) return a.score - b.score;
-      return (a.task.ticket || a.task.title).localeCompare(
-        b.task.ticket || b.task.title,
-        undefined,
-        { numeric: true, sensitivity: 'base' }
-      );
-    });
-    return scored.slice(0, MAX_RESULTS);
-  }, [query, tasks]);
+
+    const trash: ResultRow[] = [];
+    for (const task of trashedTasks) {
+      const hit = scoreTask(task, query);
+      if (!hit) continue;
+      trash.push({ task, ...hit, group: 'trash' });
+    }
+
+    live.sort(byScoreThenLabel);
+    archived.sort(byScoreThenLabel);
+    trash.sort(byScoreThenLabel);
+    return [...live, ...archived, ...trash].slice(0, MAX_RESULTS);
+  }, [query, tasks, trashedTasks]);
 
   // Sync from parent (e.g. SearchInterface / clear filters)
   useEffect(() => {
@@ -112,15 +154,33 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
   }, [value]);
 
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
     setKeyboardIndex(-1);
     setHoverIndex(-1);
   }, [query]);
+
+  // Trash lives outside the board payload, so it needs a lookup. Debounced and
+  // aborted per keystroke so typing does not queue up requests.
+  useEffect(() => {
+    if (!onSearchTrashed || !open || query.length < TRASH_MIN_QUERY) {
+      setTrashedTasks([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      onSearchTrashed(query, controller.signal)
+        .then((found) => {
+          if (!controller.signal.aborted) setTrashedTasks(found);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setTrashedTasks([]);
+        });
+    }, DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [onSearchTrashed, open, query]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -160,19 +220,19 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
     onChange(next);
   };
 
-  const scheduleEmit = (next: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => emit(next), DEBOUNCE_MS);
-  };
-
+  /**
+   * Typing only drives the dropdown — the board filter waits for Enter. Filtering
+   * per keystroke emptied whichever board you happened to be on, even when the
+   * match lived somewhere else. Emptying the box does clear an applied filter,
+   * so the board can never stay filtered by text that is no longer there.
+   */
   const handleChange = (next: string) => {
     setDraft(next);
-    scheduleEmit(next);
     setOpen(true);
+    if (!next && lastEmittedRef.current) emit('');
   };
 
   const handleClear = () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
     setDraft('');
     emit('');
     setOpen(false);
@@ -181,16 +241,14 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
 
   const jumpTo = (task: HeaderSearchTask) => {
     if (!onJumpToTask) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
     setDraft('');
     emit('');
     setOpen(false);
     onJumpToTask(task);
   };
 
-  /** Enter with no row picked: apply the typed filter now, don't wait out the debounce. */
+  /** Enter with no row picked: commit the typed text as the board filter. */
   const applyFilterNow = () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (draft !== lastEmittedRef.current) emit(draft);
     setOpen(false);
   };
@@ -289,13 +347,17 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
           >
             {matches.length > 0 ? (
               <>
-                <div className="border-b border-gray-100 px-3 py-1.5 text-[11px] text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                  {t('searchInterface.headerTasksFound', { count: matches.length })}
+                <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-1.5 text-[11px] text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                  <span>{t('searchInterface.headerTasksFound', { count: matches.length })}</span>
+                  <span className="shrink-0 text-gray-400 dark:text-gray-500">
+                    {t('searchInterface.headerEnterToFilter')}
+                  </span>
                 </div>
-                {matches.map(({ task, reason }, index) => {
+                {matches.map(({ task, reason, group }, index) => {
                   const ticket = task.ticket || task.id;
                   const active =
                     keyboardIndex >= 0 ? index === keyboardIndex : index === hoverIndex;
+                  const startsGroup = group !== 'live' && matches[index - 1]?.group !== group;
                   const reasonLabel =
                     reason === 'ticket'
                       ? t('searchInterface.headerMatchTicket')
@@ -311,54 +373,79 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
                               ? t('searchInterface.headerMatchDescription')
                               : t('searchInterface.headerMatchComment');
                   return (
-                    <button
-                      key={task.id}
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm ${
-                        active
-                          ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/40 dark:text-blue-100'
-                          : 'text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                      onMouseEnter={() => setHoverIndex(index)}
-                      onMouseLeave={() => setHoverIndex((prev) => (prev === index ? -1 : prev))}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => jumpTo(task)}
-                    >
-                      <span
-                        className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: task.priorityColor || '#6B7280' }}
-                        aria-hidden
-                      />
-                      <span className="min-w-0">
-                        <span className="block truncate">
-                          <span className="font-medium">{ticket}</span>
-                          <span className="text-gray-600 dark:text-gray-300">
-                            {': '}
-                            {task.title}
+                    <React.Fragment key={task.id}>
+                      {startsGroup ? (
+                        <div className="border-y border-gray-100 bg-gray-50/70 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-700/40 dark:text-gray-400">
+                          {group === 'archived'
+                            ? t('searchInterface.headerGroupArchived')
+                            : t('searchInterface.headerGroupTrash')}
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm ${
+                          active
+                            ? 'bg-blue-50 text-blue-900 dark:bg-blue-900/40 dark:text-blue-100'
+                            : 'text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                        onMouseEnter={() => setHoverIndex(index)}
+                        onMouseLeave={() => setHoverIndex((prev) => (prev === index ? -1 : prev))}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => jumpTo(task)}
+                      >
+                        <span
+                          className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: task.priorityColor || '#6B7280' }}
+                          aria-hidden
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate">
+                            <span className="font-medium">{ticket}</span>
+                            <span
+                              className={`text-gray-600 dark:text-gray-300 ${
+                                group === 'trash' ? 'line-through' : ''
+                              }`}
+                            >
+                              {': '}
+                              {task.title}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                            {group === 'archived' ? (
+                              <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                                {t('searchInterface.headerBadgeArchived')}
+                              </span>
+                            ) : null}
+                            {group === 'trash' ? (
+                              <span className="inline-block rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/60 dark:text-red-200">
+                                {t('searchInterface.headerBadgeTrash')}
+                              </span>
+                            ) : null}
+                            {task.status ? (
+                              <span className="inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                {task.status}
+                              </span>
+                            ) : null}
+                            {reasonLabel ? (
+                              <span className="inline-block truncate text-[10px] text-gray-500 dark:text-gray-400">
+                                {reasonLabel}
+                              </span>
+                            ) : null}
                           </span>
                         </span>
-                        <span className="mt-0.5 flex flex-wrap items-center gap-1">
-                          {task.status ? (
-                            <span className="inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                              {task.status}
-                            </span>
-                          ) : null}
-                          {reasonLabel ? (
-                            <span className="inline-block truncate text-[10px] text-gray-500 dark:text-gray-400">
-                              {reasonLabel}
-                            </span>
-                          ) : null}
-                        </span>
-                      </span>
-                    </button>
+                      </button>
+                    </React.Fragment>
                   );
                 })}
               </>
             ) : (
               <div className="px-3 py-3 text-center text-sm text-gray-500 dark:text-gray-400">
                 {t('searchInterface.headerNoTasksFound')}
+                <span className="mt-1 block text-[11px] text-gray-400 dark:text-gray-500">
+                  {t('searchInterface.headerEnterToFilter')}
+                </span>
               </div>
             )}
           </div>,

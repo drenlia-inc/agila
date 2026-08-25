@@ -66,7 +66,7 @@ import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { scrollKanbanPageToTopFastSmooth } from './utils/kanbanScroll';
 import { applyActiveColumnFilters } from './utils/columnFilters';
-import { closeBoardTrashView } from './utils/boardTrashEvents';
+import { closeBoardTrashView, openBoardTrashView } from './utils/boardTrashEvents';
 import {
   findBoardIdForTask,
   scrollViewportToTaskWhenReady,
@@ -133,6 +133,7 @@ import {
   hasActiveFilters,
   wouldTaskBeFilteredOut,
   clearTaskSoftDelete,
+  isTaskSoftDeleted,
   sumTaskEffort,
 } from './utils/taskUtils';
 import { dedupeTasksInColumns } from './utils/taskReorderingUtils';
@@ -140,7 +141,7 @@ import { moveTaskToBoard } from './api';
 import { customCollisionDetection, calculateGridStyle } from './utils/dragDropUtils';
 import { clearCustomCursor } from './utils/cursorUtils';
 import { generateUniqueBoardName } from './utils/boardUtils';
-import { renumberColumns, isArchivedColumnFlag } from './utils/columnUtils';
+import { renumberColumns, isArchivedColumnFlag, reconcileVisibleColumnIds, sameColumnIdSet } from './utils/columnUtils';
 import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveKanbanDropIndex, snapshotColumnTaskOrder, restoreColumnTaskOrders, TaskDropPlacement } from './utils/taskReorderingUtils';
 import { getTaskColumnId, orderedCheckedTasksInColumn } from './utils/kanbanMultiSelect';
 import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
@@ -154,7 +155,11 @@ import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { SimpleDragDropManager } from './components/dnd/SimpleDragDropManager';
 import SimpleDragOverlay from './components/dnd/SimpleDragOverlay';
 import { SYSTEM_MEMBER_ID, UNASSIGNED_MEMBER_FILTER_ID, WEBSOCKET_THROTTLE_MS } from './constants/appConstants';
-import { checkInstanceStatusOnError, getDefaultPriorityName } from './utils/appHelpers';
+import {
+  checkInstanceStatusOnError,
+  getDefaultPriorityName,
+  getDefaultPriorityOption,
+} from './utils/appHelpers';
 
 // Extend Window interface for WebSocket flags
 declare global {
@@ -526,8 +531,27 @@ function AppContent() {
   // Column visibility state for each board
   const [boardColumnVisibility, setBoardColumnVisibility] = useState<{[boardId: string]: string[]}>({});
 
+  /**
+   * Columns a jump had to reveal (Archive is hidden by default). View-only and
+   * never persisted, so the saved board layout and the hidden-by-default rule
+   * survive a reload.
+   */
+  const [temporaryColumnReveals, setTemporaryColumnReveals] = useState<{[boardId: string]: string[]}>({});
+
+  /** An explicit visibility choice replaces any jump-time reveal for that board. */
+  const clearTemporaryColumnReveal = (boardId: string) => {
+    setTemporaryColumnReveals(prev => {
+      if (!prev[boardId]) return prev;
+      const next = { ...prev };
+      delete next[boardId];
+      return next;
+    });
+  };
+
   // Handle column visibility changes
   const handleBoardColumnVisibilityChange = (boardId: string, visibleColumns: string[]) => {
+    clearTemporaryColumnReveal(boardId);
+
     const newVisibility = {
       ...boardColumnVisibility,
       [boardId]: visibleColumns
@@ -554,6 +578,7 @@ function AppContent() {
 
   /** Remove saved override so Kanban falls back to default (non-archived columns visible). */
   const handleBoardColumnVisibilityReset = (boardId: string) => {
+    clearTemporaryColumnReveal(boardId);
     if (!boardColumnVisibility[boardId]) return;
     const newVisibility = { ...boardColumnVisibility };
     delete newVisibility[boardId];
@@ -691,6 +716,47 @@ function AppContent() {
   }, [currentUser?.id, isAdminUser]);
 
   useEffect(() => subscribePerfTestsPreference(setUserPerfTestsEnabled), []);
+
+  const columnIdsKey = useMemo(
+    () => Object.keys(columns).sort().join('|'),
+    [columns]
+  );
+
+  // Drop deleted statuses from saved visibility. A leftover id makes the Status
+  // picker look customized even when the user never hid anything.
+  useEffect(() => {
+    if (!selectedBoard || !columnIdsKey) return;
+
+    const remaining = columnsRef.current;
+    const current = boardColumnVisibility[selectedBoard];
+    if (current) {
+      const next = reconcileVisibleColumnIds(current, remaining);
+      if (next === null) {
+        handleBoardColumnVisibilityReset(selectedBoard);
+      } else if (!sameColumnIdSet(next, current)) {
+        handleBoardColumnVisibilityChange(selectedBoard, next);
+      }
+    }
+
+    const calMap = loadUserPreferences(currentUser?.id).calendarColumnVisibility || {};
+    const calCurrent = calMap[selectedBoard];
+    if (!calCurrent) return;
+    const calNext = reconcileVisibleColumnIds(calCurrent, remaining);
+    if (calNext === null) {
+      if (!(selectedBoard in calMap)) return;
+      const updated = { ...calMap };
+      delete updated[selectedBoard];
+      updateCurrentUserPreference('calendarColumnVisibility', updated);
+      return;
+    }
+    if (!sameColumnIdSet(calNext, calCurrent)) {
+      updateCurrentUserPreference('calendarColumnVisibility', {
+        ...calMap,
+        [selectedBoard]: calNext,
+      });
+    }
+    // Visibility handlers close over the latest map; columnIdsKey is the trigger.
+  }, [columnIdsKey, selectedBoard, currentUser?.id, boardColumnVisibility]);
 
   /** Same-board relationship edges per board — used for linked-tasks-only tab counts on non-selected boards. */
   const relationshipsByBoardIdRef = useRef<Record<string, unknown[]>>({});
@@ -1750,7 +1816,10 @@ function AppContent() {
   // Update selectedTask when columns data is refreshed (for auto-refresh comments)
   useEffect(() => {
     if (selectedTask && Object.keys(columns).length > 0) {
-      // Find the updated version of the selected task in the refreshed data
+      // A trash selection is not on the live board. Adopting a column copy
+      // (and stripping deletedAt) made TaskDetails look editable after a
+      // round-trip through the Task Page.
+      if (isTaskSoftDeleted(selectedTask)) return;
       for (const column of Object.values(columns)) {
         const updatedTask = column.tasks.find(task => task.id === selectedTask.id);
         if (updatedTask) {
@@ -3377,6 +3446,11 @@ function AppContent() {
         ? formatToYYYYMMDD(autoSprint.end_date)
         : taskStartDate);
 
+    // The server resolves the priority row from the name, but it echoes the request
+    // back, so send the id/color too or the new card reads as "No Priority" until a
+    // later refresh supplies them.
+    const defaultPriorityOption = getDefaultPriorityOption(availablePriorities);
+
     const newTask: Task = {
       id: generateUUID(),
       title: t('taskCard.newTask'),
@@ -3388,6 +3462,9 @@ function AppContent() {
       columnId,
       position: 0, // Backend will handle positioning
       priority: getDefaultPriority(), // Use frontend default priority
+      priorityId: defaultPriorityOption?.id,
+      priorityName: defaultPriorityOption?.priority,
+      priorityColor: defaultPriorityOption?.color,
       requesterId: currentUserMember.id,
       boardId: selectedBoard,
       comments: [],
@@ -3618,6 +3695,17 @@ function AppContent() {
   };
 
   const handleEditTask = useCallback(async (task: Task, options?: { skipActivity?: boolean; localOnly?: boolean; skipLoading?: boolean }) => {
+    if (isTaskSoftDeleted(task) || isTaskSoftDeleted(selectedTask)) {
+      if (selectedTask && selectedTask.id === task.id) {
+        setSelectedTask({
+          ...selectedTask,
+          ...task,
+          deletedAt: selectedTask.deletedAt || task.deletedAt || null,
+          deletedBy: selectedTask.deletedBy || task.deletedBy || null,
+        });
+      }
+      return;
+    }
     // Optimistic update
     const previousColumns = { ...columns };
     const previousFilteredColumns = { ...(taskFilters.filteredColumns || {}) };
@@ -4644,6 +4732,7 @@ function AppContent() {
     clearAllChecked,
     warnWipOnce,
     checkedTaskIds,
+    replaceCheckedTaskIds,
     toggleTaskChecked,
     toggleColumnChecked,
     isMultiSelectDragLocked,
@@ -5142,15 +5231,82 @@ function AppContent() {
     }
   };
 
+  /**
+   * Reveal the task's column when it is hidden (Archive is hidden by default),
+   * otherwise the jump target never renders and the scroll finds nothing. The
+   * reveal is view-only: nothing is written to the saved column layout.
+   */
+  const revealHiddenColumnForTask = useCallback(
+    (boardId: string, taskId: string): { revealed: boolean; columnTitle?: string } => {
+      const boardColumns: Columns =
+        boardId === selectedBoard && Object.keys(columnsRef.current).length > 0
+          ? columnsRef.current
+          : boards.find((board) => board.id === boardId)?.columns || {};
+
+      const holder = Object.values(boardColumns).find((column) =>
+        column?.tasks?.some((row) => row.id === taskId)
+      );
+      if (!holder) return { revealed: false };
+
+      const visible =
+        boardColumnVisibility[boardId] ??
+        Object.values(boardColumns)
+          .filter((column) => column && !isArchivedColumnFlag(column))
+          .map((column) => column.id);
+      if (visible.includes(holder.id)) return { revealed: false };
+
+      setTemporaryColumnReveals((prev) => {
+        const current = prev[boardId] || [];
+        if (current.includes(holder.id)) return prev;
+        return { ...prev, [boardId]: [...current, holder.id] };
+      });
+
+      return { revealed: true, columnTitle: holder.title };
+    },
+    [boardColumnVisibility, boards, selectedBoard]
+  );
+
+  /**
+   * What Kanban actually renders: saved layout plus any column a jump revealed
+   * for this session.
+   */
+  const effectiveBoardColumnVisibility = useMemo(() => {
+    const revealBoardIds = Object.keys(temporaryColumnReveals);
+    if (revealBoardIds.length === 0) return boardColumnVisibility;
+
+    const merged = { ...boardColumnVisibility };
+    revealBoardIds.forEach((boardId) => {
+      const revealed = temporaryColumnReveals[boardId];
+      if (!revealed?.length) return;
+
+      const boardColumns: Columns =
+        boardId === selectedBoard && Object.keys(columns).length > 0
+          ? columns
+          : boards.find((board) => board.id === boardId)?.columns || {};
+      const allColumns = Object.values(boardColumns);
+      // Columns not loaded yet — an empty list here would hide the whole board.
+      if (allColumns.length === 0) return;
+
+      const base =
+        merged[boardId] ??
+        allColumns.filter((column) => column && !isArchivedColumnFlag(column)).map((column) => column.id);
+      const allowed = new Set([...base, ...revealed]);
+      merged[boardId] = allColumns
+        .slice()
+        .sort((a, b) => (Number(a?.position) || 0) - (Number(b?.position) || 0))
+        .map((column) => column.id)
+        .filter((id) => allowed.has(id));
+    });
+    return merged;
+  }, [boardColumnVisibility, temporaryColumnReveals, boards, columns, selectedBoard]);
+
   const handleJumpToTask = useCallback(
     async (task: Task) => {
-      const boardId = findBoardIdForTask(
-        task.id,
-        task.boardId,
-        boards,
-        columns,
-        selectedBoard
-      );
+      // Trashed tasks are not in any column, so board lookup relies on the task.
+      const trashed = Boolean(task.deletedAt);
+      const boardId = trashed
+        ? task.boardId || null
+        : findBoardIdForTask(task.id, task.boardId, boards, columns, selectedBoard);
       if (!boardId) {
         toast.warning(t('errors.jumpToTaskFailed'), '');
         return;
@@ -5160,11 +5316,37 @@ function AppContent() {
         handlePageChange('kanban');
       }
 
+      const boardSwitched = selectedBoard !== boardId;
+
+      if (trashed) {
+        // The card only exists in the board's Trash panel — open it and land
+        // there. The panel renders above the board in every view mode.
+        if (boardSwitched) {
+          handleBoardSelection(boardId);
+        }
+        openBoardTrashView(boardId);
+        const found = await scrollViewportToTaskWhenReady(task.id, { maxAttempts: 80 });
+        if (found) {
+          toast.info(t('trash.jumpedToTrashTitle'), t('trash.jumpedToTrashBody'), 10000);
+        } else {
+          toast.warning(t('errors.jumpToTaskFailed'), t('trash.jumpToTrashFailedBody'));
+        }
+        return;
+      }
+
       closeBoardTrashView(boardId);
 
-      const boardSwitched = selectedBoard !== boardId;
       if (boardSwitched) {
         handleBoardSelection(boardId);
+      }
+
+      const reveal = revealHiddenColumnForTask(boardId, task.id);
+      if (reveal.revealed) {
+        toast.info(
+          t('trash.columnRevealedTitle'),
+          t('trash.columnRevealedBody', { column: reveal.columnTitle || '' }),
+          10000
+        );
       }
 
       let ok = true;
@@ -5202,6 +5384,7 @@ function AppContent() {
       handlePageChange,
       handleBoardSelection,
       handleSelectTask,
+      revealHiddenColumnForTask,
       t,
     ]
   );
@@ -5715,7 +5898,7 @@ function AppContent() {
         gridStyle={gridStyle}
         sensors={sensors}
         collisionDetection={collisionDetection}
-        boardColumnVisibility={boardColumnVisibility}
+        boardColumnVisibility={effectiveBoardColumnVisibility}
         onBoardColumnVisibilityChange={handleBoardColumnVisibilityChange}
         onBoardColumnVisibilityReset={handleBoardColumnVisibilityReset}
         kanbanColumnWidth={kanbanColumnWidth}
@@ -5816,6 +5999,7 @@ function AppContent() {
                                     boardRelationships={taskLinking.boardRelationships}
                                     onTaskRestoredLocally={handleTaskRestoredLocally}
                                     checkedTaskIds={checkedTaskIds}
+                                    onReplaceCheckedTaskIds={replaceCheckedTaskIds}
                                     onToggleTaskChecked={toggleTaskChecked}
                                     onToggleColumnChecked={toggleColumnChecked}
                                     onClearAllChecked={clearAllChecked}

@@ -3,6 +3,7 @@ import { Board, Columns, Task, TeamMember } from '../types';
 import { getBoardTaskRelationships } from '../api';
 import { feDebug } from '../utils/clientDebug';
 import { dedupeTasksInColumns, stripTaskFromAllColumns, applyRestoredTaskToColumns } from '../utils/taskReorderingUtils';
+import { isTaskSoftDeleted } from '../utils/taskUtils';
 import { scheduleSettledBoardRefresh } from '../utils/boardRestoredRefresh';
 
 function wsHookLog(...args: unknown[]) {
@@ -164,6 +165,7 @@ export const useTaskWebSocket = ({
       // Collect all updates for the board currently on screen
       updatesForVisibleBoard.forEach(data => {
         if (!data.task || !data.boardId) return;
+        if (isTaskSoftDeleted(data.task)) return;
         const taskId = data.task.id;
         if (!taskId) return;
         taskUpdatesMap.set(taskId, data);
@@ -438,6 +440,7 @@ export const useTaskWebSocket = ({
     const boardUpdatesMap = new Map<string, any>(); // Track updates by boardId
     updates.forEach(data => {
       if (!data.task || !data.boardId) return;
+      if (isTaskSoftDeleted(data.task)) return;
       const boardId = data.boardId;
       if (!boardUpdatesMap.has(boardId)) {
         boardUpdatesMap.set(boardId, []);

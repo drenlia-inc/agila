@@ -30,8 +30,10 @@ import MemberPicker from './ui/MemberPicker';
 import WatchThisTaskButton from './ui/WatchThisTaskButton';
 import TagPicker from './ui/TagPicker';
 import PriorityPicker from './ui/PriorityPicker';
+import TaskStatusSelect from './ui/TaskStatusSelect';
 import SprintSelector from './SprintSelector';
 import type { Tag } from '../types';
+import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
 
 function pageLog(...args: unknown[]) {
   if (feDebug('FE_DEBUG_TASK_PAGE')) console.log(...args);
@@ -61,6 +63,7 @@ function normalizeTaskFromApi(taskData: any): Task {
     blockedReason: taskData.blockedReason || taskData.blocked_reason || null,
     priorityId: taskData.priorityId ?? taskData.priority_id ?? null,
     deletedAt: taskData.deletedAt ?? taskData.deleted_at ?? null,
+    deletedBy: taskData.deletedBy ?? taskData.deleted_by ?? null,
   };
 }
 
@@ -93,6 +96,7 @@ export default function TaskPage({
   // onToggleAutoRefresh // Disabled - using real-time updates
 }: TaskPageProps) {
   const { t } = useTranslation('tasks');
+  const columnDisplayTitle = useColumnDisplayTitle();
   const [task, setTask] = useState<Task | null>(null);
   const [boards, setBoards] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -476,7 +480,7 @@ export default function TaskPage({
     onUpdate: setTask,
     siteSettings,
     boards,
-    canMutate: userCanMutate(currentUser),
+    canMutate: userCanMutate(currentUser) && !isTaskSoftDeleted(task),
   });
 
   const {
@@ -502,6 +506,14 @@ export default function TaskPage({
     handleUpdateComment,
     saveImmediately
   } = taskDetailsHook;
+  const displayStatus =
+    editedTask.columnId && editedTask.boardId && editedTask.status
+      ? columnDisplayTitle({
+          id: editedTask.columnId,
+          title: editedTask.status,
+          boardId: editedTask.boardId,
+        })
+      : editedTask.status || '';
 
   // Keep blocked reason draft aligned when switching tasks
   useEffect(() => {
@@ -1013,12 +1025,12 @@ export default function TaskPage({
                   <h1 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
                     {editedTask.title}
                   </h1>
-                  {(editedTask.status || '').trim() && (
+                  {displayStatus.trim() && (
                     <span
                       className="inline-flex shrink-0 items-center rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-200 max-w-[10rem] sm:max-w-[14rem] truncate"
-                      title={editedTask.status}
+                      title={displayStatus}
                     >
-                      {editedTask.status}
+                      {displayStatus}
                     </span>
                   )}
                 </div>
@@ -1694,8 +1706,9 @@ export default function TaskPage({
                   />
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                     {parseEffortUnit(siteSettings) === 'points' ? t('labels.effortPoints') : t('labels.effortHours')}
                   </label>
                   <input
@@ -1721,6 +1734,22 @@ export default function TaskPage({
                     }`}
                     placeholder="0"
                   />
+                </div>
+                <TaskStatusSelect
+                  boardId={editedTask.boardId}
+                  columnId={editedTask.columnId}
+                  statusTitle={editedTask.status}
+                  disabled={fieldsLocked}
+                  onChange={(column) =>
+                    handleTaskUpdate({ columnId: column.id, status: column.title })
+                  }
+                  labelClassName="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
+                  selectClassName={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                    fieldsLocked
+                      ? 'cursor-default'
+                      : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                  }`}
+                />
                 </div>
 
                 <PriorityPicker
@@ -2040,7 +2069,7 @@ export default function TaskPage({
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">{t('taskPage.status')}:</span>
-                  <span className="capitalize text-gray-900 dark:text-gray-100">{editedTask.status || t('taskPage.unknown')}</span>
+                  <span className="capitalize text-gray-900 dark:text-gray-100">{displayStatus || t('taskPage.unknown')}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">{t('labels.created')}:</span>
