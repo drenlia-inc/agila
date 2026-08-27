@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { onHelpReveal, takeHelpReveal } from '../utils/helpGoThere';
 import type { Columns as BoardColumns } from '../types';
 import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
+import { formFilterTriggerClass, formInputEditableParts } from '../utils/formFieldClasses';
 
 interface ColumnFilterDropdownProps {
   columns: BoardColumns;
@@ -133,12 +134,12 @@ const ColumnFilterDropdown: React.FC<ColumnFilterDropdownProps> = ({
           compact
             ? `relative inline-flex h-8 items-center justify-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors ${
                 isCustomized
-                  ? 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60'
-                  : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                  ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-500/60 text-blue-800 dark:text-blue-200'
+                  : `${formInputEditableParts('panel')} text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-800/80`
               } ${isCustomized && onResetToDefault ? 'pr-6' : ''}`
-            : `relative flex items-center gap-1.5 px-2 py-1 pr-6 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors${
-                fullWidth ? ' w-full' : ''
-              }`
+            : `${formFilterTriggerClass(isCustomized, {
+                extra: fullWidth ? ' w-full' : '',
+              })}`
         }
         title={triggerTitle || t('columnFilterDropdown.filterColumns')}
         aria-label={triggerTitle || t('columnFilterDropdown.filterColumns')}

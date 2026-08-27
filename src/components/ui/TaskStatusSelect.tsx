@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getBoardColumns } from '../../api';
 import { useColumnDisplayTitle } from '../../utils/columnDisplayTitle';
+import EnumPicker, { type EnumOption } from './EnumPicker';
 
 type BoardColumnOption = {
   id: string;
@@ -17,7 +18,7 @@ export default function TaskStatusSelect({
   disabled = false,
   onChange,
   labelClassName,
-  selectClassName,
+  className,
 }: {
   boardId?: string | null;
   columnId?: string | null;
@@ -25,7 +26,9 @@ export default function TaskStatusSelect({
   disabled?: boolean;
   onChange: (column: { id: string; title: string }) => void;
   labelClassName?: string;
+  /** @deprecated Native select class — ignored; custom picker uses form chrome. */
   selectClassName?: string;
+  className?: string;
 }) {
   const { t } = useTranslation('tasks');
   const columnDisplayTitle = useColumnDisplayTitle();
@@ -58,7 +61,7 @@ export default function TaskStatusSelect({
     };
   }, [boardId]);
 
-  const options = useMemo(() => {
+  const optionsList = useMemo(() => {
     if (!columnId || columns.some((column) => column.id === columnId)) {
       return columns;
     }
@@ -72,30 +75,34 @@ export default function TaskStatusSelect({
     ];
   }, [boardId, columnId, columns, statusTitle]);
 
+  const options: EnumOption[] = useMemo(
+    () =>
+      optionsList.length === 0
+        ? [{ value: '', label: t('gantt.noColumnsAvailable', { ns: 'common' }) }]
+        : optionsList.map((column) => ({
+            value: column.id,
+            label: columnDisplayTitle(column),
+          })),
+    [optionsList, columnDisplayTitle, t]
+  );
+
+  const pickerDisabled = disabled || optionsList.length === 0;
+
   return (
-    <div>
-      <label className={labelClassName}>{t('labels.status')}</label>
-      <select
-        value={columnId || ''}
-        disabled={disabled || options.length === 0}
-        onChange={(event) => {
-          const next = options.find((column) => column.id === event.target.value);
-          if (!next || next.id === columnId) return;
-          onChange({ id: next.id, title: next.title });
-        }}
-        className={selectClassName}
-        aria-label={t('labels.status')}
-      >
-        {options.length === 0 ? (
-          <option value="">{t('gantt.noColumnsAvailable', { ns: 'common' })}</option>
-        ) : (
-          options.map((column) => (
-            <option key={column.id} value={column.id}>
-              {columnDisplayTitle(column)}
-            </option>
-          ))
-        )}
-      </select>
-    </div>
+    <EnumPicker
+      className={className}
+      label={t('labels.status')}
+      labelClassName={labelClassName}
+      options={options}
+      value={columnId || ''}
+      disabled={pickerDisabled}
+      surface="panel"
+      aria-label={t('labels.status')}
+      onChange={(nextId) => {
+        const next = optionsList.find((column) => column.id === nextId);
+        if (!next || next.id === columnId) return;
+        onChange({ id: next.id, title: next.title });
+      }}
+    />
   );
 }

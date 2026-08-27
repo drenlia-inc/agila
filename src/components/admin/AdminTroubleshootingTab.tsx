@@ -20,6 +20,7 @@ import {
   subscribePerfTestsPreference,
 } from '../../perfTests';
 import { toast } from '../../utils/toast';
+import { formSecondaryButtonClass } from '../../utils/formFieldClasses';
 import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
 
 type TroubleshootKey = FeClientDebugKey | ServerDebugKey;
@@ -304,7 +305,7 @@ const AdminTroubleshootingTab: React.FC<AdminTroubleshootingTabProps> = ({
               type="button"
               disabled={savingKey !== null}
               onClick={() => setMany(FE_CLIENT_DEBUG_KEYS, 'true')}
-              className="px-3 py-1.5 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+              className={formSecondaryButtonClass}
             >
               {t('appSettings.enableAll')}
             </button>
@@ -312,7 +313,7 @@ const AdminTroubleshootingTab: React.FC<AdminTroubleshootingTabProps> = ({
               type="button"
               disabled={savingKey !== null}
               onClick={() => setMany(FE_CLIENT_DEBUG_KEYS, 'false')}
-              className="px-3 py-1.5 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+              className={formSecondaryButtonClass}
             >
               {t('appSettings.disableAll')}
             </button>
@@ -370,7 +371,7 @@ const AdminTroubleshootingTab: React.FC<AdminTroubleshootingTabProps> = ({
               type="button"
               disabled={cspLoading}
               onClick={() => loadCspReports()}
-              className="px-3 py-1.5 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50"
+              className={formSecondaryButtonClass}
             >
               {t('appSettings.cspReportsRefresh')}
             </button>
@@ -449,7 +450,7 @@ const AdminTroubleshootingTab: React.FC<AdminTroubleshootingTabProps> = ({
               <button
                 type="button"
                 onClick={() => setCspClearConfirmOpen(false)}
-                className="px-3 py-1.5 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                className={formSecondaryButtonClass}
               >
                 {t('cancel', { ns: 'common' })}
               </button>

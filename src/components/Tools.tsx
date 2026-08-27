@@ -39,10 +39,10 @@ const buttonShapeClass =
   'shrink-0 flex items-center justify-center rounded-md transition-all relative border';
 const buttonBaseClass = `w-10 h-10 ${buttonShapeClass}`;
 const buttonCompactClass = `w-8 h-8 ${buttonShapeClass}`;
-const buttonActiveClass =
-  'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700';
 const buttonIdleClass =
-  'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600';
+  'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800';
+const buttonActiveClass =
+  'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-600';
 
 function ToolIcon({ icon: Icon }: { icon: LucideIcon }) {
   return <Icon size={ICON_SIZE} strokeWidth={ICON_STROKE} absoluteStrokeWidth />;

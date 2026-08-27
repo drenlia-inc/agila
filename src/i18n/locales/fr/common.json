@@ -1284,8 +1284,8 @@
     "editMyProfile": "Modifier mon profil",
     "showBio": "Afficher la bio",
     "hideBio": "Masquer la bio",
-    "meetTheTeam": "Rencontrer l'équipe",
-    "meetTheTeamTitle": "Rencontrer l'équipe",
+    "meetTheTeam": "L'équipe",
+    "meetTheTeamTitle": "L'équipe",
     "meetTheTeamDescription": "Faites connaissance avec l’équipe. Glissez les cartes pour définir votre ordre des membres.",
     "hideBios": "Masquer les bios",
     "showBios": "Afficher les bios",
@@ -1293,7 +1293,8 @@
     "addYourBio": "Ajouter votre bio",
     "updateYourBio": "Modifier votre bio",
     "thatsYou": "Vous",
-    "noBio": "Pas encore de bio"
+    "noBio": "Pas encore de bio",
+    "inactiveAccount": "Compte inactif"
   },
   "columnFilterDropdown": {
     "filterColumns": "Filtrer les statuts",

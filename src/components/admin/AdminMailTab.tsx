@@ -19,7 +19,8 @@ import {
   AdminActionsBar,
   AdminPageShell,
   AdminSection,
-  adminInputBoundedClass,
+  adminFieldClass,
+  adminInputLockedShortClass,
   adminInputShortClass,
 } from './AdminSection';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
@@ -168,8 +169,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
   // Check if email is managed
   const isManagedEmail = editingSettings.MAIL_MANAGED === 'true';
 
-  const mailFieldClass = (disabled = false) =>
-    `${adminInputBoundedClass}${disabled ? ' bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''}`;
+  const mailFieldClass = (disabled = false) => adminFieldClass(disabled, 'w-full max-w-md');
 
   return (
     <>
@@ -383,7 +383,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
                     );
                   }}
                   disabled={isManagedEmail}
-                  className={`${adminInputShortClass}${isManagedEmail ? ' bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''} ${ADMIN_NUMERIC_INPUT_CLASS}`}
+                  className={`${isManagedEmail ? adminInputLockedShortClass : adminInputShortClass} ${ADMIN_NUMERIC_INPUT_CLASS}`}
                   placeholder="587"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

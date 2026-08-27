@@ -19,6 +19,7 @@ import { userIsViewer, userIsAdmin } from '../utils/permissions';
 import { agilaGithubFeedbackUrls } from '../constants';
 import { isDemoModeClient } from '../utils/demoReset';
 import { buildCustomerPortalUrl } from '../utils/customerPortalUrl';
+import { formFieldClass, formInputEditableParts } from '../utils/formFieldClasses';
 
 type NotificationPreferenceKey = keyof UserPreferences['notifications'];
 
@@ -696,7 +697,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                           onChange={(e) => setDisplayName(e.target.value)}
                           onKeyDown={handleDisplayNameKeyDown}
                           maxLength={30}
-                          className="w-56 max-w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          className={formFieldClass(false, { widthClass: 'w-56 max-w-full', py: '1.5' })}
                           placeholder={t('profile.displayNamePlaceholder')}
                           required
                         />
@@ -732,7 +733,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
+                          className={`inline-flex items-center px-2.5 py-1.5 border shadow-sm text-xs font-medium rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${formInputEditableParts('panel')}`}
                         >
                           <Upload className="h-3.5 w-3.5 mr-1.5" />
                           {currentUser?.avatarUrl || previewUrl ? t('profile.changePhoto') : t('profile.uploadPhoto')}
@@ -763,7 +764,11 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                     onChange={(e) => setBio(e.target.value.slice(0, 280))}
                     maxLength={280}
                     rows={5}
-                    className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 resize-y min-h-[7.5rem]"
+                    className={formFieldClass(false, {
+                      widthClass: 'w-full',
+                      py: '1.5',
+                      extra: 'resize-y min-h-[7.5rem]',
+                    })}
                     placeholder={t('profile.bioPlaceholder')}
                   />
                   <div className="mt-1 flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -883,7 +888,11 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                             type="text"
                             value={deleteConfirmation}
                             onChange={(e) => setDeleteConfirmation(e.target.value)}
-                            className="w-full px-3 py-2 border border-red-300 dark:border-red-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                            className={formFieldClass(false, {
+                              widthClass: 'w-full',
+                              extra:
+                                'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500',
+                            })}
                             placeholder={t('profile.typeDeletePlaceholder')}
                             disabled={isDeletingAccount}
                           />
@@ -974,7 +983,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                           handleTaskDeleteConfirmChange(value === 'true');
                         }
                       }}
-                      className="block w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className={formFieldClass(false, { widthClass: 'block w-40' })}
                     >
                       <option value="system">{t('profile.useSystemDefault')}</option>
                       <option value="true">{t('profile.alwaysConfirm')}</option>
@@ -1002,7 +1011,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                       onChange={(e) =>
                         handleLanguageChange(e.target.value === 'fr' ? 'fr' : 'en')
                       }
-                      className="block w-40 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className={formFieldClass(false, { widthClass: 'block w-40' })}
                     >
                       <option value="en">{t('profile.languageEnglish')}</option>
                       <option value="fr">{t('profile.languageFrench')}</option>
@@ -1062,14 +1071,14 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                     <button
                       type="button"
                       onClick={() => setAllNotificationPrefs(true)}
-                      className="px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                      className={`px-2 py-1 text-xs font-medium rounded border text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 ${formInputEditableParts('panel')}`}
                     >
                       {t('profile.enableAllNotifications')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setAllNotificationPrefs(false)}
-                      className="px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                      className={`px-2 py-1 text-xs font-medium rounded border text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 ${formInputEditableParts('panel')}`}
                     >
                       {t('profile.disableAllNotifications')}
                     </button>

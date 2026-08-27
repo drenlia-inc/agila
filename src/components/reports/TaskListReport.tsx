@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { List, Calendar, RefreshCw, FileText, Tag as TagIcon, User, AlertCircle, Printer, ChevronDown, Search, X } from 'lucide-react';
-import DateRangeSelector from './DateRangeSelector';
+import DateRangeSelector, { REPORT_DATE_FILTER_ROW_CLASS } from './DateRangeSelector';
+import EnumPicker from '../ui/EnumPicker';
+import { formDropdownSearchClass, formLabelClass, formPickerShellClass } from '../../utils/formFieldClasses';
 import { getBoards } from '../../api';
+import { getReportPrintStyles, printReport } from '../../utils/reportPrint';
 
 interface Task {
   task_id: string;
@@ -209,182 +212,12 @@ const TaskListReport: React.FC<TaskListReportProps> = ({ initialFilters, onFilte
   }, [startDate, endDate, status, boardId]);
 
   const handlePrint = () => {
-    window.print();
+    printReport();
   };
 
   return (
     <div className="space-y-6">
-      <style>{`
-        @media print {
-          /* Hide navigation and UI chrome */
-          header,
-          nav,
-          .no-print,
-          .reports-tabs,
-          .reports-header,
-          [class*="ActivityFeed"],
-          [class*="activity-feed"],
-          div[style*="position: fixed"],
-          div[style*="position:fixed"],
-          div[class*="fixed"],
-          [style*="z-index: 9999"],
-          [style*="z-index:9999"],
-          [class*="NetworkStatus"],
-          [class*="ToastContainer"],
-          [class*="Toast"],
-          [class*="ModalManager"],
-          [class*="TaskLinkingOverlay"],
-          [class*="VersionUpdateBanner"],
-          [class*="ResetCountdown"],
-          [class*="DebugPanel"],
-          [class*="sticky"] {
-            display: none !important;
-            visibility: hidden !important;
-            position: absolute !important;
-            left: -9999px !important;
-          }
-          
-          /* Hide print button itself */
-          button[title="Print report"] {
-            display: none !important;
-          }
-          
-          /* Remove padding and constraints from layout wrappers */
-          body > *:not(script),
-          html {
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          
-          /* Make report content full width and remove layout constraints */
-          .flex-1,
-          .w-4\\/5,
-          .mx-auto,
-          [class*="p-6"] {
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          
-          /* Ensure report content is visible and properly formatted */
-          .space-y-6 {
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          
-          /* Reduce spacing between sections for print */
-          .space-y-6 > * {
-            margin-top: 0.5rem !important;
-          }
-          
-          .space-y-6 > *:first-child {
-            margin-top: 0 !important;
-          }
-          
-          /* Allow summary metrics and table to be on same page */
-          .grid {
-            page-break-inside: avoid;
-            page-break-after: auto !important;
-            margin-bottom: 0.25rem !important;
-            padding: 0.5rem !important;
-          }
-          
-          /* Reduce header size for print */
-          h2 {
-            font-size: 1.25rem !important;
-            margin-bottom: 0.25rem !important;
-            page-break-after: avoid !important;
-          }
-          
-          h2 + p {
-            font-size: 0.75rem !important;
-            margin-bottom: 0.25rem !important;
-            page-break-after: avoid !important;
-          }
-          
-          /* Don't force page break before table - let it flow naturally */
-          table {
-            page-break-before: auto !important;
-            margin-top: 0.25rem !important;
-          }
-          
-          /* Reduce padding in table container */
-          .bg-white.rounded-lg.border {
-            padding: 0.5rem !important;
-          }
-          
-          /* Ensure summary section doesn't create orphaned page */
-          .grid + .bg-white {
-            page-break-before: auto !important;
-          }
-          
-          /* Force grid layouts to maintain columns in print */
-          .grid {
-            display: grid !important;
-          }
-          
-          /* Task List: 4 columns (horizontal stack) */
-          .grid.grid-cols-2,
-          .grid[class*="grid-cols-2"],
-          .grid[class*="grid-cols-4"],
-          .grid[class*="md:grid-cols-4"] {
-            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-          }
-          
-          /* Print styles - Landscape for better table fit */
-          @page {
-            size: landscape;
-            margin: 0.5cm;
-          }
-          
-          /* Ensure all table columns fit within page width */
-          table {
-            width: 100% !important;
-            table-layout: fixed !important;
-            font-size: 9px !important;
-          }
-          
-          /* Make table container use full width */
-          .overflow-x-auto {
-            overflow: visible !important;
-            width: 100% !important;
-          }
-          
-          thead {
-            display: table-header-group !important;
-          }
-          
-          tbody {
-            display: table-row-group !important;
-          }
-          
-          th, td {
-            padding: 3px 4px !important;
-            font-size: 9px !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            word-wrap: break-word !important;
-          }
-          
-          /* Allow rows to break across pages */
-          tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
-          }
-          
-          /* Ensure table headers repeat on each page (automatic with table-header-group) */
-          
-          /* Reduce summary metrics size for print */
-          .grid .text-2xl {
-            font-size: 1.25rem !important;
-          }
-          
-          .grid .text-sm {
-            font-size: 0.75rem !important;
-          }
-        }
-      `}</style>
+      <style>{getReportPrintStyles('taskList')}</style>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -392,13 +225,13 @@ const TaskListReport: React.FC<TaskListReportProps> = ({ initialFilters, onFilte
             <List className="w-7 h-7 text-green-500" />
             {t('reports.taskList.title')}
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="no-print text-gray-600 dark:text-gray-400 mt-1">
             {t('reports.taskList.description')}
           </p>
         </div>
         <button
           onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+          className="no-print flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
           title={t('reports.taskList.printReport')}
         >
           <Printer className="w-4 h-4" />
@@ -432,16 +265,17 @@ const TaskListReport: React.FC<TaskListReportProps> = ({ initialFilters, onFilte
           onEndDateChange={setEndDate}
         />
 
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t('reports.taskList.boardFilter')}
-          </label>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowBoardDropdown(!showBoardDropdown)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-left flex items-center justify-between hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
-            >
+        <div className={`mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 ${REPORT_DATE_FILTER_ROW_CLASS}`}>
+          <div>
+            <label className={formLabelClass}>
+              {t('reports.taskList.boardFilter')}
+            </label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowBoardDropdown(!showBoardDropdown)}
+                className={`${formPickerShellClass(false, 'panel', 'flex items-center justify-between gap-2')} hover:border-gray-400 dark:hover:border-gray-500 transition-colors`}
+              >
               <span className={boardId ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}>
                 {boardId ? boards.find(b => b.id === boardId)?.title || t('reports.taskList.allBoards') : t('reports.taskList.allBoards')}
               </span>
@@ -468,7 +302,7 @@ const TaskListReport: React.FC<TaskListReportProps> = ({ initialFilters, onFilte
                         onChange={(e) => setBoardSearchTerm(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder={t('reports.taskList.searchBoards')}
-                        className="w-full pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        className={`${formDropdownSearchClass('w-full')} pl-9 pr-8`}
                         onClick={(e) => e.stopPropagation()}
                       />
                       {boardSearchTerm && (
@@ -546,21 +380,22 @@ const TaskListReport: React.FC<TaskListReportProps> = ({ initialFilters, onFilte
               </>
             )}
           </div>
-        </div>
+          </div>
 
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t('reports.taskList.statusFilter')}
-          </label>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="">{t('reports.taskList.allTasks')}</option>
-            <option value="completed">{t('reports.taskList.completedOnly')}</option>
-            <option value="active">{t('reports.taskList.activeOnly')}</option>
-          </select>
+          <div>
+            <EnumPicker
+              label={t('reports.taskList.statusFilter')}
+              labelClassName={formLabelClass}
+              widthClass="w-full"
+              options={[
+                { value: '', label: t('reports.taskList.allTasks') },
+                { value: 'completed', label: t('reports.taskList.completedOnly') },
+                { value: 'active', label: t('reports.taskList.activeOnly') },
+              ]}
+              value={status}
+              onChange={setStatus}
+            />
+          </div>
         </div>
       </div>
 
@@ -580,9 +415,9 @@ const TaskListReport: React.FC<TaskListReportProps> = ({ initialFilters, onFilte
 
       {/* Task Data */}
       {!loading && taskData && (
-        <>
+        <div className="table-report-print-data">
           {/* Summary Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="table-report-print-metrics grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
               <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('reports.taskList.totalTasks')}</div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -610,7 +445,7 @@ const TaskListReport: React.FC<TaskListReportProps> = ({ initialFilters, onFilte
           </div>
 
           {/* Tasks Table */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="table-report-print-table bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="overflow-x-auto">
               {taskData.tasks.length > 0 ? (
                 <table className="w-full">
@@ -692,7 +527,7 @@ const TaskListReport: React.FC<TaskListReportProps> = ({ initialFilters, onFilte
               )}
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

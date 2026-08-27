@@ -15,6 +15,7 @@ import TextEditor from './TextEditor';
 import { TASK_DESCRIPTION_MAX_LENGTH } from '../constants/appConstants';
 import { ModernCheckbox } from './ModernCheckbox';
 import DOMPurify from 'dompurify';
+import { formFieldClass, formInputLockedClass } from '../utils/formFieldClasses';
 
 export type AssignToAgentModalMode = 'assign' | 'configure';
 export type AgentJobMode = 'assist' | 'code' | 'automation';
@@ -605,7 +606,7 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
                     setLlmModel(v);
                   }}
                   disabled={busy || modelsLoading}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50"
+                  className={formFieldClass(busy || modelsLoading, { widthClass: 'w-full' })}
                 >
                   <option value="">
                     {tenantDefaultModel
@@ -625,7 +626,7 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
                     value={llmModel}
                     onChange={(e) => setLlmModel(e.target.value)}
                     placeholder={t('agent.llmModelCustomPlaceholder')}
-                    className="mt-2 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className={formFieldClass(false, { widthClass: 'mt-2 w-full' })}
                   />
                 )}
                 <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
@@ -652,7 +653,7 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
                       ? t('agent.llmModelLoading')
                       : effectiveDisplayModel || t('agent.llmModelUnknown')
                   }
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-md text-sm bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                  className={`w-full ${formInputLockedClass()}`}
                 />
                 <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
                   {(llmModel || initialLlmModel || '').trim()
@@ -825,7 +826,7 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
                 placeholder="https://github.com/org/repo.git"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={formFieldClass(false, { widthClass: 'w-full' })}
                 autoFocus
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -858,7 +859,7 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
                       setRepoBranch(v);
                     }}
                     disabled={!repoUrl.trim() || busy}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50"
+                    className={formFieldClass(busy || modelsLoading, { widthClass: 'w-full' })}
                   >
                     {sortedBranches.map((b) => (
                       <option key={b} value={b}>
@@ -878,7 +879,7 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
                       onChange={(e) => setRepoBranch(e.target.value)}
                       placeholder={t('agent.branchCustomPlaceholder')}
                       disabled={!repoUrl.trim() || busy}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50"
+                      className={formFieldClass(busy || modelsLoading, { widthClass: 'w-full' })}
                     />
                   )}
                 </div>
@@ -889,7 +890,7 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
                   onChange={(e) => setRepoBranch(e.target.value)}
                   placeholder="main"
                   disabled={!repoUrl.trim()}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:opacity-50"
+                  className={formFieldClass(busy || modelsLoading, { widthClass: 'w-full' })}
                 />
               )}
               <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { X, Send } from 'lucide-react';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { COMMENT_MAX_LENGTH } from '../constants/appConstants';
+import { formFieldClass } from '../utils/formFieldClasses';
 
 interface AddCommentModalProps {
   isOpen: boolean;
@@ -130,7 +131,7 @@ export default function AddCommentModal({
             onKeyDown={handleKeyDown}
             placeholder={t('addCommentModal.typeYourCommentHere')}
             maxLength={COMMENT_MAX_LENGTH}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+            className={formFieldClass(false, { widthClass: 'w-full', extra: 'resize-none placeholder:text-gray-400 dark:placeholder:text-gray-500' })}
             rows={4}
             disabled={isSubmitting}
           />

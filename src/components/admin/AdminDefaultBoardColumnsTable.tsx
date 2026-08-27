@@ -278,6 +278,13 @@ const AdminDefaultBoardColumnsTable: React.FC<AdminDefaultBoardColumnsTableProps
     if (!validateTitles(draftEn, draftFr, editingId)) return false;
     const titleEn = draftEn.trim();
     const titleFr = draftFr.trim();
+    const existing = displayRows.find((r) => r.id === editingId);
+    if (existing && existing.titleEn === titleEn && existing.titleFr === titleFr) {
+      setEditingId(null);
+      setDraftEn('');
+      setDraftFr('');
+      return true;
+    }
     const next = displayRows.map((r) =>
       r.id === editingId ? { ...r, titleEn, titleFr } : r
     );

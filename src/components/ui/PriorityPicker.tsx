@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown } from 'lucide-react';
 import type { PriorityOption } from '../../types';
+import AnchoredDropdownPortal, { useAnchoredDropdownDismiss } from './AnchoredDropdownPortal';
+import { formPickerShellClass } from '../../utils/formFieldClasses';
 
 export interface PriorityPickerProps {
   priorities: PriorityOption[];
@@ -28,22 +30,14 @@ export default function PriorityPicker({
 }: PriorityPickerProps) {
   const { t } = useTranslation('tasks');
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const selected =
     value != null
       ? priorities.find((priority) => String(priority.id) === String(value))
       : undefined;
 
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
+  useAnchoredDropdownDismiss(open, () => setOpen(false), triggerRef, panelRef);
 
   useEffect(() => {
     if (disabled) setOpen(false);
@@ -73,22 +67,22 @@ export default function PriorityPicker({
     </span>
   );
 
-  const shellClass =
-    'w-full flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700';
+  const shellClass = formPickerShellClass(disabled);
 
   return (
-    <div className={`relative ${className}`} ref={rootRef}>
+    <div className={className}>
       {label && (
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
           {label}
         </label>
       )}
       {disabled ? (
-        <div className={`${shellClass} cursor-default`} aria-readonly="true">
+        <div className={shellClass} aria-readonly="true">
           {valueContent}
         </div>
       ) : (
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={`${shellClass} focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -106,11 +100,14 @@ export default function PriorityPicker({
       </button>
       )}
 
-      {open && (
-        <div
-          className="absolute left-0 right-0 top-full mt-1 z-50 max-h-64 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg py-1"
-          role="listbox"
-        >
+      <AnchoredDropdownPortal
+        open={open && !disabled}
+        triggerRef={triggerRef}
+        panelRef={panelRef}
+        preferredMaxHeight={256}
+        className="flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800"
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto" role="listbox">
           {allowClear && (
             <button
               type="button"
@@ -153,7 +150,7 @@ export default function PriorityPicker({
             );
           })}
         </div>
-      )}
+      </AnchoredDropdownPortal>
     </div>
   );
 }

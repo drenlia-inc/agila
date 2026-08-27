@@ -70,23 +70,6 @@
       "file": "src/components/ListView.tsx"
     },
     {
-      "id": "help:task-relationship-link-mode",
-      "attr": "help",
-      "value": "task-relationship-link-mode",
-      "en": "Remove related link",
-      "fr": "Supprimer le lien associé",
-      "searchEn": "Remove related link Remove related link Add related task... task-relationship-link-mode",
-      "searchFr": "Supprimer le lien associé Supprimer le lien associé Ajouter une tâche associée... task-relationship-link-mode",
-      "kind": "view",
-      "mode": "kanban",
-      "highlights": [
-        "[data-help-target=\"task-relationship-link-mode\"]"
-      ],
-      "adminOnly": false,
-      "audience": "user",
-      "file": "src/components/TaskRelationshipLinker.tsx"
-    },
-    {
       "id": "ownerSetup:add-priority",
       "attr": "ownerSetup",
       "value": "add-priority",
@@ -245,8 +228,8 @@
       "value": "AI_API_BASE_URL",
       "en": "AI API base URL",
       "fr": "URL de base de l'API IA",
-      "searchEn": "AI API base URL AI API base URL Endpoint Agila probes for connectivity. Override when using a proxy, Azure, or a host reachable from this server (e.g. host.docker.internal for Ollama in Docker). AI_API_BASE_URL",
-      "searchFr": "URL de base de l'API IA URL de base de l'API IA Point de terminaison testé par Agila. Remplacez-le pour un proxy, Azure, ou un hôte joignable depuis ce serveur (ex. host.docker.internal pour Ollama sous Docker). AI_API_BASE_URL",
+      "searchEn": "AI API base URL Choose a preset (OpenAI, Anthropic, OpenRouter, Ollama, or custom). You can still override the base URL and model. AI API base URL Endpoint Agila probes for connectivity. Override when using a proxy, Azure, or a host reachable from this server (e.g. host.docker.internal for Ollama in Docker). AI_API_BASE_URL",
+      "searchFr": "URL de base de l'API IA Choisissez un préréglage (OpenAI, Anthropic, OpenRouter, Ollama ou personnalisé). Vous pouvez toujours remplacer l'URL de base et le modèle. URL de base de l'API IA Point de terminaison testé par Agila. Remplacez-le pour un proxy, Azure, ou un hôte joignable depuis ce serveur (ex. host.docker.internal pour Ollama sous Docker). AI_API_BASE_URL",
       "kind": "admin",
       "hash": "#admin#system-settings#ai",
       "highlights": [
@@ -296,8 +279,8 @@
       "value": "AI_MAX_CONCURRENT",
       "en": "Max concurrent agent jobs",
       "fr": "Tâches agent simultanées max",
-      "searchEn": "Max concurrent agent jobs 4. Job limits How many agent jobs can run at once for this tenant. Max concurrent agent jobs How many Agent tasks this tenant may run at once (1–10). The runner also has a pool limit. AI_MAX_CONCURRENT",
-      "searchFr": "Tâches agent simultanées max 4. Limites de tâches Combien de tâches agent peuvent tourner en parallèle pour ce tenant. Tâches agent simultanées max Nombre de tâches Agent que ce locataire peut exécuter à la fois (1–10). Le runner a aussi une limite de pool. AI_MAX_CONCURRENT",
+      "searchEn": "Max concurrent agent jobs gpt-4o / claude-… / llama3.2 4. Job limits How many agent jobs can run at once for this tenant. Max concurrent agent jobs How many Agent tasks this tenant may run at once (1–10). The runner also has a pool limit. AI_MAX_CONCURRENT",
+      "searchFr": "Tâches agent simultanées max gpt-4o / claude-… / llama3.2 4. Limites de tâches Combien de tâches agent peuvent tourner en parallèle pour ce tenant. Tâches agent simultanées max Nombre de tâches Agent que ce locataire peut exécuter à la fois (1–10). Le runner a aussi une limite de pool. AI_MAX_CONCURRENT",
       "kind": "admin",
       "hash": "#admin#system-settings#ai",
       "highlights": [
@@ -653,8 +636,8 @@
       "value": "NOTIFICATION_QUEUE_RETENTION_DAYS",
       "en": "Keep sent/failed (days)",
       "fr": "Conserver envoyés/échoués (jours)",
-      "searchEn": "Keep sent/failed (days) Automatically delete sent and failed queue rows older than this many days. Pending notifications are never auto-deleted. Keep sent/failed (days) NOTIFICATION_QUEUE_RETENTION_DAYS",
-      "searchFr": "Conserver envoyés/échoués (jours) Supprime automatiquement les lignes envoyées ou échouées plus anciennes que ce nombre de jours. Les notifications en attente ne sont jamais purgées automatiquement. Conserver envoyés/échoués (jours) NOTIFICATION_QUEUE_RETENTION_DAYS",
+      "searchEn": "Keep sent/failed (days) Email Webhooks Automatically delete sent and failed queue rows older than this many days. Pending notifications are never auto-deleted. Keep sent/failed (days) NOTIFICATION_QUEUE_RETENTION_DAYS",
+      "searchFr": "Conserver envoyés/échoués (jours) Email Webhooks Supprime automatiquement les lignes envoyées ou échouées plus anciennes que ce nombre de jours. Les notifications en attente ne sont jamais purgées automatiquement. Conserver envoyés/échoués (jours) NOTIFICATION_QUEUE_RETENTION_DAYS",
       "kind": "admin",
       "hash": "#admin#system-settings#notification-queue",
       "highlights": [
@@ -1078,8 +1061,8 @@
       "value": "TASK_EMAIL_NOTIFICATIONS_ENABLED",
       "en": "Task email notifications",
       "fr": "Notifications email de tâches",
-      "searchEn": "Task email notifications Task email notifications Delivery is set to webhooks only, so task emails are not queued. Webhook messages still go through the Notification Queue. Switch back to Email or Email and webhooks to use this pause switch. When off, task activity emails stay in the Notification Queue and are not sent. Invites and password resets are unchanged. TASK_EMAIL_NOTIFICATIONS_ENABLED",
-      "searchFr": "Notifications email de tâches Notifications email de tâches L'envoi est défini sur webhooks uniquement, donc les emails de tâches ne sont pas mis en file. Les messages webhook passent toujours par la file d'attente. Revenez à Email ou Email et webhooks pour utiliser cette pause. Lorsque c'est désactivé, les emails d'activité de tâches restent dans la file d'attente et ne sont pas envoyés. Les invitations et réinitialisations de mot de passe ne sont pas affectées. TASK_EMAIL_NOTIFICATIONS_ENABLED",
+      "searchEn": "Task email notifications Task email notifications Delivery is set to webhooks only, so task emails are not queued. Webhook messages still go through the Notification Queue. Switch back to Email or Email and webhooks to use this pause switch. When off, task activity emails stay in the Notification Queue and are not sent. User invitations and password reset emails are not affected. TASK_EMAIL_NOTIFICATIONS_ENABLED",
+      "searchFr": "Notifications email de tâches Notifications email de tâches L'envoi est défini sur webhooks uniquement, donc les emails de tâches ne sont pas mis en file. Les messages webhook passent toujours par la file d'attente. Revenez à Email ou Email et webhooks pour utiliser cette pause. Lorsque c'est désactivé, les emails d'activité de tâches restent dans la file d'attente et ne sont pas envoyés. Les emails d'invitation et de réinitialisation de mot de passe ne sont pas affectés. TASK_EMAIL_NOTIFICATIONS_ENABLED",
       "kind": "admin",
       "hash": "#admin#system-settings#mail-server",
       "highlights": [

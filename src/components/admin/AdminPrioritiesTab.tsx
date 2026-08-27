@@ -9,6 +9,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
 import { PRIORITY_NAME_MAX_LENGTH } from '../../constants/appConstants';
+import { adminFieldClass } from './AdminSection';
 
 interface Priority {
   id: string;
@@ -559,7 +560,7 @@ const AdminPrioritiesTab: React.FC<AdminPrioritiesTabProps> = ({
                       required
                       value={editingPriority.priority}
                       onChange={(e) => setEditingPriority(prev => prev ? { ...prev, priority: e.target.value } : null)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                      className={adminFieldClass(false, 'w-full')}
                       placeholder={t('priorities.enterPriorityName')}
                       maxLength={PRIORITY_NAME_MAX_LENGTH}
                     />

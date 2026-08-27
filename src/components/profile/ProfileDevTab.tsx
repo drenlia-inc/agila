@@ -17,6 +17,7 @@ import {
 } from '../../api';
 import { toast } from '../../utils/toast';
 import { isMaskedApiKeyDisplay } from '../../utils/maskSecret';
+import { formFieldClass } from '../../utils/formFieldClasses';
 
 function StatusBadge({
   ok,
@@ -288,7 +289,11 @@ const ProfileDevTab: React.FC = () => {
                 value={githubDraft}
                 onChange={(e) => setGithubDraft(e.target.value)}
                 placeholder={t('profile.devGithubPatPlaceholder')}
-                className="block w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={formFieldClass(false, {
+                  widthClass: 'block w-full',
+                  py: '1.5',
+                  extra: 'px-2.5 font-mono',
+                })}
               />
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -357,7 +362,11 @@ const ProfileDevTab: React.FC = () => {
                 readOnly
                 value={sshKey.publicKey}
                 rows={2}
-                className="w-full text-xs font-mono px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                className={formFieldClass(true, {
+                  widthClass: 'w-full',
+                  py: '1.5',
+                  extra: 'px-2 text-xs font-mono resize-none',
+                })}
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
                 {t('profile.devSshAddHint')}

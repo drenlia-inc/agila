@@ -7,6 +7,7 @@ import { truncateMemberName } from '../../utils/memberUtils';
 import { layoutMemberDropdownFromElement, type MemberDropdownLayout } from '../../utils/memberDropdownLayout';
 import MemberAvatar from './MemberAvatar';
 import MemberSearchList from './MemberSearchList';
+import { formPickerShellClass } from '../../utils/formFieldClasses';
 
 export interface MemberPickerProps {
   members: TeamMember[];
@@ -23,8 +24,7 @@ export interface MemberPickerProps {
   placeholder?: string;
   label?: string;
   /**
-   * Read-only display: full-contrast value, no chevron / menu.
-   * Prefer this over washing out the control with opacity.
+   * Read-only display when task/form is locked — gray locked surface, no chevron.
    */
   disabled?: boolean;
   className?: string;
@@ -32,6 +32,8 @@ export interface MemberPickerProps {
   showAgentSection?: boolean;
   /** Hide read-only viewers from assignee lists */
   excludeViewers?: boolean;
+  /** Hide inactive accounts from assignment pickers (default true). */
+  excludeInactive?: boolean;
   /** Show clear/unassign row (assignee pickers) */
   allowClear?: boolean;
 }
@@ -51,6 +53,7 @@ export default function MemberPicker({
   className = '',
   showAgentSection,
   excludeViewers = false,
+  excludeInactive = true,
   allowClear = false,
 }: MemberPickerProps) {
   const { t } = useTranslation('tasks');
@@ -71,6 +74,7 @@ export default function MemberPicker({
       layoutMemberDropdownFromElement(el, members, {
         showAgent: preferAgentSection,
         excludeViewers,
+        excludeInactive,
         selectedId: mode === 'single' ? value : null,
         placement: 'below',
         extraChrome: allowClear && mode === 'single' ? 44 : 0,
@@ -81,7 +85,7 @@ export default function MemberPicker({
   useLayoutEffect(() => {
     if (!open) return;
     measure();
-  }, [open, members, preferAgentSection, excludeViewers, value, mode, allowClear]);
+  }, [open, members, preferAgentSection, excludeViewers, excludeInactive, value, mode, allowClear]);
 
   useEffect(() => {
     if (!open) return;
@@ -99,7 +103,7 @@ export default function MemberPicker({
       window.removeEventListener('resize', onWin);
       window.removeEventListener('scroll', onWin, true);
     };
-  }, [open, members, preferAgentSection, excludeViewers, value, mode]);
+  }, [open, members, preferAgentSection, excludeViewers, excludeInactive, value, mode]);
 
   useEffect(() => {
     if (disabled) setOpen(false);
@@ -120,10 +124,8 @@ export default function MemberPicker({
             ? t('taskCard.noAssignee')
             : t('labels.selectMember', { defaultValue: 'Select member' }));
 
-  const shellClass =
-    'w-full flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
+  const shellClass = formPickerShellClass(disabled);
 
-  // Read-only: same chrome and contrast as editable, without picker affordances.
   if (disabled) {
     return (
       <div className={`relative ${className}`} ref={rootRef}>
@@ -132,10 +134,7 @@ export default function MemberPicker({
             {label}
           </label>
         )}
-        <div
-          className={`${shellClass} cursor-default`}
-          aria-readonly="true"
-        >
+        <div className={shellClass} aria-readonly="true">
           {mode === 'single' && (
             <MemberAvatar member={selected} memberId={value} members={members} size="sm" />
           )}
@@ -208,6 +207,7 @@ export default function MemberPicker({
               selectedId={mode === 'single' ? value : null}
               showAgentSection={preferAgentSection}
               excludeViewers={excludeViewers}
+              excludeInactive={excludeInactive}
               allowClear={allowClear && mode === 'single'}
               columns={layout.columns}
               onSelect={pick}

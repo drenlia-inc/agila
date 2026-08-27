@@ -1,6 +1,6 @@
 import type { TeamMember } from '../types';
 import { isAgentMemberId } from './agentMemberUi';
-import { memberIsViewer } from './memberUtils';
+import { memberIsInactive, memberIsViewer } from './memberUtils';
 
 const MARGIN = 12;
 const SEARCH_H = 56;
@@ -19,11 +19,19 @@ export type MemberDropdownLayout = {
 
 export function countAssigneePeople(
   members: TeamMember[],
-  opts?: { excludeViewers?: boolean; selectedId?: string | null }
+  opts?: { excludeViewers?: boolean; excludeInactive?: boolean; selectedId?: string | null }
 ): number {
   return members.filter((m) => {
     if (isAgentMemberId(m.id)) return false;
     if (opts?.excludeViewers && memberIsViewer(m) && m.id !== opts.selectedId) return false;
+    if (
+      opts?.excludeInactive !== false &&
+      memberIsInactive(m) &&
+      !isAgentMemberId(m.id) &&
+      m.id !== opts.selectedId
+    ) {
+      return false;
+    }
     return true;
   }).length;
 }
@@ -92,6 +100,7 @@ export function layoutMemberDropdownFromElement(
   opts?: {
     showAgent?: boolean;
     excludeViewers?: boolean;
+    excludeInactive?: boolean;
     selectedId?: string | null;
     placement?: 'below' | 'beside';
     extraChrome?: number;
@@ -101,6 +110,7 @@ export function layoutMemberDropdownFromElement(
     anchor: el.getBoundingClientRect(),
     peopleCount: countAssigneePeople(members, {
       excludeViewers: opts?.excludeViewers,
+      excludeInactive: opts?.excludeInactive,
       selectedId: opts?.selectedId,
     }),
     showAgent: opts?.showAgent !== false,

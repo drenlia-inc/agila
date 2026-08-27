@@ -2,8 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TrendingUp, Calendar, Info, RefreshCw, ChevronDown, Search, X, ZoomOut, Printer } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceArea, ReferenceLine } from 'recharts';
-import DateRangeSelector from './DateRangeSelector';
+import DateRangeSelector, { REPORT_DATE_FILTER_ROW_CLASS } from './DateRangeSelector';
+import { formDropdownSearchClass, formLabelClass, formPickerShellClass } from '../../utils/formFieldClasses';
 import { getBoards } from '../../api';
+import {
+  estimateBurndownPrintChartHeightPx,
+  estimateBurndownPrintChartWidthPx,
+  getReportPrintStyles,
+  printReport,
+} from '../../utils/reportPrint';
 
 interface BurndownDataPoint {
   date: string;
@@ -77,6 +84,17 @@ const BurndownReport: React.FC<BurndownReportProps> = ({ initialFilters, onFilte
   
   // Ref to track scroll position
   const scrollPositionRef = useRef<number>(0);
+  const chartWrapRef = useRef<HTMLDivElement>(null);
+  const [printLayout, setPrintLayout] = useState(false);
+  const [printChartSize, setPrintChartSize] = useState<{ width: number; height: number } | null>(null);
+
+  const screenChartHeight = 450;
+  const printChartHeight = estimateBurndownPrintChartHeightPx();
+  const printChartWidth = estimateBurndownPrintChartWidthPx();
+
+  const chartMargin = printLayout
+    ? { top: 8, right: 12, left: 4, bottom: 44 }
+    : { top: 5, right: 30, left: 20, bottom: 60 };
 
   // Fetch boards on mount
   useEffect(() => {
@@ -369,6 +387,10 @@ const BurndownReport: React.FC<BurndownReportProps> = ({ initialFilters, onFilte
 
   const chartData = prepareChartData();
 
+  const chartDataForDisplay = zoomState
+    ? chartData.slice(zoomState.startIndex, zoomState.endIndex + 1)
+    : chartData;
+
   // Get today's date formatted for the chart
   const getTodayFormatted = () => {
     const today = new Date();
@@ -479,101 +501,181 @@ const BurndownReport: React.FC<BurndownReportProps> = ({ initialFilters, onFilte
   };
 
   const handlePrint = () => {
-    window.print();
+    void printReport({
+      onPrepare: async () => {
+        setPrintChartSize({ width: printChartWidth, height: printChartHeight });
+        setPrintLayout(true);
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+        await new Promise((resolve) => setTimeout(resolve, 450));
+      },
+      onCleanup: () => {
+        setPrintLayout(false);
+        setPrintChartSize(null);
+      },
+    });
+  };
+
+  const renderBurndownLineChart = () => {
+    const lineProps = {
+      data: chartDataForDisplay,
+      margin: chartMargin,
+      onMouseDown: printLayout ? undefined : handleMouseDown,
+      onMouseMove: printLayout ? undefined : handleMouseMove,
+      onMouseUp: printLayout ? undefined : handleMouseUp,
+    };
+
+    const chartBody = (
+      <>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        {weekendRanges.map((range, index) => (
+          <ReferenceArea
+            key={`weekend-${index}`}
+            x1={range.start}
+            x2={range.end}
+            fill="#9ca3af"
+            fillOpacity={0.12}
+          />
+        ))}
+        {isTodayInRange && (
+          <ReferenceLine
+            x={todayFormatted}
+            stroke="#ef4444"
+            strokeWidth={2}
+            strokeDasharray="3 3"
+            label={{
+              value: t('reports.burndown.today'),
+              position: 'top',
+              fill: '#dc2626',
+              fontSize: 11,
+            }}
+          />
+        )}
+        <XAxis
+          dataKey="date"
+          stroke="#6b7280"
+          tick={{ fill: '#374151', fontSize: printLayout ? 9 : 12 }}
+          angle={printLayout ? -40 : -45}
+          textAnchor="end"
+          height={printLayout ? 56 : 80}
+          minTickGap={printLayout ? 8 : 5}
+          interval="preserveStartEnd"
+        />
+        <YAxis
+          stroke="#6b7280"
+          tick={{ fill: '#374151', fontSize: printLayout ? 10 : 12 }}
+          label={{
+            value: t('reports.burndown.tasksRemaining'),
+            angle: -90,
+            position: 'insideLeft',
+            fill: '#374151',
+          }}
+        />
+        <Legend
+          hide={printLayout}
+          wrapperStyle={{ paddingTop: '20px', cursor: 'pointer', zIndex: 1 }}
+          onClick={(e: { dataKey?: string }) => {
+            if (e.dataKey) handleLegendClick(e.dataKey);
+          }}
+        />
+        <Line
+          type="monotone"
+          dataKey="ideal"
+          stroke="#9CA3AF"
+          strokeWidth={3}
+          strokeDasharray="5 5"
+          name={t('reports.burndown.idealWorkingDays')}
+          dot={false}
+          isAnimationActive={false}
+        />
+        {((boardId || !burndownData?.boards || burndownData.boards.length === 0) ||
+          (!boardId && burndownData?.boards && burndownData.boards.length > 0)) && (
+          <Line
+            type="monotone"
+            dataKey="remaining"
+            stroke="#3B82F6"
+            strokeWidth={3}
+            name={t('reports.burndown.actualRemaining')}
+            dot={false}
+            isAnimationActive={false}
+          />
+        )}
+        {!boardId &&
+          burndownData?.boards &&
+          burndownData.boards.length > 0 &&
+          burndownData.boards.map((board, index) => {
+            const dataKey = `board_${board.boardId}`;
+            return (
+              <Line
+                key={board.boardId}
+                type="monotone"
+                dataKey={dataKey}
+                stroke={BOARD_COLORS[index % BOARD_COLORS.length]}
+                strokeWidth={3}
+                name={board.boardName}
+                dot={false}
+                isAnimationActive={false}
+                hide={hiddenBoards.has(dataKey)}
+                strokeOpacity={hiddenBoards.has(dataKey) ? 0.2 : 1}
+              />
+            );
+          })}
+        {refAreaLeft && refAreaRight && (
+          <ReferenceArea
+            x1={refAreaLeft}
+            x2={refAreaRight}
+            strokeOpacity={0.3}
+            fill="#3b82f6"
+            fillOpacity={0.3}
+          />
+        )}
+        <Tooltip
+          offset={12}
+          wrapperStyle={{ zIndex: 50, pointerEvents: 'none' }}
+          contentStyle={{
+            backgroundColor: 'var(--tooltip-bg)',
+            border: '1px solid var(--tooltip-border)',
+            borderRadius: '0.5rem',
+          }}
+          labelStyle={{ color: 'var(--tooltip-text)' }}
+        />
+      </>
+    );
+
+    if (printChartSize) {
+      return (
+        <div
+          className="burndown-chart-print-host"
+          style={{ width: printChartSize.width, maxWidth: '100%' }}
+        >
+          <LineChart
+            width={printChartSize.width}
+            height={printChartSize.height}
+            {...lineProps}
+          >
+            {chartBody}
+          </LineChart>
+        </div>
+      );
+    }
+
+    return (
+      <ResponsiveContainer width="100%" height={screenChartHeight}>
+        <LineChart {...lineProps}>{chartBody}</LineChart>
+      </ResponsiveContainer>
+    );
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 burndown-print-root">
+      <style>{getReportPrintStyles('burndown')}</style>
       <style>{`
-        @media print {
-          /* Hide navigation and UI chrome */
-          header,
-          nav,
-          .no-print,
-          .reports-tabs,
-          .reports-header,
-          [class*="ActivityFeed"],
-          [class*="activity-feed"],
-          div[style*="position: fixed"],
-          div[style*="position:fixed"],
-          div[class*="fixed"],
-          [style*="z-index: 9999"],
-          [style*="z-index:9999"],
-          [class*="NetworkStatus"],
-          [class*="ToastContainer"],
-          [class*="Toast"],
-          [class*="ModalManager"],
-          [class*="TaskLinkingOverlay"],
-          [class*="VersionUpdateBanner"],
-          [class*="ResetCountdown"],
-          [class*="DebugPanel"],
-          [class*="sticky"] {
-            display: none !important;
-            visibility: hidden !important;
-            position: absolute !important;
-            left: -9999px !important;
-          }
-          
-          /* Hide print button itself */
-          button[title="Print report"] {
-            display: none !important;
-          }
-          
-          /* Remove padding and constraints from layout wrappers */
-          body > *:not(script),
-          html {
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          
-          /* Make report content full width and remove layout constraints */
-          .flex-1,
-          .w-4\\/5,
-          .mx-auto,
-          [class*="p-6"] {
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          
-          /* Ensure report content is visible and properly formatted */
-          .space-y-6 {
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          
-          .space-y-6 > * {
-            page-break-inside: avoid;
-            margin-top: 1rem !important;
-          }
-          
-          .space-y-6 > *:first-child {
-            margin-top: 0 !important;
-          }
-          
-          /* Force grid layouts to match screen display */
-          .grid {
-            display: grid !important;
-          }
-          
-          /* Burndown: 3 columns (horizontal stack) */
-          .grid.grid-cols-1,
-          .grid[class*="grid-cols-1"],
-          .grid[class*="grid-cols-3"],
-          .grid[class*="md:grid-cols-3"] {
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-          }
-          
-          /* Print styles */
-          @page {
-            margin: 1cm;
-          }
-          
-          /* Ensure charts print properly */
-          [class*="recharts"] {
-            page-break-inside: avoid;
-          }
+        .burndown-chart-wrap .recharts-tooltip-wrapper {
+          z-index: 50 !important;
+        }
+        .burndown-chart-wrap .recharts-legend-wrapper {
+          z-index: 1;
         }
       `}</style>
       {/* Header */}
@@ -583,13 +685,13 @@ const BurndownReport: React.FC<BurndownReportProps> = ({ initialFilters, onFilte
             <TrendingUp className="w-7 h-7 text-blue-500" />
             {t('reports.burndown.title')}
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="no-print text-gray-600 dark:text-gray-400 mt-1">
             {t('reports.burndown.description')}
           </p>
         </div>
         <button
           onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+          className="no-print flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
           title={t('reports.taskList.printReport')}
         >
           <Printer className="w-4 h-4" />
@@ -623,15 +725,15 @@ const BurndownReport: React.FC<BurndownReportProps> = ({ initialFilters, onFilte
           onEndDateChange={setEndDate}
         />
 
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        <div className={`mt-4 ${REPORT_DATE_FILTER_ROW_CLASS}`}>
+          <label className={formLabelClass}>
             {t('reports.taskList.boardFilter')}
           </label>
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowBoardDropdown(!showBoardDropdown)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-left flex items-center justify-between hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+              className={`${formPickerShellClass(false, 'panel', 'flex items-center justify-between gap-2')} hover:border-gray-400 dark:hover:border-gray-500 transition-colors`}
             >
               <span className={boardId ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}>
                 {boardId ? boards.find(b => b.id === boardId)?.title || t('reports.taskList.allBoards') : t('reports.taskList.allBoards')}
@@ -659,7 +761,7 @@ const BurndownReport: React.FC<BurndownReportProps> = ({ initialFilters, onFilte
                         onChange={(e) => setBoardSearchTerm(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder={t('reports.taskList.searchBoards')}
-                        className="w-full pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`${formDropdownSearchClass('w-full')} pl-9 pr-8`}
                         onClick={(e) => e.stopPropagation()}
                       />
                       {boardSearchTerm && (
@@ -756,9 +858,9 @@ const BurndownReport: React.FC<BurndownReportProps> = ({ initialFilters, onFilte
 
       {/* Burndown Data */}
       {!loading && burndownData && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+        <div className="burndown-print-data bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
           {/* Summary Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className={`burndown-print-metrics grid grid-cols-1 md:grid-cols-3 gap-4 ${printLayout ? 'mb-2' : 'mb-6'}`}>
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
               <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t('reports.burndown.totalTasks')}</div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -781,154 +883,31 @@ const BurndownReport: React.FC<BurndownReportProps> = ({ initialFilters, onFilte
 
           {/* Burndown Chart */}
           {chartData.length > 0 ? (
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-4">
+            <div className={`burndown-print-chart ${printLayout ? 'mt-2' : 'mt-6'}`}>
+              <div className={`flex items-center justify-between ${printLayout ? 'mb-1' : 'mb-4'}`}>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   {t('reports.burndown.chartTitle')}
                 </h3>
                 {zoomState && (
                   <button
                     onClick={handleZoomOut}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg font-medium transition-colors"
+                    className="no-print flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg font-medium transition-colors"
                   >
                     <ZoomOut className="w-4 h-4" />
                     {t('reports.burndown.resetZoom')}
                   </button>
                 )}
               </div>
-              <div style={{ userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none' }}>
-                <ResponsiveContainer width="100%" height={450}>
-                  <LineChart 
-                    data={zoomState ? chartData.slice(zoomState.startIndex, zoomState.endIndex + 1) : chartData}
-                    margin={{ top: 5, right: 30, left: 20, bottom: 60 }}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                  >
-                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-gray-200 dark:text-gray-700" />
-                  
-                  {/* Weekend backgrounds */}
-                  {weekendRanges.map((range, index) => (
-                    <ReferenceArea
-                      key={`weekend-${index}`}
-                      x1={range.start}
-                      x2={range.end}
-                      fill="currentColor"
-                      fillOpacity={0.1}
-                      className="text-gray-400 dark:text-gray-600"
-                    />
-                  ))}
-                  
-                  {/* Today's date marker */}
-                  {isTodayInRange && (
-                    <ReferenceLine
-                      x={todayFormatted}
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeDasharray="3 3"
-                      className="text-red-500 dark:text-red-400"
-                      label={{ 
-                        value: t('reports.burndown.today'), 
-                        position: 'top',
-                        fill: 'currentColor',
-                        className: 'text-red-600 dark:text-red-400 text-xs font-semibold'
-                      }}
-                    />
-                  )}
-                  
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="currentColor" 
-                    className="text-gray-600 dark:text-gray-400"
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis 
-                    stroke="currentColor" 
-                    className="text-gray-600 dark:text-gray-400"
-                    label={{ value: t('reports.burndown.tasksRemaining'), angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'var(--tooltip-bg)', 
-                      border: '1px solid var(--tooltip-border)',
-                      borderRadius: '0.5rem'
-                    }}
-                    labelStyle={{ color: 'var(--tooltip-text)' }}
-                  />
-                  <Legend 
-                    wrapperStyle={{ paddingTop: '20px', cursor: 'pointer' }}
-                    onClick={(e: any) => {
-                      if (e.dataKey) handleLegendClick(e.dataKey);
-                    }}
-                  />
-                  
-                  {/* Ideal burndown guideline (gray dashed, flattened on weekends) */}
-                  <Line 
-                    type="monotone" 
-                    dataKey="ideal" 
-                    stroke="#9CA3AF" 
-                    strokeWidth={3}
-                    strokeDasharray="5 5" 
-                    name={t('reports.burndown.idealWorkingDays')}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                  
-                  {/* Single board view or aggregated view */}
-                  {/* Overall remaining line - show when viewing specific board or when no boards, or always show alongside boards */}
-                  {((boardId || !burndownData.boards || burndownData.boards.length === 0) || 
-                    (!boardId && burndownData.boards && burndownData.boards.length > 0)) && (
-                    <Line 
-                      type="monotone" 
-                      dataKey="remaining" 
-                      stroke="#3B82F6" 
-                      strokeWidth={3}
-                      name={t('reports.burndown.actualRemaining')}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  )}
-                  
-                  {/* Multi-board view - one line per board */}
-                  {!boardId && burndownData.boards && burndownData.boards.length > 0 && 
-                    burndownData.boards.map((board, index) => {
-                      const dataKey = `board_${board.boardId}`;
-                      return (
-                        <Line 
-                          key={board.boardId}
-                          type="monotone" 
-                          dataKey={dataKey}
-                          stroke={BOARD_COLORS[index % BOARD_COLORS.length]}
-                          strokeWidth={3}
-                          name={board.boardName}
-                          dot={false}
-                          isAnimationActive={false}
-                          hide={hiddenBoards.has(dataKey)}
-                          strokeOpacity={hiddenBoards.has(dataKey) ? 0.2 : 1}
-                        />
-                      );
-                    })
-                  }
-                  
-                  {/* Selection area for zoom (shown while dragging) */}
-                  {refAreaLeft && refAreaRight && (
-                    <ReferenceArea
-                      x1={refAreaLeft}
-                      x2={refAreaRight}
-                      strokeOpacity={0.3}
-                      fill="currentColor"
-                      fillOpacity={0.3}
-                      className="text-blue-500"
-                    />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
+              <div
+                ref={chartWrapRef}
+                className={`burndown-chart-wrap relative w-full max-w-full ${printLayout ? 'overflow-visible' : 'overflow-hidden'}`}
+                style={{ userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none' }}
+              >
+                {renderBurndownLineChart()}
               </div>
               
-              {/* Legend info */}
-              <div className="mt-4 flex flex-col gap-2">
+              {/* Screen-only legend hints — chart legend is sufficient on paper */}
+              <div className="no-print mt-4 flex flex-col gap-2">
                 <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-0.5 border-t-2 border-dashed border-gray-400"></div>
@@ -965,8 +944,8 @@ const BurndownReport: React.FC<BurndownReportProps> = ({ initialFilters, onFilte
         </div>
       )}
 
-      {/* Info Card */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+      {/* Info Card — screen only */}
+      <div className="no-print bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
         <div className="flex items-start gap-3">
           <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
           <div>

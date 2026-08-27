@@ -1,5 +1,70 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
+
+const BENIGN_SOCKET_CODES = new Set(['ECONNRESET', 'EPIPE', 'ECANCELED']);
+
+/** Client disconnects (OAuth redirect, CF tunnel, tab close) must not take down the dev/preview server. */
+function attachBenignSocketErrorHandler(httpServer: import('http').Server | null | undefined) {
+  httpServer?.on('connection', (socket) => {
+    socket.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code && BENIGN_SOCKET_CODES.has(err.code)) return;
+      console.warn('[vite] client socket error:', err.message);
+    });
+  });
+}
+
+function attachProxyResilience(proxy: { on: (event: string, handler: (...args: any[]) => void) => void }) {
+  proxy.on('error', (err: NodeJS.ErrnoException, _req: unknown, res: { headersSent?: boolean; writeHead?: Function; end?: Function }) => {
+    if (err.code && BENIGN_SOCKET_CODES.has(err.code)) return;
+    console.warn('[vite-proxy] error:', err.code || err.message);
+    if (res && typeof res.writeHead === 'function' && !res.headersSent) {
+      res.writeHead(502);
+      res.end?.();
+    }
+  });
+}
+
+function resilientProxyConfigure(
+  proxy: Parameters<NonNullable<import('vite').ProxyOptions['configure']>>[0],
+  options: Parameters<NonNullable<import('vite').ProxyOptions['configure']>>[1],
+  extra?: (proxy: typeof proxy, options: typeof options) => void
+) {
+  attachProxyResilience(proxy);
+  extra?.(proxy, options);
+}
+
+function withForwardedHostProxyConfigure(
+  proxy: Parameters<NonNullable<import('vite').ProxyOptions['configure']>>[0],
+  options: Parameters<NonNullable<import('vite').ProxyOptions['configure']>>[1]
+) {
+  resilientProxyConfigure(proxy, options, (p, _o) => {
+    p.on('proxyReq', (proxyReq, req, _res) => {
+      const forwardedHost = req.headers['x-forwarded-host'];
+      const originalHost = req.headers['host'];
+      const hostToUse = forwardedHost || originalHost;
+
+      if (hostToUse) {
+        proxyReq.setHeader('X-Forwarded-Host', hostToUse);
+        proxyReq.setHeader('Host', hostToUse);
+        if (originalHost && originalHost !== hostToUse) {
+          proxyReq.setHeader('X-Original-Host', originalHost);
+        }
+      }
+    });
+  });
+}
+
+function ignoreBenignSocketErrors(): Plugin {
+  return {
+    name: 'agila-ignore-benign-socket-errors',
+    configureServer(server: ViteDevServer) {
+      attachBenignSocketErrorHandler(server.httpServer);
+    },
+    configurePreviewServer(server: PreviewServer) {
+      attachBenignSocketErrorHandler(server.httpServer);
+    },
+  };
+}
 
 /** Swap the tab icon on the Vite dev server so local tabs are obvious vs production. */
 function agilaDevFavicon(): Plugin {
@@ -13,7 +78,7 @@ function agilaDevFavicon(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), agilaDevFavicon()],
+  plugins: [react(), agilaDevFavicon(), ignoreBenignSocketErrors()],
   envPrefix: ['VITE_', 'DEMO_', 'MULTI_'] as string[],
   // A second React copy makes every hook call fail ("dispatcher is null")
   resolve: {
@@ -113,31 +178,38 @@ export default defineConfig({
       '/api': {
         target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
         changeOrigin: true,
+        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
       },
       '/health': {
         target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
         changeOrigin: true,
+        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
       },
       '/attachments': {
         target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
         changeOrigin: true,
+        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
       },
       '/avatars': {
         target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
         changeOrigin: true,
+        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
       },
       '/api/files/attachments': {
         target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
         changeOrigin: true,
+        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
       },
       '/api/files/avatars': {
         target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
         changeOrigin: true,
+        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
       },
       '/socket.io': {
         target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
         changeOrigin: true,
         ws: true, // Enable WebSocket proxying
+        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
       },
     },
   },
@@ -158,130 +230,43 @@ export default defineConfig({
           // Preserve the original Host header from the incoming request
           // This allows tenant routing to extract tenant ID from hostname
         },
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            // Preserve X-Forwarded-Host header from ingress (most reliable)
-            const forwardedHost = req.headers['x-forwarded-host'];
-            const originalHost = req.headers['host'];
-            const hostToUse = forwardedHost || originalHost;
-            
-            if (hostToUse) {
-              // Set both headers to ensure tenant routing works
-              proxyReq.setHeader('X-Forwarded-Host', hostToUse);
-              proxyReq.setHeader('Host', hostToUse);
-              // Also set X-Original-Host as fallback
-              if (originalHost && originalHost !== hostToUse) {
-                proxyReq.setHeader('X-Original-Host', originalHost);
-              }
-            }
-          });
-        },
+        configure: withForwardedHostProxyConfigure,
       },
       '/ready': {
         target: 'http://localhost:3222',
         changeOrigin: false,
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            const forwardedHost = req.headers['x-forwarded-host'];
-            const originalHost = req.headers['host'];
-            const hostToUse = forwardedHost || originalHost;
-            if (hostToUse) {
-              proxyReq.setHeader('X-Forwarded-Host', hostToUse);
-              proxyReq.setHeader('Host', hostToUse);
-            }
-          });
-        },
+        configure: withForwardedHostProxyConfigure,
       },
       '/health': {
         target: 'http://localhost:3222',
         changeOrigin: false,
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            const forwardedHost = req.headers['x-forwarded-host'];
-            const originalHost = req.headers['host'];
-            const hostToUse = forwardedHost || originalHost;
-            if (hostToUse) {
-              proxyReq.setHeader('X-Forwarded-Host', hostToUse);
-              proxyReq.setHeader('Host', hostToUse);
-            }
-          });
-        },
+        configure: withForwardedHostProxyConfigure,
       },
       '/attachments': {
         target: 'http://localhost:3222',
         changeOrigin: false,
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            const forwardedHost = req.headers['x-forwarded-host'];
-            const originalHost = req.headers['host'];
-            const hostToUse = forwardedHost || originalHost;
-            if (hostToUse) {
-              proxyReq.setHeader('X-Forwarded-Host', hostToUse);
-              proxyReq.setHeader('Host', hostToUse);
-            }
-          });
-        },
+        configure: withForwardedHostProxyConfigure,
       },
       '/avatars': {
         target: 'http://localhost:3222',
         changeOrigin: false,
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            const forwardedHost = req.headers['x-forwarded-host'];
-            const originalHost = req.headers['host'];
-            const hostToUse = forwardedHost || originalHost;
-            if (hostToUse) {
-              proxyReq.setHeader('X-Forwarded-Host', hostToUse);
-              proxyReq.setHeader('Host', hostToUse);
-            }
-          });
-        },
+        configure: withForwardedHostProxyConfigure,
       },
       '/api/files/attachments': {
         target: 'http://localhost:3222',
         changeOrigin: false,
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            const forwardedHost = req.headers['x-forwarded-host'];
-            const originalHost = req.headers['host'];
-            const hostToUse = forwardedHost || originalHost;
-            if (hostToUse) {
-              proxyReq.setHeader('X-Forwarded-Host', hostToUse);
-              proxyReq.setHeader('Host', hostToUse);
-            }
-          });
-        },
+        configure: withForwardedHostProxyConfigure,
       },
       '/api/files/avatars': {
         target: 'http://localhost:3222',
         changeOrigin: false,
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            const forwardedHost = req.headers['x-forwarded-host'];
-            const originalHost = req.headers['host'];
-            const hostToUse = forwardedHost || originalHost;
-            if (hostToUse) {
-              proxyReq.setHeader('X-Forwarded-Host', hostToUse);
-              proxyReq.setHeader('Host', hostToUse);
-            }
-          });
-        },
+        configure: withForwardedHostProxyConfigure,
       },
       '/socket.io': {
         target: 'http://localhost:3222',
         changeOrigin: false,
         ws: true, // Enable WebSocket proxying
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            const forwardedHost = req.headers['x-forwarded-host'];
-            const originalHost = req.headers['host'];
-            const hostToUse = forwardedHost || originalHost;
-            if (hostToUse) {
-              proxyReq.setHeader('X-Forwarded-Host', hostToUse);
-              proxyReq.setHeader('Host', hostToUse);
-            }
-          });
-        },
+        configure: withForwardedHostProxyConfigure,
       },
     },
   },

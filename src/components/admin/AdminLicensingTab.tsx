@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, CheckCircle, Users, ClipboardList, Layout, HardDrive, Shield, ExternalLink } from 'lucide-react';
+import { AlertCircle, CheckCircle, Users, ClipboardList, Layout, HardDrive, Shield, ExternalLink, Webhook } from 'lucide-react';
 import api from '../../api';
 import { buildCustomerPortalUrl } from '../../utils/customerPortalUrl';
 import { adminSubNavTabClass } from './AdminSection';
@@ -18,6 +18,7 @@ interface LicenseInfo {
     TASK_LIMIT: number;
     BOARD_LIMIT: number;
     STORAGE_LIMIT: number;
+    WEBHOOK_LIMIT?: number;
     SUPPORT_LEVEL?: string;
     /** @deprecated legacy alias — prefer SUPPORT_LEVEL */
     SUPPORT_TYPE?: string;
@@ -28,11 +29,13 @@ interface LicenseInfo {
     boards: number;
     totalTasks: number;
     storage: number;
+    webhooks?: number;
   };
   limitsReached: {
     users: boolean;
     boards: boolean;
     storage: boolean;
+    webhooks?: boolean;
   };
   boardTaskCounts?: BoardTaskCount[];
   message?: string;
@@ -324,7 +327,7 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
         </div>
 
         {/* Usage Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Users */}
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="p-6">
@@ -397,6 +400,56 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
             </div>
           </div>
 
+          {/* Webhooks */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="p-6">
+              <h3 className="text-sm font-medium flex items-center mb-3 text-gray-900 dark:text-white">
+                <Webhook className="h-4 w-4 mr-2" />
+                {t('licensing.webhooks')}
+              </h3>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {licenseInfo.usage.webhooks ?? 0}
+                  </span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    /{' '}
+                    {licenseInfo.limits.WEBHOOK_LIMIT === undefined ||
+                    licenseInfo.limits.WEBHOOK_LIMIT === -1
+                      ? '∞'
+                      : licenseInfo.limits.WEBHOOK_LIMIT}
+                  </span>
+                </div>
+                {licenseInfo.limits.WEBHOOK_LIMIT !== undefined &&
+                  licenseInfo.limits.WEBHOOK_LIMIT !== -1 && (
+                    <>
+                      <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                        <div
+                          className="h-full w-full flex-1 bg-blue-600 transition-all duration-300 ease-in-out"
+                          style={{
+                            transform: `translateX(-${100 - calculateUsagePercentage(licenseInfo.usage.webhooks ?? 0, licenseInfo.limits.WEBHOOK_LIMIT)}%)`,
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {t('licensing.percentageUsed', {
+                            percentage: calculateUsagePercentage(
+                              licenseInfo.usage.webhooks ?? 0,
+                              licenseInfo.limits.WEBHOOK_LIMIT
+                            ).toFixed(1),
+                          })}
+                        </span>
+                        {licenseInfo.limitsReached.webhooks && (
+                          <span className="text-red-500 font-medium">{t('licensing.limitReached')}</span>
+                        )}
+                      </div>
+                    </>
+                  )}
+              </div>
+            </div>
+          </div>
+
           {/* Storage */}
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="p-6">
@@ -440,7 +493,9 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {licenseInfo.limits.TASK_LIMIT === -1 ? t('licensing.unlimited') : licenseInfo.limits.TASK_LIMIT} {t('licensing.tasksPerBoard')}
+                  {licenseInfo.limits.TASK_LIMIT === -1
+                    ? t('licensing.unlimitedTasksPerBoard')
+                    : t('licensing.tasksPerBoardLimit', { count: licenseInfo.limits.TASK_LIMIT })}
                 </h3>
                 <p className="text-gray-600 dark:text-gray-400 mt-1">
                   {t('licensing.maxTasksPerBoardDescription')}

@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, ChevronDown } from 'lucide-react';
+import { formFieldClass, formLabelClass } from '../../utils/formFieldClasses';
+
+/** Width of the start/end date pair; board filter matches this span. */
+export const REPORT_DATE_FILTER_ROW_CLASS = 'max-w-md';
 
 interface PlanningPeriod {
   id: string;
@@ -218,35 +222,37 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
         </div>
       </div>
 
-      {/* Manual Date Selection */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t('reports.dateRangeSelector.startDate')}
-          </label>
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => onStartDateChange(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
+      {/* Manual Date Selection — compact side-by-side */}
+      <div className={REPORT_DATE_FILTER_ROW_CLASS}>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={formLabelClass}>
+              {t('reports.dateRangeSelector.startDate')}
+            </label>
+            <div className="relative">
+              <Calendar className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => onStartDateChange(e.target.value)}
+                className={`${formFieldClass(false, { widthClass: 'w-full', py: '1.5', rounded: 'lg' })} pl-9`}
+              />
+            </div>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t('reports.dateRangeSelector.endDate')}
-          </label>
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => onEndDateChange(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
+          <div>
+            <label className={formLabelClass}>
+              {t('reports.dateRangeSelector.endDate')}
+            </label>
+            <div className="relative">
+              <Calendar className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => onEndDateChange(e.target.value)}
+                className={`${formFieldClass(false, { widthClass: 'w-full', py: '1.5', rounded: 'lg' })} pl-9`}
+              />
+            </div>
           </div>
         </div>
       </div>

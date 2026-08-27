@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { TAG_NAME_MAX_LENGTH } from '../constants/appConstants';
 import { setDndGloballyDisabled } from '../utils/globalDndState';
+import { formFieldClass } from '../utils/formFieldClasses';
 
 interface AddTagModalProps {
   onClose: () => void;
@@ -164,7 +165,7 @@ export default function AddTagModal({ onClose, onTagCreated }: AddTagModalProps)
               value={tagName}
               onChange={(e) => setTagName(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              className={formFieldClass(false, { widthClass: 'w-full' })}
               placeholder={t('addTagModal.enterTagName')}
               maxLength={TAG_NAME_MAX_LENGTH}
               disabled={isSubmitting}

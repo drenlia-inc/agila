@@ -7,8 +7,9 @@ import {
   isAgentMemberId,
   sortMembersAgentLast,
 } from '../../utils/agentMemberUi';
-import { truncateMemberName, memberIsViewer } from '../../utils/memberUtils';
+import { truncateMemberName, memberIsViewer, memberIsInactive } from '../../utils/memberUtils';
 import MemberAvatar from './MemberAvatar';
+import { formDropdownSearchClass } from '../../utils/formFieldClasses';
 
 export interface MemberSearchListProps {
   members: TeamMember[];
@@ -19,6 +20,8 @@ export interface MemberSearchListProps {
   selectedId?: string | null;
   /** Hide read-only viewers (assignee pickers). Still shows selectedId if it is a viewer. */
   excludeViewers?: boolean;
+  /** Hide inactive accounts (assignee/requester/watcher/collaborator pickers). Agent stays eligible. */
+  excludeInactive?: boolean;
   /** Highlight agent in its own section */
   showAgentSection?: boolean;
   /** Show a clear/unassign row at the top (assignee pickers) */
@@ -50,6 +53,7 @@ export default function MemberSearchList({
   excludeIds = [],
   selectedId = null,
   excludeViewers = false,
+  excludeInactive = true,
   showAgentSection = true,
   allowClear = false,
   autoFocus = true,
@@ -69,11 +73,19 @@ export default function MemberSearchList({
         members.filter((m) => {
           if (exclude.has(m.id)) return false;
           if (excludeViewers && memberIsViewer(m) && m.id !== selectedId) return false;
+          if (
+            excludeInactive &&
+            memberIsInactive(m) &&
+            !isAgentMemberId(m.id) &&
+            m.id !== selectedId
+          ) {
+            return false;
+          }
           return true;
         })
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [members, excludeIds.join('|'), excludeViewers, selectedId]
+    [members, excludeIds.join('|'), excludeViewers, excludeInactive, selectedId]
   );
 
   const filtered = useMemo(
@@ -179,7 +191,7 @@ export default function MemberSearchList({
             placeholder={t('taskPage.searchMembers', {
               defaultValue: 'Search by name…',
             })}
-            className="w-full pl-8 pr-8 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            className={`${formDropdownSearchClass()} pl-8 pr-8`}
             aria-label={t('taskPage.searchMembers', {
               defaultValue: 'Search by name…',
             })}
