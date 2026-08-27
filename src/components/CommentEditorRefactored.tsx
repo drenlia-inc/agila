@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useFileUpload, createFileInput } from '../hooks/useFileUpload';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import { formFieldClass, formMemoShellClass, formMemoToolbarClass } from '../utils/formFieldClasses';
 
 interface CommentEditorProps {
   onSubmit: (content: string, attachments: File[]) => Promise<void>;
@@ -128,9 +129,9 @@ export default function CommentEditor({ onSubmit, onCancel, initialContent = '',
   if (!editor) return null;
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className={formMemoShellClass}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 border-b">
+      <div className={`flex items-center justify-between p-2 border-b ${formMemoToolbarClass}`}>
         <div className="flex items-center space-x-1">
           <button
             type="button"
@@ -197,7 +198,7 @@ export default function CommentEditor({ onSubmit, onCancel, initialContent = '',
 
       {/* Attachments display */}
       {attachments.length > 0 && (
-        <div className="p-2 bg-gray-50 dark:bg-gray-800 border-t">
+        <div className={`p-2 border-t ${formMemoToolbarClass}`}>
           <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
             Attachments ({attachments.length}):
           </div>
@@ -228,7 +229,7 @@ export default function CommentEditor({ onSubmit, onCancel, initialContent = '',
       )}
 
       {/* Action buttons */}
-      <div className="flex items-center justify-end space-x-2 p-2 bg-gray-50 dark:bg-gray-800 border-t">
+      <div className={`flex items-center justify-end space-x-2 p-2 border-t ${formMemoToolbarClass}`}>
         {onCancel && (
           <button
             type="button"
@@ -262,7 +263,7 @@ export default function CommentEditor({ onSubmit, onCancel, initialContent = '',
                   type="url"
                   value={linkUrl}
                   onChange={(e) => setLinkUrl(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className={formFieldClass(false, { widthClass: 'w-full' })}
                   placeholder="https://example.com"
                   required
                 />
@@ -275,7 +276,7 @@ export default function CommentEditor({ onSubmit, onCancel, initialContent = '',
                   type="text"
                   value={linkText}
                   onChange={(e) => setLinkText(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className={formFieldClass(false, { widthClass: 'w-full' })}
                   placeholder="Click here"
                 />
               </div>

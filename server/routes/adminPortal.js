@@ -971,7 +971,7 @@ router.get('/plan', authenticateAdminPortal, async (req, res) => {
       licenseSettings.forEach(setting => {
         let key = setting.settingKey;
         if (key === 'SUPPORT_TYPE') key = 'SUPPORT_LEVEL';
-        if (['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'].includes(key)) {
+        if (['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'].includes(key)) {
           // Parse numeric values, keep string values as-is
           if (key === 'SUPPORT_LEVEL' || key === 'AI_TIER') {
             dbSettings[key] = setting.settingValue;
@@ -1016,6 +1016,7 @@ router.get('/plan', authenticateAdminPortal, async (req, res) => {
         TASK_LIMIT: getDisplayValue('TASK_LIMIT'),
         BOARD_LIMIT: getDisplayValue('BOARD_LIMIT'),
         STORAGE_LIMIT: getDisplayValue('STORAGE_LIMIT'),
+        WEBHOOK_LIMIT: getDisplayValue('WEBHOOK_LIMIT'),
         SUPPORT_LEVEL: getDisplayValue('SUPPORT_LEVEL'),
         AI_TIER: getDisplayValue('AI_TIER')
       },
@@ -1052,6 +1053,14 @@ router.get('/plan', authenticateAdminPortal, async (req, res) => {
           currentUsage: licenseInfo.usage.storage,
           currentUsageFormatted: formatBytes(licenseInfo.usage.storage),
           limitReached: licenseInfo.limitsReached.storage
+        },
+        {
+          key: 'WEBHOOK_LIMIT',
+          value: getDisplayValue('WEBHOOK_LIMIT'),
+          inMemory: isMultiTenant ? null : licenseInfo.limits.WEBHOOK_LIMIT,
+          database: dbSettings.WEBHOOK_LIMIT !== undefined ? dbSettings.WEBHOOK_LIMIT : null,
+          currentUsage: licenseInfo.usage.webhooks,
+          limitReached: licenseInfo.limitsReached.webhooks
         },
         {
           key: 'SUPPORT_LEVEL',
@@ -1156,7 +1165,7 @@ router.put('/plan/:key', authenticateAdminPortal, async (req, res) => {
     const t = await getTranslator(db);
     
     // Validate key
-    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'];
+    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'];
     if (!allowedKeys.includes(key)) {
       return res.status(400).json({ 
         success: false,
@@ -1212,7 +1221,7 @@ router.delete('/plan/:key', authenticateAdminPortal, async (req, res) => {
     const t = await getTranslator(db);
     
     // Validate key
-    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'];
+    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'];
     if (!allowedKeys.includes(key)) {
       return res.status(400).json({ 
         success: false,

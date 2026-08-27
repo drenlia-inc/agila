@@ -15,6 +15,7 @@ import ModalManager from './layout/ModalManager';
 import Header from './layout/Header';
 import TaskFlowChart from './TaskFlowChart';
 import TaskRelationshipLinker from './TaskRelationshipLinker';
+import TaskPickerDropdown from './ui/TaskPickerDropdown';
 import { toast } from '../utils/toast';
 import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
 import DOMPurify from 'dompurify';
@@ -34,6 +35,11 @@ import TaskStatusSelect from './ui/TaskStatusSelect';
 import SprintSelector from './SprintSelector';
 import type { Tag } from '../types';
 import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
+import {
+  formFieldClass,
+  formInputLockedClass,
+  formToggleTrackClass,
+} from '../utils/formFieldClasses';
 
 function pageLog(...args: unknown[]) {
   if (feDebug('FE_DEBUG_TASK_PAGE')) console.log(...args);
@@ -129,7 +135,6 @@ export default function TaskPage({
   const [showChildrenDropdown, setShowChildrenDropdown] = useState(false);
   const [childrenSearchTerm, setChildrenSearchTerm] = useState('');
   const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
-  const childrenDropdownRef = useRef<HTMLDivElement>(null);
 
   const reloadRelationships = useCallback(async () => {
     if (!task?.id) return;
@@ -327,24 +332,6 @@ export default function TaskPage({
     void reloadRelationships();
   }, [reloadRelationships]);
 
-  // Handle clicking outside children dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (childrenDropdownRef.current && !childrenDropdownRef.current.contains(event.target as Node)) {
-        setShowChildrenDropdown(false);
-        setChildrenSearchTerm('');
-      }
-    };
-
-    if (showChildrenDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showChildrenDropdown]);
-
   // Create a default task to avoid hook issues during loading
   const defaultTask = {
     id: '',
@@ -452,18 +439,6 @@ export default function TaskPage({
       }
     } catch (error) {
       console.error('Failed to remove child task:', error);
-    }
-  };
-
-  // Handler for opening children dropdown
-  const handleChildrenDropdownToggle = () => {
-    if (!userCanMutate(currentUser)) return;
-    const softDeleted =
-      isTaskSoftDeleted(editedTask) || (task ? isTaskSoftDeleted(task) : false);
-    if (softDeleted) return;
-    setShowChildrenDropdown(!showChildrenDropdown);
-    if (!showChildrenDropdown) {
-      setChildrenSearchTerm('');
     }
   };
 
@@ -1103,11 +1078,14 @@ export default function TaskPage({
                 readOnly={fieldsLocked}
                 disabled={fieldsLocked}
                 title={isInTrash ? t('trash.readOnlyHint') : undefined}
-                className={`w-full min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 disabled:opacity-70 disabled:cursor-not-allowed ${
+                className={
                   isInTrash
-                    ? 'bg-amber-50/80 dark:bg-amber-950/30'
-                    : 'bg-white dark:bg-gray-700'
-                }`}
+                    ? 'w-full min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base sm:text-lg font-medium bg-amber-50/80 dark:bg-amber-950/30 text-gray-900 dark:text-gray-100 disabled:opacity-70 disabled:cursor-not-allowed'
+                    : formFieldClass(fieldsLocked, {
+                        widthClass: 'w-full min-w-0',
+                        extra: 'text-base sm:text-lg font-medium',
+                      })
+                }
                 placeholder={t('placeholders.enterTitle')}
                 maxLength={TASK_TITLE_MAX_LENGTH}
               />
@@ -1528,7 +1506,7 @@ export default function TaskPage({
                     ) : fieldsLocked ? (
                       taskWatchers.length === 0 && (
                         <div
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"
+                          className={`w-full ${formInputLockedClass()}`}
                           aria-readonly="true"
                         >
                           {t('taskPage.noWatchers')}
@@ -1587,7 +1565,7 @@ export default function TaskPage({
                     {fieldsLocked ? (
                       taskCollaborators.length === 0 && (
                         <div
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"
+                          className={`w-full ${formInputLockedClass()}`}
                           aria-readonly="true"
                         >
                           {t('taskPage.noCollaborators')}
@@ -1682,11 +1660,7 @@ export default function TaskPage({
                     onChange={(e) => handleTaskUpdate({ startDate: e.target.value || null })}
                     readOnly={fieldsLocked}
                     tabIndex={fieldsLocked ? -1 : undefined}
-                    className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                      fieldsLocked
-                        ? 'cursor-default pointer-events-none'
-                        : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                    }`}
+                    className={formFieldClass(fieldsLocked, { widthClass: 'w-full' })}
                   />
                 </div>
 
@@ -1698,11 +1672,7 @@ export default function TaskPage({
                     onChange={(e) => handleTaskUpdate({ dueDate: e.target.value || null })}
                     readOnly={fieldsLocked}
                     tabIndex={fieldsLocked ? -1 : undefined}
-                    className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                      fieldsLocked
-                        ? 'cursor-default pointer-events-none'
-                        : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                    }`}
+                    className={formFieldClass(fieldsLocked, { widthClass: 'w-full' })}
                   />
                 </div>
 
@@ -1727,11 +1697,7 @@ export default function TaskPage({
                     }}
                     readOnly={fieldsLocked}
                     tabIndex={fieldsLocked ? -1 : undefined}
-                    className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                      fieldsLocked
-                        ? 'cursor-default'
-                        : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                    }`}
+                    className={formFieldClass(fieldsLocked, { widthClass: 'w-full' })}
                     placeholder="0"
                   />
                 </div>
@@ -1744,11 +1710,6 @@ export default function TaskPage({
                     handleTaskUpdate({ columnId: column.id, status: column.title })
                   }
                   labelClassName="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
-                  selectClassName={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                    fieldsLocked
-                      ? 'cursor-default'
-                      : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                  }`}
                 />
                 </div>
 
@@ -1766,7 +1727,7 @@ export default function TaskPage({
                 />
 
                 <div>
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                  <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium text-gray-700 dark:text-gray-200">
                         {t('labels.blocked')}
@@ -1788,9 +1749,7 @@ export default function TaskPage({
                           })
                         }
                       />
-                      <div className={`w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600 ${
-                        fieldsLocked ? '' : 'peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300'
-                      }`} />
+                      <div className={formToggleTrackClass} />
                     </label>
                   </div>
                   {editedTask.isBlocked && (
@@ -1820,9 +1779,10 @@ export default function TaskPage({
                       }}
                       placeholder={t('labels.blockedReasonPlaceholder')}
                       maxLength={BLOCKED_REASON_MAX_LENGTH}
-                      className={`mt-2 w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm ${
-                        fieldsLocked ? 'cursor-default' : ''
-                      }`}
+                      className={formFieldClass(fieldsLocked, {
+                        widthClass: 'mt-2 w-full',
+                        extra: 'text-sm',
+                      })}
                     />
                   )}
                 </div>
@@ -1972,55 +1932,21 @@ export default function TaskPage({
                     
                     {/* Children Dropdown */}
                     {!fieldsLocked && (
-                    <div className="relative" ref={childrenDropdownRef}>
-                      <button
-                        type="button"
-                        onClick={handleChildrenDropdownToggle}
-                        className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between text-gray-900 dark:text-gray-100"
-                      >
-                        <span className="text-gray-700 dark:text-gray-200">
-                          {t('taskPage.addChildTask')}
-                        </span>
-                        <ChevronDown size={16} className={`transform transition-transform ${showChildrenDropdown ? 'rotate-180' : ''}`} />
-                      </button>
-                      
-                      {showChildrenDropdown && (
-                        <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {/* Search Input */}
-                          <div className="p-2 border-b border-gray-200 dark:border-gray-600">
-                            <input
-                              type="text"
-                              placeholder={t('taskPage.searchTasks')}
-                              value={childrenSearchTerm}
-                              onChange={(e) => setChildrenSearchTerm(e.target.value)}
-                              className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              autoFocus
-                            />
-                          </div>
-                          
-                          {/* Available Tasks List */}
-                          <div className="max-h-40 overflow-y-auto">
-                            {filteredAvailableChildren.length > 0 ? (
-                              filteredAvailableChildren.map(availableTask => (
-                                <button
-                                  key={availableTask.id}
-                                  type="button"
-                                  onClick={() => handleAddChildTask(availableTask.id)}
-                                  className="w-full px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/35 focus:bg-blue-50 dark:focus:bg-blue-900/35 focus:outline-none transition-colors text-sm"
-                                >
-                                  <div className="font-medium text-blue-600 dark:text-blue-400">{availableTask.ticket}</div>
-                                  <div className="text-gray-600 dark:text-gray-300 truncate">{availableTask.title}</div>
-                                </button>
-                              ))
-                            ) : (
-                              <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-                                {childrenSearchTerm ? t('taskPage.noTasksFound') : t('taskPage.noAvailableTasks')}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                      <TaskPickerDropdown
+                        open={showChildrenDropdown}
+                        onOpenChange={(open) => {
+                          setShowChildrenDropdown(open);
+                          if (!open) setChildrenSearchTerm('');
+                        }}
+                        triggerLabel={t('taskPage.addChildTask')}
+                        searchTerm={childrenSearchTerm}
+                        onSearchTermChange={setChildrenSearchTerm}
+                        searchPlaceholder={t('taskPage.searchTasks')}
+                        items={filteredAvailableChildren}
+                        emptyText={t('taskPage.noAvailableTasks')}
+                        noResultsText={t('taskPage.noTasksFound')}
+                        onSelect={(id) => void handleAddChildTask(id)}
+                      />
                     )}
                   </div>
                 </div>

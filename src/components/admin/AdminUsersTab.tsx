@@ -11,6 +11,14 @@ import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { useSettings } from '../../contexts/SettingsContext';
 import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
 import { formatToYYYYMMDDHHmmss } from '../../utils/dateUtils';
+import {
+  adminInputLockedClass,
+  adminLabelClass,
+  adminLabelLockedClass,
+  adminLockedSurfaceClass,
+  adminModalInputEditableClass,
+  adminModalInputLockedClass,
+} from './AdminSection';
 
 interface User {
   id: string;
@@ -201,15 +209,13 @@ function RoleBadgeSelect({
         }}
         className={
           isMd
-            ? `w-full inline-flex items-center justify-between gap-2 px-3 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors ${
-                disabled
-                  ? 'opacity-60 cursor-not-allowed'
-                  : 'hover:border-slate-400 dark:hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 cursor-pointer'
+            ? `w-full inline-flex items-center justify-between gap-2 px-3 py-2.5 text-sm rounded-md transition-colors ${
+                disabled ? adminLockedSurfaceClass : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 cursor-pointer'
               }`
-            : `inline-flex items-center justify-between gap-1.5 font-medium rounded-md border transition-colors max-w-[7.5rem] px-1.5 py-1 text-[11px] ${roleToneClasses(value)} ${
+            : `inline-flex items-center justify-between gap-1.5 font-medium rounded-md border transition-colors max-w-[7.5rem] px-1.5 py-1 text-[11px] ${
                 disabled
-                  ? 'opacity-60 cursor-not-allowed'
-                  : 'hover:brightness-[0.98] dark:hover:brightness-110 cursor-pointer'
+                  ? adminInputLockedClass
+                  : `${roleToneClasses(value)} hover:brightness-[0.98] dark:hover:brightness-110 cursor-pointer`
               }`
         }
       >
@@ -678,9 +684,6 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   const persistedEditingUser = users.find((u) => u.id === editingUserData.id) || null;
   const [editingUserInitialRole, setEditingUserInitialRole] = useState<'admin' | 'user' | 'viewer'>('user');
 
-  const fieldClass =
-    'w-full px-3 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500';
-  const labelClass = 'block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5';
   const roleLabels = useMemo(
     () => ({
       user: t('users.user'),
@@ -1574,51 +1577,51 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
             </div>
             <div className="px-5 py-5 space-y-5">
               <div>
-                <label className={labelClass}>{t('users.email')}</label>
+                <label className={adminLabelClass}>{t('users.email')}</label>
                 <input
                   type="email"
                   value={newUser.email}
                   onChange={(e) => handleNewUserChange('email', e.target.value)}
-                  className={fieldClass}
+                  className={adminModalInputEditableClass}
                   placeholder="user@example.com"
                   autoFocus
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>{t('users.firstName')}</label>
+                  <label className={adminLabelClass}>{t('users.firstName')}</label>
                   <input
                     type="text"
                     value={newUser.firstName}
                     onChange={(e) => setNewUser(prev => ({ ...prev, firstName: e.target.value }))}
-                    className={fieldClass}
+                    className={adminModalInputEditableClass}
                     placeholder={t('users.firstName')}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>{t('users.lastName')}</label>
+                  <label className={adminLabelClass}>{t('users.lastName')}</label>
                   <input
                     type="text"
                     value={newUser.lastName}
                     onChange={(e) => setNewUser(prev => ({ ...prev, lastName: e.target.value }))}
-                    className={fieldClass}
+                    className={adminModalInputEditableClass}
                     placeholder={t('users.lastName')}
                   />
                 </div>
               </div>
               <div>
-                <label className={labelClass}>{t('users.displayName')}</label>
+                <label className={adminLabelClass}>{t('users.displayName')}</label>
                 <input
                   type="text"
                   value={newUser.displayName || `${newUser.firstName} ${newUser.lastName}`.trim()}
                   onChange={(e) => setNewUser(prev => ({ ...prev, displayName: e.target.value }))}
                   maxLength={30}
-                  className={fieldClass}
+                  className={adminModalInputEditableClass}
                   placeholder={t('users.displayName')}
                 />
               </div>
               <div>
-                <label className={labelClass}>{t('users.role')}</label>
+                <label className={adminLabelClass}>{t('users.role')}</label>
                 <RoleBadgeSelect
                   size="md"
                   value={(newUser.role as RoleValue) || 'user'}
@@ -1734,45 +1737,51 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
               )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>{t('users.firstName')}</label>
+                  <label className={adminLabelClass}>{t('users.firstName')}</label>
                   <input
                     type="text"
                     value={editingUserData.firstName}
                     onChange={(e) => setEditingUserData(prev => ({ ...prev, firstName: e.target.value }))}
-                    className={fieldClass}
+                    className={adminModalInputEditableClass}
                     placeholder={t('users.firstName')}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>{t('users.lastName')}</label>
+                  <label className={adminLabelClass}>{t('users.lastName')}</label>
                   <input
                     type="text"
                     value={editingUserData.lastName}
                     onChange={(e) => setEditingUserData(prev => ({ ...prev, lastName: e.target.value }))}
-                    className={fieldClass}
+                    className={adminModalInputEditableClass}
                     placeholder={t('users.lastName')}
                   />
                 </div>
               </div>
               <div>
-                <label className={labelClass}>{t('users.displayName')}</label>
+                <label className={adminLabelClass}>{t('users.displayName')}</label>
                 <input
                   type="text"
                   value={editingUserData.displayName}
                   onChange={(e) => setEditingUserData(prev => ({ ...prev, displayName: e.target.value }))}
                   maxLength={30}
-                  className={fieldClass}
+                  className={adminModalInputEditableClass}
                   placeholder={t('users.displayName')}
                 />
               </div>
               <div>
-                <label className={labelClass}>
+                <label
+                  className={
+                    isOwner(editingUserData.email) || isLocalPseudoAccount(editingUserData.email)
+                      ? adminLabelLockedClass
+                      : adminLabelClass
+                  }
+                >
                   {t('users.email')}
                   {isOwner(editingUserData.email) && (
-                    <span className="ml-2 text-[11px] text-amber-600 font-normal">{t('users.ownerCannotBeChanged')}</span>
+                    <span className="ml-2 text-[11px] text-amber-600/90 dark:text-amber-500/90 font-normal">{t('users.ownerCannotBeChanged')}</span>
                   )}
                   {isLocalPseudoAccount(editingUserData.email) && (
-                    <span className="ml-2 text-[11px] text-amber-600 font-normal">{t('users.pseudoEmailLocked')}</span>
+                    <span className="ml-2 text-[11px] text-amber-600/90 dark:text-amber-500/90 font-normal">{t('users.pseudoEmailLocked')}</span>
                   )}
                 </label>
                 <input
@@ -1780,17 +1789,26 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   value={editingUserData.email}
                   onChange={(e) => setEditingUserData(prev => ({ ...prev, email: e.target.value }))}
                   disabled={isOwner(editingUserData.email) || isLocalPseudoAccount(editingUserData.email)}
-                  className={`${fieldClass} ${
+                  readOnly={isOwner(editingUserData.email) || isLocalPseudoAccount(editingUserData.email)}
+                  className={
                     isOwner(editingUserData.email) || isLocalPseudoAccount(editingUserData.email)
-                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
-                      : ''
-                  }`}
+                      ? adminModalInputLockedClass
+                      : adminModalInputEditableClass
+                  }
                   placeholder="user@example.com"
                 />
               </div>
               {!isLocalPseudoAccount(editingUserData.email) && (
                 <div>
-                  <label className={labelClass}>{t('users.role')}</label>
+                  <label
+                    className={
+                      editingUserData.id === currentUser?.id || !canModifyUser(editingUserData.email)
+                        ? adminLabelLockedClass
+                        : adminLabelClass
+                    }
+                  >
+                    {t('users.role')}
+                  </label>
                   <RoleBadgeSelect
                     size="md"
                     value={editingUserData.role}
@@ -1818,13 +1836,20 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                     disabled={!canModifyUser(editingUserData.email)}
                     onChange={(e) => setEditingUserData(prev => ({ ...prev, isActive: e.target.checked }))}
                   />
-                  <label htmlFor="editIsActive" className="text-sm text-slate-700 dark:text-slate-300">
+                  <label
+                    htmlFor="editIsActive"
+                    className={`text-sm ${
+                      !canModifyUser(editingUserData.email)
+                        ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                        : 'text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
                     {t('users.active')}
                   </label>
                 </div>
               )}
               <div>
-                <label className={labelClass}>{t('users.avatar')}</label>
+                <label className={adminLabelClass}>{t('users.avatar')}</label>
                 <div className="flex items-center gap-3">
                   <div className="flex-shrink-0">
                     {avatarPreviewUrl ? (

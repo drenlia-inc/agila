@@ -1,6 +1,7 @@
 // License configuration and management
 import { wrapQuery } from '../utils/queryLogger.js';
 import { getStorageUsage as getStorageUsageFromUtils } from '../utils/storageUtils.js';
+import { webhooks as webhookQueries } from '../utils/sqlManager/index.js';
 
 /** Soft fair-use cap when STORAGE_LIMIT is unlimited (-1). Not shown on pricing cards. */
 const PRO_STORAGE_SOFT_CAP_BYTES = 1024 * 1024 * 1024 * 1024; // 1 TiB
@@ -332,6 +333,7 @@ class LicenseManager {
       const boards = await this.getBoardCount();
       const totalTasks = await this.getTotalTaskCount();
       const storage = await this.getStorageUsage();
+      const webhooks = await webhookQueries.countWebhooks(this.db);
       const effectiveStorage = this.getEffectiveStorageLimitBytes(limits);
 
       return {
@@ -341,12 +343,17 @@ class LicenseManager {
           users,
           boards,
           totalTasks,
-          storage
+          storage,
+          webhooks
         },
         limitsReached: {
           users: !isUnlimitedNumeric(limits.USER_LIMIT) && users >= limits.USER_LIMIT,
           boards: !isUnlimitedNumeric(limits.BOARD_LIMIT) && boards >= limits.BOARD_LIMIT,
-          storage: effectiveStorage !== null && storage >= effectiveStorage
+          storage: effectiveStorage !== null && storage >= effectiveStorage,
+          webhooks:
+            limits.WEBHOOK_LIMIT !== undefined &&
+            !isUnlimitedNumeric(limits.WEBHOOK_LIMIT) &&
+            webhooks >= limits.WEBHOOK_LIMIT
         },
         boardTaskCounts: await this.getBoardTaskCounts()
       };

@@ -15,6 +15,7 @@ import Image from '@tiptap/extension-image';
 import Heading from '@tiptap/extension-heading';
 import Strike from '@tiptap/extension-strike';
 import { ModernCheckbox } from './ModernCheckbox';
+import { formFieldClass, formMemoShellClass, formMemoToolbarClass } from '../utils/formFieldClasses';
 import Code from '@tiptap/extension-code';
 import CodeBlock from '@tiptap/extension-code-block';
 import Table from '@tiptap/extension-table';
@@ -1445,11 +1446,11 @@ export default function TextEditor({
       }} />
       <div 
         ref={editorRef}
-        className={`${compact ? 'border border-gray-300 dark:border-gray-600 rounded' : 'border border-gray-300 dark:border-gray-600 rounded-lg'} overflow-hidden bg-white dark:bg-gray-800 ${className}`}
+        className={`${compact ? formMemoShellClass.replace('rounded-lg', 'rounded') : formMemoShellClass} ${className}`}
       >
       {/* Toolbar */}
       {showToolbar && (
-        <div className={`flex flex-wrap gap-1 ${compact ? 'p-1' : 'p-2'} border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700`}>
+        <div className={`flex flex-wrap gap-1 ${compact ? 'p-1' : 'p-2'} border-b ${formMemoToolbarClass}`}>
           {/* Headers */}
           {finalToolbarOptions.heading && (
             <div className="relative" ref={headingDropdownRef}>
@@ -1997,7 +1998,7 @@ export default function TextEditor({
 
       {/* Attachments */}
       {showAttachments && displayedAttachments.length > 0 && (
-        <div className="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+        <div className={`p-2 border-t ${formMemoToolbarClass}`}>
           <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Attachments:</p>
           <div className="space-y-1">
             {displayedAttachments
@@ -2115,7 +2116,7 @@ export default function TextEditor({
 
       {/* Submit Buttons */}
       {showSubmitButtons && (
-        <div className="flex justify-end gap-2 p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <div className={`flex justify-end gap-2 p-2 border-t ${formMemoToolbarClass}`}>
           {onCancel && (
             <button
               type="button"
@@ -2178,7 +2179,7 @@ export default function TextEditor({
                       handleLinkSubmit(e);
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className={formFieldClass(false, { widthClass: 'w-full' })}
                   placeholder={t('textEditor.urlPlaceholder')}
                   autoFocus
                 />
@@ -2199,7 +2200,7 @@ export default function TextEditor({
                         handleLinkSubmit(e);
                       }
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className={formFieldClass(false, { widthClass: 'w-full' })}
                     placeholder={t('textEditor.linkTextPlaceholder')}
                   />
                 </div>

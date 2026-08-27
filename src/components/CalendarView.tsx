@@ -40,6 +40,8 @@ import { TaskJumpDropdown } from './gantt/TaskJumpDropdown';
 import { TaskBarTooltip } from './gantt/TaskBarTooltip';
 import ColumnFilterDropdown from './ColumnFilterDropdown';
 import MemberAvatar from './ui/MemberAvatar';
+import MemberSearchList from './ui/MemberSearchList';
+import { layoutMemberDropdownFromElement, type MemberDropdownLayout } from '../utils/memberDropdownLayout';
 import AddCommentModal from './AddCommentModal';
 import {
   CHROME_TOOLTIP_PANEL_SURFACE_CLASS,
@@ -506,7 +508,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const [commentPreviewPosition, setCommentPreviewPosition] =
     useState<FixedPopoverPosition | null>(null);
   const [assigneeMenuPosition, setAssigneeMenuPosition] =
-    useState<FixedPopoverPosition | null>(null);
+    useState<MemberDropdownLayout | null>(null);
   const [menuTaskId, setMenuTaskId] = useState<string | null>(null);
   const [assigneeMenuTaskId, setAssigneeMenuTaskId] = useState<string | null>(null);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
@@ -538,7 +540,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const weekdayRowRef = useRef<HTMLDivElement | null>(null);
   const periodPickerRef = useRef<HTMLInputElement | null>(null);
   const assigneeMenuRef = useRef<HTMLDivElement | null>(null);
-  const assigneeAnchorRectRef = useRef<DOMRect | null>(null);
   const commentPreviewRef = useRef<HTMLDivElement | null>(null);
   const commentAnchorRectRef = useRef<DOMRect | null>(null);
   const commentShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -877,24 +878,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     setHoverCommentId(null);
   }, []);
 
-  /** Dropdown anchored under its trigger, flipped above when the viewport is tight. */
-  const dropdownPositionFor = useCallback(
-    (anchor: DOMRect, width: number, height: number, gap = 6): FixedPopoverPosition => {
-      const viewportGap = 8;
-      let left = anchor.left + anchor.width / 2 - width / 2;
-      left = Math.max(viewportGap, Math.min(left, window.innerWidth - width - viewportGap));
-
-      const spaceBelow = window.innerHeight - anchor.bottom;
-      let top =
-        spaceBelow >= height + gap || spaceBelow >= anchor.top
-          ? anchor.bottom + gap
-          : anchor.top - height - gap;
-      top = Math.max(viewportGap, Math.min(top, window.innerHeight - height - viewportGap));
-      return { left, top };
-    },
-    []
-  );
-
   /**
    * Same placement rule as the Kanban card comment tooltip: centred on the icon,
    * above it when there is room, so the panel stays next to the bubble it belongs to.
@@ -984,20 +967,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       )
     );
   }, [commentPreviewOpen, commentPreviewPositionFor]);
-
-  useLayoutEffect(() => {
-    if (!assigneeMenuTaskId || !assigneeMenuRef.current || !assigneeAnchorRectRef.current) {
-      return;
-    }
-    const panel = assigneeMenuRef.current;
-    setAssigneeMenuPosition(
-      dropdownPositionFor(
-        assigneeAnchorRectRef.current,
-        panel.offsetWidth,
-        panel.offsetHeight
-      )
-    );
-  }, [assigneeMenuTaskId, dropdownPositionFor]);
 
   useEffect(() => {
     if (!assigneeMenuTaskId) return;
@@ -1747,9 +1716,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             setAssigneeMenuPosition(null);
             return;
           }
-          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          assigneeAnchorRectRef.current = rect;
-          setAssigneeMenuPosition(dropdownPositionFor(rect, 224, 256));
+          const el = e.currentTarget as HTMLElement;
+          setAssigneeMenuPosition(
+            layoutMemberDropdownFromElement(el, members, {
+              showAgent: true,
+              excludeViewers: true,
+              selectedId: task.memberId ?? null,
+              placement: 'below',
+            })
+          );
           setAssigneeMenuTaskId(task.id);
         }}
       >
@@ -2885,43 +2860,33 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         createPortal(
           <div
             ref={assigneeMenuRef}
-            className="fixed z-[9999] max-h-64 w-56 overflow-auto rounded-md border border-gray-200 bg-white p-1 text-gray-800 shadow-lg dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+            className="fixed z-[9999] overflow-hidden flex flex-col rounded-lg border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-gray-800"
             role="menu"
             style={{
               left: assigneeMenuPosition.left,
               top: assigneeMenuPosition.top,
+              width: assigneeMenuPosition.width,
+              height: assigneeMenuPosition.height,
+              maxHeight: assigneeMenuPosition.height,
             }}
             onClick={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="px-2 py-1 text-[10px] uppercase text-gray-500 dark:text-gray-400">
-              {t('calendar.assignee')}
-            </div>
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700"
-              onClick={() => assignMember(assigneeMenuTask, null)}
-            >
-              <MemberAvatar member={null} size="xs" />
-              <span className="truncate">{t('calendar.unassigned')}</span>
-            </button>
-            {assignableMembers.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                role="menuitem"
-                className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                  m.id === assigneeMenuTask.memberId
-                    ? 'bg-blue-50 font-medium dark:bg-blue-900/40'
-                    : ''
-                }`}
-                onClick={() => assignMember(assigneeMenuTask, m.id)}
-              >
-                <MemberAvatar member={m} size="xs" />
-                <span className="truncate">{m.name}</span>
-              </button>
-            ))}
+            <MemberSearchList
+              members={members}
+              selectedId={assigneeMenuTask.memberId ?? null}
+              showAgentSection
+              excludeViewers
+              allowClear
+              columns={assigneeMenuPosition.columns}
+              onSelect={(memberId) => assignMember(assigneeMenuTask, memberId)}
+              onEscape={() => {
+                setAssigneeMenuTaskId(null);
+                setAssigneeMenuPosition(null);
+              }}
+              maxHeightClassName="max-h-none"
+              className="min-h-0 flex-1"
+            />
           </div>,
           document.body
         )}

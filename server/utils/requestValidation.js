@@ -705,3 +705,9 @@ export const webhookUpsertBodySchema = z.object({
 export const webhookEnabledBodySchema = z.object({
   enabled: z.boolean(),
 });
+
+/** Probe draft webhook config without persisting (Admin → Webhooks editor). */
+export const webhookTestBodySchema = webhookUpsertBodySchema.extend({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().max(100).optional(),
+});

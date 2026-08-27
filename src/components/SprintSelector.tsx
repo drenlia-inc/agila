@@ -14,6 +14,8 @@ import {
 } from '../utils/sprintActiveWorkTransfer';
 import SprintTransferConfirmDialog from './sprints/SprintTransferConfirmDialog';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import AnchoredDropdownPortal from './ui/AnchoredDropdownPortal';
+import { formFieldClass, formInputEditableParts, formLockedSurfaceClass } from '../utils/formFieldClasses';
 
 interface Sprint {
   id: string;
@@ -77,7 +79,8 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const showCreateUi = canCreateSprint && mode === 'filter';
 
@@ -122,14 +125,15 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
     fetchSprints();
   }, [propSprints]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (skip while transfer confirm is open)
   useEffect(() => {
     if (!isOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
       if (transferOffer) return;
       const target = event.target as Node;
-      if (dropdownRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
       closeDropdown();
     };
 
@@ -362,8 +366,25 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
     }
   };
 
+  const panelWidth =
+    isCreating && showCreateUi
+      ? Math.min(576, typeof window !== 'undefined' ? window.innerWidth - 24 : 576)
+      : isAssign
+        ? 'trigger'
+        : 288;
+  const panelMaxHeight = isCreating && showCreateUi ? 640 : 384;
+
+  const assignTriggerClass = disabled
+    ? `w-full py-2 shadow-sm justify-between ${formLockedSurfaceClass}`
+    : `w-full py-2 shadow-sm justify-between ${formInputEditableParts('panel')} text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50`;
+
+  const filterTriggerClass = disabled
+    ? `py-1.5 ${formLockedSurfaceClass}`
+    :
+        'py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700';
+
   return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
+    <div className={`relative ${className}`}>
       <KanbanChromeTooltip
         label={
           !isAssign && selectedSprintId !== null
@@ -372,6 +393,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
         }
       >
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => {
             if (disabled) return;
@@ -382,15 +404,9 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
             }
           }}
           disabled={disabled}
-          className={`flex items-center gap-2 px-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-md transition-colors border border-gray-300 dark:border-gray-600 relative ${
-            disabled
-              ? 'cursor-default opacity-100'
-              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-          } ${
-            isAssign
-              ? 'w-full py-2 bg-white dark:bg-gray-700 shadow-sm justify-between'
-              : 'py-1.5'
-          } ${isOpen ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}
+          className={`flex items-center gap-2 px-3 text-sm font-medium rounded-md transition-colors relative ${
+            isAssign ? assignTriggerClass : filterTriggerClass
+          } ${isOpen && !disabled ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}
           aria-label={t('sprintSelector.selectSprint')}
           aria-readonly={disabled || undefined}
           data-tour-id="sprint-selector"
@@ -414,18 +430,20 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
         </button>
       </KanbanChromeTooltip>
 
-      {isOpen && (
+      <AnchoredDropdownPortal
+        open={isOpen}
+        triggerRef={triggerRef}
+        panelRef={panelRef}
+        width={panelWidth}
+        minWidth={isAssign ? 360 : undefined}
+        preferredMaxHeight={panelMaxHeight}
+        className="flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+      >
         <div
-          className={`absolute left-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 overflow-hidden flex flex-col ${
-            isAssign
-              ? 'w-full'
-              : isCreating
-                ? 'w-[min(36rem,calc(100vw-1.5rem))] max-h-[min(90vh,40rem)]'
-                : 'w-72 max-h-96'
-          }`}
           role={isCreating ? 'dialog' : undefined}
           aria-modal={isCreating ? true : undefined}
           aria-label={isCreating ? ta('sprintSettings.createNewSprint') : undefined}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
         >
           {isCreating && showCreateUi ? (
             <div className="p-6 overflow-y-auto bg-blue-50 dark:bg-blue-900/20">
@@ -475,7 +493,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={t('sprintSelector.searchSprints')}
-                className="w-full pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={formFieldClass(false, { widthClass: 'w-full pl-9 pr-8', py: '1.5' })}
                 autoFocus
               />
               {searchTerm && (
@@ -630,7 +648,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
             </>
           )}
         </div>
-      )}
+      </AnchoredDropdownPortal>
       <SprintTransferConfirmDialog
         offer={transferOffer}
         toName={createForm.name.trim() || createForm.name}

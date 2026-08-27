@@ -137,6 +137,8 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
       return;
     }
     const json = serializeDefaultBoardColumns(complete);
+    const prevColumnsJson = editingSettings.DEFAULT_BOARD_COLUMNS ?? '';
+    const columnsChanged = json !== prevColumnsJson;
     setDefaultBoardColumns(complete);
     const extras = uniqueNewFinishedKeywords(extraKeywords, finishedColumnNames);
     const names = extras.length ? [...finishedColumnNames, ...extras] : finishedColumnNames;
@@ -144,14 +146,22 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
       setFinishedColumnNames(names);
     }
     const namesJson = JSON.stringify(names);
+    const prevNamesJson = editingSettings.DEFAULT_FINISHED_COLUMN_NAMES ?? '';
+    const namesChanged = extras.length > 0 && namesJson !== prevNamesJson;
+    if (!columnsChanged && !namesChanged) {
+      return;
+    }
     onSettingsChange({
       ...editingSettings,
       DEFAULT_BOARD_COLUMNS: json,
-      ...(extras.length ? { DEFAULT_FINISHED_COLUMN_NAMES: namesJson } : {}),
+      ...(namesChanged ? { DEFAULT_FINISHED_COLUMN_NAMES: namesJson } : {}),
     });
     if (options?.autoSave && onAutoSave) {
-      const saves = [onAutoSave('DEFAULT_BOARD_COLUMNS', json, { silent: true })];
-      if (extras.length) {
+      const saves: Promise<void>[] = [];
+      if (columnsChanged) {
+        saves.push(onAutoSave('DEFAULT_BOARD_COLUMNS', json, { silent: true }));
+      }
+      if (namesChanged) {
         saves.push(onAutoSave('DEFAULT_FINISHED_COLUMN_NAMES', namesJson, { silent: true }));
       }
       void Promise.all(saves)
@@ -248,7 +258,7 @@ const AdminProjectSettingsTab: React.FC<AdminProjectSettingsTabProps> = ({
             <button
               onClick={addFinishedColumnName}
               disabled={!newColumnName.trim() || finishedColumnNames.includes(newColumnName.trim())}
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed dark:disabled:bg-blue-600/40"
             >
               {t('add')}
             </button>

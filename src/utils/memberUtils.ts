@@ -13,3 +13,8 @@ export function memberIsViewer(member?: { isViewer?: boolean } | null): boolean 
   return Boolean(member?.isViewer);
 }
 
+/** Linked user account is deactivated (Agent is handled separately in pickers). */
+export function memberIsInactive(member?: { isActive?: boolean } | null): boolean {
+  return member?.isActive === false;
+}
+

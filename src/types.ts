@@ -92,6 +92,8 @@ export type TaskUpdateOptions = {
    * Use after comment/tag/watcher/collaborator APIs that already persisted the change.
    */
   localOnly?: boolean;
+  /** Persist without the board-wide loading overlay (Task Details panel, Calendar drag). */
+  skipLoading?: boolean;
 };
 
 export interface Tag {

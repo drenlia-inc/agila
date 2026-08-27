@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Search, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Task } from '../../types';
+import { formFieldClass } from '../../utils/formFieldClasses';
 
 export interface HeaderSearchTask extends Pick<
   Task,
@@ -107,9 +108,11 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
   const [hoverIndex, setHoverIndex] = useState(-1);
   const [menuPos, setMenuPos] = useState<{
     left: number;
-    top: number;
+    top?: number;
+    bottom?: number;
     width: number;
     maxHeight: number;
+    placement: 'above' | 'below';
   } | null>(null);
   const [trashedTasks, setTrashedTasks] = useState<HeaderSearchTask[]>([]);
   const lastEmittedRef = useRef(value);
@@ -211,8 +214,23 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
     const above = rect.top - margin;
     const placeBelow = below >= 160 || below >= above;
     const maxHeight = Math.max(120, Math.min(320, placeBelow ? below : above));
-    const top = placeBelow ? rect.bottom + 4 : Math.max(margin, rect.top - maxHeight - 4);
-    setMenuPos({ left, top, width, maxHeight });
+    if (placeBelow) {
+      setMenuPos({
+        left,
+        top: rect.bottom + 4,
+        width,
+        maxHeight,
+        placement: 'below',
+      });
+    } else {
+      setMenuPos({
+        left,
+        bottom: window.innerHeight - rect.top + 4,
+        width,
+        maxHeight,
+        placement: 'above',
+      });
+    }
   }, [open, query, matches.length]);
 
   const emit = (next: string) => {
@@ -312,7 +330,7 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
         aria-expanded={showMenu}
         aria-controls="header-task-search-results"
         role="combobox"
-        className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 py-1.5 pl-7 pr-7 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className={`${formFieldClass(false, { widthClass: 'w-full', py: '1.5' })} pl-7 pr-7 text-sm placeholder:text-gray-400`}
         data-tour-id="header-task-search"
         autoComplete="off"
         data-1p-ignore
@@ -340,7 +358,9 @@ const HeaderTaskSearch: React.FC<HeaderTaskSearchProps> = ({
             className="fixed z-[80] overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
             style={{
               left: menuPos.left,
-              top: menuPos.top,
+              ...(menuPos.placement === 'below'
+                ? { top: menuPos.top }
+                : { bottom: menuPos.bottom }),
               width: menuPos.width,
               maxHeight: menuPos.maxHeight,
             }}

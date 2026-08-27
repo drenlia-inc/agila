@@ -16,6 +16,17 @@ import {
   searchFiltersMatchSavedView,
   searchFiltersToViewFilters,
 } from '../utils/savedFilterViewUtils';
+import {
+  formFieldClass,
+  formFilterTriggerClass,
+  formChromeIconButtonClass,
+  formDropdownSearchClass,
+  formInputEditableParts,
+  formFilterPillDismissButtonClass,
+  formFilterPillDismissIconClass,
+  formFilterBulkClearChipClass,
+  formClearAllFiltersButtonClass,
+} from '../utils/formFieldClasses';
 
 /** Save/apply filter dropdown — keep list scrollable before viewport edge. */
 const FILTER_DROPDOWN_VIEWPORT_MARGIN_PX = 12;
@@ -335,12 +346,7 @@ export default function SearchInterface({
     updateFilter('stalledDays', Number.isFinite(n) && n > 0 ? n : null);
   };
 
-  const flowToggleClass = (active: boolean) =>
-    `rounded p-1 transition-colors shrink-0 ${
-      active
-        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
-        : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200'
-    }`;
+  const flowToggleClass = (active: boolean) => formChromeIconButtonClass(active);
 
   /**
    * Stacked pill under pointer. Foreground pill stays locked while the cursor
@@ -600,17 +606,12 @@ export default function SearchInterface({
 
   // Helper function to get input field styling based on whether it's active
   const getInputClassName = (isActive: boolean) => {
-    const baseClasses = "px-2 py-1 border rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent";
-    const activeClasses = isActive ? "border-blue-400 bg-blue-50 dark:bg-blue-900" : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
-    return `${baseClasses} ${activeClasses}`;
+    const base = formFieldClass(false, { py: '1.5', extra: 'text-xs focus:ring-1' });
+    return isActive ? `${base} border-blue-400 bg-blue-50 dark:bg-blue-900/30` : base;
   };
 
-  // Helper function to get dropdown button styling based on whether it's active
-  const getDropdownButtonClassName = (isActive: boolean) => {
-    const baseClasses = `relative bg-white dark:bg-gray-700 border rounded px-2 py-1 pr-6 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent ${FILTER_PROJECT_TAG_PRIORITY_WIDTH_CLASS} flex items-center text-gray-900 dark:text-gray-100`;
-    const activeClasses = isActive ? "border-blue-400 bg-blue-50 dark:bg-blue-900" : "border-gray-300 dark:border-gray-600";
-    return `${baseClasses} ${activeClasses}`;
-  };
+  const getDropdownButtonClassName = (isActive: boolean) =>
+    formFilterTriggerClass(isActive, { widthClass: FILTER_PROJECT_TAG_PRIORITY_WIDTH_CLASS });
 
   // Load saved filter views function (only user's own - shared filters come from props)
   const loadSavedFilters = async () => {
@@ -962,11 +963,9 @@ export default function SearchInterface({
                   type="button"
                   onClick={() => setShowProjectDropdown(!showProjectDropdown)}
                   onKeyDown={(e) => handleFilterEscape(e, 'selectedProjectIds')}
-                  className={`relative flex items-center gap-1.5 px-2 py-1 pr-6 text-xs font-medium rounded transition-colors ${FILTER_PROJECT_TAG_PRIORITY_WIDTH_CLASS} ${
-                    filters.selectedProjectIds.length > 0
-                      ? 'border border-blue-400 bg-blue-50 dark:bg-blue-900 text-gray-700 dark:text-gray-300'
-                      : 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
-                  }`}
+                  className={formFilterTriggerClass(filters.selectedProjectIds.length > 0, {
+                    widthClass: FILTER_PROJECT_TAG_PRIORITY_WIDTH_CLASS,
+                  })}
                   title={t('searchInterface.projectFilterHint')}
                   aria-label={t('searchInterface.projectFilterHint')}
                 >
@@ -1086,13 +1085,7 @@ export default function SearchInterface({
               type="button"
               disabled={!hasBoardRelationships}
               onClick={() => updateFilter('linkedTasksOnly', !filters.linkedTasksOnly)}
-              className={`rounded p-1 transition-colors ${
-                !hasBoardRelationships
-                  ? 'cursor-not-allowed text-gray-400 opacity-40'
-                  : filters.linkedTasksOnly
-                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
-                    : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200'
-              }`}
+              className={formChromeIconButtonClass(filters.linkedTasksOnly, !hasBoardRelationships)}
               title={
                 !hasBoardRelationships
                   ? t('searchInterface.linkedTasksOnlyDisabled')
@@ -1124,9 +1117,10 @@ export default function SearchInterface({
                   type="button"
                   onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                   title={currentFilterView?.filterName}
-                  className={`relative flex items-center gap-0.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent min-w-[120px] max-w-[140px] overflow-hidden${
-                    currentFilterView ? ' pr-7' : ' pr-6'
-                  }`}
+                  className={`${formFilterTriggerClass(false, {
+                    widthClass: 'min-w-[120px] max-w-[140px] overflow-hidden',
+                    prClass: currentFilterView ? 'pr-7' : 'pr-6',
+                  })}`}
                 >
                   <span className="min-w-0 flex-1 truncate text-left text-gray-600 dark:text-gray-300">
                     {currentFilterView ? currentFilterView.filterName : t('searchInterface.none')}
@@ -1222,7 +1216,7 @@ export default function SearchInterface({
                               value={savedFilterSearchTerm}
                               onChange={(e) => setSavedFilterSearchTerm(e.target.value)}
                               placeholder={t('searchInterface.searchSavedFilters')}
-                              className="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 py-1.5 pl-7 pr-7 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:border-transparent focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className={`${formDropdownSearchClass('w-full')} pl-7 pr-7`}
                               onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => e.stopPropagation()}
                             />
@@ -1326,7 +1320,7 @@ export default function SearchInterface({
             {/* Manage Filters Button */}
             <button
               onClick={() => setShowManageModal(true)}
-              className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              className={`p-1.5 rounded transition-colors ${formChromeIconButtonClass()}`}
               title={t('searchInterface.manageSavedFilters')}
             >
               <Settings size={14} />
@@ -1357,7 +1351,7 @@ export default function SearchInterface({
           })() && (
             <button
               onClick={handleClearAllFilters}
-              className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full border border-gray-300 dark:border-gray-600 transition-colors"
+              className={formClearAllFiltersButtonClass}
               title={t('searchInterface.clearAllFilters')}
             >
               <X size={16} />
@@ -1400,7 +1394,7 @@ export default function SearchInterface({
           )}
           <button
             onClick={handleToggleCollapse}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            className={`p-1 rounded transition-colors ${formChromeIconButtonClass()}`}
             title={isCollapsed ? t('searchInterface.expandAdvanced') : t('searchInterface.collapseBasic')}
           >
             {isCollapsed ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronUp size={14} className="text-gray-500" />}
@@ -1586,10 +1580,10 @@ export default function SearchInterface({
                         <button
                           type="button"
                           onClick={() => toggleTag(tagId)}
-                          className="ml-1 hover:bg-black hover:bg-opacity-10 rounded-full p-0.5 transition-colors shrink-0"
+                          className={`ml-1 ${formFilterPillDismissButtonClass}`}
                           title={t('searchInterface.removeTag', { tag: tag.tag })}
                         >
-                          <X size={10} className="text-red-600" />
+                          <X size={10} className="opacity-60 hover:opacity-100 shrink-0" />
                         </button>
                       </div>
                     );
@@ -1597,17 +1591,14 @@ export default function SearchInterface({
                 </div>
 
                 {filters.selectedTags.length > 1 && (
-                  <div
-                    data-tag-clear-all
-                    className="flex items-center bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200 px-2 py-1 rounded-full text-xs border border-red-300 dark:border-red-700 shrink-0"
-                  >
+                  <div data-tag-clear-all className={formFilterBulkClearChipClass}>
                     <button
                       type="button"
                       onClick={() => updateFilter('selectedTags', [])}
-                      className="p-0.5 hover:bg-red-200 dark:hover:bg-red-900/60 rounded-full transition-colors"
+                      className={formFilterPillDismissButtonClass}
                       title={t('searchInterface.clearAllTags')}
                     >
-                      <X size={10} className="text-red-600 dark:text-red-300" />
+                      <X size={10} className={formFilterPillDismissIconClass} />
                     </button>
                   </div>
                 )}
@@ -1806,10 +1797,10 @@ export default function SearchInterface({
                         <button
                           type="button"
                           onClick={() => togglePriority(priorityName)}
-                          className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full transition-colors shrink-0"
+                          className={formFilterPillDismissButtonClass}
                           title={t('searchInterface.removePriority')}
                         >
-                          <X size={10} className="text-gray-600 dark:text-gray-300" />
+                          <X size={10} className={formFilterPillDismissIconClass} />
                         </button>
                       </div>
                     );
@@ -1817,17 +1808,14 @@ export default function SearchInterface({
                 </div>
 
                 {filters.selectedPriorities.length > 1 && (
-                  <div
-                    data-priority-clear-all
-                    className="flex items-center bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200 px-2 py-1 rounded-full text-xs border border-red-300 dark:border-red-700 shrink-0"
-                  >
+                  <div data-priority-clear-all className={formFilterBulkClearChipClass}>
                     <button
                       type="button"
                       onClick={() => updateFilter('selectedPriorities', [])}
-                      className="p-0.5 hover:bg-red-200 dark:hover:bg-red-900/60 rounded-full transition-colors"
+                      className={formFilterPillDismissButtonClass}
                       title={t('searchInterface.clearAllPriorities')}
                     >
-                      <X size={10} className="text-red-600 dark:text-red-300" />
+                      <X size={10} className={formFilterPillDismissIconClass} />
                     </button>
                   </div>
                 )}

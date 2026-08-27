@@ -37,6 +37,7 @@ import { useFileUpload, getUploadErrorMessage } from '../hooks/useFileUpload';
 import { toast } from '../utils/toast';
 import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
 import TaskRelationshipLinker from './TaskRelationshipLinker';
+import TaskPickerDropdown from './ui/TaskPickerDropdown';
 import { getLocalISOString, formatToYYYYMMDDHHmmss, formatToYYYYMMDD } from '../utils/dateUtils';
 import { generateUUID } from '../utils/uuid';
 import { loadUserPreferences, updateUserPreference } from '../utils/userPreferences';
@@ -72,10 +73,19 @@ import { commentTextToHtml } from '../utils/commentContent';
 import { parseEffortUnit, isTaskSoftDeleted } from '../utils/taskUtils';
 import { userIsViewer } from '../utils/permissions';
 import websocketClient from '../services/websocketClient';
+import {
+  formFieldClass,
+  formInputLockedClass,
+  formPickerShellClass,
+  formToggleTrackClass,
+} from '../utils/formFieldClasses';
 
 function detailsLog(...args: unknown[]) {
   if (feDebug('FE_DEBUG_TASK_DETAILS')) console.log(...args);
 }
+
+/** Task Details already shows its own busy state — avoid board-wide loading overlay. */
+const PANEL_TASK_SAVE: TaskUpdateOptions = { skipLoading: true };
 
 /** Mini task-card glyph (distinct from Kanban LayoutGrid in Tools). */
 function TaskCardLocateIcon({ className }: { className?: string }) {
@@ -298,7 +308,6 @@ export default function TaskDetails({
   const [showChildrenDropdown, setShowChildrenDropdown] = useState(false);
   const [childrenSearchTerm, setChildrenSearchTerm] = useState('');
   const [isLoadingRelationships, setIsLoadingRelationships] = useState(false);
-  const childrenDropdownRef = useRef<HTMLDivElement>(null);
 
   const reloadRelationships = useCallback(async () => {
     if (!task.id) return;
@@ -605,7 +614,7 @@ export default function TaskDetails({
     if (!isTextUpdate) {
       try {
         setIsSubmitting(true);
-        await onUpdate(updatedTask);
+        await onUpdate(updatedTask, PANEL_TASK_SAVE);
       } catch (error) {
         console.error('Failed to update task:', error);
       } finally {
@@ -640,7 +649,7 @@ export default function TaskDetails({
             : {}),
         };
         setEditedTask(updatedTask);
-        await onUpdate(updatedTask);
+        await onUpdate(updatedTask, PANEL_TASK_SAVE);
         const shouldLaunch = options?.launch !== false;
         const { work } = await putTaskWork(task.id, {
           repoUrl: agentMode === 'automation' ? '' : repoUrl,
@@ -664,7 +673,7 @@ export default function TaskDetails({
       if (options?.description !== undefined) {
         const updatedTask = { ...editedTask, description: options.description };
         setEditedTask(updatedTask);
-        await onUpdate(updatedTask);
+        await onUpdate(updatedTask, PANEL_TASK_SAVE);
       }
       const { work } = await putTaskWork(task.id, {
         repoUrl: agentMode === 'automation' ? '' : repoUrl,
@@ -782,7 +791,7 @@ export default function TaskDetails({
         ...updatedTask,
         attachmentCount: taskAttachments.length
       };
-      await onUpdate(taskWithAttachmentCount);
+      await onUpdate(taskWithAttachmentCount, PANEL_TASK_SAVE);
       // Update last saved description after successful save
       if (updatedTask.description) {
         setLastSavedDescription(updatedTask.description);
@@ -804,7 +813,7 @@ export default function TaskDetails({
           ...editedTask,
           attachmentCount: taskAttachments.length
         };
-        await onUpdate(taskWithAttachmentCount);
+        await onUpdate(taskWithAttachmentCount, PANEL_TASK_SAVE);
       } catch (error) {
         console.error('Failed to save task:', error);
       } finally {
@@ -824,24 +833,6 @@ export default function TaskDetails({
       }
     };
   }, []);
-
-  // Handle clicking outside children dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (childrenDropdownRef.current && !childrenDropdownRef.current.contains(event.target as Node)) {
-        setShowChildrenDropdown(false);
-        setChildrenSearchTerm('');
-      }
-    };
-
-    if (showChildrenDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showChildrenDropdown]);
 
   // Handle task switching - save current task before switching to new one
   useEffect(() => {
@@ -1193,15 +1184,6 @@ export default function TaskDetails({
     }
   };
 
-  // Handler for opening children dropdown
-  const handleChildrenDropdownToggle = () => {
-    if (isWritersLocked) return;
-    setShowChildrenDropdown(!showChildrenDropdown);
-    if (!showChildrenDropdown) {
-      setChildrenSearchTerm('');
-    }
-  };
-
   // Filter available tasks based on search term
   const filteredAvailableChildren = (Array.isArray(availableTasksForChildren) ? availableTasksForChildren : []).filter(task => 
     task.ticket.toLowerCase().includes(childrenSearchTerm.toLowerCase()) ||
@@ -1479,7 +1461,7 @@ export default function TaskDetails({
             attachmentCount: updatedAttachments.length 
           };
           setEditedTask(updatedTask);
-          onUpdate(updatedTask);
+          onUpdate(updatedTask, PANEL_TASK_SAVE);
         },
         onDescriptionUpdate: (updatedDescription) => {
           detailsLog('🔄 Updating task description with server URLs');
@@ -1559,7 +1541,7 @@ export default function TaskDetails({
         attachmentCount: taskAttachments.length - 1 
       };
       setEditedTask(updatedTask);
-      onUpdate(updatedTask);
+      onUpdate(updatedTask, PANEL_TASK_SAVE);
     } catch (error) {
       console.error('❌ Failed to delete attachment:', error);
       throw error; // Re-throw to let TextEditor handle the error
@@ -1605,7 +1587,7 @@ export default function TaskDetails({
       attachmentCount: taskAttachments.length - 1 
     };
     setEditedTask(updatedTask);
-    onUpdate(updatedTask);
+    onUpdate(updatedTask, PANEL_TASK_SAVE);
     
     // Clear the recently deleted flag after a longer delay
     setTimeout(() => {
@@ -1698,10 +1680,12 @@ export default function TaskDetails({
                     type="text"
                     value={editedTask.title}
                     onChange={e => handleTextUpdate('title', e.target.value)}
-                    className={`text-xl font-semibold w-full min-w-0 border-none focus:outline-none focus:ring-0 p-3 rounded text-gray-900 dark:text-white disabled:opacity-70 disabled:cursor-not-allowed ${
+                    className={`text-xl font-semibold w-full min-w-0 border-none focus:outline-none focus:ring-0 p-3 rounded disabled:cursor-not-allowed ${
                       isReadOnlyMode
-                        ? 'bg-amber-50/80 dark:bg-amber-950/30'
-                        : 'bg-gray-50 dark:bg-gray-700'
+                        ? 'bg-amber-50/80 dark:bg-amber-950/30 text-gray-900 dark:text-white disabled:opacity-70'
+                        : isWritersLocked
+                          ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                          : 'bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white'
                     }`}
                     disabled={isSubmitting || isWritersLocked}
                     maxLength={TASK_TITLE_MAX_LENGTH}
@@ -1948,7 +1932,7 @@ export default function TaskDetails({
                   ) : isWritersLocked ? (
                     taskWatchers.length === 0 && (
                       <div
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"
+                        className={`w-full ${formInputLockedClass()}`}
                         aria-readonly="true"
                       >
                         {t('taskPage.noWatchers')}
@@ -2003,7 +1987,7 @@ export default function TaskDetails({
                   {isWritersLocked ? (
                     taskCollaborators.length === 0 && (
                       <div
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-default"
+                        className={`w-full ${formInputLockedClass()}`}
                         aria-readonly="true"
                       >
                         {t('taskPage.noCollaborators')}
@@ -2072,9 +2056,7 @@ export default function TaskDetails({
                   onBlur={e => handleUpdate({ startDate: e.target.value })}
                   readOnly={isSubmitting || isWritersLocked}
                   tabIndex={isSubmitting || isWritersLocked ? -1 : undefined}
-                  className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 ${
-                    isSubmitting || isWritersLocked ? 'cursor-default pointer-events-none' : ''
-                  }`}
+                  className={formFieldClass(isSubmitting || isWritersLocked, { widthClass: 'w-full' })}
                 />
               </div>
 
@@ -2089,9 +2071,7 @@ export default function TaskDetails({
                   onBlur={e => handleUpdate({ dueDate: e.target.value })}
                   readOnly={isSubmitting || isWritersLocked}
                   tabIndex={isSubmitting || isWritersLocked ? -1 : undefined}
-                  className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 ${
-                    isSubmitting || isWritersLocked ? 'cursor-default pointer-events-none' : ''
-                  }`}
+                  className={formFieldClass(isSubmitting || isWritersLocked, { widthClass: 'w-full' })}
                 />
               </div>
 
@@ -2130,9 +2110,7 @@ export default function TaskDetails({
                   }}
                   readOnly={isSubmitting || isWritersLocked}
                   tabIndex={isSubmitting || isWritersLocked ? -1 : undefined}
-                  className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 ${
-                    isSubmitting || isWritersLocked ? 'cursor-default' : ''
-                  }`}
+                  className={formFieldClass(isSubmitting || isWritersLocked, { widthClass: 'w-full' })}
                 />
               </div>
 
@@ -2145,13 +2123,10 @@ export default function TaskDetails({
                   handleUpdate({ columnId: column.id, status: column.title })
                 }
                 labelClassName="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1"
-                selectClassName={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 ${
-                  isSubmitting || isWritersLocked ? 'cursor-default' : ''
-                }`}
               />
 
               <div className="col-span-2">
-                <div className="flex items-center justify-between gap-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-200">
                       {t('labels.blocked')}
@@ -2160,7 +2135,11 @@ export default function TaskDetails({
                       {t('labels.blockedHint')}
                     </p>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <label
+                    className={`relative inline-flex items-center shrink-0 ${
+                      isSubmitting || isWritersLocked ? 'cursor-default' : 'cursor-pointer'
+                    }`}
+                  >
                     <input
                       type="checkbox"
                       className="sr-only peer"
@@ -2173,7 +2152,7 @@ export default function TaskDetails({
                         })
                       }
                     />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600" />
+                    <div className={formToggleTrackClass} />
                   </label>
                 </div>
                 {editedTask.isBlocked && (
@@ -2205,7 +2184,10 @@ export default function TaskDetails({
                     }}
                     placeholder={t('labels.blockedReasonPlaceholder')}
                     maxLength={BLOCKED_REASON_MAX_LENGTH}
-                    className="mt-2 w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm"
+                    className={formFieldClass(isSubmitting || isWritersLocked, {
+                      widthClass: 'mt-2 w-full',
+                      extra: 'text-sm',
+                    })}
                     disabled={isSubmitting || isWritersLocked}
                   />
                 )}
@@ -2233,7 +2215,7 @@ export default function TaskDetails({
               <div className="relative" ref={tagsDropdownRef}>
                 {isWritersLocked || isSubmitting ? (
                   <div
-                    className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm flex items-center text-gray-900 dark:text-gray-100 cursor-default"
+                    className={formPickerShellClass(true, 'panel', 'flex items-center')}
                     aria-readonly="true"
                   >
                     <span className={taskTags.length === 0 ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-200'}>
@@ -2247,7 +2229,7 @@ export default function TaskDetails({
                   ref={tagsButtonRef}
                   type="button"
                   onClick={handleTagsDropdownToggle}
-                  className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between text-gray-900 dark:text-gray-100"
+                  className={`${formPickerShellClass(false, 'panel', 'flex items-center justify-between')} focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                 >
                   <span className="text-gray-700 dark:text-gray-200">
                     {taskTags.length === 0 
@@ -2412,55 +2394,21 @@ export default function TaskDetails({
                   
                   {/* Children Dropdown */}
                   {!isWritersLocked && (
-                  <div className="relative" ref={childrenDropdownRef}>
-                    <button
-                      type="button"
-                      onClick={handleChildrenDropdownToggle}
-                      className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between text-gray-900 dark:text-gray-100"
-                    >
-                      <span className="text-gray-700 dark:text-gray-200">
-                        {t('relationships.addChildTask')}
-                      </span>
-                      <ChevronDown size={16} className={`transform transition-transform ${showChildrenDropdown ? 'rotate-180' : ''}`} />
-                    </button>
-                    
-                    {showChildrenDropdown && (
-                      <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
-                        {/* Search Input */}
-                        <div className="p-2 border-b border-gray-200 dark:border-gray-600">
-                          <input
-                            type="text"
-                            placeholder={t('relationships.searchTasks')}
-                            value={childrenSearchTerm}
-                            onChange={(e) => setChildrenSearchTerm(e.target.value)}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            autoFocus
-                          />
-                        </div>
-                        
-                        {/* Available Tasks List */}
-                        <div className="max-h-40 overflow-y-auto">
-                          {filteredAvailableChildren.length > 0 ? (
-                            filteredAvailableChildren.map(availableTask => (
-                              <button
-                                key={availableTask.id}
-                                type="button"
-                                onClick={() => handleAddChildTask(availableTask.id)}
-                                className="w-full px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/35 focus:bg-blue-50 dark:focus:bg-blue-900/35 focus:outline-none transition-colors text-sm"
-                              >
-                                <div className="font-medium text-blue-600 dark:text-blue-400">{availableTask.ticket}</div>
-                                <div className="text-gray-600 dark:text-gray-300 truncate">{availableTask.title}</div>
-                              </button>
-                            ))
-                          ) : (
-                            <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-                              {childrenSearchTerm ? 'No tasks found matching your search' : 'No available tasks'}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    <TaskPickerDropdown
+                      open={showChildrenDropdown}
+                      onOpenChange={(open) => {
+                        setShowChildrenDropdown(open);
+                        if (!open) setChildrenSearchTerm('');
+                      }}
+                      triggerLabel={t('relationships.addChildTask')}
+                      searchTerm={childrenSearchTerm}
+                      onSearchTermChange={setChildrenSearchTerm}
+                      searchPlaceholder={t('relationships.searchTasks')}
+                      items={filteredAvailableChildren}
+                      emptyText={t('relationships.noAvailableTasks')}
+                      noResultsText={t('relationships.noTasksFound')}
+                      onSelect={(id) => void handleAddChildTask(id)}
+                    />
                   )}
                 </div>
               </div>

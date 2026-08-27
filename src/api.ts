@@ -1477,6 +1477,11 @@ export const testAdminWebhook = async (id: string): Promise<void> => {
   await api.post(`/admin/webhooks/${id}/test`);
 };
 
+/** Send a test message using draft form values (no save required). */
+export const testAdminWebhookDraft = async (body: Record<string, unknown>): Promise<void> => {
+  await api.post('/admin/webhooks/test', body);
+};
+
 // ─── AI Agent / Dev credentials ─────────────────────────────────────────────
 
 export type TaskWorkMap = Record<string, string | null | undefined>;

@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import express from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { getRequestDatabase } from '../middleware/tenantRouting.js';
-import { parseBody, webhookUpsertBodySchema, webhookEnabledBodySchema } from '../utils/requestValidation.js';
+import { parseBody, webhookUpsertBodySchema, webhookEnabledBodySchema, webhookTestBodySchema } from '../utils/requestValidation.js';
 import { webhooks as webhookQueries } from '../utils/sqlManager/index.js';
 import { dispatchWebhook } from '../services/webhookDispatcher.js';
 import { normalizeWebhookEventTypes } from '../constants/webhookEvents.js';
@@ -78,6 +78,53 @@ function stringifyTypes(eventTypes) {
   return JSON.stringify(normalizeWebhookEventTypes(eventTypes));
 }
 
+function formatWebhookTestError(error) {
+  const msg = String(error?.message || '');
+  const http = msg.match(/\bHTTP (\d{3})\b/i);
+  let publicError = 'Webhook test failed';
+  if (http) publicError = `HTTP ${http[1]}`;
+  else if (error?.name === 'AbortError' || /aborted|timeout/i.test(msg)) publicError = 'Request timed out';
+  else if (msg && msg.length <= 80 && !/<|>|DOCTYPE/i.test(msg)) publicError = msg;
+  return publicError;
+}
+
+async function buildWebhookForDispatch(db, data, existingId = null) {
+  let existing = null;
+  if (existingId) {
+    existing = await webhookQueries.getWebhookById(db, existingId);
+  }
+  const endpointUrl = await resolveEndpointUrl(
+    data.platform,
+    data.endpointUrl,
+    existing?.endpointUrl ?? null
+  );
+  if (URL_PLATFORMS.has(data.platform) && !endpointUrl) {
+    const err = new Error('Incoming webhook URL is required');
+    throw err;
+  }
+  const telegramBotToken = isMasked(data.telegramBotToken)
+    ? existing?.telegramBotToken ?? null
+    : data.telegramBotToken || null;
+  const whatsappAccessToken = isMasked(data.whatsappAccessToken)
+    ? existing?.whatsappAccessToken ?? null
+    : data.whatsappAccessToken || null;
+
+  return {
+    name: data.name || 'Webhook test',
+    platform: data.platform,
+    locale: data.locale || '',
+    eventTypes: stringifyTypes(data.eventTypes),
+    projectIds: JSON.stringify(data.projectIds || []),
+    endpointUrl,
+    telegramBotToken,
+    telegramChatId: data.telegramChatId || null,
+    whatsappAccessToken,
+    whatsappPhoneNumberId: data.whatsappPhoneNumberId || null,
+    whatsappTo: data.whatsappTo || null,
+    whatsappGraphVersion: data.whatsappGraphVersion || 'v21.0',
+  };
+}
+
 router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const db = getRequestDatabase(req);
@@ -141,6 +188,24 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     }
     console.error('Create webhook error:', error);
     res.status(500).json({ error: 'Failed to create webhook' });
+  }
+});
+
+router.post('/test', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const parsed = parseBody(webhookTestBodySchema, req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error });
+    const db = getRequestDatabase(req);
+    const webhook = await buildWebhookForDispatch(db, parsed.data, parsed.data.id);
+    await dispatchWebhook(db, webhook, { isTest: true });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Test webhook draft error:', error);
+    const msg = String(error?.message || '');
+    if (msg.includes('webhook URL') || msg.includes('Webhook URL') || msg.includes('Invalid webhook')) {
+      return res.status(400).json({ error: msg });
+    }
+    res.status(400).json({ error: formatWebhookTestError(error) });
   }
 });
 
@@ -227,13 +292,7 @@ router.post('/:id/test', authenticateToken, requireRole(['admin']), async (req, 
     res.json({ success: true });
   } catch (error) {
     console.error('Test webhook error:', error);
-    const msg = String(error?.message || '');
-    const http = msg.match(/\bHTTP (\d{3})\b/i);
-    let publicError = 'Webhook test failed';
-    if (http) publicError = `HTTP ${http[1]}`;
-    else if (error?.name === 'AbortError' || /aborted|timeout/i.test(msg)) publicError = 'Request timed out';
-    else if (msg && msg.length <= 80 && !/<|>|DOCTYPE/i.test(msg)) publicError = msg;
-    res.status(400).json({ error: publicError });
+    res.status(400).json({ error: formatWebhookTestError(error) });
   }
 });
 

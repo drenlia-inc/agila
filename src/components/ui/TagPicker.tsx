@@ -7,6 +7,8 @@ import {
   mergeTaskTagsWithLiveData,
 } from '../../utils/tagUtils';
 import AddTagModal from '../AddTagModal';
+import AnchoredDropdownPortal, { useAnchoredDropdownDismiss } from './AnchoredDropdownPortal';
+import { formPickerShellClass } from '../../utils/formFieldClasses';
 
 export interface TagPickerProps {
   availableTags: Tag[];
@@ -38,19 +40,11 @@ export default function TagPicker({
   const { t } = useTranslation('tasks');
   const [open, setOpen] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const liveSelected = mergeTaskTagsWithLiveData(selectedTags, availableTags);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
+  useAnchoredDropdownDismiss(open, () => setOpen(false), triggerRef, panelRef);
 
   useEffect(() => {
     if (disabled) setOpen(false);
@@ -63,24 +57,24 @@ export default function TagPicker({
           liveSelected.length !== 1 ? t('tag.plural') : t('tag.singular')
         } ${t('tag.selected')}`;
 
-  const shellClass =
-    'w-full flex items-center justify-between gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
+  const shellClass = formPickerShellClass(disabled, 'panel', 'flex items-center justify-between gap-2');
 
   return (
-    <div className={`relative ${className}`} ref={rootRef}>
+    <div className={className}>
       {label && (
         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
           {label}
         </label>
       )}
       {disabled ? (
-        <div className={`${shellClass} cursor-default`} aria-readonly="true">
+        <div className={shellClass} aria-readonly="true">
           <span className={`truncate text-left ${liveSelected.length === 0 ? 'text-gray-500 dark:text-gray-400' : ''}`}>
             {liveSelected.length === 0 ? t('taskPage.noTagsAssigned') : summary}
           </span>
         </div>
       ) : (
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={`${shellClass} focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -98,8 +92,14 @@ export default function TagPicker({
       </button>
       )}
 
-      {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-50 max-h-[400px] overflow-y-auto rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg">
+      <AnchoredDropdownPortal
+        open={open && !disabled}
+        triggerRef={triggerRef}
+        panelRef={panelRef}
+        preferredMaxHeight={400}
+        className="flex flex-col overflow-hidden rounded-md border border-gray-300 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {allowCreate && (
             <button
               type="button"
@@ -107,7 +107,7 @@ export default function TagPicker({
                 setShowAddModal(true);
                 setOpen(false);
               }}
-              className="w-full px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-2 text-sm border-b border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400 font-medium sticky top-0 bg-white dark:bg-gray-800"
+              className="sticky top-0 z-[1] w-full border-b border-gray-200 bg-white px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-blue-900/20 flex items-center gap-2"
             >
               <Plus size={14} />
               <span>{t('labels.addNewTag')}</span>
@@ -147,7 +147,7 @@ export default function TagPicker({
             })
           )}
         </div>
-      )}
+      </AnchoredDropdownPortal>
 
       {liveSelected.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">

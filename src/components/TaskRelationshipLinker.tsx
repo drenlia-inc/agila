@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown } from 'lucide-react';
 import { addTaskRelationship, removeTaskRelationship } from '../api';
 import { toast } from '../utils/toast';
 import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
+import TaskPickerDropdown from './ui/TaskPickerDropdown';
 
 export interface TaskRelationshipRow {
   id: string;
@@ -42,7 +42,6 @@ export default function TaskRelationshipLinker({
   const { t } = useTranslation('tasks');
   const [showRelatedDropdown, setShowRelatedDropdown] = useState(false);
   const [relatedSearchTerm, setRelatedSearchTerm] = useState('');
-  const relatedDropdownRef = useRef<HTMLDivElement>(null);
   const addInFlightRef = useRef(false);
 
   const relatedTasks = useMemo(
@@ -71,18 +70,6 @@ export default function TaskRelationshipLinker({
       );
     });
   }, [availableTasks, relatedSearchTerm, relatedTasks, taskId]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (relatedDropdownRef.current && !relatedDropdownRef.current.contains(event.target as Node)) {
-        setShowRelatedDropdown(false);
-      }
-    };
-    if (showRelatedDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showRelatedDropdown]);
 
   const handleAddRelatedTask = async (targetTaskId: string) => {
     if (!canMutate || addInFlightRef.current || targetTaskId === taskId) return;
@@ -151,56 +138,22 @@ export default function TaskRelationshipLinker({
       )}
 
       {canMutate && (
-        <div className="relative" ref={relatedDropdownRef}>
-          <button
-            type="button"
-            data-help-target="task-relationship-link-mode"
-            onClick={() => setShowRelatedDropdown((open) => !open)}
-            className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between text-gray-900 dark:text-gray-100"
-          >
-            <span className="text-gray-700 dark:text-gray-200">
-              {t('relationships.addRelatedTask')}
-            </span>
-            <ChevronDown
-              size={16}
-              className={`transform transition-transform ${showRelatedDropdown ? 'rotate-180' : ''}`}
-            />
-          </button>
-
-          {showRelatedDropdown && (
-            <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto">
-              <div className="p-2 border-b border-gray-200 dark:border-gray-600">
-                <input
-                  type="text"
-                  placeholder={t('relationships.searchTasks')}
-                  value={relatedSearchTerm}
-                  onChange={(e) => setRelatedSearchTerm(e.target.value)}
-                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  autoFocus
-                />
-              </div>
-              <div className="max-h-40 overflow-y-auto">
-                {filteredAvailableRelated.length > 0 ? (
-                  filteredAvailableRelated.map((availableTask) => (
-                    <button
-                      key={availableTask.id}
-                      type="button"
-                      onClick={() => void handleAddRelatedTask(availableTask.id)}
-                      className="w-full px-3 py-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/35 focus:bg-blue-50 dark:focus:bg-blue-900/35 focus:outline-none transition-colors text-sm"
-                    >
-                      <div className="font-medium text-blue-600 dark:text-blue-400">{availableTask.ticket}</div>
-                      <div className="text-gray-600 dark:text-gray-300 truncate">{availableTask.title}</div>
-                    </button>
-                  ))
-                ) : (
-                  <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-                    {relatedSearchTerm ? t('relationships.noTasksFound') : t('relationships.noAvailableTasks')}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <TaskPickerDropdown
+          open={showRelatedDropdown}
+          onOpenChange={(open) => {
+            setShowRelatedDropdown(open);
+            if (!open) setRelatedSearchTerm('');
+          }}
+          triggerLabel={t('relationships.addRelatedTask')}
+          searchTerm={relatedSearchTerm}
+          onSearchTermChange={setRelatedSearchTerm}
+          searchPlaceholder={t('relationships.searchTasks')}
+          items={filteredAvailableRelated}
+          emptyText={t('relationships.noAvailableTasks')}
+          noResultsText={t('relationships.noTasksFound')}
+          onSelect={(id) => void handleAddRelatedTask(id)}
+          helpTarget="task-relationship-link-mode"
+        />
       )}
     </div>
   );

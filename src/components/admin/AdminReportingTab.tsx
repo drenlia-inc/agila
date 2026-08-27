@@ -13,6 +13,15 @@ import {
 } from '../../utils/adminFieldLimits';
 import { AdminFieldDraftControls } from './AdminFieldDraftControls';
 import { AdminUnsavedHint } from './AdminUnsavedChanges';
+import {
+  adminFieldClass,
+  adminInputShortClass,
+  adminInputLockedShortClass,
+  adminSettingsLabelClass,
+  adminSettingsLabelLockedClass,
+} from './AdminSection';
+import { formSecondaryButtonClass } from '../../utils/formFieldClasses';
+import EnumPicker from '../ui/EnumPicker';
 
 interface ReportingSettings {
   REPORTS_ENABLED: string;
@@ -335,6 +344,10 @@ const AdminReportingTab: React.FC<AdminReportingTabProps> = ({
     return () => onRegisterLocalSave(null);
   }, [onRegisterLocalSave]);
 
+  const reportsLocked = settings.REPORTS_ENABLED === 'false';
+  const gamificationLocked =
+    reportsLocked || settings.REPORTS_GAMIFICATION_ENABLED === 'false';
+
   return (
     <div>
       <div className="space-y-6">
@@ -459,18 +472,20 @@ const AdminReportingTab: React.FC<AdminReportingTabProps> = ({
         </h3>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label className={reportsLocked ? adminSettingsLabelLockedClass : adminSettingsLabelClass}>
             {t('reporting.reportsVisibilityAndAccess')}
           </label>
-          <select
+          <EnumPicker
+            surface="slate"
+            widthClass="w-full max-w-[11rem]"
+            options={[
+              { value: 'all', label: t('reporting.allUsers') },
+              { value: 'admin', label: t('reporting.adminsOnly') },
+            ]}
             value={settings.REPORTS_VISIBLE_TO}
-            onChange={(e) => handleVisibilityChange(e.target.value)}
-            disabled={settings.REPORTS_ENABLED === 'false'}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <option value="all">{t('reporting.allUsers')}</option>
-            <option value="admin">{t('reporting.adminsOnly')}</option>
-          </select>
+            disabled={reportsLocked}
+            onChange={(value) => void handleVisibilityChange(value)}
+          />
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {t('reporting.reportsVisibilityDescription')}
           </p>
@@ -486,38 +501,46 @@ const AdminReportingTab: React.FC<AdminReportingTabProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className={reportsLocked ? adminSettingsLabelLockedClass : adminSettingsLabelClass}>
               {t('reporting.snapshotFrequency')}
             </label>
-            <select
+            <EnumPicker
+              surface="slate"
+              widthClass="w-full max-w-[11rem]"
+              options={[
+                { value: 'daily', label: t('reporting.daily') },
+                { value: 'weekly', label: t('reporting.weekly') },
+                { value: 'manual', label: t('reporting.manualOnly') },
+              ]}
               value={settings.REPORTS_SNAPSHOT_FREQUENCY}
-              onChange={(e) => setSettings(prev => ({ ...prev, REPORTS_SNAPSHOT_FREQUENCY: e.target.value }))}
-              disabled={settings.REPORTS_ENABLED === 'false'}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <option value="daily">{t('reporting.daily')}</option>
-              <option value="weekly">{t('reporting.weekly')}</option>
-              <option value="manual">{t('reporting.manualOnly')}</option>
-            </select>
+              disabled={reportsLocked}
+              onChange={(value) =>
+                setSettings((prev) => ({ ...prev, REPORTS_SNAPSHOT_FREQUENCY: value }))
+              }
+            />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className={reportsLocked ? adminSettingsLabelLockedClass : adminSettingsLabelClass}>
               {t('reporting.dataRetentionDays')}
             </label>
-            <select
+            <EnumPicker
+              surface="slate"
+              widthClass="w-full max-w-[13rem]"
+              options={[
+                { value: '90', label: t('reporting.days90') },
+                { value: '180', label: t('reporting.months6') },
+                { value: '365', label: t('reporting.year1') },
+                { value: '730', label: t('reporting.years2') },
+                { value: '1825', label: t('reporting.years5') },
+                { value: 'unlimited', label: t('reporting.unlimited') },
+              ]}
               value={settings.REPORTS_RETENTION_DAYS}
-              onChange={(e) => setSettings(prev => ({ ...prev, REPORTS_RETENTION_DAYS: e.target.value }))}
-              disabled={settings.REPORTS_ENABLED === 'false'}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <option value="90">{t('reporting.days90')}</option>
-              <option value="180">{t('reporting.months6')}</option>
-              <option value="365">{t('reporting.year1')}</option>
-              <option value="730">{t('reporting.years2')}</option>
-              <option value="1825">{t('reporting.years5')}</option>
-              <option value="unlimited">{t('reporting.unlimited')}</option>
-            </select>
+              disabled={reportsLocked}
+              onChange={(value) =>
+                setSettings((prev) => ({ ...prev, REPORTS_RETENTION_DAYS: value }))
+              }
+            />
           </div>
         </div>
 
@@ -609,8 +632,8 @@ const AdminReportingTab: React.FC<AdminReportingTabProps> = ({
                     ),
                   }))
                 }
-                disabled={settings.REPORTS_ENABLED === 'false' || settings.REPORTS_GAMIFICATION_ENABLED === 'false'}
-                className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed ${ADMIN_NUMERIC_INPUT_CLASS}`}
+                disabled={gamificationLocked}
+                className={`${gamificationLocked ? adminInputLockedShortClass : adminInputShortClass} ${ADMIN_NUMERIC_INPUT_CLASS}`}
               />
             </div>
             );
@@ -626,7 +649,7 @@ const AdminReportingTab: React.FC<AdminReportingTabProps> = ({
           <button
             type="button"
             onClick={handleReset}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`${formSecondaryButtonClass} text-sm px-4 py-2`}
             disabled={saving || !hasChanges}
           >
             {t('reporting.reset')}

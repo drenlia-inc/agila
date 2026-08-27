@@ -1,20 +1,77 @@
 import React from 'react';
+import {
+  formFieldClass,
+  formFocusToEditFieldClass as formFocusToEditFieldClassBase,
+  formInputEditableClass,
+  formInputLockedClass,
+  formLockedSurfaceClass,
+} from '../../utils/formFieldClasses';
+
+/**
+ * Admin form field chrome — light and dark follow the same idea:
+ * - Editable: matches the panel surface (white / slate-900) — border carries affordance.
+ * - Locked: filled gray (slate-100 / slate-800) so non-editable fields read clearly.
+ */
+
+/** Editable text/select chrome for admin settings forms. */
+export const adminInputEditableClass = formInputEditableClass('slate', { py: '1.5' });
+
+/** Locked surface colors/border (inputs, selects, read-only controls). */
+export const adminLockedSurfaceClass = formLockedSurfaceClass;
+
+/** Locked / read-only field chrome (matches Admin → Users edit modal). */
+export const adminInputLockedClass = formInputLockedClass({ py: '1.5' });
+
+/** Modal forms (Users) — editable fields blend with slate-900 modal shell in dark mode. */
+export const adminModalInputEditableClass = `w-full ${formInputEditableClass('slate', { py: '2.5' })}`;
+
+export const adminModalInputLockedClass = `w-full ${formInputLockedClass({ py: '2.5' })}`;
+
+export const adminLabelClass = 'block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5';
+export const adminLabelLockedClass = 'block text-xs font-medium text-slate-400 dark:text-slate-500 mb-1.5';
+
+/** Settings section labels (slightly larger than modal labels). */
+export const adminSettingsLabelClass =
+  'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
+export const adminSettingsLabelLockedClass =
+  'block text-sm font-medium text-slate-400 dark:text-slate-500 mb-1';
+
+/** Pick editable vs locked input chrome; optional width/layout prefix (e.g. `w-full max-w-md`). */
+export function adminFieldClass(locked: boolean, widthClass = ''): string {
+  return formFieldClass(locked, { surface: 'slate', widthClass, py: '1.5' });
+}
+
+/** Editable look for readOnly-until-focus fields (secrets); no cursor-not-allowed. */
+export function adminFocusToEditFieldClass(widthClass = ''): string {
+  return formFocusToEditFieldClassBase(widthClass, 'slate', '1.5');
+}
+
+/** Short enum selects (visibility, locale-style values). */
+export const adminSelectEnumClass = (locked: boolean, widthClass = 'w-full max-w-[11rem]') =>
+  adminFieldClass(locked, widthClass);
 
 /** Shared control chrome — add `w-full` (or a fixed width) at the call site. */
-export const adminInputClass =
-  'px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+export const adminInputClass = adminInputEditableClass;
 
 /** Full-width variant for stacked form fields. */
 export const adminInputFullClass = `w-full ${adminInputClass}`;
 
+export const adminInputLockedFullClass = `w-full ${adminInputLockedClass}`;
+
 /** Typical settings fields — cap length so full-width pages do not stretch emails/secrets. */
 export const adminInputBoundedClass = `w-full max-w-md ${adminInputClass}`;
+
+export const adminInputLockedBoundedClass = `w-full max-w-md ${adminInputLockedClass}`;
 
 /** Longer values (URLs, client IDs). */
 export const adminInputWideClass = `w-full max-w-xl ${adminInputClass}`;
 
+export const adminInputLockedWideClass = `w-full max-w-xl ${adminInputLockedClass}`;
+
 /** Ports and other short numeric values. */
 export const adminInputShortClass = `w-full max-w-[7.5rem] ${adminInputClass}`;
+
+export const adminInputLockedShortClass = `w-full max-w-[7.5rem] ${adminInputLockedClass}`;
 
 export const adminSubtabPanelClass = 'min-w-0';
 

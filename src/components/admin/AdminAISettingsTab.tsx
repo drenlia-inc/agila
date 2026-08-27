@@ -19,6 +19,7 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { toast } from '../../utils/toast';
 import { AdminFieldDraftControls } from './AdminFieldDraftControls';
 import { AdminUnsavedHint } from './AdminUnsavedChanges';
+import { adminFieldClass, adminFocusToEditFieldClass } from './AdminSection';
 
 interface AdminAISettingsTabProps {
   editingSettings: { [key: string]: string | undefined };
@@ -658,7 +659,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
                     void applyAgentName();
                   }
                 }}
-                className="block min-w-0 flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={adminFieldClass(false, 'block min-w-0 flex-1 sm:text-sm')}
               />
               <button
                 type="button"
@@ -710,7 +711,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
             <select
               value={provider}
               onChange={(e) => applyProviderChange(e.target.value)}
-              className="block w-full max-w-md px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className={adminFieldClass(false, 'block w-full max-w-md sm:text-sm')}
             >
               {AI_PROVIDER_PRESETS.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -751,7 +752,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
               placeholder={
                 selectedPreset.suggestedBaseUrl || 'https://api.openai.com/v1'
               }
-              className="block w-full max-w-xl px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className={adminFocusToEditFieldClass('block w-full max-w-xl sm:text-sm')}
             />
             {selectedPreset.suggestedBaseUrl && (
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -807,7 +808,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
                     ? t('appSettings.aiApiKeyOptionalPlaceholder')
                     : t('appSettings.aiApiKeyPlaceholder')
               }
-              className="block w-full max-w-xl px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className={adminFocusToEditFieldClass('block w-full max-w-xl sm:text-sm font-mono')}
             />
           </div>
 
@@ -838,7 +839,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
                   setModelMode('list');
                   setModel(v);
                 }}
-                className="block min-w-0 flex-1 max-w-md px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={adminFieldClass(false, 'block min-w-0 flex-1 max-w-md sm:text-sm')}
               >
                 <option value={CUSTOM_MODEL}>
                   {t('appSettings.aiModelCustomOption')}
@@ -877,7 +878,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
                   setModel(e.target.value);
                 }}
                 placeholder={t('appSettings.aiModelPlaceholder')}
-                className="mt-2 block w-full max-w-md px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={adminFieldClass(false, 'mt-2 block w-full max-w-md sm:text-sm')}
               />
             )}
           </div>
@@ -921,7 +922,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
                   )
                 )
               }
-              className={`block w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${ADMIN_NUMERIC_INPUT_CLASS}`}
+              className={`${adminFieldClass(false, 'block w-24 sm:text-sm')} ${ADMIN_NUMERIC_INPUT_CLASS}`}
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {t('numberRangeHint', {
@@ -968,11 +969,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
                 readOnly={platformRunnerManaged}
                 disabled={platformRunnerManaged}
                 placeholder="http://agila-runner:8080"
-                className={`block min-w-0 flex-1 max-w-xl px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono text-gray-900 dark:text-gray-100 ${
-                  platformRunnerManaged
-                    ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-90'
-                    : 'bg-white dark:bg-gray-700'
-                }`}
+                className={adminFieldClass(platformRunnerManaged, 'block min-w-0 flex-1 max-w-xl sm:text-sm font-mono')}
               />
               <button
                 type="button"
@@ -1013,7 +1010,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
                     ? t('appSettings.aiApiKeyReplacePlaceholder')
                     : t('appSettings.aiRunnerTokenPlaceholder')
                 }
-                className="block w-full max-w-xl px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className={adminFieldClass(false, 'block w-full max-w-xl sm:text-sm font-mono')}
               />
             </div>
           )}

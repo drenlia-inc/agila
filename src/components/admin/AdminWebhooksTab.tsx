@@ -11,12 +11,14 @@ import api, {
   getPriorities,
   patchAdminWebhookEnabled,
   testAdminWebhook,
+  testAdminWebhookDraft,
   updateAdminWebhook,
 } from '../../api';
 import { toast } from '../../utils/toast';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { createPortal } from 'react-dom';
-import { isMultiTenantDeploy } from '../../utils/ownerSetup';
+import { BetaSup } from '../HelpAssistantTitle';
+import { KanbanChromeTooltip } from '../KanbanChromeTooltip';
 import {
   AdminPageShell,
   AdminSection,
@@ -24,8 +26,6 @@ import {
   adminInputWideClass,
 } from './AdminSection';
 import { AdminToggle } from './AdminToggle';
-import { BetaSup } from '../HelpAssistantTitle';
-import { KanbanChromeTooltip } from '../KanbanChromeTooltip';
 import {
   AdminNotificationChannelMode,
   ConfirmWebhooksOnlyDialog,
@@ -126,6 +126,53 @@ type Draft = {
   whatsappGraphVersion: string;
 };
 
+function isMaskedSecret(value: string): boolean {
+  const v = String(value || '').trim();
+  if (!v) return true;
+  if (v.includes('••••')) return true;
+  return looksLikeMaskedWebhookUrl(v);
+}
+
+function draftToSaveBody(editing: Draft) {
+  return {
+    name: editing.name.trim().slice(0, WEBHOOK_NAME_MAX),
+    platform: editing.platform,
+    enabled: editing.enabled,
+    eventTypes: editing.eventTypes,
+    projectIds: editing.projectIds,
+    minPriorityId: editing.minPriorityId || null,
+    locale: editing.locale || null,
+    endpointUrl: sanitizeIncomingWebhookUrl(editing.endpointUrl),
+    telegramBotToken: editing.telegramBotToken,
+    telegramChatId: editing.telegramChatId,
+    whatsappAccessToken: editing.whatsappAccessToken,
+    whatsappPhoneNumberId: editing.whatsappPhoneNumberId,
+    whatsappTo: editing.whatsappTo,
+    whatsappGraphVersion: editing.whatsappGraphVersion,
+  };
+}
+
+function canTestDraft(d: Draft): boolean {
+  if (URL_PLATFORMS.has(d.platform)) {
+    const url = sanitizeIncomingWebhookUrl(d.endpointUrl);
+    if (url && !looksLikeMaskedWebhookUrl(url)) return true;
+    return Boolean(d.id && d.hasEndpointUrl);
+  }
+  if (d.platform === 'telegram') {
+    if (!String(d.telegramChatId || '').trim()) return false;
+    if (d.telegramBotToken && !isMaskedSecret(d.telegramBotToken)) return true;
+    return Boolean(d.id && d.hasTelegramBotToken);
+  }
+  if (d.platform === 'whatsapp') {
+    if (!String(d.whatsappPhoneNumberId || '').trim() || !String(d.whatsappTo || '').trim()) {
+      return false;
+    }
+    if (d.whatsappAccessToken && !isMaskedSecret(d.whatsappAccessToken)) return true;
+    return Boolean(d.id && d.hasWhatsappAccessToken);
+  }
+  return false;
+}
+
 function toDraft(row?: AdminWebhook): Draft {
   return {
     id: row?.id,
@@ -189,6 +236,7 @@ const AdminWebhooksTab: React.FC<{
   const [webhookCreateLimit, setWebhookCreateLimit] = useState(-1);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [testingEditor, setTestingEditor] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<AdminWebhook | null>(null);
   const [confirmWebhooksOnly, setConfirmWebhooksOnly] = useState(false);
@@ -242,12 +290,16 @@ const AdminWebhooksTab: React.FC<{
       ]);
       setRows(hooks || []);
       const licenseInfo = licenseRes?.data;
+      const rawLimit = licenseInfo?.limits?.WEBHOOK_LIMIT;
       if (
-        isMultiTenantDeploy() &&
         licenseInfo?.enabled &&
-        String(licenseInfo?.limits?.SUPPORT_LEVEL || '').toLowerCase() === 'basic'
+        rawLimit !== undefined &&
+        rawLimit !== null &&
+        rawLimit !== '' &&
+        Number.parseInt(String(rawLimit), 10) !== -1
       ) {
-        setWebhookCreateLimit(1);
+        const n = Number.parseInt(String(rawLimit), 10);
+        setWebhookCreateLimit(Number.isNaN(n) ? -1 : n);
       } else {
         setWebhookCreateLimit(-1);
       }
@@ -321,26 +373,19 @@ const AdminWebhooksTab: React.FC<{
     void persistChannel(mode);
   };
 
+  const webhookPlanLimitMessage = useMemo(() => {
+    if (webhookCreateLimit === -1) return t('webhooks.planLimitBasic');
+    return t('webhooks.planLimitReached', { max: webhookCreateLimit, count: webhookCreateLimit });
+  }, [t, webhookCreateLimit]);
+
+  const atWebhookCreateLimit =
+    webhookCreateLimit !== -1 && rows.length >= webhookCreateLimit;
+
   const saveDraft = async () => {
     if (!editing) return;
     setSaving(true);
     try {
-      const body = {
-        name: editing.name.trim().slice(0, WEBHOOK_NAME_MAX),
-        platform: editing.platform,
-        enabled: editing.enabled,
-        eventTypes: editing.eventTypes,
-        projectIds: editing.projectIds,
-        minPriorityId: editing.minPriorityId || null,
-        locale: editing.locale || null,
-        endpointUrl: sanitizeIncomingWebhookUrl(editing.endpointUrl),
-        telegramBotToken: editing.telegramBotToken,
-        telegramChatId: editing.telegramChatId,
-        whatsappAccessToken: editing.whatsappAccessToken,
-        whatsappPhoneNumberId: editing.whatsappPhoneNumberId,
-        whatsappTo: editing.whatsappTo,
-        whatsappGraphVersion: editing.whatsappGraphVersion,
-      };
+      const body = draftToSaveBody(editing);
       if (editing.id) {
         await updateAdminWebhook(editing.id, body);
       } else {
@@ -354,7 +399,7 @@ const AdminWebhooksTab: React.FC<{
     } catch (e: any) {
       const data = e?.response?.data;
       if (data?.limit === 'WEBHOOK_LIMIT') {
-        toast.error(t('webhooks.planLimitBasic'));
+        toast.error(webhookPlanLimitMessage);
       } else {
         toast.error(data?.error || t('webhooks.saveError'));
       }
@@ -363,12 +408,9 @@ const AdminWebhooksTab: React.FC<{
     }
   };
 
-  const atWebhookCreateLimit =
-    webhookCreateLimit !== -1 && rows.length >= webhookCreateLimit;
-
   const startNewWebhook = () => {
     if (atWebhookCreateLimit) {
-      toast.error(t('webhooks.planLimitBasic'));
+      toast.error(webhookPlanLimitMessage);
       return;
     }
     setUrlFieldFocused(false);
@@ -414,6 +456,24 @@ const AdminWebhooksTab: React.FC<{
       toast.error(e?.response?.data?.error || t('webhooks.saveError'));
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const runEditorTest = async () => {
+    if (!editing) return;
+    if (!canTestDraft(editing)) {
+      toast.error(t('webhooks.testNeedsCredentials'));
+      return;
+    }
+    setTestingEditor(true);
+    try {
+      const body = draftToSaveBody(editing);
+      await testAdminWebhookDraft(editing.id ? { ...body, id: editing.id } : body);
+      toast.success(t('webhooks.testOk'));
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || t('webhooks.testError'));
+    } finally {
+      setTestingEditor(false);
     }
   };
 
@@ -480,7 +540,7 @@ const AdminWebhooksTab: React.FC<{
                 <KanbanChromeTooltip
                   label={
                     atWebhookCreateLimit
-                      ? t('webhooks.planLimitBasic')
+                      ? webhookPlanLimitMessage
                       : t('webhooks.addTooltip')
                   }
                 >
@@ -496,7 +556,7 @@ const AdminWebhooksTab: React.FC<{
                 </KanbanChromeTooltip>
                 {atWebhookCreateLimit ? (
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {t('webhooks.planLimitBasic')}
+                    {webhookPlanLimitMessage}
                   </p>
                 ) : null}
               </div>
@@ -779,7 +839,7 @@ const AdminWebhooksTab: React.FC<{
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
-                {editing.id ? t('webhooks.testAfterSaveHint') : t('webhooks.testAfterSaveFirst')}
+                {t('webhooks.testUsesDraftHint')}
               </p>
               <div className="flex flex-wrap gap-2">
               <KanbanChromeTooltip
@@ -798,19 +858,28 @@ const AdminWebhooksTab: React.FC<{
                   {saving ? t('webhooks.saving') : t('webhooks.save')}
                 </button>
               </KanbanChromeTooltip>
-              {editing.id ? testButton(editing.id, false) : (
-                <KanbanChromeTooltip label={t('webhooks.testAfterSaveFirst')}>
-                  <button
-                    type="button"
-                    disabled
-                    className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-sm text-gray-400 dark:border-gray-600 dark:bg-gray-800"
-                    aria-label={t('webhooks.test')}
-                  >
+              <KanbanChromeTooltip
+                label={
+                  canTestDraft(editing)
+                    ? t('webhooks.testTooltip')
+                    : t('webhooks.testNeedsCredentials')
+                }
+              >
+                <button
+                  type="button"
+                  disabled={testingEditor || !canTestDraft(editing)}
+                  onClick={() => void runEditorTest()}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                  aria-label={t('webhooks.test')}
+                >
+                  {testingEditor ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
                     <Send className="h-4 w-4" />
-                    {t('webhooks.test')}
-                  </button>
-                </KanbanChromeTooltip>
-              )}
+                  )}
+                  {t('webhooks.test')}
+                </button>
+              </KanbanChromeTooltip>
               <KanbanChromeTooltip label={t('webhooks.cancelTooltip')}>
                 <button
                   type="button"

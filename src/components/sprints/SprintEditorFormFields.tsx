@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ModernCheckbox } from '../ModernCheckbox';
+import { formFieldClass } from '../../utils/formFieldClasses';
 import { SPRINT_NAME_MAX_LENGTH, SPRINT_DESCRIPTION_MAX_LENGTH } from '../../constants/appConstants';
 
 export type SprintEditorFormData = {
@@ -24,8 +25,7 @@ const SprintEditorFormFields: React.FC<SprintEditorFormFieldsProps> = ({
 }) => {
   const { t } = useTranslation('admin');
   const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
-  const inputClass =
-    'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400';
+  const inputClass = `${formFieldClass(false, { widthClass: 'w-full', rounded: 'lg' })} placeholder-gray-400`;
   const gridGap = 'gap-4 mb-4';
 
   return (

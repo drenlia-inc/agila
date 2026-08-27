@@ -14,7 +14,9 @@ import {
   AdminPageShell,
   AdminSection,
   adminInputBoundedClass,
+  adminInputLockedWideClass,
   adminInputWideClass,
+  adminSettingsLabelLockedClass,
 } from './AdminSection';
 import {
   DEFAULT_SITE_LOGO,
@@ -420,7 +422,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
         </div>
 
         <div className="pt-1">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className={adminSettingsLabelLockedClass}>
             {t('siteSettings.websiteUrl')}
           </label>
           <input
@@ -428,7 +430,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
             value={editingSettings.WEBSITE_URL || ''}
             readOnly
             disabled
-            className={`${adminInputWideClass} bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed`}
+            className={adminInputLockedWideClass}
             placeholder="https://customer-portal.example.com"
           />
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

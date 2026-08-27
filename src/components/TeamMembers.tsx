@@ -25,7 +25,7 @@ import {
   isSystemMemberId,
   sortMembersAgentLast,
 } from '../utils/agentMemberUi';
-import { memberIsViewer } from '../utils/memberUtils';
+import { memberIsViewer, memberIsInactive } from '../utils/memberUtils';
 import { UNASSIGNED_MEMBER_FILTER_ID } from '../constants/appConstants';
 import {
   loadUserPreferences,
@@ -33,6 +33,7 @@ import {
   updateUserPreference,
 } from '../utils/userPreferences';
 import { KanbanChromeTooltip, CHROME_TOOLTIP_MUTED_TEXT_CLASS } from './KanbanChromeTooltip';
+import { formRoleChipClass, formChromeOutlineButtonClass } from '../utils/formFieldClasses';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import MemberAvatar from './ui/MemberAvatar';
 
@@ -90,19 +91,6 @@ interface TeamMembersProps {
   onEditOwnProfile?: (opts?: { focus?: 'displayName' | 'bio' }) => void;
 }
 
-function roleChipClass(active: boolean) {
-  // Use ring without ring-offset so selection isn’t clipped by the card padding/overflow.
-  return `
-    flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
-    transition-all duration-200 shrink-0
-    ${active
-      ? 'bg-blue-500/15 dark:bg-blue-500/25 text-blue-700 dark:text-blue-300 ring-2 ring-inset ring-blue-500'
-      : 'bg-gray-500/15 dark:bg-gray-500/25 text-gray-600 dark:text-gray-400 hover:scale-101'
-    }
-    focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
-  `;
-}
-
 function truncateDisplayName(name: string, maxLength: number = 12): string {
   if (name.length <= maxLength) {
     return name;
@@ -110,9 +98,11 @@ function truncateDisplayName(name: string, maxLength: number = 12): string {
   return name.substring(0, maxLength) + '...';
 }
 
-/** Active accounts with an email get a selectable name/email tooltip (copyable). */
+/** Active accounts with an email, or inactive accounts (rich tooltip without email). */
 function canShowMemberContactTooltip(member: TeamMember): boolean {
-  return member.isActive !== false && Boolean(member.email?.trim());
+  if (isAgentMemberId(member.id) || isSystemMemberId(member.id)) return false;
+  if (member.isActive !== false && Boolean(member.email?.trim())) return true;
+  return memberIsInactive(member);
 }
 
 function MemberContactTooltipBody({
@@ -120,16 +110,18 @@ function MemberContactTooltipBody({
   statusLabel,
   isSelf,
   onEditOwnProfile,
+  inactiveAccount = false,
 }: {
   member: TeamMember;
   statusLabel: string;
   isSelf?: boolean;
   onEditOwnProfile?: (opts?: { focus?: 'displayName' | 'bio' }) => void;
+  inactiveAccount?: boolean;
 }) {
   const { t } = useTranslation('common');
   const [copied, setCopied] = useState(false);
   const [bioOpen, setBioOpen] = useState(false);
-  const email = member.email!.trim();
+  const email = member.email?.trim() || '';
   const bioText = member.bio?.trim() || '';
   const hasBio = bioText.length > 1;
 
@@ -192,23 +184,31 @@ function MemberContactTooltipBody({
         </p>
       ) : null}
       <div className="flex items-center gap-1.5 min-w-0">
-        <span
-          className={`flex-1 min-w-0 break-all select-text ${CHROME_TOOLTIP_MUTED_TEXT_CLASS}`}
-          title={email}
-        >
-          {email}
-        </span>
-        <button
-          type="button"
-          onClick={copyEmail}
-          className="shrink-0 p-1 rounded hover:bg-white/10 dark:hover:bg-black/10 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/40 dark:focus-visible:ring-black/30"
-          title={copied ? t('teamMembers.emailCopied') : t('teamMembers.copyEmail')}
-          aria-label={copied ? t('teamMembers.emailCopied') : t('teamMembers.copyEmail')}
-        >
-          {copied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2} />}
-        </button>
+        {inactiveAccount ? (
+          <span className={`flex-1 min-w-0 ${CHROME_TOOLTIP_MUTED_TEXT_CLASS}`}>
+            {t('teamMembers.inactiveAccount')}
+          </span>
+        ) : (
+          <>
+            <span
+              className={`flex-1 min-w-0 break-all select-text ${CHROME_TOOLTIP_MUTED_TEXT_CLASS}`}
+              title={email}
+            >
+              {email}
+            </span>
+            <button
+              type="button"
+              onClick={copyEmail}
+              className="shrink-0 p-1 rounded hover:bg-white/10 dark:hover:bg-black/10 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/40 dark:focus-visible:ring-black/30"
+              title={copied ? t('teamMembers.emailCopied') : t('teamMembers.copyEmail')}
+              aria-label={copied ? t('teamMembers.emailCopied') : t('teamMembers.copyEmail')}
+            >
+              {copied ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2} />}
+            </button>
+          </>
+        )}
       </div>
-      {isSelf && onEditOwnProfile ? (
+      {isSelf && onEditOwnProfile && !inactiveAccount ? (
         <button
           type="button"
           onClick={editProfile}
@@ -228,8 +228,13 @@ function memberAvatarNode(
   member: TeamMember,
   sizeClass: string,
   textClass = 'text-xs',
-  viewerLabel?: string
+  viewerLabel?: string,
+  options?: { dimInactive?: boolean }
 ) {
+  const isInactive =
+    memberIsInactive(member) && !isAgentMemberId(member.id) && !isSystemMemberId(member.id);
+  const dimInactive = options?.dimInactive !== false;
+
   let inner: ReactElement;
   if (isAgentMemberId(member.id)) {
     inner = (
@@ -266,7 +271,16 @@ function memberAvatarNode(
       </div>
     );
   }
-  if (!memberIsViewer(member)) return inner;
+  if (!memberIsViewer(member)) {
+    if (isInactive && dimInactive) {
+      return (
+        <span className={`relative inline-flex ${sizeClass} shrink-0 opacity-45 saturate-50`}>
+          {inner}
+        </span>
+      );
+    }
+    return inner;
+  }
   const compact = sizeClass.includes('w-7');
   return (
     <span className={`relative inline-flex ${sizeClass} shrink-0`} title={viewerLabel}>
@@ -298,6 +312,8 @@ function MeetTheTeamCard({
 }) {
   const { t } = useTranslation('common');
   const isAgent = isAgentMemberId(member.id);
+  const isInactiveMember =
+    memberIsInactive(member) && !isAgent && !isSystemMemberId(member.id);
   const {
     attributes,
     listeners,
@@ -330,7 +346,7 @@ function MeetTheTeamCard({
       style={style}
       className={`meet-team-card group relative flex h-full flex-col items-center text-center rounded-xl border px-3.5 py-4 overflow-hidden ${
         isSelf ? 'ring-2 ring-blue-500/40 dark:ring-blue-400/40' : ''
-      } ${isDragging ? 'meet-team-card--dragging' : ''} ${isAgent ? 'meet-team-card--static' : ''}`}
+      } ${isInactiveMember ? 'opacity-65 saturate-75' : ''} ${isDragging ? 'meet-team-card--dragging' : ''} ${isAgent ? 'meet-team-card--static' : ''}`}
       {...attributes}
       {...(isAgent ? {} : listeners)}
     >
@@ -358,13 +374,19 @@ function MeetTheTeamCard({
             member,
             showBios ? 'w-16 h-16' : 'w-12 h-12',
             showBios ? 'text-lg' : 'text-sm',
-            t('messages.readOnlyBadge')
+            t('messages.readOnlyBadge'),
+            { dimInactive: false }
           )}
         </div>
       </div>
       <div className="mt-2.5 text-sm font-semibold text-gray-900 dark:text-gray-50 break-words w-full pointer-events-none">
         {member.name}
       </div>
+      {isInactiveMember ? (
+        <div className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 pointer-events-none">
+          {t('teamMembers.inactiveAccount')}
+        </div>
+      ) : null}
       {showBios ? (
         <div className="mt-1.5 flex-1 flex flex-col items-center w-full min-h-0">
           {hasBio ? (
@@ -816,7 +838,7 @@ export default function TeamMembers({
                 onClick={handleClearSelections}
                 disabled={selectedMembers.length === 0}
                 aria-disabled={selectedMembers.length === 0}
-                className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-600 dark:disabled:hover:text-gray-300 disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600 enabled:hover:text-red-600 dark:enabled:hover:text-red-400 enabled:hover:border-red-400 dark:enabled:hover:border-red-500"
+                className={`${formChromeOutlineButtonClass('danger-hover')} disabled:hover:text-gray-600 dark:disabled:hover:text-gray-300 disabled:hover:border-gray-300 dark:disabled:hover:border-gray-600`}
               >
                 {t('teamMembers.clear')}
               </button>
@@ -833,7 +855,7 @@ export default function TeamMembers({
             >
               <button
                 onClick={onSelectAll}
-                className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 border border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 rounded transition-colors"
+                className={formChromeOutlineButtonClass('neutral')}
               >
                 {isAllModeActive ? t('teamMembers.assigneesOnly') : t('teamMembers.allRoles')}
               </button>
@@ -846,7 +868,7 @@ export default function TeamMembers({
                 <KanbanChromeTooltip label={t('teamMembers.assigneesTooltip')}>
                   <button
                     onClick={() => onToggleAssignees(!includeAssignees)}
-                    className={roleChipClass(includeAssignees)}
+                    className={formRoleChipClass(includeAssignees)}
                   >
                     <span>{t('teamMembers.assignees')}</span>
                   </button>
@@ -858,7 +880,7 @@ export default function TeamMembers({
                   <button
                     type="button"
                     onClick={() => onToggleWatchers(!includeWatchers)}
-                    className={roleChipClass(includeWatchers)}
+                    className={formRoleChipClass(includeWatchers)}
                   >
                     <span>{t('teamMembers.watchers')}</span>
                   </button>
@@ -870,7 +892,7 @@ export default function TeamMembers({
                   <button
                     type="button"
                     onClick={() => onToggleCollaborators(!includeCollaborators)}
-                    className={roleChipClass(includeCollaborators)}
+                    className={formRoleChipClass(includeCollaborators)}
                   >
                     <span>{t('teamMembers.collaborators')}</span>
                   </button>
@@ -881,7 +903,7 @@ export default function TeamMembers({
                 <KanbanChromeTooltip label={t('teamMembers.requestersTooltip')}>
                   <button
                     onClick={() => onToggleRequesters(!includeRequesters)}
-                    className={roleChipClass(includeRequesters)}
+                    className={formRoleChipClass(includeRequesters)}
                   >
                     <span>{t('teamMembers.requesters')}</span>
                   </button>
@@ -892,7 +914,7 @@ export default function TeamMembers({
                 <button
                   type="button"
                   onClick={() => onSelectMember(UNASSIGNED_MEMBER_FILTER_ID)}
-                  className={roleChipClass(
+                  className={formRoleChipClass(
                     selectedMembers.includes(UNASSIGNED_MEMBER_FILTER_ID)
                   )}
                 >
@@ -908,7 +930,7 @@ export default function TeamMembers({
                   <button
                     type="button"
                     onClick={() => onToggleSystem(!includeSystem)}
-                    className={roleChipClass(includeSystem)}
+                    className={formRoleChipClass(includeSystem)}
                   >
                     <span>{t('teamMembers.system')}</span>
                     <span className="ml-0.5 px-1.5 py-0.5 bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200 rounded-full text-xs font-semibold">
@@ -952,6 +974,10 @@ export default function TeamMembers({
       >
         {displayMembers.map(member => {
           const isSelected = selectedMembers.includes(member.id);
+          const isInactiveMember =
+            memberIsInactive(member) &&
+            !isAgentMemberId(member.id) &&
+            !isSystemMemberId(member.id);
           const statusLabel = isSelected
             ? t('teamMembers.selected')
             : t('teamMembers.clickToSelect');
@@ -968,6 +994,7 @@ export default function TeamMembers({
                     statusLabel={statusLabel}
                     isSelf={isSelf}
                     onEditOwnProfile={onEditOwnProfile}
+                    inactiveAccount={isInactiveMember}
                   />
                 ),
               }
@@ -987,11 +1014,18 @@ export default function TeamMembers({
                   className={`shrink-0 rounded-full transition-shadow duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     isSelected
                       ? 'ring-2 ring-blue-500 dark:ring-blue-400 shadow-sm'
-                      : 'hover:opacity-90'
+                      : isInactiveMember
+                        ? 'opacity-70 hover:opacity-85'
+                        : 'hover:opacity-90'
                   }`}
                   onClick={() => onSelectMember(member.id)}
                 >
-                  {memberAvatarNode(member, 'w-7 h-7', 'text-xs', t('messages.readOnlyBadge'))}
+                  {memberAvatarNode(
+                    member,
+                    'w-7 h-7',
+                    'text-xs',
+                    t('messages.readOnlyBadge')
+                  )}
                 </button>
               </KanbanChromeTooltip>
             );
@@ -1006,18 +1040,27 @@ export default function TeamMembers({
                 className={`flex items-center gap-1 px-2 py-1 rounded-full cursor-pointer transition-all duration-200 shrink-0 ${
                   isSelected
                     ? 'ring-2 ring-inset ring-blue-500 dark:ring-blue-400 shadow-sm'
-                    : 'hover:shadow-sm hover:scale-101'
+                    : isInactiveMember
+                      ? 'opacity-60 hover:opacity-80 hover:shadow-sm'
+                      : 'hover:shadow-sm hover:scale-101'
                 }`}
                 style={{
                   backgroundColor: isSelected ? `${member.color}25` : `${member.color}15`,
                 }}
                 onClick={() => onSelectMember(member.id)}
               >
-                {memberAvatarNode(member, 'w-7 h-7', 'text-xs', t('messages.readOnlyBadge'))}
+                {memberAvatarNode(
+                  member,
+                  'w-7 h-7',
+                  'text-xs',
+                  t('messages.readOnlyBadge')
+                )}
                 <span
-                  className={`text-xs text-gray-800 dark:text-gray-100 ${
-                    isSelected ? 'font-semibold' : 'font-medium'
-                  }`}
+                  className={`text-xs ${
+                    isInactiveMember
+                      ? 'text-gray-500 dark:text-gray-400 italic'
+                      : 'text-gray-800 dark:text-gray-100'
+                  } ${isSelected ? 'font-semibold' : 'font-medium'}`}
                 >
                   {truncateDisplayName(member.name)}
                 </span>

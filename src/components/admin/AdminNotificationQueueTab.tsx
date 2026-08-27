@@ -15,6 +15,8 @@ import {
   parseOptionalInt,
 } from '../../utils/adminFieldLimits';
 import { AdminUnsavedHint } from './AdminUnsavedChanges';
+import { adminFieldClass } from './AdminSection';
+import { formDropdownSearchClass, formSecondaryButtonClass } from '../../utils/formFieldClasses';
 
 interface NotificationQueueItem {
   id: string;
@@ -499,66 +501,105 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
   return (
     <div className="min-w-0 max-w-full">
       <div className="mb-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 max-w-sm">
             {webhooksOnly ? (
               <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
                 {t('notificationQueue.webhooksOnlyHint')}
               </p>
             ) : (
-            <div
-              className="inline-flex items-center gap-2"
-              data-setting-key="TASK_EMAIL_NOTIFICATIONS_ENABLED"
-              title={t('mail.taskEmailNotificationsHint')}
-            >
-              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                {emailSendingEnabled
-                  ? t('mail.taskEmailNotificationsOn')
-                  : t('mail.taskEmailNotificationsOff')}
-              </span>
+              <div
+                className="inline-flex items-center gap-2"
+                data-setting-key="TASK_EMAIL_NOTIFICATIONS_ENABLED"
+                title={t('mail.taskEmailNotificationsHint')}
+              >
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                  {emailSendingEnabled
+                    ? t('mail.taskEmailNotificationsOn')
+                    : t('mail.taskEmailNotificationsOff')}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={emailSendingEnabled}
+                  aria-label={t('mail.taskEmailNotificationsLabel')}
+                  disabled={savingSendingToggle}
+                  onClick={() => void toggleTaskEmailSending()}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 ${
+                    emailSendingEnabled
+                      ? 'bg-blue-600 dark:bg-blue-500'
+                      : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      emailSendingEnabled ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
+            <div className="relative w-full">
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Escape') return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSearchQuery('');
+                  e.currentTarget.blur();
+                }}
+                placeholder={t('notificationQueue.searchPlaceholder')}
+                aria-label={t('notificationQueue.searchPlaceholder')}
+                className={`${formDropdownSearchClass('w-full')} pl-8 pr-3`}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
-                role="switch"
-                aria-checked={emailSendingEnabled}
-                aria-label={t('mail.taskEmailNotificationsLabel')}
-                disabled={savingSendingToggle}
-                onClick={() => void toggleTaskEmailSending()}
-                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 disabled:opacity-50 ${
-                  emailSendingEnabled
-                    ? 'bg-blue-600 dark:bg-blue-500'
-                    : 'bg-gray-300 dark:bg-gray-600'
-                }`}
+                onClick={() => setChannelFilter((prev) => (prev === 'email' ? null : 'email'))}
+                className={
+                  channelFilter === 'email'
+                    ? 'rounded-full px-2.5 py-0.5 text-xs font-medium border border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-100'
+                    : `${formSecondaryButtonClass} !rounded-full !px-2.5 !py-0.5`
+                }
               >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    emailSendingEnabled ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
+                {t('notificationQueue.filterEmail')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setChannelFilter((prev) => (prev === 'webhook' ? null : 'webhook'))}
+                className={
+                  channelFilter === 'webhook'
+                    ? 'rounded-full px-2.5 py-0.5 text-xs font-medium border border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-100'
+                    : `${formSecondaryButtonClass} !rounded-full !px-2.5 !py-0.5`
+                }
+              >
+                {t('notificationQueue.filterWebhooks')}
               </button>
             </div>
-            )}
           </div>
+
           <div
-            className="flex-shrink-0 sm:text-right"
+            className="shrink-0 sm:min-w-[11rem]"
             data-setting-key="NOTIFICATION_QUEUE_RETENTION_DAYS"
             title={t('notificationQueue.retentionDaysDescription')}
           >
             <label
               htmlFor="notification-queue-retention"
-              className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+              className="block text-xs font-medium text-gray-700 dark:text-gray-300"
             >
               {t('notificationQueue.retentionDays')}
             </label>
-            <div className="sm:hidden mb-1 flex justify-start">
+            <div className="mt-1 flex items-center gap-2">
               <AdminUnsavedHint show={retentionDirty} />
-            </div>
-            <div className="relative flex items-center gap-2 sm:justify-end">
-              {/* Absolutely left of the controls so the field/button stay put when dirty */}
-              <div className="pointer-events-none absolute inset-y-0 right-full mr-2 hidden items-center sm:flex">
-                <div className="pointer-events-auto whitespace-nowrap">
-                  <AdminUnsavedHint show={retentionDirty} />
-                </div>
-              </div>
               <input
                 id="notification-queue-retention"
                 type="number"
@@ -578,7 +619,7 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
                   )
                 }
                 aria-describedby="notification-queue-retention-hint"
-                className={`w-16 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 ${ADMIN_NUMERIC_INPUT_CLASS}`}
+                className={`${adminFieldClass(false, 'w-16')} ${ADMIN_NUMERIC_INPUT_CLASS}`}
               />
               <button
                 type="button"
@@ -586,8 +627,8 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
                 disabled={savingRetention || !retentionDirty}
                 className={`px-2.5 py-1.5 text-xs font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
                   retentionDirty
-                    ? 'bg-blue-600 hover:bg-blue-700 ring-2 ring-amber-400 ring-offset-1'
-                    : 'bg-blue-600'
+                    ? 'bg-blue-600 hover:bg-blue-700 ring-2 ring-amber-400 ring-offset-1 dark:ring-offset-gray-800'
+                    : 'bg-blue-600 hover:bg-blue-700'
                 }`}
               >
                 {savingRetention
@@ -604,55 +645,7 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-4">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Escape') return;
-                e.preventDefault();
-                e.stopPropagation();
-                setSearchQuery('');
-                e.currentTarget.blur();
-              }}
-              placeholder={t('notificationQueue.searchPlaceholder')}
-              aria-label={t('notificationQueue.searchPlaceholder')}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setChannelFilter((prev) => (prev === 'email' ? null : 'email'))}
-              className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                channelFilter === 'email'
-                  ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-100'
-                  : 'border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300'
-              }`}
-            >
-              {t('notificationQueue.filterEmail')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setChannelFilter((prev) => (prev === 'webhook' ? null : 'webhook'))}
-              className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                channelFilter === 'webhook'
-                  ? 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-100'
-                  : 'border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300'
-              }`}
-            >
-              {t('notificationQueue.filterWebhooks')}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between">
           <div className="text-sm text-gray-500 dark:text-gray-400">
             {filteredNotifications.length > 0 ? (
               <>
@@ -668,7 +661,7 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
           <div className="flex gap-2">
           <button
             onClick={handleSelectAll}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`${formSecondaryButtonClass} text-sm px-4 py-2`}
           >
             {(() => {
               const visibleNotifications = filteredNotifications.slice(0, displayLimit);
@@ -778,7 +771,7 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
           <button
             onClick={() => void fetchNotifications()}
             disabled={loading || isSending || isDeleting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            className={`${formSecondaryButtonClass} text-sm px-4 py-2`}
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             {t('notificationQueue.refresh')}
@@ -934,7 +927,11 @@ const AdminNotificationQueueTab: React.FC<AdminNotificationQueueTabProps> = ({
                             {notification.webhookName || t('notificationQueue.channelWebhook')}
                           </div>
                           <div className="truncate text-xs text-gray-500 dark:text-gray-400">
-                            {t('notificationQueue.channelWebhook')}
+                            {notification.webhookPlatform
+                              ? t(`webhooks.platforms.${notification.webhookPlatform}`, {
+                                  defaultValue: notification.webhookPlatform,
+                                })
+                              : t('notificationQueue.channelWebhook')}
                           </div>
                         </>
                       ) : (

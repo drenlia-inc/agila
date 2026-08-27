@@ -5,6 +5,7 @@ import { Edit, Trash2 } from 'lucide-react';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
 import { TAG_NAME_MAX_LENGTH, TAG_DESCRIPTION_MAX_LENGTH } from '../../constants/appConstants';
+import { adminFieldClass } from './AdminSection';
 
 interface Tag {
   id: number;
@@ -391,7 +392,7 @@ const AdminTagsTab: React.FC<AdminTagsTabProps> = ({
                     type="text"
                     value={editingTag.tag}
                     onChange={(e) => setEditingTag(prev => prev ? { ...prev, tag: e.target.value } : null)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                    className={adminFieldClass(false, 'w-full')}
                     placeholder={t('tags.enterTagName')}
                     maxLength={TAG_NAME_MAX_LENGTH}
                     required
@@ -402,7 +403,7 @@ const AdminTagsTab: React.FC<AdminTagsTabProps> = ({
                   <textarea
                     value={editingTag.description || ''}
                     onChange={(e) => setEditingTag(prev => prev ? { ...prev, description: e.target.value } : null)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                    className={adminFieldClass(false, 'w-full')}
                     placeholder={t('tags.enterTagDescription')}
                     maxLength={TAG_DESCRIPTION_MAX_LENGTH}
                     rows={3}
