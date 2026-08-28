@@ -154,7 +154,13 @@ export interface UserPreferences {
     height: number;
     lastSeenActivityId: number;
     clearActivityId: number;
+    /** Activity IDs hidden individually (between clear watermark and newest). */
+    dismissedActivityIds: number[];
+    /** Activity IDs marked read individually (newer than lastSeen watermark). */
+    readActivityIds: number[];
     filterText: string;
+    /** When true (default), show short task-impact lines and hide non-task noise. */
+    taskImpactView: boolean;
   };
 }
 
@@ -422,7 +428,10 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
     height: 400, // Default height (matches database default)
     lastSeenActivityId: 0,
     clearActivityId: 0,
-    filterText: ''
+    dismissedActivityIds: [],
+    readActivityIds: [],
+    filterText: '',
+    taskImpactView: true,
   }
 };
 
@@ -707,7 +716,10 @@ export const saveUserPreferences = async (preferences: UserPreferences, userId: 
           saveIfDefined('activityFeedHeight', preferences.activityFeed.height),
           saveIfDefined('lastSeenActivityId', preferences.activityFeed.lastSeenActivityId),
           saveIfDefined('clearActivityId', preferences.activityFeed.clearActivityId),
+          saveIfDefined('dismissedActivityIds', JSON.stringify(preferences.activityFeed.dismissedActivityIds)),
+          saveIfDefined('readActivityIds', JSON.stringify(preferences.activityFeed.readActivityIds)),
           saveIfDefined('activityFilterText', preferences.activityFeed.filterText),
+          saveIfDefined('activityFeedTaskImpactView', preferences.activityFeed.taskImpactView),
           
           // List View Column Visibility
           saveIfDefined('listViewColumnVisibility', JSON.stringify(preferences.listViewColumnVisibility)),
@@ -1217,7 +1229,64 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
           })(),
           lastSeenActivityId: smartMerge(preferences.activityFeed.lastSeenActivityId, dbSettings.lastSeenActivityId, defaults.activityFeed.lastSeenActivityId),
           clearActivityId: smartMerge(preferences.activityFeed.clearActivityId, dbSettings.clearActivityId, defaults.activityFeed.clearActivityId),
+          dismissedActivityIds: (() => {
+            const parseIds = (raw: unknown): number[] => {
+              if (Array.isArray(raw)) {
+                return raw.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
+              }
+              if (typeof raw === 'string' && raw.trim()) {
+                try {
+                  return parseIds(JSON.parse(raw));
+                } catch {
+                  return [];
+                }
+              }
+              return [];
+            };
+            const fromDb = parseIds(dbSettings.dismissedActivityIds);
+            const fromLocal = parseIds(preferences.activityFeed.dismissedActivityIds);
+            const merged = fromDb.length > 0 ? fromDb : fromLocal.length > 0 ? fromLocal : defaults.activityFeed.dismissedActivityIds;
+            const clearId = Number(smartMerge(preferences.activityFeed.clearActivityId, dbSettings.clearActivityId, defaults.activityFeed.clearActivityId)) || 0;
+            return merged.filter((id) => id > clearId);
+          })(),
+          readActivityIds: (() => {
+            const parseIds = (raw: unknown): number[] => {
+              if (Array.isArray(raw)) {
+                return raw.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
+              }
+              if (typeof raw === 'string' && raw.trim()) {
+                try {
+                  return parseIds(JSON.parse(raw));
+                } catch {
+                  return [];
+                }
+              }
+              return [];
+            };
+            const fromDb = parseIds(dbSettings.readActivityIds);
+            const fromLocal = parseIds(preferences.activityFeed.readActivityIds);
+            const merged = fromDb.length > 0 ? fromDb : fromLocal.length > 0 ? fromLocal : defaults.activityFeed.readActivityIds;
+            const lastSeen = Number(smartMerge(preferences.activityFeed.lastSeenActivityId, dbSettings.lastSeenActivityId, defaults.activityFeed.lastSeenActivityId)) || 0;
+            const clearId = Number(smartMerge(preferences.activityFeed.clearActivityId, dbSettings.clearActivityId, defaults.activityFeed.clearActivityId)) || 0;
+            return merged.filter((id) => id > lastSeen && id > clearId);
+          })(),
           filterText: smartMerge(preferences.activityFeed.filterText, dbSettings.activityFilterText, defaults.activityFeed.filterText),
+          taskImpactView: (() => {
+            const fromDb = dbSettings.activityFeedTaskImpactView;
+            const localValue = preferences.activityFeed.taskImpactView;
+            if (fromDb === 'true' || fromDb === true) {
+              if (localValue !== true) needsStoredPrefsUpdate = true;
+              return true;
+            }
+            if (fromDb === 'false' || fromDb === false) {
+              if (localValue !== false) needsStoredPrefsUpdate = true;
+              return false;
+            }
+            if (localValue !== undefined) {
+              return localValue !== false;
+            }
+            return defaults.activityFeed.taskImpactView !== false;
+          })(),
         },
         
         // Gantt Scroll Positions (localStorage + DB)
@@ -1484,7 +1553,10 @@ export const updateActivityFeedPreference = async <K extends keyof UserPreferenc
     'height': 'activityFeedHeight',
     'lastSeenActivityId': 'lastSeenActivityId',
     'clearActivityId': 'clearActivityId',
-    'filterText': 'activityFilterText'
+    'dismissedActivityIds': 'dismissedActivityIds',
+    'readActivityIds': 'readActivityIds',
+    'filterText': 'activityFilterText',
+    'taskImpactView': 'activityFeedTaskImpactView'
   };
   
   const dbKey = dbKeyMap[key];
@@ -1495,8 +1567,10 @@ export const updateActivityFeedPreference = async <K extends keyof UserPreferenc
   
   // Save ONLY this specific setting to database (single API call instead of 30+)
   let dbValue: any = value;
-  if (key === 'position') {
+  if (key === 'position' || key === 'dismissedActivityIds' || key === 'readActivityIds') {
     dbValue = JSON.stringify(value);
+  } else if (key === 'taskImpactView') {
+    dbValue = value ? 'true' : 'false';
   }
   
   await updateUserSetting(dbKey, dbValue);

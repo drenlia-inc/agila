@@ -1,7 +1,7 @@
 /** Shared styles for board/column task-count pills. */
 
 export const TASK_COUNT_PILL_BASE =
-  'inline-flex items-center justify-center min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-[0.65rem] leading-none tabular-nums whitespace-nowrap';
+  'inline-flex h-5 items-center justify-center min-w-[1.25rem] rounded-full px-1.5 text-center text-[0.65rem] leading-none tabular-nums whitespace-nowrap';
 
 /** Default count chrome (same whether filters are on or off). */
 export const TASK_COUNT_PILL_DEFAULT =

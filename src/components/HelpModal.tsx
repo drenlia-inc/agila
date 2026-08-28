@@ -43,6 +43,8 @@ type HelpGoTarget = {
 
 type ChecklistNavOptions = {
   titleTarget?: HelpGoTarget;
+  preIntroKey?: string;
+  preIntroTarget?: HelpGoTarget;
   itemTargets?: Partial<Record<string, HelpGoTarget>>;
 };
 
@@ -130,12 +132,12 @@ const HELP_TAB_IDS = new Set<TabType>([
 const HELP_DELIVERY_KEYS = [
   'help.delivery.intro', 'help.delivery.introDesc1', 'help.delivery.introDesc2', 'help.delivery.introDesc3',
   'help.delivery.roles', 'help.delivery.roleAdmin', 'help.delivery.roleUser', 'help.delivery.roleViewer',
-  'help.delivery.firstHour', 'help.delivery.firstHourIntro',
+  'help.delivery.firstHour', 'help.delivery.firstHourSsoNote', 'help.delivery.firstHourIntro',
   'help.delivery.firstHour2', 'help.delivery.firstHour3', 'help.delivery.firstHour4',
   'help.delivery.firstHour5', 'help.delivery.firstHour6', 'help.delivery.firstHour7', 'help.delivery.firstHour8', 'help.delivery.firstHour9',
   'help.delivery.shapeBoard', 'help.delivery.shapeColumns',
   'help.delivery.shapeColumns1', 'help.delivery.shapeColumns2', 'help.delivery.shapeColumns3', 'help.delivery.shapeColumns4',
-  'help.delivery.oneBoard', 'help.delivery.oneBoardWhen', 'help.delivery.manyBoardsWhen', 'help.delivery.oneBoardAdvice',
+  'help.delivery.oneBoard', 'help.delivery.oneBoardWhen', 'help.delivery.oneBoardTeamNote', 'help.delivery.manyBoardsWhen', 'help.delivery.oneBoardAdvice',
   'help.delivery.softWip', 'help.delivery.softWipIntro',
   'help.delivery.columnWip', 'help.delivery.columnWip1', 'help.delivery.columnWip2', 'help.delivery.columnWip3',
   'help.delivery.boardWip', 'help.delivery.boardWip1', 'help.delivery.boardWip2', 'help.delivery.boardWip3', 'help.delivery.boardWip4',
@@ -297,7 +299,7 @@ const HELP_SHORTCUT_SECTIONS: { titleKey: string; rows: ShortcutRow[] }[] = [
     rows: [
       { keys: '/ or Ctrl/Cmd+K', actionKey: 'help.shortcuts.boardSearch' },
       { keys: 'S', actionKey: 'help.shortcuts.boardSearchPanel' },
-      { keys: 'N', actionKey: 'help.shortcuts.boardNewTask' },
+      { keys: '+', actionKey: 'help.shortcuts.boardNewTask' },
       { keys: '1 / 2 / 3 / 4', actionKey: 'help.shortcuts.boardViews' },
       { keys: 'F / P / M', actionKey: 'help.shortcuts.boardDensity' },
       { keys: 'Escape', actionKey: 'help.shortcuts.boardFilterEscape' },
@@ -1015,9 +1017,10 @@ export default function HelpModal({
     nav?: ChecklistNavOptions
   ) => {
     const title = t(titleKey);
+    const preIntro = nav?.preIntroKey ? t(nav.preIntroKey) : '';
     const intro = introKey ? t(introKey) : '';
     const items = itemKeys.map((key) => t(key));
-    const allTexts = [title, intro, ...items].filter(Boolean);
+    const allTexts = [title, preIntro, intro, ...items].filter(Boolean);
     const hasMatch = debouncedSearchTerm.trim() ? anyTextMatches(allTexts, debouncedSearchTerm) : false;
 
     const sectionRef = (node: HTMLElement | null) => {
@@ -1035,6 +1038,14 @@ export default function HelpModal({
           <span className="min-w-0">{highlightText(title, debouncedSearchTerm)}</span>
           {nav?.titleTarget ? renderGoThereButton(nav.titleTarget) : null}
         </h3>
+        {preIntro ? (
+          <div className="mb-3 rounded-lg border border-blue-200/90 bg-blue-50/90 px-3.5 py-3 dark:border-blue-800/70 dark:bg-blue-950/35">
+            <p className={`${bodyTextClass} flex flex-wrap items-center gap-2`}>
+              <span>{renderHelpContent(preIntro, debouncedSearchTerm)}</span>
+              {nav?.preIntroTarget ? renderGoThereButton(nav.preIntroTarget) : null}
+            </p>
+          </div>
+        ) : null}
         {intro ? (
           <p className={`mb-3 ${bodyTextClass}`}>{renderHelpContent(intro, debouncedSearchTerm)}</p>
         ) : null}
@@ -1171,6 +1182,8 @@ export default function HelpModal({
         'text-emerald-600 dark:text-emerald-400',
         'bg-emerald-50 dark:bg-emerald-900/40',
         {
+          preIntroKey: 'help.delivery.firstHourSsoNote',
+          preIntroTarget: adminGo('admin#system-settings#sso', HELP_HL.sso),
           itemTargets: {
             'help.delivery.firstHour5': adminGo('admin#project-settings#project', HELP_HL.project),
             'help.delivery.firstHour6': adminGo('admin#project-settings#features', HELP_HL.features),
@@ -1192,7 +1205,8 @@ export default function HelpModal({
           {
             titleKey: 'help.delivery.oneBoard',
             itemKeys: [
-              'help.delivery.oneBoardWhen', 'help.delivery.manyBoardsWhen', 'help.delivery.oneBoardAdvice',
+              'help.delivery.oneBoardWhen', 'help.delivery.oneBoardTeamNote',
+              'help.delivery.manyBoardsWhen', 'help.delivery.oneBoardAdvice',
             ],
           },
         ],

@@ -39,6 +39,10 @@ import { KanbanChromeTooltip, CHROME_TOOLTIP_PANEL_SURFACE_CLASS, CHROME_TOOLTIP
 import SprintAssignmentCurrentPill from './ui/SprintAssignmentCurrentPill';
 import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { feDebug } from '../utils/clientDebug';
+import {
+  completeNewTaskTitleEdit,
+  subscribeNewTaskTitleEdit,
+} from '../utils/newTaskReveal';
 import { commentTextToHtml } from '../utils/commentContent';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { isEditableEscapeTarget, hasEscapeConsumingOverlay } from '../utils/escapeKeyUtils';
@@ -53,6 +57,9 @@ import {
 import AgentPanel from './AgentPanel';
 import type { AgentPanelView } from './AgentPanel';
 import websocketClient from '../services/websocketClient';
+
+/** Drop Clock icons on days-in-column & effort when the card is squeezed narrow. */
+const TASK_CARD_HIDE_CLOCK_ICONS_BELOW_PX = 275;
 
 function cardLog(...args: unknown[]) {
   if (feDebug('FE_DEBUG_TASK_CARD')) console.log(...args);
@@ -146,6 +153,24 @@ interface TaskCardProps {
 }
 
 
+
+/** True when rendered title text occupies more than one line in the card. */
+function titleTextWrapsElement(el: HTMLElement): boolean {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const rects = Array.from(range.getClientRects()).filter(
+    (rect) => rect.width > 0 && rect.height > 0
+  );
+  range.detach();
+  if (rects.length <= 1) return false;
+  const firstTop = rects[0].top;
+  const lineTolerance = Math.max(2, rects[0].height * 0.35);
+  return rects.some((rect) => Math.abs(rect.top - firstTop) > lineTolerance);
+}
+
+function normalizeInlineTitle(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
 
 const TaskCard = React.memo(function TaskCard({
   task,
@@ -346,6 +371,7 @@ const TaskCard = React.memo(function TaskCard({
   );
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleEditMultiline, setTitleEditMultiline] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task.title);
   const [isEditingEffort, setIsEditingEffort] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -398,10 +424,13 @@ const TaskCard = React.memo(function TaskCard({
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
   const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
+  const [hideMetadataClockIcons, setHideMetadataClockIcons] = useState(false);
   const cardElRef = useRef<HTMLDivElement | null>(null);
+  const titleDisplayRef = useRef<HTMLHeadingElement | null>(null);
   const isInteractingWithTagRef = useRef<boolean>(false); // Track if user is interacting with tags
   const isInteractingWithDropdownRef = useRef<boolean>(false); // Track if user is interacting with dropdowns (member, sprint, etc.)
   const isSelectingRef = useRef<boolean>(false); // Track if we're in the process of selecting this task
+  const isPointerOverCardRef = useRef<boolean>(false);
 
   // Check if any editing is active to disable drag
   const agentStatus = agentWork.status || null;
@@ -418,6 +447,20 @@ const TaskCard = React.memo(function TaskCard({
       setEditedEffort(String(task.effort ?? 0));
     }
   }, [task.effort, isEditingEffort]);
+
+  useEffect(() => {
+    const el = cardElement;
+    if (!el) return;
+    const sync = (width: number) => {
+      setHideMetadataClockIcons(width > 0 && width < TASK_CARD_HIDE_CLOCK_ICONS_BELOW_PX);
+    };
+    sync(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver(([entry]) => {
+      sync(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [cardElement]);
 
   // Prevent component updates while editing description to maintain focus
   useEffect(() => {
@@ -603,11 +646,16 @@ const TaskCard = React.memo(function TaskCard({
   // Check if this task is currently selected (TaskDetails panel is open for this task)
   const isSelected = selectedTask?.id === task.id;
   
-  // Clear hover state when card becomes unselected to prevent light gray appearance
+  // Keep pencil hover in sync when selection toggles (e.g. close TaskDetails while still hovering).
   useEffect(() => {
     if (!isSelected) {
-      setIsHoveringTitle(false);
-      setIsHoveringDescription(false);
+      if (isPointerOverCardRef.current) {
+        setIsHoveringTitle(true);
+        setIsHoveringDescription(true);
+      } else {
+        setIsHoveringTitle(false);
+        setIsHoveringDescription(false);
+      }
     }
   }, [isSelected]);
 
@@ -648,12 +696,13 @@ const TaskCard = React.memo(function TaskCard({
     let dirty = false;
 
     if (isEditingTitle) {
-      const trimmed = editedTitle.trim();
+      const trimmed = normalizeInlineTitle(editedTitle);
       if (trimmed && trimmed !== task.title) {
         next = { ...next, title: trimmed };
         dirty = true;
       }
       setIsEditingTitle(false);
+      setTitleEditMultiline(false);
     }
 
     if (isEditingDescription) {
@@ -936,11 +985,26 @@ const TaskCard = React.memo(function TaskCard({
       setClickPosition(clickX);
       setSelectAllTitleOnFocus(false);
     }
+    setTitleEditMultiline(
+      titleDisplayRef.current ? titleTextWrapsElement(titleDisplayRef.current) : false
+    );
     setIsEditingTitle(true);
     setEditedTitle(task.title);
   };
 
-  const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    return subscribeNewTaskTitleEdit((taskId) => {
+      if (taskId !== task.id || !allowMutations) return;
+      setClickPosition(null);
+      setSelectAllTitleOnFocus(true);
+      setTitleEditMultiline(false);
+      setEditedTitle(task.title);
+      setIsEditingTitle(true);
+      completeNewTaskTitleEdit(taskId);
+    });
+  }, [task.id, task.title, allowMutations]);
+
+  const handleInputFocus = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const input = e.target;
     if (selectAllTitleOnFocus) {
       setTimeout(() => {
@@ -1006,18 +1070,21 @@ const TaskCard = React.memo(function TaskCard({
   };
 
   const handleTitleSave = () => {
-    if (editedTitle.trim() && editedTitle !== task.title) {
-      onEdit({ ...task, title: editedTitle.trim() });
+    const normalized = normalizeInlineTitle(editedTitle);
+    if (normalized && normalized !== task.title) {
+      onEdit({ ...task, title: normalized });
     }
     setIsEditingTitle(false);
+    setTitleEditMultiline(false);
   };
 
   const handleTitleCancel = () => {
     setEditedTitle(task.title);
     setIsEditingTitle(false);
+    setTitleEditMultiline(false);
   };
 
-  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleTitleSave();
@@ -1584,7 +1651,9 @@ const TaskCard = React.memo(function TaskCard({
         }}
         style={{ 
           ...style, 
-          borderLeft: `4px solid ${member?.color || '#9CA3AF'}`,
+          ...(isSelected
+            ? {}
+            : { borderLeft: `4px solid ${member?.color || '#9CA3AF'}` }),
           // Use CSS variable for background to prevent flash - ensures correct color immediately
           backgroundColor: isSelected 
             ? undefined 
@@ -1597,9 +1666,12 @@ const TaskCard = React.memo(function TaskCard({
           position: 'relative'
         }}
         className={`group task-card sortable-item cursor-pointer outline-none focus:outline-none focus-visible:outline-none ${
-          isSelected ? 'bg-gray-100 dark:bg-gray-700 ring-1 ring-amber-400 dark:ring-amber-500' : 
-          member?.id === SYSTEM_MEMBER_ID ? 'bg-yellow-50 dark:bg-yellow-900' :
-          isAgentWorkActive ? 'bg-teal-50/90 dark:bg-teal-950/40' :
+          isSelected
+            ? 'border-2 border-blue-500 bg-gray-100 dark:border-blue-400 dark:bg-gray-700'
+            : ''
+        } ${
+          !isSelected && member?.id === SYSTEM_MEMBER_ID ? 'bg-yellow-50 dark:bg-yellow-900' :
+          !isSelected && isAgentWorkActive ? 'bg-teal-50/90 dark:bg-teal-950/40' :
           '' // Background now handled by CSS variable in style to prevent flash
         } p-4 rounded-lg shadow-sm relative ${
           isDragging ? 'opacity-90 scale-105 shadow-2xl rotate-2 ring-2 ring-blue-400' : 'hover:shadow-md'
@@ -1856,9 +1928,6 @@ const TaskCard = React.memo(function TaskCard({
                 // Toggle: if clicking the same task that's already selected, close TaskDetails
                 // Use the latest IDs to avoid stale closure issues
                 if (latestSelectedTaskId === latestTaskId) {
-                  // Clear hover state before unselecting to prevent light gray appearance
-                  setIsHoveringTitle(false);
-                  setIsHoveringDescription(false);
                   cardLog('[TaskCard] Closing TaskDetails (same task clicked)');
                   onSelect(null);
                 } else {
@@ -1920,20 +1989,16 @@ const TaskCard = React.memo(function TaskCard({
           }
         }}
         onMouseEnter={() => {
-          // Don't set hover state if we're in the process of selecting
-          // Also don't set hover if the card is currently selected (it has its own styling)
-          if (!isSelectingRef.current && !isSelected) {
+          isPointerOverCardRef.current = true;
+          if (!isSelectingRef.current) {
             setIsHoveringTitle(true);
             setIsHoveringDescription(true);
           }
         }}
         onMouseLeave={() => {
-          // Only clear hover if card is not selected (selected cards have their own styling)
-          if (!isSelected) {
-            setIsHoveringTitle(false);
-            setIsHoveringDescription(false);
-          }
-          // Do not clear link-tool hover focus on card leave — toolbar handles pointer lifecycle.
+          isPointerOverCardRef.current = false;
+          setIsHoveringTitle(false);
+          setIsHoveringDescription(false);
         }}
         onDoubleClick={(e) => {
           // Cancel pending single-click timer to prevent TaskDetails from opening/closing
@@ -1974,7 +2039,7 @@ const TaskCard = React.memo(function TaskCard({
         {task.ticket && (
           <div
             className="absolute right-0 z-10 leading-none"
-            style={{ top: '-8px' }}
+            style={{ top: '-11px' }}
             data-stop-propagation
           >
             <KanbanChromeTooltip
@@ -1986,7 +2051,7 @@ const TaskCard = React.memo(function TaskCard({
                 {...(getLinkTarget(siteSettings)
                   ? { target: '_blank', rel: 'noopener noreferrer' }
                   : {})}
-                className={`bg-white dark:bg-gray-800 px-1.5 py-0.8 text-gray-600 dark:text-gray-300 font-mono font-bold hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 transition-all duration-200 cursor-pointer whitespace-nowrap max-w-none`}
+                className={`bg-white dark:bg-gray-800 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:text-gray-300 font-mono hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 transition-all duration-200 cursor-pointer whitespace-nowrap max-w-none`}
                 data-help-target="task-page-link"
                 style={{
                   borderTopLeftRadius: '0.25rem',
@@ -1994,7 +2059,6 @@ const TaskCard = React.memo(function TaskCard({
                   borderBottomLeftRadius: '0',
                   borderBottomRightRadius: '0',
                   border: 'none',
-                  fontSize: '12px',
                   textDecoration: 'none',
                   display: 'inline-block',
                   lineHeight: '1.2',
@@ -2069,6 +2133,31 @@ const TaskCard = React.memo(function TaskCard({
           cardWidthAnchorRef={cardElRef}
         />
 
+        {/* Bulk-select checkbox — fixed under grip / agent icon; hidden during inline title/description edit. */}
+        {toggleChecked && !isEditingTitle && !isEditingDescription && (
+          <label
+            className="absolute left-1 top-[23px] z-[6] flex h-[22px] w-[22px] cursor-pointer items-center justify-center"
+            data-no-dnd="true"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (e.shiftKey && toggleChecked) {
+                e.preventDefault();
+                toggleChecked({ range: true });
+              }
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <ModernCheckbox
+              checked={isChecked}
+              onChange={toggleChecked}
+              size="sm"
+              aria-label={t('kanbanSelect.selectTask')}
+              data-testid={`task-check-${task.id}`}
+            />
+          </label>
+        )}
+
         {/* Relationship Type Indicator - when focus card highlights related ones */}
         {hoveredLinkTask && getTaskRelationshipType && hoveredLinkTask.id !== task.id && (() => {
           const relationshipType = getTaskRelationshipType(task.id);
@@ -2093,23 +2182,42 @@ const TaskCard = React.memo(function TaskCard({
           return null;
         })()}
 
+        {/* Title + description — nudged right for optical alignment with toolbar column. */}
+        <div className="ml-[3px]">
         {/* Title row: float spacer matches assignee avatar (w-8) so line boxes wrap
             beside it, then reclaim full card width once past the avatar height. */}
-        <div className="mb-2 mt-1">
+        <div className="mb-2 mt-1.5">
           {isEditingTitle ? (
             <div className="pr-10">
-              <input
-                type="text"
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                onBlur={handleTitleBlur}
-                onKeyDown={handleTitleKeyDown}
-                onFocus={handleInputFocus}
-                className="font-medium text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-blue-400 rounded px-1 py-0.5 outline-none focus:border-blue-500 w-full text-sm"
-                onClick={(e) => e.stopPropagation()}
-                autoFocus
-                maxLength={TASK_TITLE_MAX_LENGTH}
-              />
+              {titleEditMultiline ? (
+                <textarea
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  onBlur={handleTitleBlur}
+                  onKeyDown={handleTitleKeyDown}
+                  onFocus={handleInputFocus}
+                  rows={2}
+                  className="font-medium text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-blue-400 rounded px-1 py-0.5 outline-none focus:border-blue-500 w-full text-sm resize-none leading-snug"
+                  onClick={(e) => e.stopPropagation()}
+                  autoFocus
+                  maxLength={TASK_TITLE_MAX_LENGTH}
+                  data-testid="task-quick-edit"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  onBlur={handleTitleBlur}
+                  onKeyDown={handleTitleKeyDown}
+                  onFocus={handleInputFocus}
+                  className="font-medium text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 border border-blue-400 rounded px-1 py-0.5 outline-none focus:border-blue-500 w-full text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                  autoFocus
+                  maxLength={TASK_TITLE_MAX_LENGTH}
+                  data-testid="task-quick-edit"
+                />
+              )}
             </div>
           ) : (
             <div
@@ -2120,34 +2228,10 @@ const TaskCard = React.memo(function TaskCard({
               }`}
               {...(isMultiSelectDragLocked ? {} : listeners)}
             >
-              {/* Multi-check reuses the former left pencil slot (no layout growth). */}
-              {toggleChecked && (
-                <label
-                  className="absolute -left-[10px] top-[19px] z-10 -translate-x-1 -translate-y-1/2 -m-1.5 flex cursor-pointer items-center p-1.5"
-                  data-no-dnd="true"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (e.shiftKey && toggleChecked) {
-                      e.preventDefault();
-                      toggleChecked({ range: true });
-                    }
-                  }}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <ModernCheckbox
-                    checked={isChecked}
-                    onChange={toggleChecked}
-                    size="sm"
-                    aria-label={t('kanbanSelect.selectTask')}
-                    data-testid={`task-check-${task.id}`}
-                  />
-                </label>
-              )}
               <FirstLineEndAnchor
                 contentClassName="min-w-0 flow-root"
                 anchor={
-                  allowMutations && isHoveringTitle ? (
+                  allowMutations && (isHoveringTitle || isSelected) ? (
                     <KanbanChromeTooltip label={t('taskCard.editTitle')} wrapperClassName="inline-flex">
                       <button
                         type="button"
@@ -2171,6 +2255,7 @@ const TaskCard = React.memo(function TaskCard({
                   aria-hidden
                 />
                 <h3
+                  ref={titleDisplayRef}
                   className="font-medium text-gray-800 dark:text-gray-100 px-1 py-0.5 rounded text-sm"
                   onDoubleClick={(e) => {
                     e.stopPropagation();
@@ -2198,7 +2283,7 @@ const TaskCard = React.memo(function TaskCard({
         {taskViewMode !== 'compact' && (
           <>
             {isEditingDescription ? (
-              <div className="-mt-2 mb-3" onClick={(e) => e.stopPropagation()} style={{ cursor: 'text' }}>
+              <div className="-mt-4 mb-3" onClick={(e) => e.stopPropagation()} style={{ cursor: 'text' }}>
                 <TextEditor
                   onSubmit={async (content) => {
                     // Handle save
@@ -2242,7 +2327,7 @@ const TaskCard = React.memo(function TaskCard({
               </div>
             ) : (
               <div
-                className={`relative -mt-2 mb-3 ${
+                className={`relative -mt-4 mb-3 ${
                   isDragDisabled || isMultiSelectDragLocked || isAnyEditingActive
                     ? ''
                     : 'cursor-grab active:cursor-grabbing'
@@ -2256,8 +2341,9 @@ const TaskCard = React.memo(function TaskCard({
                 >
                   <FirstLineEndAnchor
                     contentClassName="min-w-0"
+                    anchorOffsetY={4}
                     anchor={
-                      allowMutations && isHoveringDescription ? (
+                      allowMutations && (isHoveringDescription || isSelected) ? (
                         <KanbanChromeTooltip
                           label={t('taskCard.editDescription')}
                           wrapperClassName="inline-flex"
@@ -2279,7 +2365,7 @@ const TaskCard = React.memo(function TaskCard({
                     }
                   >
                   <div
-                    className={`task-card-description text-sm text-gray-600 dark:text-gray-300 px-2 py-1 rounded transition-colors min-h-[2.5rem] prose prose-sm max-w-none ${
+                    className={`task-card-description text-xs leading-relaxed text-gray-600 dark:text-gray-300 px-1 py-1 rounded transition-colors min-h-[2.5rem] prose prose-sm max-w-none [&_p]:px-0 [&_ul]:pl-4 ${
                       taskViewMode === 'shrink' ? 'line-clamp-2 overflow-hidden' : ''
                     }`}
                     onDoubleClick={(e) => {
@@ -2296,8 +2382,8 @@ const TaskCard = React.memo(function TaskCard({
                   }}
                     style={{
                       // Ensure images fit nicely in task cards
-                      '--tw-prose-body': '1rem',
-                      '--tw-prose-headings': '1rem',
+                      '--tw-prose-body': '0.75rem',
+                      '--tw-prose-headings': '0.8125rem',
                       cursor:
                         isDragDisabled || isMultiSelectDragLocked || isAnyEditingActive
                           ? 'default'
@@ -2310,6 +2396,7 @@ const TaskCard = React.memo(function TaskCard({
             )}
           </>
         )}
+        </div>
 
         {/* Sprint Badge - Conditional Display */}
         {shouldShowSprintBadge() && (() => {
@@ -2539,7 +2626,11 @@ const TaskCard = React.memo(function TaskCard({
                     }`}
                     aria-label={tooltipLabel}
                   >
-                    {showBlocked ? <Ban size={12} /> : <Clock size={12} />}
+                    {showBlocked ? (
+                      <Ban size={12} />
+                    ) : (
+                      !hideMetadataClockIcons && <Clock size={12} />
+                    )}
                     {showDays &&
                       t('taskCard.daysInColumnShort', { count: daysInColumn })}
                   </span>
@@ -2637,8 +2728,8 @@ const TaskCard = React.memo(function TaskCard({
             </div>
             
             {/* Effort - squeezed close */}
-            <div className="flex items-center gap-0.5">
-              <Clock size={12} />
+            <div className={`flex items-center ${hideMetadataClockIcons ? '' : 'gap-0.5'}`}>
+              {!hideMetadataClockIcons && <Clock size={12} />}
               {isEditingEffort ? (
                 <input
                   type="text"
@@ -2859,7 +2950,7 @@ const TaskCard = React.memo(function TaskCard({
                     setShowPrioritySelect(!showPrioritySelect);
                   }}
                   disabled={!allowMutations}
-                  className={`px-2 py-1 rounded-full text-xs hover:opacity-80 transition-all ${
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] hover:opacity-80 transition-all ${
                     allowMutations ? 'cursor-pointer' : 'cursor-default'
                   } ${showPrioritySelect ? 'ring-2 ring-blue-400' : ''}`}
                   style={(() => {

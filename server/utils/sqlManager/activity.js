@@ -11,13 +11,33 @@ import { wrapQuery } from '../queryLogger.js';
 
 /**
  * Get activity feed
- * 
+ *
  * @param {Database} db - Database connection
- * @param {number} limit - Maximum number of activities to return
- * @param {string} userLanguage - User's language preference ('en' or 'fr'), defaults to 'en'
+ * @param {Object} [options]
+ * @param {number} [options.limit=20] - Maximum rows to return
+ * @param {string} [options.userLanguage='en'] - Locale for bilingual details
+ * @param {number} [options.beforeId] - Return rows older than this activity id (load more)
+ * @param {number} [options.sinceId] - Return rows newer than this activity id (delta sync)
  * @returns {Promise<Array>} Array of activity objects with details in user's language
  */
-export async function getActivityFeed(db, limit = 20, userLanguage = 'en') {
+export async function getActivityFeed(db, options = {}) {
+  const {
+    limit = 20,
+    userLanguage = 'en',
+    beforeId,
+    sinceId,
+  } = options;
+
+  const params = [limit];
+  let whereClause = '';
+  if (sinceId != null) {
+    whereClause = 'WHERE a.id > $2';
+    params.push(sinceId);
+  } else if (beforeId != null) {
+    whereClause = 'WHERE a.id < $2';
+    params.push(beforeId);
+  }
+
   const query = `
     SELECT 
       a.id, 
@@ -44,12 +64,13 @@ export async function getActivityFeed(db, limit = 20, userLanguage = 'en') {
     LEFT JOIN boards b ON a.boardid = b.id
     LEFT JOIN columns c ON a.columnid = c.id
     LEFT JOIN tasks t ON a.taskid = t.id
+    ${whereClause}
     ORDER BY a.created_at DESC
     LIMIT $1
   `;
   
   const stmt = wrapQuery(db.prepare(query), 'SELECT');
-  const activities = await stmt.all(limit);
+  const activities = await stmt.all(...params);
   
   // Parse bilingual JSON details and return user's language
   const normalizedLang = userLanguage?.toLowerCase() === 'fr' ? 'fr' : 'en';
@@ -275,6 +296,27 @@ export async function getTaskTicket(db, taskId) {
   
   const stmt = wrapQuery(db.prepare(query), 'SELECT');
   return await stmt.get(taskId);
+}
+
+/**
+ * Task tickets for bulk activity copy, in the same order as taskIds.
+ *
+ * @param {Database} db
+ * @param {string[]} taskIds
+ * @returns {Promise<string[]>}
+ */
+export async function getTaskTicketsForActivity(db, taskIds) {
+  if (!taskIds?.length) return [];
+  const placeholders = taskIds.map((_, index) => `$${index + 1}`).join(', ');
+  const query = `
+    SELECT id, ticket
+    FROM tasks
+    WHERE id IN (${placeholders})
+  `;
+  const stmt = wrapQuery(db.prepare(query), 'SELECT');
+  const rows = await stmt.all(...taskIds);
+  const byId = new Map(rows.map((row) => [row.id, row.ticket]));
+  return taskIds.map((id) => byId.get(id)).filter(Boolean);
 }
 
 /**

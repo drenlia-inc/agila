@@ -33,7 +33,7 @@ Agila is a comprehensive agile project management platform that combines Kanban 
 ### Key Features
 - **Multi-board Kanban system** with drag-and-drop (including cross-board drops)
 - **Soft WIP limits** (column and board), card aging, blocked flags, and column policy notes
-- **Multiple views**: Kanban, List, and Gantt
+- **Multiple views**: Kanban, List, Gantt, and Calendar
 - **Real-time collaboration** - see changes instantly as team members work
 - **User authentication** with local accounts and Google OAuth support
 - **Role-based access control** (Admin/User permissions)
@@ -752,7 +752,7 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 ### Boards page (when not typing / no dialog open)
 - **/** or **Ctrl/Cmd+K**: Focus header task search
 - **S**: Open or close the Filter panel
-- **N**: Create a new task in the first column
+- **+**: Create a new task in the first column (Shift+= on US / FR-CA keyboards)
 - **1 / 2 / 3 / 4**: Switch Kanban / List / Gantt / Calendar view
 - **F / P / M**: Card density — Full / Preview / Minimal
 - **Escape** (in search/filter panel): Clear the focused field, then clear all filters (same as the X controls)

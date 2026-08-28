@@ -28,8 +28,10 @@ import { toast } from '../utils/toast';
 import { showRelationshipCreateErrorToast } from '../utils/relationshipErrors';
 import {
   getTaskDetailsSafeViewport,
-  scrollViewportToTaskWhenReady,
 } from '../utils/scrollViewportToTask';
+import {
+  scrollGanttTaskRowIntoViewWhenReady,
+} from '../utils/ganttTaskScroll';
 import { completeTaskJump, subscribeTaskJump } from '../utils/taskJumpEvents';
 import TaskBulkActionGutter from './TaskBulkActionGutter';
 import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
@@ -511,6 +513,8 @@ const GanttViewV2 = ({
 
   // Date range (simplified for now)
   const [dateRange, setDateRange] = useState<any[]>([]);
+  const dateRangeRef = useRef<any[]>([]);
+  dateRangeRef.current = dateRange;
   
   // Board loading state for scroll position restoration
   const [isBoardLoading, setIsBoardLoading] = useState(false);
@@ -555,14 +559,17 @@ const GanttViewV2 = ({
   
   // Navigate to a specific date with sliding window
   const navigateToDate = useCallback((targetDate: Date, position: 'start' | 'center' | 'end' = 'center') => {
-    if (!scrollContainerRef.current) {
-      return;
-    }
-    
+    const localDateKey = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     // Calculate new date range centered around target
     const newStart = new Date(targetDate);
     const newEnd = new Date(targetDate);
-    
+
     if (position === 'start') {
       newStart.setDate(newStart.getDate() - 30);
       newEnd.setDate(newEnd.getDate() + VIEWPORT_DAYS - 30);
@@ -574,22 +581,36 @@ const GanttViewV2 = ({
       newStart.setDate(newStart.getDate() - VIEWPORT_DAYS / 2);
       newEnd.setDate(newEnd.getDate() + VIEWPORT_DAYS / 2);
     }
-    
-    // Generate new range
+
+    // Always slide the window — even when the timeline scroller is not mounted yet.
     const newRange = generateDateRange(newStart, newEnd);
     setDateRange(newRange);
-    
-    // Calculate scroll position after state update
-    setTimeout(() => {
-      const targetIndex = newRange.findIndex(d => 
-        d.date.toISOString().split('T')[0] === targetDate.toISOString().split('T')[0]
-      );
-      
-      if (targetIndex >= 0 && scrollContainerRef.current) {
-        const container = scrollContainerRef.current;
-        // Task Details is a fixed panel drawn over the timeline, so the usable
-        // width ends at its left edge. Measuring against clientWidth would center
-        // the target date behind the panel.
+
+    const targetKey = localDateKey(targetDate);
+
+    const applyHorizontalScroll = (attempt = 0) => {
+      const container = scrollContainerRef.current;
+      if (!container) {
+        if (attempt < 60) {
+          window.setTimeout(() => applyHorizontalScroll(attempt + 1), 50);
+        }
+        return;
+      }
+
+      const col = dayColumnWidthRef.current;
+      const expectedCols = newRange.length;
+      const domCols = col > 0 ? Math.round(container.scrollWidth / col) : 0;
+      // Wait until React paints the slid window — scrolling early uses stale column widths.
+      if (Math.abs(domCols - expectedCols) > 1 && attempt < 60) {
+        window.setTimeout(() => applyHorizontalScroll(attempt + 1), 50);
+        return;
+      }
+
+      const liveRange =
+        dateRangeRef.current.length === expectedCols ? dateRangeRef.current : newRange;
+      const targetIndex = liveRange.findIndex((d) => localDateKey(d.date) === targetKey);
+
+      if (targetIndex >= 0) {
         const containerRect = container.getBoundingClientRect();
         const { safeRight } = getTaskDetailsSafeViewport();
         const visibleWidth = Math.max(
@@ -597,95 +618,42 @@ const GanttViewV2 = ({
           Math.min(containerRect.right, safeRight) - containerRect.left
         );
         let scrollPosition;
-        const col = dayColumnWidthRef.current;
-        
+
         if (position === 'start') {
           scrollPosition = targetIndex * col;
         } else if (position === 'end') {
-          scrollPosition = (targetIndex * col) - visibleWidth + col;
+          scrollPosition = targetIndex * col - visibleWidth + col;
         } else {
-          scrollPosition = (targetIndex * col) - (visibleWidth / 2) + col / 2;
+          scrollPosition = targetIndex * col - visibleWidth / 2 + col / 2;
         }
-        
-        container.scrollLeft = Math.max(0, scrollPosition);
-        
-        // Save scroll position after navigation
-        saveCurrentScrollPosition(container, newRange, { immediate: true, targetBoardId: boardId || undefined });
-      }
-    }, 50);
-  }, [generateDateRange, saveCurrentScrollPosition]);
-  
-  // Handle task jump from dropdown with highlighting and scrolling
-  const handleJumpToTask = useCallback((task: any) => {
-    if (!task.startDate || !task.endDate) {
-      return;
-    }
 
-    // Use async wrapper to handle the promise
-    (async () => {
-      try {
-        // First, scroll horizontally to the task
-        navigateToDate(task.startDate, 'center');
-        
-        // Wait for horizontal scroll to complete before highlighting
-        setTimeout(() => {
-          // Highlight the task for 1 second
-          setHighlightedTaskId(task.id);
-          setTimeout(() => {
-            setHighlightedTaskId(null);
-          }, 1000);
-        }, 400); // Wait for horizontal scroll to complete
-        
-        // Scroll vertically to task if not visible (after horizontal scroll completes)
-        setTimeout(() => {
-          const taskElement = document.querySelector(`[data-task-id="${task.id}"]`);
-          
-          if (taskElement) {
-            const taskRect = taskElement.getBoundingClientRect();
-            const viewportHeight = window.innerHeight;
-            
-            // Check if task is outside the visible viewport (with buffer)
-            const buffer = 100;
-            const isAboveViewport = taskRect.top < buffer;
-            const isBelowViewport = taskRect.bottom > viewportHeight - buffer;
-            
-            if (isAboveViewport || isBelowViewport) {
-              // Find the scrollable parent (could be document or a parent container)
-              let scrollableParent = taskElement.parentElement;
-              while (scrollableParent && scrollableParent !== document.body) {
-                const style = window.getComputedStyle(scrollableParent);
-                if (style.overflowY === 'auto' || style.overflowY === 'scroll' || style.overflow === 'auto' || style.overflow === 'scroll') {
-                  break;
-                }
-                scrollableParent = scrollableParent.parentElement;
-              }
-              
-              // If no scrollable parent found, use window scrolling
-              if (!scrollableParent || scrollableParent === document.body) {
-                // Scroll the page to bring task into view
-                const targetY = window.pageYOffset + taskRect.top - (viewportHeight / 2) + (taskRect.height / 2);
-                window.scrollTo({
-                  top: Math.max(0, targetY),
-                  behavior: 'smooth'
-                });
-              } else {
-                // Scroll within the parent container
-                const containerRect = scrollableParent.getBoundingClientRect();
-                const relativeTop = taskRect.top - containerRect.top;
-                const targetScrollTop = scrollableParent.scrollTop + relativeTop - (containerRect.height / 2) + (taskRect.height / 2);
-                
-                scrollableParent.scrollTo({
-                  top: Math.max(0, targetScrollTop),
-                  behavior: 'smooth'
-                });
-              }
-            }
-          }
-        }, 500); // Wait a bit longer for horizontal scroll to complete
-      } catch (error) {
-        console.error('Error jumping to task:', error);
+        container.scrollLeft = Math.max(0, scrollPosition);
+        saveCurrentScrollPosition(container, liveRange, {
+          immediate: true,
+          targetBoardId: boardId || undefined,
+        });
+      } else if (attempt < 60) {
+        window.setTimeout(() => applyHorizontalScroll(attempt + 1), 50);
       }
-    })();
+    };
+
+    window.setTimeout(() => applyHorizontalScroll(), 50);
+  }, [generateDateRange, saveCurrentScrollPosition, boardId]);
+  
+  // Handle task jump from dropdown / activity feed / header search
+  const handleJumpToTask = useCallback((task: { id: string; startDate?: Date | string | null; endDate?: Date | string | null; dueDate?: Date | string | null }) => {
+    const startRaw = task.startDate ?? task.dueDate;
+    if (!startRaw) return;
+
+    const startDate = startRaw instanceof Date ? startRaw : parseLocalDate(startRaw);
+
+    navigateToDate(startDate, 'center');
+
+    window.setTimeout(() => {
+      setHighlightedTaskId(task.id);
+      window.setTimeout(() => setHighlightedTaskId(null), 1000);
+      void scrollGanttTaskRowIntoViewWhenReady(task.id, { maxAttempts: 50 });
+    }, 400);
   }, [navigateToDate]);
   
   // Combined keyboard handler for ESC/Enter and arrow key navigation
@@ -1537,6 +1505,27 @@ const GanttViewV2 = ({
     });
   }, [columns, localDragState, priorities, columnDisplayTitle]);
 
+  const ganttTasksRef = useRef(ganttTasks);
+  ganttTasksRef.current = ganttTasks;
+  const ganttBoardBusyRef = useRef(false);
+  ganttBoardBusyRef.current = isBoardLoading || isSwitchingBoards || isInitializing;
+  const pendingGanttJumpRef = useRef<{ id: string; task: { id: string; startDate?: Date | string | null; endDate?: Date | string | null; dueDate?: Date | string | null } } | null>(null);
+
+  const processPendingGanttJump = useCallback(() => {
+    const pending = pendingGanttJumpRef.current;
+    if (!pending || ganttBoardBusyRef.current) return false;
+
+    const ganttTask = ganttTasksRef.current.find((row) => row.id === pending.id);
+    const startRaw =
+      ganttTask?.startDate ?? pending.task.startDate ?? pending.task.dueDate;
+    if (!startRaw) return false;
+
+    pendingGanttJumpRef.current = null;
+    handleJumpToTask(ganttTask ?? pending.task);
+    completeTaskJump(pending.id);
+    return true;
+  }, [handleJumpToTask]);
+
   /**
    * Step to the nearest task outside the current viewport rather than the
    * absolute earliest / latest one, so the arrows walk the timeline from where
@@ -1594,35 +1583,38 @@ const GanttViewV2 = ({
   /** Bring an off-screen row back into view from the header indicators. */
   const scrollRowIntoView = useCallback((taskId: string) => {
     setHighlightedTaskId(taskId);
-    void scrollViewportToTaskWhenReady(taskId, { maxAttempts: 10 });
-    setTimeout(() => setHighlightedTaskId(null), 1800);
+    void scrollGanttTaskRowIntoViewWhenReady(taskId, { maxAttempts: 30 }).finally(() => {
+      window.setTimeout(() => setHighlightedTaskId(null), 1800);
+    });
   }, []);
 
   useEffect(
     () =>
       subscribeTaskJump(({ task }) => {
-        const startRaw = task.startDate || task.dueDate;
-        const endRaw = task.dueDate || task.startDate;
-        const jumpTask =
-          startRaw && endRaw
-            ? {
-                ...task,
-                startDate: parseLocalDate(startRaw),
-                endDate: parseLocalDate(endRaw),
-              }
-            : null;
-        if (!jumpTask) {
-          completeTaskJump(task.id);
-          return;
-        }
+        pendingGanttJumpRef.current = { id: task.id, task };
 
-        handleJumpToTask(jumpTask);
-        void scrollViewportToTaskWhenReady(task.id, { maxAttempts: 60 }).finally(() => {
-          completeTaskJump(task.id);
-        });
+        const tryJump = (attempt = 0) => {
+          if (processPendingGanttJump()) return;
+
+          if (attempt >= 80) {
+            pendingGanttJumpRef.current = null;
+            completeTaskJump(task.id);
+            return;
+          }
+
+          window.setTimeout(() => tryJump(attempt + 1), 100);
+        };
+
+        tryJump();
       }),
-    [handleJumpToTask]
+    [processPendingGanttJump]
   );
+
+  useEffect(() => {
+    if (pendingGanttJumpRef.current) {
+      processPendingGanttJump();
+    }
+  }, [ganttTasks, isBoardLoading, isSwitchingBoards, isInitializing, processPendingGanttJump]);
 
   /**
    * The selection survives bulk actions, so actions that remove bars (delete,
@@ -2654,22 +2646,7 @@ const GanttViewV2 = ({
                 <button
                   key={task.id}
                   onClick={() => {
-                    if (task.startDate) {
-                      navigateToDate(task.startDate, 'center');
-                      
-                      // Also scroll to task vertically
-                      setTimeout(() => {
-                        const taskElement = document.querySelector(`[data-task-id="${task.id}"]`);
-                        if (taskElement && mainContentRef.current) {
-                          const containerRect = mainContentRef.current.getBoundingClientRect();
-                          const taskRect = taskElement.getBoundingClientRect();
-                          const relativeTop = taskRect.top - containerRect.top + mainContentRef.current.scrollTop;
-                          
-                          // Scroll to center the task vertically
-                          mainContentRef.current.scrollTop = relativeTop - (containerRect.height / 2) + (taskRect.height / 2);
-                        }
-                      }, 100);
-                    }
+                    handleJumpToTask(task);
                     setShowTaskJumpDropdown(false);
                   }}
                 className="w-full text-left px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded flex items-center justify-between"

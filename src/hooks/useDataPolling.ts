@@ -123,7 +123,7 @@ export const useDataPolling = ({
           api.getBoards(),
           api.getMembers(includeSystemRef.current), // Use ref to avoid dependency on includeSystem
           getAllPriorities(),
-          onActivitiesUpdate ? getActivityFeed(20) : Promise.resolve([]),
+          onActivitiesUpdate ? getActivityFeed() : Promise.resolve([]),
           onSharedFiltersUpdate ? getSharedFilterViews() : Promise.resolve([]),
           onRelationshipsUpdate && selectedBoard ? getBoardTaskRelationships(selectedBoard) : Promise.resolve([])
         ]);

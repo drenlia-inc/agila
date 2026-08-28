@@ -11,6 +11,32 @@ import { activity as activityQueries, helpers } from '../utils/sqlManager/index.
 
 let db; // Database instance will be injected
 
+const ACTIVITY_TICKET_LIST_MAX = 5;
+
+/** Default placeholder titles — skip rename activity when user is just naming a new card. */
+const NEW_TASK_PLACEHOLDER_TITLES = new Set([
+  'New Task',
+  'Nouvelle tâche',
+  'Nouvelle Tâche',
+]);
+
+function formatActivityTaskTicketList(tickets, lang) {
+  if (!tickets.length) return '';
+  if (tickets.length <= ACTIVITY_TICKET_LIST_MAX) return tickets.join(', ');
+  const head = tickets.slice(0, ACTIVITY_TICKET_LIST_MAX).join(', ');
+  const more = tickets.length - ACTIVITY_TICKET_LIST_MAX;
+  return `${head}, ${t('activity.andMoreTickets', { count: more }, lang)}`;
+}
+
+async function resolveOrderedTaskTickets(database, taskIds) {
+  try {
+    return await activityQueries.getTaskTicketsForActivity(database, taskIds);
+  } catch (err) {
+    console.warn('Failed to resolve task tickets for bulk activity:', err.message);
+    return [];
+  }
+}
+
 /**
  * Initialize the activity logger with database instance
  */
@@ -161,24 +187,21 @@ export const logTaskActivity = async (userId, action, taskId, details, additiona
       
       // If not already bilingual JSON, check if this is a "create at top" action
       if (!isBilingualJson && details && details.includes('at top')) {
-        enhancedDetailsBilingual = getBilingualTranslation('activity.createdTaskAtTop', {
-          taskTitle: translatedTaskTitle.en, // Use English title for both (task titles are not translated)
+        enhancedDetailsBilingual.en = t('activity.createdTaskAtTop', {
+          taskRef,
           boardTitle: translatedBoardTitle.en
-        });
-        // Override with actual task title and board title (same for both languages)
-        enhancedDetailsBilingual.en = t('activity.createdTaskAtTop', { taskTitle: translatedTaskTitle.en, boardTitle: translatedBoardTitle.en }, 'en');
-        enhancedDetailsBilingual.fr = t('activity.createdTaskAtTop', { taskTitle: translatedTaskTitle.fr, boardTitle: translatedBoardTitle.fr }, 'fr');
-        // Note: taskRef will be appended at the end, so don't include it in the translation
+        }, 'en');
+        enhancedDetailsBilingual.fr = t('activity.createdTaskAtTop', {
+          taskRef,
+          boardTitle: translatedBoardTitle.fr
+        }, 'fr');
       } else if (!isBilingualJson) {
-        // For regular create, taskRef is included in the translation template
         enhancedDetailsBilingual.en = t('activity.createdTask', {
-          taskTitle: translatedTaskTitle.en,
-          taskRef: '', // Will be appended at the end instead
+          taskRef,
           boardTitle: translatedBoardTitle.en
         }, 'en');
         enhancedDetailsBilingual.fr = t('activity.createdTask', {
-          taskTitle: translatedTaskTitle.fr,
-          taskRef: '', // Will be appended at the end instead
+          taskRef,
           boardTitle: translatedBoardTitle.fr
         }, 'fr');
       }
@@ -267,10 +290,15 @@ export const logTaskActivity = async (userId, action, taskId, details, additiona
       let detailsEn = details;
       let detailsFr = details;
       let isCompleteMessage = false;
+      let wrapByRef = false;
       
       try {
         const parsed = JSON.parse(details);
         if (parsed.en && parsed.fr) {
+          if (parsed.skip) {
+            return;
+          }
+          wrapByRef = parsed.wrapByRef === true;
           // Check if this is already a complete message (contains task title/board context)
           // Complete messages typically contain "in task" or "dans la tâche" or "in board" or "dans le tableau"
           const isCompleteEn = parsed.en.includes('in task') || parsed.en.includes('in board') || parsed.en.includes('updated task:');
@@ -307,6 +335,17 @@ export const logTaskActivity = async (userId, action, taskId, details, additiona
           }, 'en');
           enhancedDetailsBilingual.fr = t('activity.movedTaskColumn', {
             details: detailsFr,
+            boardTitle: translatedBoardTitle.fr
+          }, 'fr');
+        } else if (wrapByRef) {
+          enhancedDetailsBilingual.en = t('activity.updatedTaskByRef', {
+            details: detailsEn,
+            taskRef,
+            boardTitle: translatedBoardTitle.en
+          }, 'en');
+          enhancedDetailsBilingual.fr = t('activity.updatedTaskByRef', {
+            details: detailsFr,
+            taskRef,
             boardTitle: translatedBoardTitle.fr
           }, 'fr');
         } else {
@@ -636,6 +675,20 @@ export const generateTaskUpdateDetails = async (field, oldValue, newValue, addit
   // Get bilingual field labels
   const fieldLabelEn = t(`activity.fieldLabels.${translationKey}`, {}, 'en') || field;
   const fieldLabelFr = t(`activity.fieldLabels.${translationKey}`, {}, 'fr') || field;
+
+  // Special handling for title changes — reference ticket, not post-update title; skip placeholder rename.
+  if (field === 'title') {
+    const oldTitle = String(oldValue ?? '').trim();
+    const newTitle = String(newValue ?? '').trim();
+    if (NEW_TASK_PLACEHOLDER_TITLES.has(oldTitle)) {
+      return JSON.stringify({ en: '', fr: '', skip: true });
+    }
+    return JSON.stringify({
+      en: t('activity.changedTitleFromTo', { oldValue: oldTitle, newValue: newTitle }, 'en'),
+      fr: t('activity.changedTitleFromTo', { oldValue: oldTitle, newValue: newTitle }, 'fr'),
+      wrapByRef: true,
+    });
+  }
 
   // Special handling for description changes
   if (field === 'description') {
@@ -1061,9 +1114,48 @@ export const logBulkTaskFieldActivity = async (userId, field, payload = {}, addi
         undidArchive: 'activity.bulkUndidArchive',
         undidMove: 'activity.bulkUndidColumnMove',
       };
-      const key = keyByReason[reason] || keyByReason.undidMove;
-      detailsEn = t(key, { count, boardTitle: boardTitleEn }, 'en');
-      detailsFr = t(key, { count, boardTitle: boardTitleFr }, 'fr');
+      if (reason === 'undidMove' || reason === 'undidArchive') {
+        const tickets = await resolveOrderedTaskTickets(database, taskIds);
+        const singleKey =
+          reason === 'undidArchive'
+            ? 'activity.bulkUndidArchiveSingle'
+            : 'activity.bulkUndidColumnMoveSingle';
+        const multipleKey =
+          reason === 'undidArchive'
+            ? 'activity.bulkUndidArchiveMultiple'
+            : 'activity.bulkUndidColumnMoveMultiple';
+        if (count === 1 && tickets[0]) {
+          detailsEn = t(singleKey, { ticket: tickets[0], boardTitle: boardTitleEn }, 'en');
+          detailsFr = t(singleKey, { ticket: tickets[0], boardTitle: boardTitleFr }, 'fr');
+        } else if (tickets.length > 0) {
+          detailsEn = t(
+            multipleKey,
+            {
+              count,
+              taskTickets: formatActivityTaskTicketList(tickets, 'en'),
+              boardTitle: boardTitleEn,
+            },
+            'en'
+          );
+          detailsFr = t(
+            multipleKey,
+            {
+              count,
+              taskTickets: formatActivityTaskTicketList(tickets, 'fr'),
+              boardTitle: boardTitleFr,
+            },
+            'fr'
+          );
+        } else {
+          const key = keyByReason[reason] || keyByReason.undidMove;
+          detailsEn = t(key, { count, boardTitle: boardTitleEn }, 'en');
+          detailsFr = t(key, { count, boardTitle: boardTitleFr }, 'fr');
+        }
+      } else {
+        const key = keyByReason[reason] || keyByReason.undidMove;
+        detailsEn = t(key, { count, boardTitle: boardTitleEn }, 'en');
+        detailsFr = t(key, { count, boardTitle: boardTitleFr }, 'fr');
+      }
     } else if (field === 'delete') {
       detailsEn = t('activity.bulkDeleted', { count, boardTitle: boardTitleEn }, 'en');
       detailsFr = t('activity.bulkDeleted', { count, boardTitle: boardTitleFr }, 'fr');

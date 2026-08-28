@@ -1781,7 +1781,12 @@ export default function TaskDetails({
                           type="button"
                           disabled={lifecycleBusy}
                           onClick={async () => {
-                            if (!window.confirm(t('trash.purgeConfirm'))) return;
+                            if (
+                              !window.confirm(
+                                `${t('trash.purgeConfirmTitle')}\n${t('trash.purgeConfirmBody')}`
+                              )
+                            )
+                              return;
                             setLifecycleBusy(true);
                             try {
                               await onPurge();

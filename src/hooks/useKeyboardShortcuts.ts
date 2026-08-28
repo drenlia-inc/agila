@@ -10,7 +10,7 @@ export type KeyboardShortcutHandlers = {
   onHelp: () => void;
   /** Focus board header search (/ and Ctrl/Cmd+K). Only used when boardShortcutsEnabled. */
   onFocusSearch?: () => void;
-  /** Create a task on the first column (N). */
+  /** Create a task on the first column (+). */
   onNewTask?: () => void;
   /** Switch Kanban / List / Gantt / Calendar (1 / 2 / 3 / 4). */
   onViewMode?: (mode: ViewMode) => void;
@@ -75,8 +75,8 @@ export const useKeyboardShortcuts = ({
         return;
       }
 
-      // N — new task
-      if ((event.key === 'n' || event.key === 'N') && !mod && !event.altKey) {
+      // + — new task (Shift+= on US / FR-CA keyboards; numpad + also works)
+      if (event.key === '+' && !mod && !event.altKey) {
         if (!onNewTask) return;
         event.preventDefault();
         onNewTask();

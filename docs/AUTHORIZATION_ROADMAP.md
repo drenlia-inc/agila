@@ -65,7 +65,7 @@ Instance-wide **viewer**: read all boards, tasks, reports (subject to existing r
 **Frontend**
 
 - Introduce `usePermissions()` → `{ isAdmin, isViewer, canMutate }`.
-- Thread `canMutate` through Kanban / List / Gantt / TaskDetails / Column / BoardTabs / bulk bars / agent UI.
+- Thread `canMutate` through Kanban / List / Gantt / Calendar / TaskDetails / Column / BoardTabs / bulk bars / agent UI.
 - Disable DnD, inline edit, create/delete affordances when `!canMutate`.
 - Locales for role label + read-only empty/hint states (all locale files).
 

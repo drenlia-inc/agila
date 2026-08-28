@@ -30,10 +30,12 @@ Shape the board to how work actually moves; use soft WIP and optional sprints wh
 
 ## First hour checklist
 
-Do these in order. Skip branding/SSO/AI until the team can move cards.
+**Google SSO (initial setup):** If your organization uses Google OAuth, configure SSO during setup—before invites go wide. Users can sign in with Google instead of creating another password, which speeds onboarding. See Admin → **System Settings → SSO** (or Help → Admin → SSO).
+
+Do these in order. Skip branding and AI until the team can move cards.
 
 1. **Invite the team** — header **Invite**, or Admin → Users (assign **User** or **Viewer** as needed).
-2. **Create one board** — `+` on the board tabs. Prefer one board per team/value stream at first.
+2. **Create one board** — `+` on the board tabs. Prefer **one board per project** at first (most people work across several projects).
 3. **Shape columns** to match how work actually flows (example: To Do → In Progress → Review → Done). Add/reorder from the board; click a column title (admin) for name, soft WIP, and short policy notes.
 4. **Optional: define “finished”** — Admin → **Project Settings → Project** → finished column names (e.g. `Done`). Tasks in those columns are not treated as overdue.
 5. **Tune Features** — Admin → **Project Settings → Features**:
@@ -42,10 +44,10 @@ Do these in order. Skip branding/SSO/AI until the team can move cards.
   - Effort unit: hours or points (display only; values are not converted)
   - Highlight overdue: on if you want LATE badges
 6. **Optional: soft board WIP** — double-click the board tab → set a team-capacity limit for **active** work (see [WIP](#soft-wip-column-and-board)).
-7. **Optional: first sprint** — only if you timebox:
+7. **Optional: first sprint** — only if you use dated sprints:
   - Create the sprint from the header sprint dropdown (**New sprint**) or Admin → **Project Settings → Sprints** (do this before you need to assign work to it).
   - In the header sprint dropdown, pick that sprint: **new tasks you add are placed in that sprint** (and dates follow the sprint window when applicable).
-  - With **All sprints** selected, new tasks are not auto-assigned; use the **calendar icon on each card** (or bulk sprint) to send tasks into a sprint.
+  - With **All sprints** selected, new tasks are not auto-assigned; use the **calendar icon on a card**, or **select cards with their checkbox and choose Sprint in the bulk action bar** to assign a sprint.
 8. **Create a few real tasks** and walk the flow once with the team.
 
 Press **F1** anytime for the in-app guide; offer the short product tour if teammates are new.
@@ -69,15 +71,17 @@ Press **F1** anytime for the in-app guide; offer the short product tour if teamm
 
 ### One board or many?
 
+**Default: one board per project.** Work usually spans projects; a project board keeps tabs, Search, sprints, and reporting aligned with how delivery is organized.
 
-| Prefer **one board** when… | Prefer **another board** when…            |
-| -------------------------- | ----------------------------------------- |
-| Same team, same workflow   | Different WIP / cadence / audience        |
-| Shared standup             | Separate product or client stream         |
-| You still learn the tool   | Cross-team handoff needs a clear boundary |
+| Prefer **a board per project** when… | Prefer **another board** when… |
+| ------------------------------------ | ------------------------------ |
+| Starting out (recommended default)   | Different WIP / cadence        |
+| People juggle multiple projects      | Separate product, client, or program |
+| You want filters and tabs to match project boundaries | Cross-team handoff needs a clear boundary |
 
+**Board per team (optional):** Agila supports it, but the **Team** strip lists everyone on that board—there is no “my team only” filter—so a shared team board can feel awkward when several squads or groups mix on one surface. If you split boards by group instead, members can still contribute across groups, but Team filtering will not isolate “just our squad.”
 
-You can move tasks across boards later (including drag onto another board tab). Start simple.
+You can move tasks across boards later (including drag onto another board tab). Start with one project board, then add boards only when the workflow truly diverges.
 
 ---
 
@@ -131,7 +135,7 @@ WIP in Agila is **soft**: at or over the limit, the UI **warns**; moves and crea
 ### Planning / refinement
 
 - Capture work as tasks with clear titles; use description, priority, tags, effort as your team agrees.
-- **List** view for bulk scan/sort; **Gantt** when dates and dependencies matter.
+- **List** view for bulk scan/sort; **Gantt** when dates and dependencies matter; **Calendar** for month/week/day scheduling.
 - Parent/child or related links when useful—optional, not required.
 - Multi-select + bulk actions for sprint, tag, priority, move board, archive, delete.
 
@@ -142,7 +146,7 @@ WIP in Agila is **soft**: at or over the limit, the UI **warns**; moves and crea
 1. Admin creates sprints (**name, start, end**; mark one **Active**).
 2. Header **sprint dropdown**:
   - A **specific sprint** selected → new tasks land in that sprint.
-  - **All sprints** → new tasks stay unassigned; click the **calendar icon on cards** (or use bulk sprint) to send them into a sprint.
+  - **All sprints** → new tasks stay unassigned; use the **calendar icon on a card**, or **select cards with their checkbox and choose Sprint in the bulk action bar** to assign a sprint.
   - **Backlog** filters to unassigned work.
 3. Enable **Reports** when you want burndown and team views (Admin → Project Settings → Reporting).
 4. Create the next sprint before the current one ends so assignment never blocks planning.
@@ -213,7 +217,7 @@ Copy this into a wiki or pin it next to the board:
 | Finished column name(s)         |            |
 | Column WIP (which columns & soft limits) |            |
 | Board WIP (active work)         |            |
-| Effort: hours / points / unused |            |
+| Effort: hours / points            |            |
 | Sprints: yes / no; length       |            |
 | Definition of Ready (policy)    |            |
 | Definition of Done (policy)     |            |
@@ -235,4 +239,4 @@ Copy this into a wiki or pin it next to the board:
 | Optional AI Agent      | [Documentation.md — AI Agent](../Documentation.md#ai-agent), [AI_INTEGRATION.md](./AI_INTEGRATION.md) |
 
 
-Revisit this playbook after the first sprint or two weeks of flow: tighten WIP, retire unused columns, and only then add Reports or a second board.
+Revisit this playbook after the first sprint or two weeks of flow: tighten WIP and retire unused columns.

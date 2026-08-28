@@ -671,8 +671,8 @@ router.post('/', authenticateToken, checkTaskLimit, async (req, res) => {
     const taskRef = ticket ? ` (${ticket})` : '';
     // Fire-and-forget: Don't await activity logging to avoid blocking API response
     const createDetails = JSON.stringify({
-      en: t('activity.createdTask', { taskTitle: task.title, taskRef, boardTitle }, 'en'),
-      fr: t('activity.createdTask', { taskTitle: task.title, taskRef, boardTitle }, 'fr')
+      en: t('activity.createdTask', { taskRef, boardTitle }, 'en'),
+      fr: t('activity.createdTask', { taskRef, boardTitle }, 'fr')
     });
     logTaskActivity(
       userId,
@@ -820,9 +820,10 @@ router.post('/add-at-top', authenticateToken, checkTaskLimit, async (req, res) =
     // Create bilingual message for "create at top" (use imported t function with language parameter)
     const board = await helpers.getBoardById(db, task.boardId);
     const boardTitle = board ? board.title : 'Unknown Board';
+    const taskRef = ticket ? ` (${ticket})` : '';
     const createAtTopDetails = JSON.stringify({
-      en: t('activity.createdTaskAtTop', { taskTitle: task.title, boardTitle }, 'en'),
-      fr: t('activity.createdTaskAtTop', { taskTitle: task.title, boardTitle }, 'fr')
+      en: t('activity.createdTaskAtTop', { taskRef, boardTitle }, 'en'),
+      fr: t('activity.createdTaskAtTop', { taskRef, boardTitle }, 'fr')
     });
     logTaskActivity(
       userId,
@@ -1454,7 +1455,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
               : normalizedCurrentTask[field];
           const newVal =
             field === 'isBlocked' ? Boolean(task.isBlocked) : task[field];
-          changes.push(await generateTaskUpdateDetails(field, oldVal, newVal, '', db));
+          const changeDetails = await generateTaskUpdateDetails(field, oldVal, newVal, '', db);
+          try {
+            const parsed = JSON.parse(changeDetails);
+            if (parsed.skip) continue;
+          } catch {
+            /* use as-is */
+          }
+          changes.push(changeDetails);
         }
       }
     }
