@@ -160,8 +160,8 @@
       "value": "storage-test-connection",
       "en": "Force path-style URLs",
       "fr": "Forcer les URL path-style",
-      "searchEn": "Force path-style URLs Force path-style URLs optional Leave off for Amazon S3. Turn on for MinIO and some S3-compatible providers. Testing… Test S3 connection Last test succeeded storage-test-connection",
-      "searchFr": "Forcer les URL path-style Forcer les URL path-style optionnel Laissez désactivé pour Amazon S3. Activez pour MinIO et certains fournisseurs compatibles S3. Test en cours… Tester la connexion S3 Dernier test réussi storage-test-connection",
+      "searchEn": "Force path-style URLs Force path-style URLs optional Leave off for Amazon S3. Turn on for MinIO and some S3-compatible providers. Testing… Test S3 connection Test passed. storage-test-connection",
+      "searchFr": "Forcer les URL path-style Forcer les URL path-style optionnel Laissez désactivé pour Amazon S3. Activez pour MinIO et certains fournisseurs compatibles S3. Test en cours… Tester la connexion S3 Test réussi. storage-test-connection",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [

@@ -2,7 +2,7 @@
  * Hook for managing activity feed state and handlers
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   loadUserPreferences,
   updateActivityFeedPreference,
@@ -10,6 +10,42 @@ import {
 import { DEFAULT_ACTIVITY_FEED_STORED_POSITION } from '../utils/activityFeedPosition';
 import { isMobileViewport } from '../utils/mobileViewport';
 import { useIsMobileViewport } from './useIsMobileViewport';
+import {
+  ACTIVITY_FEED_PAGE_SIZE,
+  getActivityFeed,
+} from '../api';
+
+function sortActivitiesNewestFirst(items: any[]): any[] {
+  return [...items].sort((a, b) => {
+    const idDiff = (Number(b.id) || 0) - (Number(a.id) || 0);
+    if (idDiff !== 0) return idDiff;
+    return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+  });
+}
+
+function mergePrependActivities(existing: any[], incoming: any[]): any[] {
+  if (!incoming.length) return existing;
+  const byId = new Map<number, any>();
+  for (const activity of incoming) {
+    const id = Number(activity.id);
+    if (id > 0) byId.set(id, activity);
+  }
+  for (const activity of existing) {
+    const id = Number(activity.id);
+    if (id > 0 && !byId.has(id)) byId.set(id, activity);
+  }
+  return sortActivitiesNewestFirst(Array.from(byId.values()));
+}
+
+function mergeAppendActivities(existing: any[], incoming: any[]): any[] {
+  if (!incoming.length) return existing;
+  const seen = new Set(existing.map((activity) => Number(activity.id)));
+  const toAppend = incoming.filter((activity) => {
+    const id = Number(activity.id);
+    return id > 0 && !seen.has(id);
+  });
+  return toAppend.length ? [...existing, ...toAppend] : existing;
+}
 
 export interface UseActivityFeedReturn {
   // State
@@ -22,6 +58,8 @@ export interface UseActivityFeedReturn {
   clearActivityId: number;
   dismissedActivityIds: number[];
   readActivityIds: number[];
+  hasMoreActivities: boolean;
+  loadingMoreActivities: boolean;
   
   // Setters
   setShowActivityFeed: (enabled: boolean) => void;
@@ -33,6 +71,8 @@ export interface UseActivityFeedReturn {
   setClearActivityId: (activityId: number) => void;
   setDismissedActivityIds: (ids: number[]) => void;
   setReadActivityIds: (ids: number[]) => void;
+  loadMoreActivities: () => Promise<void>;
+  syncActivityDelta: (lang?: string) => Promise<void>;
   
   // Handlers
   handleActivityFeedToggle: (enabled: boolean) => void;
@@ -93,17 +133,101 @@ export const useActivityFeed = (currentUserId: string | null): UseActivityFeedRe
     width: initial.width,
     height: initial.height,
   });
-  const [activities, setActivities] = useState<any[]>([]);
+  const [activities, setActivitiesState] = useState<any[]>([]);
   const [lastSeenActivityId, setLastSeenActivityId] = useState<number>(initial.lastSeenActivityId);
   const [clearActivityId, setClearActivityId] = useState<number>(initial.clearActivityId);
   const [dismissedActivityIds, setDismissedActivityIds] = useState<number[]>(initial.dismissedActivityIds);
   const [readActivityIds, setReadActivityIds] = useState<number[]>(initial.readActivityIds);
+  const [hasMoreActivities, setHasMoreActivities] = useState(false);
+  const [loadingMoreActivities, setLoadingMoreActivities] = useState(false);
+  const activitiesRef = useRef<any[]>([]);
+  activitiesRef.current = activities;
+
+  const replaceActivities = useCallback((next: any[]) => {
+    const normalized = sortActivitiesNewestFirst(Array.isArray(next) ? next : []);
+    activitiesRef.current = normalized;
+    setActivitiesState(normalized);
+    setHasMoreActivities(normalized.length >= ACTIVITY_FEED_PAGE_SIZE);
+  }, []);
 
   useEffect(() => {
     if (isMobile) {
       setActivityFeedMinimized(true);
     }
   }, [isMobile]);
+
+  const loadMoreActivities = useCallback(async () => {
+    if (loadingMoreActivities || !hasMoreActivities) return;
+    const current = activitiesRef.current;
+    if (!current.length) return;
+
+    const oldestId = current.reduce((min, activity) => {
+      const id = Number(activity.id);
+      return id > 0 ? Math.min(min, id) : min;
+    }, Number.POSITIVE_INFINITY);
+    if (!Number.isFinite(oldestId)) return;
+
+    setLoadingMoreActivities(true);
+    try {
+      const older = await getActivityFeed({
+        beforeId: oldestId,
+        limit: ACTIVITY_FEED_PAGE_SIZE,
+      });
+      const batch = Array.isArray(older) ? older : [];
+      setActivitiesState((prev) => {
+        const merged = mergeAppendActivities(prev, batch);
+        activitiesRef.current = merged;
+        return merged;
+      });
+      setHasMoreActivities(batch.length >= ACTIVITY_FEED_PAGE_SIZE);
+    } catch (error) {
+      console.warn('Failed to load more activity feed items:', error);
+    } finally {
+      setLoadingMoreActivities(false);
+    }
+  }, [hasMoreActivities, loadingMoreActivities]);
+
+  const syncActivityDelta = useCallback(async (lang?: string) => {
+    const current = activitiesRef.current;
+    let maxId = current.reduce((max, activity) => {
+      const id = Number(activity.id);
+      return id > 0 ? Math.max(max, id) : max;
+    }, 0);
+
+    try {
+      if (maxId <= 0) {
+        const initial = await getActivityFeed({ limit: ACTIVITY_FEED_PAGE_SIZE, lang });
+        replaceActivities(Array.isArray(initial) ? initial : []);
+        return;
+      }
+
+      let merged = current;
+      for (let pass = 0; pass < 5; pass += 1) {
+        const delta = await getActivityFeed({
+          sinceId: maxId,
+          limit: ACTIVITY_FEED_PAGE_SIZE,
+          lang,
+        });
+        const batch = Array.isArray(delta) ? delta : [];
+        if (!batch.length) break;
+
+        merged = mergePrependActivities(merged, batch);
+        maxId = batch.reduce((nextMax, activity) => {
+          const id = Number(activity.id);
+          return id > 0 ? Math.max(nextMax, id) : nextMax;
+        }, maxId);
+
+        if (batch.length < ACTIVITY_FEED_PAGE_SIZE) break;
+      }
+
+      if (merged !== current) {
+        activitiesRef.current = merged;
+        setActivitiesState(merged);
+      }
+    } catch (error) {
+      console.warn('Failed to sync activity feed delta:', error);
+    }
+  }, [replaceActivities]);
 
   const handleActivityFeedToggle = (enabled: boolean) => {
     setShowActivityFeed(enabled);
@@ -180,15 +304,19 @@ export const useActivityFeed = (currentUserId: string | null): UseActivityFeedRe
     clearActivityId,
     dismissedActivityIds,
     readActivityIds,
+    hasMoreActivities,
+    loadingMoreActivities,
     setShowActivityFeed,
     setActivityFeedMinimized,
     setActivityFeedPosition,
     setActivityFeedDimensions,
-    setActivities,
+    setActivities: replaceActivities,
     setLastSeenActivityId,
     setClearActivityId,
     setDismissedActivityIds,
     setReadActivityIds,
+    loadMoreActivities,
+    syncActivityDelta,
     handleActivityFeedToggle,
     handleActivityFeedMinimizedChange,
     handleActivityFeedMarkOneAsRead,

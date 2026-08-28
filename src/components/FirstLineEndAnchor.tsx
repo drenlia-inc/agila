@@ -5,6 +5,8 @@ type FirstLineEndAnchorProps = {
   anchor: ReactNode;
   className?: string;
   contentClassName?: string;
+  /** Extra px subtracted from anchor top (positive values move the anchor up). */
+  anchorOffsetY?: number;
 };
 
 /**
@@ -15,6 +17,7 @@ export function FirstLineEndAnchor({
   anchor,
   className = '',
   contentClassName = '',
+  anchorOffsetY = 3,
 }: FirstLineEndAnchorProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -62,7 +65,7 @@ export function FirstLineEndAnchor({
       );
       setPos({
         left: last.right - wrapRect.left,
-        top: last.top - wrapRect.top + Math.max(0, (last.height - 16) / 2),
+        top: last.top - wrapRect.top + Math.max(0, (last.height - 16) / 2) - anchorOffsetY,
       });
     };
 
@@ -74,7 +77,7 @@ export function FirstLineEndAnchor({
       ro?.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [children, anchor]);
+  }, [children, anchor, anchorOffsetY]);
 
   return (
     <div ref={wrapRef} className={`relative ${className}`}>

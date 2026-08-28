@@ -61,7 +61,7 @@ import TaskLinkingOverlay from './components/TaskLinkingOverlay';
 import NetworkStatusIndicator from './components/NetworkStatusIndicator';
 import VersionUpdateBanner from './components/VersionUpdateBanner';
 import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
-import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById } from './api';
+import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, ACTIVITY_FEED_DEFAULT_LIMIT, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById } from './api';
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { applyActiveColumnFilters } from './utils/columnFilters';
@@ -1275,7 +1275,7 @@ function AppContent() {
           
           // Refetch activity feed with new language
           try {
-            const loadedActivities = await getActivityFeed(20, languageToUse);
+            const loadedActivities = await getActivityFeed({ limit: ACTIVITY_FEED_DEFAULT_LIMIT, lang: languageToUse });
             activityFeed.setActivities(loadedActivities || []);
           } catch (error) {
             console.warn('Failed to refetch activity feed after language change:', error);
@@ -1343,7 +1343,8 @@ function AppContent() {
       try {
         const currentLang = i18n.language || 'en';
         const normalizedLang = currentLang.toLowerCase().startsWith('fr') ? 'fr' : 'en';
-        const loadedActivities = await getActivityFeed(20, normalizedLang);
+        const currentCount = Math.max(ACTIVITY_FEED_DEFAULT_LIMIT, activityFeed.activities.length);
+        const loadedActivities = await getActivityFeed({ limit: currentCount, lang: normalizedLang });
         activityFeed.setActivities(loadedActivities || []);
       } catch (error) {
         console.warn('Failed to refetch activity feed after language change:', error);
@@ -1609,6 +1610,7 @@ function AppContent() {
     setCurrentUser,
     handleMembersUpdate,
     handleActivitiesUpdate,
+    syncActivityDelta: activityFeed.syncActivityDelta,
     handleSharedFilterViewsUpdate,
     taskFilters: {
       includeSystem: taskFilters.includeSystem,
@@ -2830,7 +2832,7 @@ function AppContent() {
           getAllPriorities(),
           getAllTags(),
           getAllSprints(),
-          getActivityFeed(20, normalizedLang)
+          getActivityFeed({ limit: ACTIVITY_FEED_DEFAULT_LIMIT, lang: normalizedLang })
         ]);
           
 
@@ -5403,7 +5405,13 @@ function AppContent() {
         if (!task.startDate && !task.dueDate) {
           ok = false;
         } else {
-          requestTaskJump(task);
+          const scheduleJump = () => requestTaskJump(task);
+          // Let board switch / column reveal paint before Gantt reads ganttTasks + timeline width.
+          if (boardSwitched || reveal.revealed) {
+            window.setTimeout(scheduleJump, 200);
+          } else {
+            scheduleJump();
+          }
         }
       } else {
         ok = await scrollViewportToTaskWhenReady(task.id, {
@@ -5411,7 +5419,8 @@ function AppContent() {
         });
       }
 
-      if (boardSwitched) {
+      // Jump scrolls/highlights only — do not open TaskDetails unless it is already open.
+      if (selectedTask) {
         let liveTask: Task | null = null;
         for (const column of Object.values(columnsRef.current)) {
           liveTask = column?.tasks?.find((row) => row.id === task.id) ?? null;
@@ -5428,6 +5437,7 @@ function AppContent() {
       boards,
       columns,
       selectedBoard,
+      selectedTask,
       currentPage,
       taskFilters.viewMode,
       handlePageChange,
@@ -5436,6 +5446,75 @@ function AppContent() {
       revealHiddenColumnForTask,
       t,
     ]
+  );
+
+  const handleJumpToTaskFromActivityFeed = useCallback(
+    async (ticket: string, hintTaskId?: string | null) => {
+      const normalized = ticket.toUpperCase();
+
+      const jumpWithTask = (found: Task, boardId?: string | null) => {
+        void handleJumpToTask({
+          ...found,
+          boardId: found.boardId || boardId || selectedBoard || undefined,
+        });
+      };
+
+      const findById = (id: string): { task: Task; boardId?: string } | null => {
+        for (const column of Object.values(columns)) {
+          const found = column?.tasks?.find((row) => row.id === id);
+          if (found) {
+            return { task: found, boardId: selectedBoard ?? undefined };
+          }
+        }
+        for (const board of boards) {
+          if (!board.columns) continue;
+          for (const column of Object.values(board.columns)) {
+            const found = column.tasks?.find((row) => row.id === id);
+            if (found) {
+              return { task: found, boardId: board.id };
+            }
+          }
+        }
+        return null;
+      };
+
+      if (hintTaskId) {
+        const byId = findById(hintTaskId);
+        if (byId) {
+          jumpWithTask(byId.task, byId.boardId);
+          return;
+        }
+        try {
+          const fetched = await getTaskById(hintTaskId);
+          jumpWithTask(fetched, fetched.boardId);
+          return;
+        } catch {
+          // fall through to ticket lookup
+        }
+      }
+
+      for (const column of Object.values(columns)) {
+        const found = column?.tasks?.find((row) => row.ticket?.toUpperCase() === normalized);
+        if (found) {
+          jumpWithTask(found, selectedBoard);
+          return;
+        }
+      }
+
+      for (const board of boards) {
+        if (!board.columns) continue;
+        for (const column of Object.values(board.columns)) {
+          const found = column.tasks?.find((row) => row.ticket?.toUpperCase() === normalized);
+          if (found) {
+            jumpWithTask(found, board.id);
+            return;
+          }
+        }
+      }
+
+      toast.warning(t('errors.jumpToTaskFailed'), '');
+    },
+    [boards, columns, selectedBoard, handleJumpToTask, t]
   );
 
   const handleOpenProjectFromActivityFeed = useCallback(
@@ -6226,7 +6305,11 @@ function AppContent() {
         onDismissActivity={activityFeed.handleActivityFeedDismissActivity}
         onClearAll={activityFeed.handleActivityFeedClearAll}
         onOpenProject={handleOpenProjectFromActivityFeed}
+        onJumpToTask={handleJumpToTaskFromActivityFeed}
         boardProjectIds={boards.map((b) => b.project).filter((p): p is string => Boolean(p))}
+        hasMoreActivities={activityFeed.hasMoreActivities}
+        loadingMoreActivities={activityFeed.loadingMoreActivities}
+        onLoadMore={activityFeed.loadMoreActivities}
         position={activityFeed.activityFeedPosition}
         onPositionChange={activityFeed.setActivityFeedPosition}
         dimensions={activityFeed.activityFeedDimensions}

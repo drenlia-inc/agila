@@ -366,7 +366,7 @@ body {
  */
 .task-card-description.line-clamp-2,
 .task-description-shrink {
-  max-height: 2.75rem; /* ~2 lines of text-sm */
+  max-height: 2.5rem; /* ~2 lines of text-xs */
   overflow: hidden !important;
 }
 

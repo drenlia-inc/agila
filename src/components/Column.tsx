@@ -1292,7 +1292,7 @@ function KanbanColumn({
         data-kanban-header-column-id={column.id}
       >
         <div className={`flex justify-between ${isEditing ? 'items-start' : 'items-center'}`}>
-        <div className={`flex gap-2 flex-1 min-w-0 ${isEditing ? 'items-start' : 'items-center'}`}>
+        <div className={`flex gap-2 flex-1 min-w-0 ${isEditing ? 'items-start' : 'items-center h-6'}`}>
           {/* Task count pill (same chrome for all roles). Admins: hover reveals drag handle. */}
           {isAdmin ? (
             <KanbanChromeTooltip
@@ -1301,8 +1301,8 @@ function KanbanColumn({
             >
               <div
                 {...listeners}
-                className={`group/column-handle relative flex min-h-5 min-w-5 cursor-grab items-center justify-center rounded px-0.5 transition-colors hover:bg-gray-200 active:cursor-grabbing dark:hover:bg-gray-700 ${
-                  !isEditing && taskCountBadge ? '' : 'h-5 w-5 p-1 opacity-50 hover:opacity-100'
+                className={`group/column-handle relative flex h-5 min-w-[1.25rem] cursor-grab items-center justify-center rounded px-0.5 transition-colors hover:bg-gray-200 active:cursor-grabbing dark:hover:bg-gray-700 ${
+                  !isEditing && taskCountBadge ? '' : 'w-5 p-1 opacity-50 hover:opacity-100'
                 }`}
               >
                 {!isEditing && taskCountBadge ? (
@@ -1532,7 +1532,7 @@ function KanbanColumn({
                 const titleEl = (
                   <h3
                     data-column-title
-                    className={`text-lg font-semibold text-gray-700 dark:text-gray-100 select-none truncate ${
+                    className={`text-lg font-semibold leading-6 text-gray-700 dark:text-gray-100 select-none truncate ${
                       isAdmin && showColumnDeleteConfirm === null
                         ? 'cursor-pointer hover:text-gray-900 dark:hover:text-white'
                         : 'cursor-default'
@@ -1576,7 +1576,7 @@ function KanbanColumn({
                   wrapperClassName="relative inline-flex shrink-0 items-center"
                 >
                   <span
-                    className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-violet-100 px-1.5 py-0.5 text-center text-[0.65rem] font-medium leading-none tabular-nums text-violet-700 select-none pointer-events-none dark:bg-violet-900/50 dark:text-violet-200"
+                    className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-violet-100 px-1.5 text-center text-[0.65rem] font-medium leading-none tabular-nums text-violet-700 select-none pointer-events-none dark:bg-violet-900/50 dark:text-violet-200"
                     aria-label={t('column.totalEffortTooltip', { display: effortDisplay })}
                   >
                     {effortDisplay}

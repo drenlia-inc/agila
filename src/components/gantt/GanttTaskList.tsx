@@ -173,7 +173,7 @@ const SortableTaskRow = memo(({
     highlightedTaskId === task.id
       ? 'bg-yellow-100 dark:bg-yellow-900/50 ring-2 ring-inset ring-yellow-400 dark:ring-yellow-500'
       : isTaskDetailsOpen
-        ? 'ring-1 ring-inset ring-amber-400 dark:ring-amber-500'
+        ? 'ring-2 ring-inset ring-blue-500 dark:ring-blue-400'
         : isSelected && highlightedTaskId !== task.id
           ? 'bg-blue-100 dark:bg-blue-800/80 ring-2 ring-inset ring-blue-400 dark:ring-blue-500'
           : '',
@@ -508,6 +508,7 @@ const GanttTaskList = memo(({
 
   return (
     <div
+      data-gantt-task-list
       className="sticky left-0 z-10 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-visible"
       style={{ width: `${taskColumnWidth}px` }}
     >

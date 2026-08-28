@@ -21,8 +21,16 @@ import {
   RotateCcw,
   Check,
   CheckCheck,
+  CircleDot,
+  ListFilter,
+  ScrollText,
 } from 'lucide-react';
-import { updateActivityFeedPreference } from '../utils/userPreferences';
+import {
+  loadUserPreferencesAsync,
+  subscribeToUserPreferences,
+  updateActivityFeedPreference,
+  type UserPreferences,
+} from '../utils/userPreferences';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { generateTaskUrl, parseTaskRoute } from '../utils/routingUtils';
 import { isMobileViewport } from '../utils/mobileViewport';
@@ -32,6 +40,10 @@ import {
   toStoredActivityFeedPosition,
 } from '../utils/activityFeedPosition';
 import { isActivityUnread } from '../utils/activityFeedReadState';
+import {
+  isColumnMoveActivity,
+  summarizeActivityImpact,
+} from '../utils/activityFeedCompact';
 
 const MINIMIZED_HEIGHT = 40;
 const BOTTOM_MARGIN = 12;
@@ -111,8 +123,13 @@ interface ActivityFeedProps {
   onClearAll?: (activityId: number) => void;
   /** Open the board for a project id (e.g. PROJ-00007) in the current board view. */
   onOpenProject?: (projectId: string) => void;
+  /** Jump to a task in the current view (same as header search). */
+  onJumpToTask?: (ticket: string, taskId?: string | null) => void;
   /** Known board project ids — any matching token in feed text links to that board. */
   boardProjectIds?: string[];
+  hasMoreActivities?: boolean;
+  loadingMoreActivities?: boolean;
+  onLoadMore?: () => void | Promise<void>;
   position?: { x: number; y: number };
   onPositionChange?: (position: { x: number; y: number }) => void;
   dimensions?: { width: number; height: number };
@@ -135,7 +152,11 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   onDismissActivity,
   onClearAll,
   onOpenProject,
+  onJumpToTask,
   boardProjectIds = [],
+  hasMoreActivities = false,
+  loadingMoreActivities = false,
+  onLoadMore,
   position = DEFAULT_ACTIVITY_FEED_STORED_POSITION,
   onPositionChange,
   dimensions = { width: 208, height: 400 },
@@ -184,6 +205,8 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   
   // Filter state
   const [filterText, setFilterText] = useState('');
+  const [taskImpactView, setTaskImpactView] = useState(true);
+  const [expandedCompactIds, setExpandedCompactIds] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
     const onResize = () => setViewportSize({ w: window.innerWidth, h: window.innerHeight });
@@ -240,23 +263,42 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     liveAbsolutePosition ||
     (isMinimized ? dockAbsolute : resolvedAbsolute);
 
-  // Load saved filter preference on mount
+  // Load saved feed prefs (async DB merge on login; subscribe for post-logout reload)
   useEffect(() => {
-    const loadFilterPreference = async () => {
-      if (userId) {
-        try {
-          const { loadUserPreferences } = await import('../utils/userPreferences');
-          const userPrefs = loadUserPreferences(userId);
-          if (userPrefs.activityFeed.filterText) {
-            setFilterText(userPrefs.activityFeed.filterText);
-          }
-        } catch (error) {
-          console.error('Failed to load activity filter preference:', error);
-        }
+    let cancelled = false;
+
+    const applyFeedPrefs = (prefs: UserPreferences) => {
+      if (cancelled) return;
+      setFilterText(prefs.activityFeed.filterText || '');
+      setTaskImpactView(prefs.activityFeed.taskImpactView !== false);
+    };
+
+    const loadFeedPrefs = async () => {
+      if (!userId) {
+        setFilterText('');
+        setTaskImpactView(true);
+        return;
+      }
+      try {
+        const prefs = await loadUserPreferencesAsync(userId);
+        applyFeedPrefs(prefs);
+      } catch (error) {
+        console.error('Failed to load activity feed preferences:', error);
       }
     };
 
-    loadFilterPreference();
+    void loadFeedPrefs();
+
+    const unsubscribe = subscribeToUserPreferences((prefs, prefsUserId) => {
+      if (prefsUserId === userId) {
+        applyFeedPrefs(prefs);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [userId]);
 
   const handleMinimize = async () => {
@@ -599,7 +641,8 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   const renderActivityDescriptionText = (
     text: string,
     projectId: string | null | undefined,
-    searchTerm: string
+    searchTerm: string,
+    activityTaskHint?: { taskId?: string | null; taskTicket?: string | null }
   ): React.ReactNode => {
     if (!text) return null;
     const resolvedProject = findProjectHintInText(text, projectId);
@@ -628,17 +671,29 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
         );
       }
       const href = activityFeedTaskHref(token, resolvedProject);
+      const hintTaskId =
+        activityTaskHint?.taskTicket?.toUpperCase() === token
+          ? activityTaskHint.taskId
+          : undefined;
       return (
         <a
           key={`${token}-${index}`}
           href={href}
           className={ACTIVITY_TASK_LINK_CLASS}
           title={token}
-          aria-label={t('activityFeed.openTask', { ticket: token })}
+          aria-label={
+            onJumpToTask
+              ? t('activityFeed.jumpToTask', { ticket: token })
+              : t('activityFeed.openTask', { ticket: token })
+          }
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            navigateActivityFeedTaskLink(href);
+            if (onJumpToTask) {
+              onJumpToTask(token, hintTaskId);
+            } else {
+              navigateActivityFeedTaskLink(href);
+            }
           }}
         >
           {highlightText(part, searchTerm)}
@@ -647,7 +702,7 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     });
   };
 
-  const getActionIcon = (action: string, sizeClass = 'w-3.5 h-3.5') => {
+  const getActionIcon = (action: string, sizeClass = 'w-3.5 h-3.5', details = '') => {
     const className = `${sizeClass} shrink-0`;
     if (action.includes('agent_job_done')) {
       return <CheckCircle2 className={`${className} text-emerald-600 dark:text-emerald-400`} />;
@@ -660,6 +715,9 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     }
     if (action.includes('create')) {
       return <Plus className={`${className} text-sky-600 dark:text-sky-400`} />;
+    }
+    if (isColumnMoveActivity(action, details)) {
+      return <CircleDot className={`${className} text-indigo-600 dark:text-indigo-400`} />;
     }
     if (action.includes('move')) {
       return <ArrowRightLeft className={`${className} text-indigo-600 dark:text-indigo-400`} />;
@@ -720,6 +778,32 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     }
   };
 
+  const handleTaskImpactViewToggle = () => {
+    const next = !taskImpactView;
+    setTaskImpactView(next);
+    setExpandedCompactIds(new Set());
+    if (userId) {
+      updateActivityFeedPreference('taskImpactView', next, userId).catch(error => {
+        console.error('Failed to save activity feed view preference:', error);
+      });
+    }
+  };
+
+  const toggleCompactActivityExpand = (activityId: number) => {
+    setExpandedCompactIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(activityId)) {
+        next.delete(activityId);
+      } else {
+        next.add(activityId);
+      }
+      return next;
+    });
+  };
+
+  const compactSummaryFor = (activity: ActivityItem): string | null =>
+    summarizeActivityImpact(activity, knownProjectIds, t);
+
   // Highlight search terms in text - returns React components for regular display
   const highlightText = (text: string, searchTerm: string): React.ReactNode => {
     if (!searchTerm.trim() || !text) {
@@ -768,8 +852,10 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   const unreadCount = unreadActivities.length;
   const unreadBadgeLabel = unreadCount > 99 ? '99+' : String(unreadCount);
   
-  // Use filtered activities for display
-  const displayActivities = filteredActivities;
+  // Use filtered activities for display (task-impact view hides non-task noise)
+  const displayActivities = taskImpactView
+    ? filteredActivities.filter((activity) => compactSummaryFor(activity) !== null)
+    : filteredActivities;
   
   // Get latest activity for minimized view (could be read or unread)
   const latestActivity = activities.length > 0 ? activities[0] : null;
@@ -802,9 +888,14 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   const isExtraNarrowMode = dimensions.width <= 130;
   
   if (isMinimized) {
+    const compactLatest =
+      latestActivity && taskImpactView
+        ? compactSummaryFor(latestActivity)
+        : null;
     const preview =
       latestActivity
-        ? `${latestActivity.memberName || t('activityFeed.unknownUser')}${
+        ? compactLatest ||
+          `${latestActivity.memberName || t('activityFeed.unknownUser')}${
             latestActivity.details ? ` · ${latestActivity.details}` : ''
           }`
         : t('activityFeed.noRecentActivity');
@@ -853,7 +944,7 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
             }
           >
             <span className="relative flex h-6 w-6 items-center justify-center rounded-full bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400">
-              {latestActivity ? getActionIcon(latestActivity.action) : <Activity className="w-3.5 h-3.5" />}
+              {latestActivity ? getActionIcon(latestActivity.action, 'w-3.5 h-3.5', latestActivity.details) : <Activity className="w-3.5 h-3.5" />}
               <span
                 className={`absolute -top-1 -right-1.5 min-w-[1.15rem] h-4 px-1 rounded-full text-[9px] font-semibold leading-4 text-center tabular-nums ${
                   unreadCount > 0
@@ -1009,12 +1100,23 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
 
         {!loading && displayActivities.length === 0 && (
           <div className="text-slate-500 dark:text-slate-400 text-xs text-center py-8 px-2">
-            {clearActivityId > 0 ? t('activityFeed.feedClearedNew') : t('activityFeed.noRecentActivity')}
+            {clearActivityId > 0
+              ? t('activityFeed.feedClearedNew')
+              : taskImpactView && filteredActivities.length > 0
+                ? t('activityFeed.compact.noTaskImpact')
+                : taskImpactView && visibleActivities.length > 0
+                  ? t('activityFeed.compact.noTaskImpactHint')
+                  : t('activityFeed.noRecentActivity')}
           </div>
         )}
 
         <div className="space-y-1">
           {displayActivities.map((activity) => {
+            const compactSummary = taskImpactView ? compactSummaryFor(activity) : null;
+            const isCompactExpanded =
+              taskImpactView && compactSummary !== null && expandedCompactIds.has(activity.id);
+            const showCompactSummary = compactSummary !== null && !isCompactExpanded;
+            const isCompactExpandable = taskImpactView && compactSummary !== null;
             const { name, description, viaApi } = formatActivityDescription(activity);
             const isUnread = isActivityUnread(activity.id, lastSeenActivityId, readIdSet);
             const actorClass = isUnread
@@ -1023,22 +1125,71 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
             return (
               <div 
                 key={activity.id} 
+                role={isCompactExpandable ? 'button' : undefined}
+                tabIndex={isCompactExpandable ? 0 : undefined}
+                aria-expanded={isCompactExpandable ? isCompactExpanded : undefined}
+                aria-label={
+                  isCompactExpandable
+                    ? isCompactExpanded
+                      ? t('activityFeed.compact.collapseRow')
+                      : t('activityFeed.compact.expandRow')
+                    : undefined
+                }
+                onClick={
+                  isCompactExpandable
+                    ? () => toggleCompactActivityExpand(activity.id)
+                    : undefined
+                }
+                onKeyDown={
+                  isCompactExpandable
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleCompactActivityExpand(activity.id);
+                        }
+                      }
+                    : undefined
+                }
                 className={`group/item relative min-w-0 rounded-xl transition-colors ${
                   isNarrowMode ? 'p-1.5' : 'p-2'
                 } ${
                   isUnread 
                     ? 'bg-sky-50/90 dark:bg-sky-950/30 ring-1 ring-inset ring-sky-200/70 dark:ring-sky-800/50' 
                     : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                } ${
+                  isCompactExpandable ? 'cursor-pointer' : ''
                 }`}
               >
                 <div className="text-xs text-slate-800 dark:text-slate-100 leading-snug">
+                  {showCompactSummary ? (
+                    <div className="flex items-start gap-1.5 min-w-0">
+                      <span
+                        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mt-0.5"
+                        aria-hidden
+                      >
+                        {getActionIcon(activity.action, 'w-2.5 h-2.5', activity.details)}
+                      </span>
+                      <div className="min-w-0 flex-1 font-medium text-slate-700 dark:text-slate-200">
+                        {renderActivityDescriptionText(compactSummary, activity.projectId, filterText, {
+                          taskId: activity.taskId,
+                          taskTicket: activity.taskTicket,
+                        })}
+                        {viaApi && (
+                          <span className="ml-1 text-slate-400 dark:text-slate-500 font-normal">
+                            {t('activityFeed.viaApi')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
                   {/* Icon sits with the actor only; wrapped lines use full feed width */}
                   <span className={`inline-flex items-center gap-1 max-w-full font-semibold align-middle ${actorClass}`}>
                     <span
                       className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800"
                       aria-hidden
                     >
-                      {getActionIcon(activity.action, 'w-2.5 h-2.5')}
+                      {getActionIcon(activity.action, 'w-2.5 h-2.5', activity.details)}
                     </span>
                     <span className={isNarrowMode ? 'truncate' : undefined}>
                       {highlightText(name, filterText)}
@@ -1051,14 +1202,22 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
                   </span>
                   {isNarrowMode ? (
                     <div className="mt-0.5 text-xs leading-snug text-slate-600 dark:text-slate-300">
-                      {renderActivityDescriptionText(description, activity.projectId, filterText)}
+                      {renderActivityDescriptionText(description, activity.projectId, filterText, {
+                        taskId: activity.taskId,
+                        taskTicket: activity.taskTicket,
+                      })}
                     </div>
                   ) : (
                     <>
                       {' '}
                       <span className="text-slate-600 dark:text-slate-300 align-middle">
-                        {renderActivityDescriptionText(description, activity.projectId, filterText)}
+                        {renderActivityDescriptionText(description, activity.projectId, filterText, {
+                          taskId: activity.taskId,
+                          taskTicket: activity.taskTicket,
+                        })}
                       </span>
+                    </>
+                  )}
                     </>
                   )}
                 </div>
@@ -1102,11 +1261,58 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
             );
           })}
         </div>
+
+        {hasMoreActivities && onLoadMore && (
+          <div className={`${isNarrowMode ? 'pt-1' : 'pt-1.5'} flex justify-center`}>
+            <button
+              type="button"
+              onClick={() => void onLoadMore()}
+              disabled={loadingMoreActivities}
+              className="rounded-lg px-2.5 py-1 text-[11px] font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-950/40 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+              aria-busy={loadingMoreActivities}
+            >
+              {loadingMoreActivities ? t('activityFeed.loadingMore') : t('activityFeed.loadMore')}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
       <div className={`border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/30 ${isNarrowMode ? 'px-1.5 py-1' : 'px-2 py-1.5'}`}>
-        <div className="flex items-center justify-end gap-0.5 min-h-[1.75rem]">
+        <div className="flex items-center justify-between gap-0.5 min-h-[1.75rem]">
+          <KanbanChromeTooltip
+            label={
+              taskImpactView
+                ? t('activityFeed.compact.switchToFullView')
+                : t('activityFeed.compact.switchToTaskImpact')
+            }
+            placement="top"
+            portalZIndex={ACTIVITY_FEED_CHROME_Z}
+            dismissOnLabelChange={false}
+          >
+            <button
+              type="button"
+              onClick={handleTaskImpactViewToggle}
+              className={`p-1.5 rounded-lg transition-colors ${
+                taskImpactView
+                  ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-100/80 dark:bg-indigo-950/40 hover:bg-indigo-200/80 dark:hover:bg-indigo-900/50'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/80 dark:hover:bg-slate-800/80'
+              }`}
+              aria-pressed={taskImpactView}
+              aria-label={
+                taskImpactView
+                  ? t('activityFeed.compact.switchToFullView')
+                  : t('activityFeed.compact.switchToTaskImpact')
+              }
+            >
+              {taskImpactView ? (
+                <ScrollText className="w-3.5 h-3.5" />
+              ) : (
+                <ListFilter className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </KanbanChromeTooltip>
+          <div className="flex items-center gap-0.5">
           <KanbanChromeTooltip
             label={unreadCount > 0 ? t('activityFeed.markAllRead', { count: unreadCount }) : t('activityFeed.markAllReadNone')}
             placement="top"
@@ -1137,6 +1343,7 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </KanbanChromeTooltip>
+          </div>
         </div>
       </div>
 

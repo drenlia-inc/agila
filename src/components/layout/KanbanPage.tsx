@@ -1549,6 +1549,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               detailsTaskId={selectedTask?.id ?? null}
               gridStyle={gridStyle}
               onColumnWidthResize={onColumnWidthResize}
+              stickyTopPx={appHeaderStickyTopPx}
+              isTaskBeingDragged={!!draggedTask}
               scrollContainerRef={trashScrollContainerRef}
               loading={trashLoading}
               onSelectTask={(task) => void handleSelectTrashedTask(task)}
@@ -1967,7 +1969,12 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                           />
                           {/* Resize handle between columns (not after the last one) */}
                           {index < array.length - 1 && onColumnWidthResize && (
-                            <ColumnResizeHandle onResize={onColumnWidthResize} isColumnBeingDragged={!!draggedColumn} />
+                            <ColumnResizeHandle
+                              onResize={onColumnWidthResize}
+                              isColumnBeingDragged={!!draggedColumn}
+                              isTaskBeingDragged={!!draggedTask}
+                              stickyTopPx={appHeaderStickyTopPx}
+                            />
                           )}
                         </div>
                       </React.Fragment>
@@ -2077,7 +2084,12 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                         />
                         {/* Resize handle between columns (not after the last one) */}
                         {index < array.length - 1 && onColumnWidthResize && (
-                          <ColumnResizeHandle onResize={onColumnWidthResize} />
+                          <ColumnResizeHandle
+                            onResize={onColumnWidthResize}
+                            isColumnBeingDragged={!!draggedColumn}
+                            isTaskBeingDragged={!!draggedTask}
+                            stickyTopPx={appHeaderStickyTopPx}
+                          />
                         )}
                       </div>
                     </React.Fragment>

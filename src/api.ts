@@ -874,12 +874,35 @@ export const getPublicSettings = async () => {
 };
 
 // Activity Feed
-export const getActivityFeed = async (limit: number = 20, lang?: string) => {
+export const ACTIVITY_FEED_DEFAULT_LIMIT = 20;
+export const ACTIVITY_FEED_PAGE_SIZE = 20;
+
+export type GetActivityFeedOptions = {
+  limit?: number;
+  lang?: string;
+  /** Load rows older than this activity id */
+  beforeId?: number;
+  /** Load rows newer than this activity id (WebSocket delta sync) */
+  sinceId?: number;
+};
+
+export const getActivityFeed = async (options: GetActivityFeedOptions = {}) => {
+  const limit = options.limit ?? ACTIVITY_FEED_DEFAULT_LIMIT;
   // Get current language from localStorage (where i18next stores it) or use provided lang
-  const currentLang = lang || localStorage.getItem('i18nextLng') || 'en';
+  const currentLang = options.lang || localStorage.getItem('i18nextLng') || 'en';
   // Normalize to 'en' or 'fr'
   const normalizedLang = currentLang.toLowerCase().startsWith('fr') ? 'fr' : 'en';
-  const { data } = await api.get(`/activity/feed?limit=${limit}&lang=${normalizedLang}`);
+  const params = new URLSearchParams({
+    limit: String(limit),
+    lang: normalizedLang,
+  });
+  if (options.beforeId != null && options.beforeId > 0) {
+    params.set('beforeId', String(options.beforeId));
+  }
+  if (options.sinceId != null && options.sinceId > 0) {
+    params.set('sinceId', String(options.sinceId));
+  }
+  const { data } = await api.get(`/activity/feed?${params.toString()}`);
   return data;
 };
 

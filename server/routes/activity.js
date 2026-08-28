@@ -6,9 +6,15 @@ import { activity as activityQueries } from '../utils/sqlManager/index.js';
 
 const router = express.Router();
 
+function parseOptionalPositiveInt(value) {
+  if (value == null || value === '') return undefined;
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 // Activity Feed endpoint
 router.get('/feed', authenticateToken, async (req, res) => {
-  const { limit = 20, lang } = req.query;
+  const { limit = 20, lang, beforeId, sinceId } = req.query;
   const db = getRequestDatabase(req);
   
   try {
@@ -28,9 +34,21 @@ router.get('/feed', authenticateToken, async (req, res) => {
         console.warn('Failed to get user language preference:', prefError.message);
       }
     }
+
+    const parsedLimit = parseInt(limit, 10);
+    const safeLimit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), 100)
+      : 20;
+    const parsedBeforeId = parseOptionalPositiveInt(beforeId);
+    const parsedSinceId = parseOptionalPositiveInt(sinceId);
     
     // MIGRATED: Get activity feed using sqlManager with user's language
-    const activities = await activityQueries.getActivityFeed(db, parseInt(limit), userLanguage);
+    const activities = await activityQueries.getActivityFeed(db, {
+      limit: safeLimit,
+      userLanguage,
+      beforeId: parsedSinceId != null ? undefined : parsedBeforeId,
+      sinceId: parsedSinceId,
+    });
     
     res.json(activities);
   } catch (error) {

@@ -25,6 +25,10 @@ interface BoardTrashViewProps {
   gridStyle: React.CSSProperties;
   /** Same column resize handle as the live board (shared width preference). */
   onColumnWidthResize?: (deltaX: number) => void;
+  /** Sticky top for column resize guides (matches live board). */
+  stickyTopPx?: number;
+  /** Hide resize guides while a task card is being dragged on the live board. */
+  isTaskBeingDragged?: boolean;
   /** Paired with the live Kanban scroller by KanbanPage. */
   scrollContainerRef?: React.Ref<HTMLDivElement>;
   loading?: boolean;
@@ -249,6 +253,8 @@ export default function BoardTrashView({
   detailsTaskId = null,
   gridStyle,
   onColumnWidthResize,
+  stickyTopPx,
+  isTaskBeingDragged = false,
   scrollContainerRef,
   loading,
   onSelectTask,
@@ -496,7 +502,7 @@ export default function BoardTrashView({
   const renderColumnCards = (columnTasks: Task[]) => (
     <div className={taskViewMode === 'compact' ? 'space-y-1' : 'space-y-2'}>
       {columnTasks.map((task) => (
-        <div key={task.id} className="relative">
+        <div key={task.id} className="relative" data-kanban-task-row>
           <TrashedTaskCard
             task={task}
             members={members}
@@ -708,7 +714,7 @@ export default function BoardTrashView({
             const columnTasks = tasksByColumn.get(column.id) || [];
             return (
               <React.Fragment key={column.id}>
-                <div className="relative min-w-0 self-start">
+                <div className="relative min-w-0 self-start" data-kanban-column-id={column.id}>
                   {renderColumnHeader(columnDisplayTitle(column), columnTasks)}
                   {columnTasks.length > 0 ? (
                     renderColumnCards(columnTasks)
@@ -718,7 +724,11 @@ export default function BoardTrashView({
                     </div>
                   )}
                   {index < array.length - 1 && onColumnWidthResize && (
-                    <ColumnResizeHandle onResize={onColumnWidthResize} />
+                    <ColumnResizeHandle
+                      onResize={onColumnWidthResize}
+                      isTaskBeingDragged={isTaskBeingDragged}
+                      stickyTopPx={stickyTopPx}
+                    />
                   )}
                 </div>
               </React.Fragment>

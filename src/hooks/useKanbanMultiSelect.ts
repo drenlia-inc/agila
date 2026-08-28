@@ -95,7 +95,7 @@ type UseKanbanMultiSelectArgs = {
   availableTags?: Array<{ id: number; tag: string }>;
 };
 
-const BULK_UNDO_TTL_MS = 60_000;
+const BULK_UNDO_TTL_MS = 20_000;
 
 export function useKanbanMultiSelect({
   columns,

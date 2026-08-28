@@ -159,6 +159,8 @@ export interface UserPreferences {
     /** Activity IDs marked read individually (newer than lastSeen watermark). */
     readActivityIds: number[];
     filterText: string;
+    /** When true (default), show short task-impact lines and hide non-task noise. */
+    taskImpactView: boolean;
   };
 }
 
@@ -428,7 +430,8 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
     clearActivityId: 0,
     dismissedActivityIds: [],
     readActivityIds: [],
-    filterText: ''
+    filterText: '',
+    taskImpactView: true,
   }
 };
 
@@ -716,6 +719,7 @@ export const saveUserPreferences = async (preferences: UserPreferences, userId: 
           saveIfDefined('dismissedActivityIds', JSON.stringify(preferences.activityFeed.dismissedActivityIds)),
           saveIfDefined('readActivityIds', JSON.stringify(preferences.activityFeed.readActivityIds)),
           saveIfDefined('activityFilterText', preferences.activityFeed.filterText),
+          saveIfDefined('activityFeedTaskImpactView', preferences.activityFeed.taskImpactView),
           
           // List View Column Visibility
           saveIfDefined('listViewColumnVisibility', JSON.stringify(preferences.listViewColumnVisibility)),
@@ -1267,6 +1271,22 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
             return merged.filter((id) => id > lastSeen && id > clearId);
           })(),
           filterText: smartMerge(preferences.activityFeed.filterText, dbSettings.activityFilterText, defaults.activityFeed.filterText),
+          taskImpactView: (() => {
+            const fromDb = dbSettings.activityFeedTaskImpactView;
+            const localValue = preferences.activityFeed.taskImpactView;
+            if (fromDb === 'true' || fromDb === true) {
+              if (localValue !== true) needsStoredPrefsUpdate = true;
+              return true;
+            }
+            if (fromDb === 'false' || fromDb === false) {
+              if (localValue !== false) needsStoredPrefsUpdate = true;
+              return false;
+            }
+            if (localValue !== undefined) {
+              return localValue !== false;
+            }
+            return defaults.activityFeed.taskImpactView !== false;
+          })(),
         },
         
         // Gantt Scroll Positions (localStorage + DB)
@@ -1535,7 +1555,8 @@ export const updateActivityFeedPreference = async <K extends keyof UserPreferenc
     'clearActivityId': 'clearActivityId',
     'dismissedActivityIds': 'dismissedActivityIds',
     'readActivityIds': 'readActivityIds',
-    'filterText': 'activityFilterText'
+    'filterText': 'activityFilterText',
+    'taskImpactView': 'activityFeedTaskImpactView'
   };
   
   const dbKey = dbKeyMap[key];
@@ -1548,6 +1569,8 @@ export const updateActivityFeedPreference = async <K extends keyof UserPreferenc
   let dbValue: any = value;
   if (key === 'position' || key === 'dismissedActivityIds' || key === 'readActivityIds') {
     dbValue = JSON.stringify(value);
+  } else if (key === 'taskImpactView') {
+    dbValue = value ? 'true' : 'false';
   }
   
   await updateUserSetting(dbKey, dbValue);

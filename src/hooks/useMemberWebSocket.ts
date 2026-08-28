@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { TeamMember, SavedFilterView } from '../types';
-import { getMembers, getCurrentUser, getActivityFeed } from '../api';
+import { getMembers, getCurrentUser } from '../api';
 
 interface UseMemberWebSocketProps {
   // State setters
@@ -10,6 +10,7 @@ interface UseMemberWebSocketProps {
   // Callbacks
   handleMembersUpdate: (newMembers: TeamMember[]) => void;
   handleActivitiesUpdate: (newActivities: any[]) => void;
+  syncActivityDelta: () => Promise<void>;
   handleSharedFilterViewsUpdate: (newFilters: SavedFilterView[]) => void;
   
   // Task filters hook
@@ -27,6 +28,7 @@ export const useMemberWebSocket = ({
   setCurrentUser,
   handleMembersUpdate,
   handleActivitiesUpdate,
+  syncActivityDelta,
   handleSharedFilterViewsUpdate,
   taskFilters,
   currentUser,
@@ -130,22 +132,13 @@ export const useMemberWebSocket = ({
   }, [currentUser?.id, taskFilters.includeSystem, setCurrentUser, setMembers]);
 
   const handleActivityUpdated = useCallback(async (data: any) => {
-    // Since we now send minimal notifications (to avoid PostgreSQL 8000-byte limit),
-    // we need to fetch the full activity feed from the API
-    // Check if we have activities in the payload (backward compatibility with Redis)
+    // Minimal WebSocket payload — fetch only rows newer than what we already have.
     if (data.activities && Array.isArray(data.activities) && data.activities.length > 0) {
-      // Old format with activities array - use it directly
       handleActivitiesUpdate(data.activities);
     } else {
-      // New minimal format - fetch from API
-      try {
-        const activities = await getActivityFeed(20);
-        handleActivitiesUpdate(activities);
-      } catch (error) {
-        console.error('Failed to fetch activity feed after notification:', error);
-      }
+      await syncActivityDelta();
     }
-  }, [handleActivitiesUpdate]);
+  }, [handleActivitiesUpdate, syncActivityDelta]);
 
   const handleFilterCreated = useCallback((data: any) => {
     // Refresh shared filters list

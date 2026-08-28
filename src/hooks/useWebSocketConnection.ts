@@ -1,5 +1,4 @@
 import { useCallback, RefObject } from 'react';
-import { getActivityFeed } from '../api';
 import websocketClient from '../services/websocketClient';
 
 interface UseWebSocketConnectionProps {
@@ -16,7 +15,7 @@ interface UseWebSocketConnectionProps {
   
   // Activity feed hook
   activityFeed: {
-    setActivities: (activities: any[]) => void;
+    syncActivityDelta: (lang?: string) => Promise<void>;
   };
 }
 
@@ -61,10 +60,8 @@ export const useWebSocketConnection = ({
               forBoardId: selectedBoardRef.current || undefined,
             });
             
-            // ALSO refresh activities to ensure activity feed is up-to-date
-            // This catches any activity events that were missed during disconnection
-            const loadedActivities = await getActivityFeed(100);
-            activityFeed.setActivities(loadedActivities || []);
+            // Catch activity events missed while offline — delta only, not a full refetch.
+            await activityFeed.syncActivityDelta();
             
             const successTimestamp = new Date().toISOString();
             console.log(`✅ [${successTimestamp}] Data refresh successful!`);
@@ -105,7 +102,7 @@ export const useWebSocketConnection = ({
       console.log(`🎉 [${firstConnectTimestamp}] First WebSocket connection established`);
       hasConnectedOnceRef.current = true;
     }
-  }, [activityFeed.setActivities, selectedBoardRef, refreshBoardDataRef, hasConnectedOnceRef, wasOfflineRef]);
+  }, [activityFeed.syncActivityDelta, selectedBoardRef, refreshBoardDataRef, hasConnectedOnceRef, wasOfflineRef]);
 
   const handleDisconnect = useCallback(() => {
     const disconnectTimestamp = new Date().toISOString();
