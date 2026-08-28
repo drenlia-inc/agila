@@ -30,6 +30,42 @@ function visibleTaskRows(columnWrap: HTMLElement): HTMLElement[] {
   return rowNodes.filter((row) => row.getBoundingClientRect().height > 6);
 }
 
+function adjacentColumnWrap(columnWrap: HTMLElement): HTMLElement | null {
+  const next = columnWrap.nextElementSibling;
+  return next instanceof HTMLElement && next.hasAttribute('data-kanban-column-id')
+    ? next
+    : null;
+}
+
+type CardStackBounds = { top: number; bottom: number };
+
+function cardStackBounds(columnWrap: HTMLElement): CardStackBounds | null {
+  const rows = visibleTaskRows(columnWrap);
+  if (rows.length === 0) return null;
+
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const row of rows) {
+    const rect = row.getBoundingClientRect();
+    top = Math.min(top, rect.top);
+    bottom = Math.max(bottom, rect.bottom);
+  }
+  return top === Infinity ? null : { top, bottom };
+}
+
+function emptyColumnBounds(columnWrap: HTMLElement): CardStackBounds {
+  const taskList = columnWrap.querySelector('[data-kanban-task-list]');
+  const fallbackEl =
+    taskList ??
+    columnWrap.querySelector('[data-kanban-drop-placeholder]')?.parentElement ??
+    columnWrap;
+  const fallbackRect = fallbackEl.getBoundingClientRect();
+  return {
+    top: fallbackRect.top,
+    bottom: fallbackRect.top + EMPTY_COLUMN_LINE_PX,
+  };
+}
+
 function measureLineGeometry(
   columnWrap: HTMLElement,
   gapCenterX: number,
@@ -50,43 +86,33 @@ function measureLineGeometry(
   const pinBelowHeader =
     (header?.getBoundingClientRect().bottom ?? stickyTopPx) + 4;
 
-  const rows = visibleTaskRows(columnWrap);
-  let anchorTop: number;
-  let naturalHeight: number;
+  const neighbor = adjacentColumnWrap(columnWrap);
+  const columns = neighbor ? [columnWrap, neighbor] : [columnWrap];
 
-  if (rows.length > 0) {
-    const firstRect = rows[0].getBoundingClientRect();
-    anchorTop = firstRect.top;
-    const fadeEnd =
-      rows.length >= 3
-        ? rows[2].getBoundingClientRect().bottom
-        : rows[rows.length - 1].getBoundingClientRect().bottom;
-    naturalHeight = Math.max(MIN_LINE_HEIGHT_PX, fadeEnd - anchorTop);
-  } else {
-    const taskList = columnWrap.querySelector('[data-kanban-task-list]');
-    const fallbackEl =
-      taskList ??
-      columnWrap.querySelector('[data-kanban-drop-placeholder]')?.parentElement ??
-      columnWrap;
-    const fallbackRect = fallbackEl.getBoundingClientRect();
-    anchorTop = fallbackRect.top;
-    naturalHeight = EMPTY_COLUMN_LINE_PX;
+  let anchorTop = Infinity;
+  let stackBottom = Infinity;
+
+  for (const col of columns) {
+    const bounds = cardStackBounds(col) ?? emptyColumnBounds(col);
+    anchorTop = Math.min(anchorTop, bounds.top);
+    stackBottom = Math.min(stackBottom, bounds.bottom);
   }
 
   const top = Math.max(anchorTop, pinBelowHeader);
-  const height = naturalHeight;
+  const height = Math.max(MIN_LINE_HEIGHT_PX, stackBottom - top);
 
   return {
     left: gapCenterX,
     top,
     height,
-    visible: height > 0,
+    visible: height > 0 && stackBottom > top,
   };
 }
 
 /**
- * Resize handle between Kanban columns — fine guide from the first card, fading
- * by ~the third card, sticky while scrolling, blue on hover / drag.
+ * Resize handle between Kanban columns — spans the shared card stack on both sides
+ * of the gap (stops at the shorter column's last card), sticky while scrolling,
+ * blue on hover / drag.
  */
 const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
   onResize,
@@ -134,9 +160,13 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
     window.addEventListener('resize', onScrollOrResize);
 
     const ro = columnWrap ? new ResizeObserver(onScrollOrResize) : null;
+    const adjacent = columnWrap ? adjacentColumnWrap(columnWrap) : null;
     if (columnWrap && ro) ro.observe(columnWrap);
-    const taskList = columnWrap?.querySelector('[data-kanban-task-list]');
-    if (taskList && ro) ro.observe(taskList);
+    if (adjacent && ro) ro.observe(adjacent);
+    for (const col of [columnWrap, adjacent]) {
+      const taskList = col?.querySelector('[data-kanban-task-list]');
+      if (taskList && ro) ro.observe(taskList);
+    }
 
     return () => {
       scrollers.forEach((target) => {
