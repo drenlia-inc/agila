@@ -14,6 +14,10 @@ import { mergeTaskTagsWithLiveData, getTagDisplayStyle } from '../utils/tagUtils
 import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { truncateMemberName } from '../utils/memberUtils';
+import {
+  completeNewTaskTitleEdit,
+  subscribeNewTaskTitleEdit,
+} from '../utils/newTaskReveal';
 import { commentTextToHtml } from '../utils/commentContent';
 import { generateUUID } from '../utils/uuid';
 import { truncateHtmlByChars } from '../utils/plainTextPreview';
@@ -1303,6 +1307,16 @@ export default function ListView({
     setEditValue(currentValue);
     setShowDropdown(null);
   };
+
+  useEffect(() => {
+    return subscribeNewTaskTitleEdit((taskId) => {
+      if (!canMutate) return;
+      const match = allTasks.find((row) => row.id === taskId);
+      if (!match) return;
+      startEditing(taskId, 'title', match.title);
+      completeNewTaskTitleEdit(taskId);
+    });
+  }, [allTasks, canMutate]);
 
   const cancelEditing = () => {
     setEditingCell(null);

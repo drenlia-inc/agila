@@ -39,6 +39,10 @@ import { KanbanChromeTooltip, CHROME_TOOLTIP_PANEL_SURFACE_CLASS, CHROME_TOOLTIP
 import SprintAssignmentCurrentPill from './ui/SprintAssignmentCurrentPill';
 import { getLinkTarget, shouldOpenLinkInNewTab } from '../utils/linkUtils';
 import { feDebug } from '../utils/clientDebug';
+import {
+  completeNewTaskTitleEdit,
+  subscribeNewTaskTitleEdit,
+} from '../utils/newTaskReveal';
 import { commentTextToHtml } from '../utils/commentContent';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { isEditableEscapeTarget, hasEscapeConsumingOverlay } from '../utils/escapeKeyUtils';
@@ -53,6 +57,9 @@ import {
 import AgentPanel from './AgentPanel';
 import type { AgentPanelView } from './AgentPanel';
 import websocketClient from '../services/websocketClient';
+
+/** Drop Clock icons on days-in-column & effort when the card is squeezed narrow. */
+const TASK_CARD_HIDE_CLOCK_ICONS_BELOW_PX = 275;
 
 function cardLog(...args: unknown[]) {
   if (feDebug('FE_DEBUG_TASK_CARD')) console.log(...args);
@@ -398,6 +405,7 @@ const TaskCard = React.memo(function TaskCard({
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
   const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
+  const [hideMetadataClockIcons, setHideMetadataClockIcons] = useState(false);
   const cardElRef = useRef<HTMLDivElement | null>(null);
   const isInteractingWithTagRef = useRef<boolean>(false); // Track if user is interacting with tags
   const isInteractingWithDropdownRef = useRef<boolean>(false); // Track if user is interacting with dropdowns (member, sprint, etc.)
@@ -418,6 +426,20 @@ const TaskCard = React.memo(function TaskCard({
       setEditedEffort(String(task.effort ?? 0));
     }
   }, [task.effort, isEditingEffort]);
+
+  useEffect(() => {
+    const el = cardElement;
+    if (!el) return;
+    const sync = (width: number) => {
+      setHideMetadataClockIcons(width > 0 && width < TASK_CARD_HIDE_CLOCK_ICONS_BELOW_PX);
+    };
+    sync(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver(([entry]) => {
+      sync(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [cardElement]);
 
   // Prevent component updates while editing description to maintain focus
   useEffect(() => {
@@ -939,6 +961,17 @@ const TaskCard = React.memo(function TaskCard({
     setIsEditingTitle(true);
     setEditedTitle(task.title);
   };
+
+  useEffect(() => {
+    return subscribeNewTaskTitleEdit((taskId) => {
+      if (taskId !== task.id || !allowMutations) return;
+      setClickPosition(null);
+      setSelectAllTitleOnFocus(true);
+      setEditedTitle(task.title);
+      setIsEditingTitle(true);
+      completeNewTaskTitleEdit(taskId);
+    });
+  }, [task.id, task.title, allowMutations]);
 
   const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     const input = e.target;
@@ -2539,7 +2572,11 @@ const TaskCard = React.memo(function TaskCard({
                     }`}
                     aria-label={tooltipLabel}
                   >
-                    {showBlocked ? <Ban size={12} /> : <Clock size={12} />}
+                    {showBlocked ? (
+                      <Ban size={12} />
+                    ) : (
+                      !hideMetadataClockIcons && <Clock size={12} />
+                    )}
                     {showDays &&
                       t('taskCard.daysInColumnShort', { count: daysInColumn })}
                   </span>
@@ -2637,8 +2674,8 @@ const TaskCard = React.memo(function TaskCard({
             </div>
             
             {/* Effort - squeezed close */}
-            <div className="flex items-center gap-0.5">
-              <Clock size={12} />
+            <div className={`flex items-center ${hideMetadataClockIcons ? '' : 'gap-0.5'}`}>
+              {!hideMetadataClockIcons && <Clock size={12} />}
               {isEditingEffort ? (
                 <input
                   type="text"

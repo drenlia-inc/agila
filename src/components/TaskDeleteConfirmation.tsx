@@ -41,7 +41,7 @@ const TaskDeleteConfirmation: React.FC<TaskDeleteConfirmationProps> = ({
 
   return createPortal(
     <div 
-      className="delete-confirmation fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg p-3 z-[9999] min-w-[200px]"
+      className="delete-confirmation fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg p-3 z-[9999] max-w-[220px]"
       role="dialog"
       aria-modal="true"
       style={{
@@ -49,10 +49,21 @@ const TaskDeleteConfirmation: React.FC<TaskDeleteConfirmationProps> = ({
         left: `${position.left}px`,
       }}
     >
-      <div className="text-sm text-gray-700 dark:text-gray-200 mb-3">
-        {permanent
-          ? t('deleteConfirmation.areYouSurePermanent')
-          : t('deleteConfirmation.areYouSure')}
+      <div className="mb-3">
+        {permanent ? (
+          <>
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-snug">
+              {t('deleteConfirmation.areYouSurePermanentTitle')}
+            </p>
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400 leading-snug">
+              {t('deleteConfirmation.areYouSurePermanentBody')}
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-gray-700 dark:text-gray-200 leading-snug">
+            {t('deleteConfirmation.areYouSure')}
+          </p>
+        )}
       </div>
       <div className="flex space-x-2 justify-end">
         <button

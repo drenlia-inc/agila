@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ColumnResizeHandleProps {
   onResize: (deltaX: number) => void;
@@ -10,6 +11,7 @@ interface ColumnResizeHandleProps {
  * Positioned between columns to adjust their width
  */
 const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({ onResize, isColumnBeingDragged = false }) => {
+  const { t } = useTranslation('tasks');
   const handleRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
@@ -40,7 +42,7 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({ onResize, isCol
       startXRef.current = e.clientX;
     };
 
-    const handleMouseUp = () => {
+    const handleUp = () => {
       if (isDraggingRef.current) {
         isDraggingRef.current = false;
         document.body.style.cursor = '';
@@ -50,12 +52,12 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({ onResize, isCol
 
     handle.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mouseup', handleUp);
 
     return () => {
       handle.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseup', handleUp);
       // Cleanup cursor styles
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -75,7 +77,8 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({ onResize, isCol
         width: '4px', // Narrow 4px width
         transform: 'translateX(-50%)' // Center the 3px handle in the gap (moves 1.5px left to perfectly center)
       }}
-      title="Drag to resize columns"
+      title={t('kanban.resizeColumn')}
+      aria-label={t('kanban.resizeColumn')}
     >
       {/* Visual indicator on hover */}
       <div className="absolute inset-0 bg-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -84,4 +87,3 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({ onResize, isCol
 };
 
 export default ColumnResizeHandle;
-

@@ -1548,6 +1548,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               canMutate={canMutate}
               detailsTaskId={selectedTask?.id ?? null}
               gridStyle={gridStyle}
+              onColumnWidthResize={onColumnWidthResize}
               scrollContainerRef={trashScrollContainerRef}
               loading={trashLoading}
               onSelectTask={(task) => void handleSelectTrashedTask(task)}

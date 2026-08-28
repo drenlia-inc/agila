@@ -64,7 +64,6 @@ import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
 import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById } from './api';
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
-import { scrollKanbanPageToTopFastSmooth } from './utils/kanbanScroll';
 import { applyActiveColumnFilters } from './utils/columnFilters';
 import { closeBoardTrashView, openBoardTrashView } from './utils/boardTrashEvents';
 import {
@@ -72,6 +71,7 @@ import {
   scrollViewportToTaskWhenReady,
 } from './utils/scrollViewportToTask';
 import { requestTaskJump } from './utils/taskJumpEvents';
+import { revealNewlyCreatedTask } from './utils/newTaskReveal';
 import { columnsContentFingerprint } from './utils/columnsFingerprint';
 import { applyLocalColumnReorder } from './utils/columnReorderingUtils';
 import { userCanMutate } from './utils/permissions';
@@ -2427,6 +2427,8 @@ function AppContent() {
         );
         activityFeed.setLastSeenActivityId(userSpecificPrefs.activityFeed.lastSeenActivityId);
         activityFeed.setClearActivityId(userSpecificPrefs.activityFeed.clearActivityId);
+        activityFeed.setDismissedActivityIds(userSpecificPrefs.activityFeed.dismissedActivityIds ?? []);
+        activityFeed.setReadActivityIds(userSpecificPrefs.activityFeed.readActivityIds ?? []);
         activityFeed.setActivityFeedPosition(userSpecificPrefs.activityFeed.position);
         // Validate width to prevent corrupted values (120-600px range)
         const validatedWidth = Math.max(120, Math.min(600, userSpecificPrefs.activityFeed.width));
@@ -3441,11 +3443,7 @@ function AppContent() {
       return false;
     }
 
-    // New tasks land at the top of the column — scroll there so the card is visible.
-    if (taskFilters.viewModeRef.current === 'kanban') {
-      await scrollKanbanPageToTopFastSmooth();
-    }
-
+    // New tasks land at the top of the column — reveal after the optimistic row mounts.
     const targetColumnForWip = columnsRef.current[columnId] || columns[columnId];
     if (targetColumnForWip && isBoardWipActiveColumn(targetColumnForWip)) {
       const currentBoard = boards.find((b) => b.id === selectedBoard);
@@ -3537,7 +3535,9 @@ function AppContent() {
     highlightedNewTaskTimerRef.current = setTimeout(() => {
       setHighlightedNewTaskId((current) => (current === newTask.id ? null : current));
       highlightedNewTaskTimerRef.current = null;
-    }, 1000);
+    }, 2200);
+
+    revealNewlyCreatedTask(newTask, taskFilters.viewModeRef.current);
     
     // ALSO update boards state for tab counters
     setBoards(prev => {
@@ -3972,7 +3972,7 @@ function AppContent() {
       }, TASK_CREATION_PAUSE_DURATION);
 
       if (!options?.skipEmail) {
-        toast.success(t('errors.copyTaskSuccessTitle'), t('errors.copyTaskSuccessMessage'));
+        toast.success(t('errors.copyTaskSuccessTitle'), '');
       }
       return copiedTask;
       
@@ -5438,6 +5438,24 @@ function AppContent() {
     ]
   );
 
+  const handleOpenProjectFromActivityFeed = useCallback(
+    (projectId: string) => {
+      const board = findBoardByProjectId(boards, projectId.toUpperCase());
+      if (!board) {
+        toast.warning(t('activityFeed.projectNotFound', { project: projectId.toUpperCase() }), '');
+        return;
+      }
+      if (currentPage !== 'kanban') {
+        handlePageChange('kanban');
+      }
+      setSelectedBoard(board.id);
+      const viewPrefix = taskFilters.viewModeRef.current === 'calendar' ? 'calendar' : 'kanban';
+      window.location.hash = `#${viewPrefix}#${board.id}`;
+      updateCurrentUserPreference('lastSelectedBoard', board.id);
+    },
+    [boards, currentPage, handlePageChange, taskFilters.viewModeRef, updateCurrentUserPreference, t]
+  );
+
   // Filter handlers are now in useTaskFilters hook (taskFilters.*)
 
   // Handle selecting all members
@@ -5701,12 +5719,7 @@ function AppContent() {
       const firstColumn = sorted[0];
       if (!firstColumn) return;
       void (async () => {
-        const created = await handleAddTask(firstColumn.id);
-        if (!created) return;
-        toast.info(
-          t('errors.createTaskShortcutTitle'),
-          t('errors.createTaskShortcutMessage', { column: firstColumn.title })
-        );
+        await handleAddTask(firstColumn.id);
       })();
     },
     setViewMode: handleViewModeChange,
@@ -6206,8 +6219,14 @@ function AppContent() {
         activities={activityFeed.activities}
         lastSeenActivityId={activityFeed.lastSeenActivityId}
         clearActivityId={activityFeed.clearActivityId}
-        onMarkAsRead={activityFeed.handleActivityFeedMarkAsRead}
+        dismissedActivityIds={activityFeed.dismissedActivityIds}
+        readActivityIds={activityFeed.readActivityIds}
+        onMarkOneAsRead={activityFeed.handleActivityFeedMarkOneAsRead}
+        onMarkAllAsRead={activityFeed.handleActivityFeedMarkAllAsRead}
+        onDismissActivity={activityFeed.handleActivityFeedDismissActivity}
         onClearAll={activityFeed.handleActivityFeedClearAll}
+        onOpenProject={handleOpenProjectFromActivityFeed}
+        boardProjectIds={boards.map((b) => b.project).filter((p): p is string => Boolean(p))}
         position={activityFeed.activityFeedPosition}
         onPositionChange={activityFeed.setActivityFeedPosition}
         dimensions={activityFeed.activityFeedDimensions}

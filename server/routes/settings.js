@@ -132,6 +132,8 @@ router.get('/', async (req, res, next) => {
       // Preference defaults for all authenticated users (not admin-only secrets)
       'DEFAULT_VIEW_MODE',
       'DEFAULT_TASK_VIEW_MODE',
+      'DEFAULT_PROJ_PREFIX',
+      'DEFAULT_TASK_PREFIX',
       'DEFAULT_ACTIVITY_FEED_POSITION',
       'DEFAULT_ACTIVITY_FEED_WIDTH',
       'DEFAULT_ACTIVITY_FEED_HEIGHT',

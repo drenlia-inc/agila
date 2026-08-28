@@ -154,6 +154,10 @@ export interface UserPreferences {
     height: number;
     lastSeenActivityId: number;
     clearActivityId: number;
+    /** Activity IDs hidden individually (between clear watermark and newest). */
+    dismissedActivityIds: number[];
+    /** Activity IDs marked read individually (newer than lastSeen watermark). */
+    readActivityIds: number[];
     filterText: string;
   };
 }
@@ -422,6 +426,8 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
     height: 400, // Default height (matches database default)
     lastSeenActivityId: 0,
     clearActivityId: 0,
+    dismissedActivityIds: [],
+    readActivityIds: [],
     filterText: ''
   }
 };
@@ -707,6 +713,8 @@ export const saveUserPreferences = async (preferences: UserPreferences, userId: 
           saveIfDefined('activityFeedHeight', preferences.activityFeed.height),
           saveIfDefined('lastSeenActivityId', preferences.activityFeed.lastSeenActivityId),
           saveIfDefined('clearActivityId', preferences.activityFeed.clearActivityId),
+          saveIfDefined('dismissedActivityIds', JSON.stringify(preferences.activityFeed.dismissedActivityIds)),
+          saveIfDefined('readActivityIds', JSON.stringify(preferences.activityFeed.readActivityIds)),
           saveIfDefined('activityFilterText', preferences.activityFeed.filterText),
           
           // List View Column Visibility
@@ -1217,6 +1225,47 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
           })(),
           lastSeenActivityId: smartMerge(preferences.activityFeed.lastSeenActivityId, dbSettings.lastSeenActivityId, defaults.activityFeed.lastSeenActivityId),
           clearActivityId: smartMerge(preferences.activityFeed.clearActivityId, dbSettings.clearActivityId, defaults.activityFeed.clearActivityId),
+          dismissedActivityIds: (() => {
+            const parseIds = (raw: unknown): number[] => {
+              if (Array.isArray(raw)) {
+                return raw.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
+              }
+              if (typeof raw === 'string' && raw.trim()) {
+                try {
+                  return parseIds(JSON.parse(raw));
+                } catch {
+                  return [];
+                }
+              }
+              return [];
+            };
+            const fromDb = parseIds(dbSettings.dismissedActivityIds);
+            const fromLocal = parseIds(preferences.activityFeed.dismissedActivityIds);
+            const merged = fromDb.length > 0 ? fromDb : fromLocal.length > 0 ? fromLocal : defaults.activityFeed.dismissedActivityIds;
+            const clearId = Number(smartMerge(preferences.activityFeed.clearActivityId, dbSettings.clearActivityId, defaults.activityFeed.clearActivityId)) || 0;
+            return merged.filter((id) => id > clearId);
+          })(),
+          readActivityIds: (() => {
+            const parseIds = (raw: unknown): number[] => {
+              if (Array.isArray(raw)) {
+                return raw.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
+              }
+              if (typeof raw === 'string' && raw.trim()) {
+                try {
+                  return parseIds(JSON.parse(raw));
+                } catch {
+                  return [];
+                }
+              }
+              return [];
+            };
+            const fromDb = parseIds(dbSettings.readActivityIds);
+            const fromLocal = parseIds(preferences.activityFeed.readActivityIds);
+            const merged = fromDb.length > 0 ? fromDb : fromLocal.length > 0 ? fromLocal : defaults.activityFeed.readActivityIds;
+            const lastSeen = Number(smartMerge(preferences.activityFeed.lastSeenActivityId, dbSettings.lastSeenActivityId, defaults.activityFeed.lastSeenActivityId)) || 0;
+            const clearId = Number(smartMerge(preferences.activityFeed.clearActivityId, dbSettings.clearActivityId, defaults.activityFeed.clearActivityId)) || 0;
+            return merged.filter((id) => id > lastSeen && id > clearId);
+          })(),
           filterText: smartMerge(preferences.activityFeed.filterText, dbSettings.activityFilterText, defaults.activityFeed.filterText),
         },
         
@@ -1484,6 +1533,8 @@ export const updateActivityFeedPreference = async <K extends keyof UserPreferenc
     'height': 'activityFeedHeight',
     'lastSeenActivityId': 'lastSeenActivityId',
     'clearActivityId': 'clearActivityId',
+    'dismissedActivityIds': 'dismissedActivityIds',
+    'readActivityIds': 'readActivityIds',
     'filterText': 'activityFilterText'
   };
   
@@ -1495,7 +1546,7 @@ export const updateActivityFeedPreference = async <K extends keyof UserPreferenc
   
   // Save ONLY this specific setting to database (single API call instead of 30+)
   let dbValue: any = value;
-  if (key === 'position') {
+  if (key === 'position' || key === 'dismissedActivityIds' || key === 'readActivityIds') {
     dbValue = JSON.stringify(value);
   }
   

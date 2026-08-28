@@ -8,6 +8,7 @@ import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { ModernCheckbox } from './ModernCheckbox';
 import { useColumnDisplayTitle } from '../utils/columnDisplayTitle';
 import MemberAvatar from './ui/MemberAvatar';
+import ColumnResizeHandle from './ColumnResizeHandle';
 
 interface BoardTrashViewProps {
   tasks: Task[];
@@ -22,6 +23,8 @@ interface BoardTrashViewProps {
   detailsTaskId?: string | null;
   /** Same grid style as the live Kanban board for width/alignment. */
   gridStyle: React.CSSProperties;
+  /** Same column resize handle as the live board (shared width preference). */
+  onColumnWidthResize?: (deltaX: number) => void;
   /** Paired with the live Kanban scroller by KanbanPage. */
   scrollContainerRef?: React.Ref<HTMLDivElement>;
   loading?: boolean;
@@ -245,6 +248,7 @@ export default function BoardTrashView({
   canMutate = true,
   detailsTaskId = null,
   gridStyle,
+  onColumnWidthResize,
   scrollContainerRef,
   loading,
   onSelectTask,
@@ -519,9 +523,14 @@ export default function BoardTrashView({
               aria-modal="true"
               className="absolute inset-x-1 top-1 z-10 rounded-lg border border-red-200 bg-white p-3 shadow-lg dark:border-red-800 dark:bg-gray-900"
             >
-              <p className="mb-2 text-xs text-gray-700 dark:text-gray-200">
-                {t('trash.purgeConfirm')}
-              </p>
+              <div className="mb-2">
+                <p className="text-xs font-medium text-gray-800 leading-snug dark:text-gray-100">
+                  {t('trash.purgeConfirmTitle')}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-600 leading-snug dark:text-gray-400">
+                  {t('trash.purgeConfirmBody')}
+                </p>
+              </div>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
@@ -695,19 +704,24 @@ export default function BoardTrashView({
         ) : (
           <>
         <div style={trashGridStyle}>
-          {displayColumns.map((column) => {
+          {displayColumns.map((column, index, array) => {
             const columnTasks = tasksByColumn.get(column.id) || [];
             return (
-              <div key={column.id} className="relative min-w-0 self-start">
-                {renderColumnHeader(columnDisplayTitle(column), columnTasks)}
-                {columnTasks.length > 0 ? (
-                  renderColumnCards(columnTasks)
-                ) : (
-                  <div className="rounded-md border border-dashed border-gray-200/80 px-2 py-1.5 text-[11px] text-gray-400 dark:border-gray-700 dark:text-gray-500">
-                    —
-                  </div>
-                )}
-              </div>
+              <React.Fragment key={column.id}>
+                <div className="relative min-w-0 self-start">
+                  {renderColumnHeader(columnDisplayTitle(column), columnTasks)}
+                  {columnTasks.length > 0 ? (
+                    renderColumnCards(columnTasks)
+                  ) : (
+                    <div className="rounded-md border border-dashed border-gray-200/80 px-2 py-1.5 text-[11px] text-gray-400 dark:border-gray-700 dark:text-gray-500">
+                      —
+                    </div>
+                  )}
+                  {index < array.length - 1 && onColumnWidthResize && (
+                    <ColumnResizeHandle onResize={onColumnWidthResize} />
+                  )}
+                </div>
+              </React.Fragment>
             );
           })}
         </div>

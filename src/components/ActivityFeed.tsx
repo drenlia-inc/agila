@@ -19,17 +19,19 @@ import {
   ArrowRightLeft,
   UserPlus,
   RotateCcw,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
 import { updateActivityFeedPreference } from '../utils/userPreferences';
-import DOMPurify from 'dompurify';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
-import { generateTaskUrl } from '../utils/routingUtils';
+import { generateTaskUrl, parseTaskRoute } from '../utils/routingUtils';
 import { isMobileViewport } from '../utils/mobileViewport';
 import {
   DEFAULT_ACTIVITY_FEED_STORED_POSITION,
   resolveActivityFeedPosition,
   toStoredActivityFeedPosition,
 } from '../utils/activityFeedPosition';
+import { isActivityUnread } from '../utils/activityFeedReadState';
 
 const MINIMIZED_HEIGHT = 40;
 const BOTTOM_MARGIN = 12;
@@ -55,51 +57,43 @@ interface ActivityItem {
   viaApi?: boolean;
 }
 
-function escapeHtml(text: string): string {
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+/** PREFIX-##### tokens (TASK-00001, TICK-00022, PROJ-00007, …). */
+const FEED_IDENTIFIER_SPLIT_RE = /(\b[A-Z][A-Z0-9]*-\d+\b)/gi;
+const FEED_IDENTIFIER_TEST_RE = /^[A-Z][A-Z0-9]*-\d+$/i;
+
+const ACTIVITY_TASK_LINK_CLASS =
+  'text-blue-600 dark:text-blue-400 hover:underline font-medium cursor-pointer';
+
+/** Hash-based href keeps navigation in the SPA without /task/ path (dev + prod). */
+function activityFeedTaskHref(ticket: string, projectId?: string | null): string {
+  const normalized = ticket.toUpperCase();
+  const resolvedProject = projectId?.toUpperCase();
+  if (resolvedProject) {
+    return generateTaskUrl(normalized, resolvedProject);
+  }
+  return `#task#${normalized}`;
 }
 
-/**
- * Link only TASK-##### tickets in activity text (not PROJ / board names).
- */
-function linkTaskTicketsInHtml(
-  text: string,
-  projectId?: string | null,
-  linkClass = 'text-blue-600 dark:text-blue-400 hover:underline font-medium'
-): string {
-  const escaped = escapeHtml(text);
-  const projectFromText = escaped.match(/\b(PROJ-\d+)\b/i)?.[1];
-  const resolvedProject = (projectId || projectFromText || '').toUpperCase() || undefined;
-
-  return escaped.replace(/\b(TASK-\d+)\b/gi, (ticket) => {
-    const normalized = ticket.toUpperCase();
-    const href = generateTaskUrl(normalized, resolvedProject);
-    return `<a href="${href}" class="${linkClass}" title="${normalized}">${ticket}</a>`;
-  });
+function navigateActivityFeedTaskLink(href: string): void {
+  if (href.startsWith('#')) {
+    window.location.hash = href;
+    return;
+  }
+  try {
+    const taskRoute = parseTaskRoute(new URL(href, window.location.origin).href);
+    if (taskRoute.isTaskRoute && taskRoute.taskId) {
+      if (taskRoute.projectId) {
+        window.location.assign(href);
+      } else {
+        window.location.hash = `#task#${taskRoute.taskId.toUpperCase()}`;
+      }
+      return;
+    }
+  } catch {
+    // fall through
+  }
+  window.location.assign(href);
 }
-
-/** Highlight search matches in HTML without breaking tags. */
-function highlightHtmlSearch(html: string, searchTerm: string): string {
-  if (!searchTerm.trim() || !html) return html;
-  const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`(${escapedTerm})`, 'gi');
-  return html.replace(/(<[^>]+>)|([^<]+)/g, (match, tag, text) => {
-    if (tag) return tag;
-    return text.replace(
-      regex,
-      '<span class="bg-yellow-200 text-yellow-900 px-0.5 rounded font-medium">$1</span>'
-    );
-  });
-}
-
-const ACTIVITY_HTML_PURIFY = {
-  ALLOWED_TAGS: ['a', 'span'],
-  ALLOWED_ATTR: ['href', 'class', 'title'],
-} as const;
 
 interface ActivityFeedProps {
   isVisible: boolean;
@@ -109,8 +103,16 @@ interface ActivityFeedProps {
   activities?: ActivityItem[];
   lastSeenActivityId?: number;
   clearActivityId?: number;
-  onMarkAsRead?: (activityId: number) => void;
+  dismissedActivityIds?: number[];
+  readActivityIds?: number[];
+  onMarkOneAsRead?: (activityId: number) => void;
+  onMarkAllAsRead?: (activityId: number) => void;
+  onDismissActivity?: (activityId: number) => void;
   onClearAll?: (activityId: number) => void;
+  /** Open the board for a project id (e.g. PROJ-00007) in the current board view. */
+  onOpenProject?: (projectId: string) => void;
+  /** Known board project ids — any matching token in feed text links to that board. */
+  boardProjectIds?: string[];
   position?: { x: number; y: number };
   onPositionChange?: (position: { x: number; y: number }) => void;
   dimensions?: { width: number; height: number };
@@ -126,8 +128,14 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   activities = [],
   lastSeenActivityId = 0,
   clearActivityId = 0,
-  onMarkAsRead,
+  dismissedActivityIds = [],
+  readActivityIds = [],
+  onMarkOneAsRead,
+  onMarkAllAsRead,
+  onDismissActivity,
   onClearAll,
+  onOpenProject,
+  boardProjectIds = [],
   position = DEFAULT_ACTIVITY_FEED_STORED_POSITION,
   onPositionChange,
   dimensions = { width: 208, height: 400 },
@@ -135,6 +143,10 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   userId = null
 }) => {
   const { t } = useTranslation('common');
+  const knownProjectIds = React.useMemo(
+    () => new Set(boardProjectIds.map((id) => id.toUpperCase())),
+    [boardProjectIds]
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Prop is source of truth (parent restores from user prefs on refresh)
@@ -567,34 +579,73 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
       description += ` ${t('activityFeed.in')} ${boardTitle}`;
     }
 
-    // HTML with TASK-##### links (plain text is escaped inside)
-    const descriptionHtml = linkTaskTicketsInHtml(description, projectId);
-
-    return { name, description, descriptionHtml, viaApi: Boolean(viaApi) };
+    return { name, description, viaApi: Boolean(viaApi) };
   };
 
-  const renderActivityHtml = (
-    html: string,
-    searchTerm: string,
-    textClassName = 'text-slate-700 dark:text-slate-200'
-  ) => (
-    <span
-      className={`${textClassName} break-words`}
-      style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-      onClick={(e) => {
-        // Keep link clicks from triggering parent row handlers
-        if ((e.target as HTMLElement).closest('a')) {
-          e.stopPropagation();
-        }
-      }}
-      dangerouslySetInnerHTML={{
-        __html: DOMPurify.sanitize(
-          highlightHtmlSearch(html, searchTerm),
-          ACTIVITY_HTML_PURIFY
-        ),
-      }}
-    />
-  );
+  const findProjectHintInText = (text: string, activityProjectId?: string | null): string | undefined => {
+    if (activityProjectId) {
+      return activityProjectId.toUpperCase();
+    }
+    const tokens = text.match(/\b[A-Z][A-Z0-9]*-\d+\b/gi) || [];
+    for (const token of tokens) {
+      const upper = token.toUpperCase();
+      if (knownProjectIds.has(upper)) {
+        return upper;
+      }
+    }
+    return undefined;
+  };
+
+  const renderActivityDescriptionText = (
+    text: string,
+    projectId: string | null | undefined,
+    searchTerm: string
+  ): React.ReactNode => {
+    if (!text) return null;
+    const resolvedProject = findProjectHintInText(text, projectId);
+
+    return text.split(FEED_IDENTIFIER_SPLIT_RE).map((part, index) => {
+      if (!part || !FEED_IDENTIFIER_TEST_RE.test(part)) {
+        return part ? <React.Fragment key={index}>{highlightText(part, searchTerm)}</React.Fragment> : null;
+      }
+      const token = part.toUpperCase();
+      if (knownProjectIds.has(token)) {
+        return (
+          <a
+            key={`${token}-${index}`}
+            href="#"
+            className={ACTIVITY_TASK_LINK_CLASS}
+            title={token}
+            aria-label={t('activityFeed.openProject', { project: token })}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onOpenProject?.(token);
+            }}
+          >
+            {highlightText(part, searchTerm)}
+          </a>
+        );
+      }
+      const href = activityFeedTaskHref(token, resolvedProject);
+      return (
+        <a
+          key={`${token}-${index}`}
+          href={href}
+          className={ACTIVITY_TASK_LINK_CLASS}
+          title={token}
+          aria-label={t('activityFeed.openTask', { ticket: token })}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            navigateActivityFeedTaskLink(href);
+          }}
+        >
+          {highlightText(part, searchTerm)}
+        </a>
+      );
+    });
+  };
 
   const getActionIcon = (action: string, sizeClass = 'w-3.5 h-3.5') => {
     const className = `${sizeClass} shrink-0`;
@@ -699,14 +750,21 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
 
   if (!isVisible) return null;
 
-  // Step 1: Filter activities based on clear point (what user can see at all)
-  const visibleActivities = activities.filter(activity => activity.id > clearActivityId);
+  const dismissedIdSet = new Set(dismissedActivityIds);
+  const readIdSet = new Set(readActivityIds);
+
+  // Step 1: Filter activities based on clear point and individually dismissed items
+  const visibleActivities = activities.filter(
+    (activity) => activity.id > clearActivityId && !dismissedIdSet.has(activity.id)
+  );
   
   // Step 2: Apply text filter to visible activities
   const filteredActivities = filterActivities(visibleActivities, filterText);
   
   // Step 3: Within filtered activities, determine which are "unread"
-  const unreadActivities = filteredActivities.filter(activity => activity.id > lastSeenActivityId);
+  const unreadActivities = filteredActivities.filter((activity) =>
+    isActivityUnread(activity.id, lastSeenActivityId, readIdSet)
+  );
   const unreadCount = unreadActivities.length;
   const unreadBadgeLabel = unreadCount > 99 ? '99+' : String(unreadCount);
   
@@ -717,11 +775,15 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   const latestActivity = activities.length > 0 ? activities[0] : null;
   
   // Handle mark as read - marks visible activities as read
-  const handleMarkAsRead = () => {
-    if (visibleActivities.length > 0 && onMarkAsRead) {
+  const handleMarkAllAsRead = () => {
+    if (visibleActivities.length > 0 && onMarkAllAsRead) {
       const latestVisibleId = Math.max(...visibleActivities.map(a => a.id));
-      onMarkAsRead(latestVisibleId);
+      onMarkAllAsRead(latestVisibleId);
     }
+  };
+
+  const handleMarkOneAsRead = (activityId: number) => {
+    onMarkOneAsRead?.(activityId);
   };
 
   // Handle clear all - sets clear point to hide current activities
@@ -730,6 +792,10 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
       const clearId = Math.max(...activities.map(a => a.id));
       onClearAll(clearId);
     }
+  };
+
+  const handleDismissActivity = (activityId: number) => {
+    onDismissActivity?.(activityId);
   };
 
   const isNarrowMode = dimensions.width <= 160;
@@ -949,15 +1015,15 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
 
         <div className="space-y-1">
           {displayActivities.map((activity) => {
-            const { name, descriptionHtml, viaApi } = formatActivityDescription(activity);
-            const isUnread = activity.id > lastSeenActivityId;
+            const { name, description, viaApi } = formatActivityDescription(activity);
+            const isUnread = isActivityUnread(activity.id, lastSeenActivityId, readIdSet);
             const actorClass = isUnread
               ? 'text-sky-800 dark:text-sky-200'
               : 'text-slate-800 dark:text-slate-100';
             return (
               <div 
                 key={activity.id} 
-                className={`min-w-0 rounded-xl transition-colors ${
+                className={`group/item relative min-w-0 rounded-xl transition-colors ${
                   isNarrowMode ? 'p-1.5' : 'p-2'
                 } ${
                   isUnread 
@@ -985,25 +1051,52 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
                   </span>
                   {isNarrowMode ? (
                     <div className="mt-0.5 text-xs leading-snug text-slate-600 dark:text-slate-300">
-                      {renderActivityHtml(descriptionHtml, filterText)}
+                      {renderActivityDescriptionText(description, activity.projectId, filterText)}
                     </div>
                   ) : (
                     <>
                       {' '}
                       <span className="text-slate-600 dark:text-slate-300 align-middle">
-                        {renderActivityHtml(descriptionHtml, filterText)}
+                        {renderActivityDescriptionText(description, activity.projectId, filterText)}
                       </span>
                     </>
                   )}
                 </div>
-                <div className={`flex items-center mt-1 ${isNarrowMode ? 'gap-1' : 'gap-1.5'}`}>
+                <div className={`flex items-center mt-1 gap-1 ${isNarrowMode ? '' : 'gap-1.5'}`}>
                   <Clock className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-none truncate">
+                  <span className="min-w-0 flex-1 text-[11px] text-slate-500 dark:text-slate-400 leading-none truncate">
                     {isNarrowMode ? formatTimeAgo(activity.createdAt, true) : formatTimeAgo(activity.createdAt)}
                   </span>
-                  {isUnread && (
-                    <span className="w-1.5 h-1.5 bg-sky-500 rounded-full flex-shrink-0" aria-hidden />
-                  )}
+                  <div className="flex shrink-0 items-center gap-0.5 opacity-25 group-hover/item:opacity-100 focus-within:opacity-100 transition-opacity">
+                    {isUnread && (
+                      <KanbanChromeTooltip label={t('activityFeed.markOneRead')} placement="top" portalZIndex={ACTIVITY_FEED_CHROME_Z}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkOneAsRead(activity.id);
+                          }}
+                          className="p-0.5 rounded text-sky-600/80 dark:text-sky-400/80 hover:text-sky-700 dark:hover:text-sky-300 hover:bg-sky-100/80 dark:hover:bg-sky-900/40"
+                          aria-label={t('activityFeed.markOneRead')}
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                      </KanbanChromeTooltip>
+                    )}
+                    <KanbanChromeTooltip label={t('activityFeed.dismissOne')} placement="top" portalZIndex={ACTIVITY_FEED_CHROME_Z}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDismissActivity(activity.id);
+                        }}
+                        className="p-0.5 rounded text-slate-500/80 dark:text-slate-400/80 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                        aria-label={t('activityFeed.dismissOne')}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </KanbanChromeTooltip>
+                  </div>
                 </div>
               </div>
             );
@@ -1012,28 +1105,39 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
       </div>
 
       {/* Footer */}
-      <div className={`border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/30 ${isNarrowMode ? 'p-1.5' : 'p-2'}`}>
-        {unreadCount > 0 ? (
-          <button
-            type="button"
-            onClick={handleMarkAsRead}
-            className="w-full text-xs font-semibold py-1.5 rounded-xl text-sky-800 dark:text-sky-200 bg-sky-100/80 dark:bg-sky-950/50 hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors"
+      <div className={`border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/30 ${isNarrowMode ? 'px-1.5 py-1' : 'px-2 py-1.5'}`}>
+        <div className="flex items-center justify-end gap-0.5 min-h-[1.75rem]">
+          <KanbanChromeTooltip
+            label={unreadCount > 0 ? t('activityFeed.markAllRead', { count: unreadCount }) : t('activityFeed.markAllReadNone')}
+            placement="top"
+            portalZIndex={ACTIVITY_FEED_CHROME_Z}
           >
-            {isNarrowMode ? `✓ ${unreadCount}` : t('activityFeed.markAsRead', { count: unreadCount })}
-          </button>
-        ) : displayActivities.length > 0 ? (
-          <button
-            type="button"
-            onClick={handleClearAll}
-            className="w-full text-xs font-medium py-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+            <button
+              type="button"
+              onClick={handleMarkAllAsRead}
+              disabled={unreadCount === 0}
+              className="p-1.5 rounded-lg text-sky-600/90 dark:text-sky-400/90 hover:text-sky-700 dark:hover:text-sky-300 hover:bg-sky-100/80 dark:hover:bg-sky-900/40 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              aria-label={t('activityFeed.markAllRead', { count: unreadCount })}
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+            </button>
+          </KanbanChromeTooltip>
+          <KanbanChromeTooltip
+            label={visibleActivities.length > 0 ? t('activityFeed.clearAll') : t('activityFeed.clearAllNone')}
+            placement="top"
+            portalZIndex={ACTIVITY_FEED_CHROME_Z}
           >
-            {isNarrowMode ? t('activityFeed.clearShort') : t('activityFeed.clearAll')}
-          </button>
-        ) : (
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 text-center py-1">
-            {clearActivityId > 0 ? t('activityFeed.feedCleared') : (isNarrowMode ? t('activityFeed.autoRefreshShort') : t('activityFeed.autoRefresh'))}
-          </div>
-        )}
+            <button
+              type="button"
+              onClick={handleClearAll}
+              disabled={visibleActivities.length === 0}
+              className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              aria-label={t('activityFeed.clearAll')}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </KanbanChromeTooltip>
+        </div>
       </div>
 
       {/* Resize handles — all edges and corners */}
