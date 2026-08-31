@@ -61,7 +61,7 @@ export type OwnerSetupGuideFieldContext = {
    */
   mailManaged?: boolean;
   /**
-   * Platform-managed object storage (`STORAGE_MANAGED === 'true'`).
+   * Platform-managed object storage (`STORAGE_MODE === 'managed'`).
    * `undefined` = unknown / not loaded yet (treat as possibly managed on MULTI_TENANT).
    */
   storageManaged?: boolean;
@@ -621,7 +621,10 @@ export function computeOwnerSetupHints(input: {
 
   const sso = String(s.GOOGLE_CLIENT_ID || '').trim().length > 0;
 
-  const storageManaged = String(s.STORAGE_MANAGED || '').toLowerCase() === 'true';
+  const storageManaged =
+    String(s.STORAGE_MODE || '').trim().toLowerCase() === 'managed' ||
+    (String(s.STORAGE_MODE || '').trim() === '' &&
+      String(s.STORAGE_MANAGED || '').toLowerCase() === 'true');
   const storageBackend = String(s.STORAGE_BACKEND || '').toLowerCase();
   const storage =
     !storageManaged &&

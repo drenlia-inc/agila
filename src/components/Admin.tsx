@@ -982,6 +982,9 @@ const Admin: React.FC<AdminProps> = ({
       if (nextBackend === 's3' && currBackend !== 's3') {
         const managed =
           settingValueAsString(
+            settingsToSave.STORAGE_MODE || settings.STORAGE_MODE
+          ).trim() === 'managed' ||
+          settingValueAsString(
             settingsToSave.STORAGE_MANAGED || settings.STORAGE_MANAGED
           ).trim() === 'true';
         const testOk =
@@ -1098,6 +1101,10 @@ const Admin: React.FC<AdminProps> = ({
 
         // Migration detail / other large JSON blobs — not edited in the form
         if (key === 'STORAGE_MIGRATION_DETAIL') {
+          continue;
+        }
+
+        if (key === 'STORAGE_MODE' || key === 'STORAGE_MANAGED_ELIGIBLE') {
           continue;
         }
         

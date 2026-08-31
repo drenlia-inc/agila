@@ -26,7 +26,12 @@ import {
   upsertSecretSetting
 } from '../utils/settingsSecrets.js';
 import { avatarUpload } from '../config/multer.js';
-import { STORAGE_MANAGED_HIDDEN_KEYS } from '../constants/storageSettings.js';
+import {
+  STORAGE_ADMIN_INTERNAL_KEYS,
+  STORAGE_MANAGED_ELIGIBLE_KEY,
+  STORAGE_MANAGED_HIDDEN_KEYS,
+  STORAGE_MODE_KEY,
+} from '../constants/storageSettings.js';
 import {
   SSO_HUB_CALLBACK_DISPLAY_KEY,
   SSO_ADMIN_INTERNAL_KEYS,
@@ -63,6 +68,12 @@ import {
   restoreManagedMail,
   switchToByoMail,
 } from '../utils/mailMode.js';
+import {
+  normalizeStorageMode,
+  resolveStorageMode,
+  storageClientPatch,
+  switchToByoStorage,
+} from '../utils/storageMode.js';
 import {
   commitUploadedFile,
   deleteObject,
@@ -303,7 +314,14 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
       host: settings.find((s) => s.key === 'SMTP_HOST')?.value,
     });
     const mailManaged = mailMode === 'managed';
-    const storageManaged = settings.find(s => s.key === 'STORAGE_MANAGED')?.value === 'true';
+    const storageMode = normalizeStorageMode(
+      settings.find((s) => s.key === STORAGE_MODE_KEY)?.value,
+      {
+        managedFlag: settings.find((s) => s.key === 'STORAGE_MANAGED')?.value,
+        bucket: settings.find((s) => s.key === 'S3_BUCKET')?.value,
+      }
+    );
+    const storageManaged = storageMode === 'managed';
     const ssoMode = normalizeGoogleSsoMode(
       settings.find((s) => s.key === GOOGLE_SSO_MODE_KEY)?.value,
       {
@@ -329,7 +347,8 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
       }
       if (
         SSO_ADMIN_INTERNAL_KEYS.includes(setting.key) ||
-        MAIL_ADMIN_INTERNAL_KEYS.includes(setting.key)
+        MAIL_ADMIN_INTERNAL_KEYS.includes(setting.key) ||
+        STORAGE_ADMIN_INTERNAL_KEYS.includes(setting.key)
       ) {
         return;
       }
@@ -372,6 +391,11 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
     }
     settingsObj[SMTP_MODE_KEY] = mailMode;
     settingsObj.MAIL_MANAGED = mailManaged ? 'true' : 'false';
+    const storageEligibleRow = settings.find((s) => s.key === STORAGE_MANAGED_ELIGIBLE_KEY);
+    settingsObj[STORAGE_MANAGED_ELIGIBLE_KEY] =
+      String(storageEligibleRow?.value || '').trim().toLowerCase() === 'true' ? 'true' : 'false';
+    settingsObj[STORAGE_MODE_KEY] = storageMode;
+    settingsObj.STORAGE_MANAGED = storageManaged ? 'true' : 'false';
 
     // Multi-tenant: overlay platform runner env so Admin shows the shared runner (read-only in UI)
     if (process.env.MULTI_TENANT === 'true') {
@@ -619,15 +643,19 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
 
     // Managed storage: tenant cannot overwrite platform S3 credentials
     if (STORAGE_MANAGED_HIDDEN_KEYS.includes(key)) {
-      const storageManaged = (await getSettingValue(db, 'STORAGE_MANAGED')) === 'true';
-      if (storageManaged) {
+      const storageMode = await resolveStorageMode(db);
+      if (storageMode === 'managed') {
         return res.status(403).json({
           error: 'S3 storage settings are managed by the platform and cannot be updated'
         });
       }
     }
 
-    if (SSO_ADMIN_INTERNAL_KEYS.includes(key) || MAIL_ADMIN_INTERNAL_KEYS.includes(key)) {
+    if (
+      SSO_ADMIN_INTERNAL_KEYS.includes(key) ||
+      MAIL_ADMIN_INTERNAL_KEYS.includes(key) ||
+      STORAGE_ADMIN_INTERNAL_KEYS.includes(key)
+    ) {
       return res.status(403).json({
         error: 'Platform shadow settings cannot be updated from the admin panel',
       });
@@ -642,7 +670,8 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
     if (
       key === GOOGLE_SSO_MANAGED_ELIGIBLE_KEY ||
       key === GOOGLE_SSO_RESUME_MODE_KEY ||
-      key === SMTP_MANAGED_ELIGIBLE_KEY
+      key === SMTP_MANAGED_ELIGIBLE_KEY ||
+      key === STORAGE_MANAGED_ELIGIBLE_KEY
     ) {
       return res.status(403).json({
         error: 'This setting is managed by the platform and cannot be updated',
@@ -694,9 +723,9 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
         (await getSettingValue(db, 'STORAGE_BACKEND')) || 'disk'
       ).toLowerCase();
       if (currentBackend !== 's3') {
-        const storageManaged = (await getSettingValue(db, 'STORAGE_MANAGED')) === 'true';
+        const storageMode = await resolveStorageMode(db);
         const testOk = (await getSettingValue(db, 'STORAGE_TEST_OK')) === 'true';
-        if (!storageManaged) {
+        if (storageMode !== 'managed') {
           if (!testOk) {
             return res.status(400).json({
               error:
@@ -780,6 +809,17 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
     ) {
       return res.status(403).json({
         error: 'Platform mail can only be restored through the dedicated endpoint',
+      });
+    }
+
+    if (
+      key === STORAGE_MODE_KEY &&
+      String(safeValue || '')
+        .trim()
+        .toLowerCase() === 'managed'
+    ) {
+      return res.status(403).json({
+        error: 'Platform storage can only be restored through the dedicated endpoint',
       });
     }
 
@@ -1051,35 +1091,18 @@ router.post('/clear-storage', authenticateToken, requireRole(['admin']), async (
 
   try {
     const db = getRequestDatabase(req);
-    const keysToClear = [...STORAGE_MANAGED_HIDDEN_KEYS];
-    const batchQueries = keysToClear.map((key) => ({
-      query: `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP`,
-      params: [key, '']
-    }));
-
-    batchQueries.push({
-      query: `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP`,
-      params: ['STORAGE_MANAGED', 'false']
-    });
-    batchQueries.push({
-      query: `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP`,
-      params: ['STORAGE_TEST_OK', 'false']
-    });
-    // Keep STORAGE_BACKEND as-is until admin configures custom S3 and migrates
-
-    await db.executeBatchTransaction(batchQueries);
-
+    await switchToByoStorage(db);
+    const settings = storageClientPatch('byo');
     const tenantId = getTenantId(req);
-    await notificationService.publish('settings-updated', {
-      key: 'STORAGE_SETTINGS_CLEARED',
-      value: 'all',
-      timestamp: new Date().toISOString(),
-      clearedSettings: [...keysToClear, 'STORAGE_MANAGED', 'STORAGE_TEST_OK']
-    }, tenantId);
+    await notificationService.publish(
+      'settings-updated',
+      { settings, timestamp: new Date().toISOString() },
+      tenantId
+    );
 
     res.json({
-      message: 'Storage settings cleared successfully',
-      clearedSettings: [...keysToClear, 'STORAGE_MANAGED', 'STORAGE_TEST_OK']
+      message: 'Storage settings switched to your own S3',
+      settings,
     });
   } catch (error) {
     console.error('❌ Error clearing storage settings:', error);
