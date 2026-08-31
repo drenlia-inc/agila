@@ -178,7 +178,7 @@ class NotificationThrottler {
               old_value, new_value, task_data, participants_data, actor_data,
               status, scheduled_send_time, first_change_time, last_change_time,
               change_count, created_at, updated_at
-            ) VALUES (?, ?, ?, NULL, 'email', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, NULL, 'email', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           `),
             'INSERT'
           ).run(
@@ -212,7 +212,6 @@ class NotificationThrottler {
               FROM notification_queue
               WHERE user_id = ? AND task_id = ? AND status = 'pending'
                 AND COALESCE(delivery_channel, 'email') = 'email'
-            AND COALESCE(delivery_channel, 'email') = 'email'
               ORDER BY created_at DESC
               LIMIT 1
             `),
