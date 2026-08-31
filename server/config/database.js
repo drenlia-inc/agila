@@ -968,6 +968,8 @@ const initializeDefaultData = async (db, tenantId = null) => {
       ['SITE_URL', '/'],
       ['MAIL_ENABLED', 'false'],
       ['MAIL_MANAGED', 'false'], // Default to false, will be set to true for licensed instances
+      ['SMTP_MODE', ''],
+      ['SMTP_MANAGED_ELIGIBLE', 'false'],
       // SMTP settings (replaces old MAIL_* settings)
       ['SMTP_HOST', ''],
       ['SMTP_PORT', '587'],
@@ -1131,8 +1133,22 @@ const initializeDefaultData = async (db, tenantId = null) => {
     if (process.env.LICENSE_ENABLED === 'true') {
       const supportType = process.env.SUPPORT_LEVEL || 'basic';
       if (supportType === 'basic' || supportType === 'pro') {
+        const existingSmtpMode = String(
+          (await wrapQuery(db.prepare('SELECT value FROM settings WHERE key = ?'), 'SELECT').get('SMTP_MODE'))
+            ?.value || ''
+        )
+          .trim()
+          .toLowerCase();
+        // Never overwrite an admin switch to custom SMTP on later inits / restarts.
+        if (existingSmtpMode === 'byo') {
+          console.log('ℹ️  SMTP_MODE=byo — leaving licensed mail seed unchanged');
+        } else {
         await wrapQuery(db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP'), 'INSERT')
           .run('MAIL_MANAGED', 'true');
+        await wrapQuery(db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP'), 'INSERT')
+          .run('SMTP_MODE', 'managed');
+        await wrapQuery(db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP'), 'INSERT')
+          .run('SMTP_MANAGED_ELIGIBLE', 'true');
         console.log('✅ Set MAIL_MANAGED=true for licensed instance');
         
         // Configure managed SMTP settings (encrypt password at rest when non-empty)
@@ -1151,7 +1167,14 @@ const initializeDefaultData = async (db, tenantId = null) => {
           ['SMTP_FROM_EMAIL', managedSmtp.fromEmail],
           ['SMTP_FROM_NAME', managedSmtp.fromName],
           ['SMTP_SECURE', 'tls'],
-          ['MAIL_ENABLED', 'true']
+          ['MAIL_ENABLED', 'true'],
+          ['PLATFORM_SMTP_HOST', managedSmtp.host],
+          ['PLATFORM_SMTP_PORT', '587'],
+          ['PLATFORM_SMTP_USERNAME', managedSmtp.username],
+          ['PLATFORM_SMTP_PASSWORD', managedSmtpPasswordStored],
+          ['PLATFORM_SMTP_FROM_EMAIL', managedSmtp.fromEmail],
+          ['PLATFORM_SMTP_FROM_NAME', managedSmtp.fromName],
+          ['PLATFORM_SMTP_SECURE', 'tls']
         ];
         
         const managedSmtpStmt = db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP');
@@ -1187,6 +1210,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
             await wrapQuery(managedSmtpStmt, 'INSERT').run(key, value);
           }
           console.log('✅ Configured managed S3 storage settings');
+        }
         }
       }
     }

@@ -851,6 +851,105 @@ ${t('emails.passwordReset.body6', { siteName: brand })}`,
   },
 
   /**
+   * Admin “Test Email” — same chrome / logo as invite and password reset.
+   */
+  testEmail: async (data) => {
+    const {
+      siteName,
+      siteLogo,
+      siteLogoDark,
+      hideSiteLogo,
+      baseUrl,
+      db,
+      recipientEmail,
+      fromEmail,
+      smtpHost,
+      smtpPort,
+      smtpSecure,
+      sentAt,
+    } = data;
+    const { t } = await getEmailLangAndTranslator({ db });
+    const brand = siteName || 'Agila';
+    const logoPath = hideSiteLogo ? '' : (siteLogo || siteLogoDark || '');
+    const siteLogoEmbed = buildEmailSiteLogo({
+      baseUrl,
+      logoPath,
+      hideSiteLogo,
+      alt: brand,
+      embedDefaultBrandLogo: true,
+    });
+
+    const sentLabel = sentAt || new Date().toISOString();
+    const secureLabel = String(smtpSecure || 'tls').toUpperCase();
+
+    const bodyHtml = `
+      <p style="margin:0 0 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#374151;">
+        ${escapeHtml(t('emails.testEmail.greeting'))}
+      </p>
+      <p style="margin:0 0 12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#4b5563;">
+        ${escapeHtml(t('emails.testEmail.body1', { siteName: brand }))}
+      </p>
+      <p style="margin:0 0 20px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#4b5563;">
+        ${escapeHtml(t('emails.testEmail.body2'))}
+      </p>
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:0 0 8px 0;background-color:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;">
+        <tr>
+          <td style="padding:16px 18px;">
+            <p style="margin:0 0 10px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#6b7280;">
+              ${escapeHtml(t('emails.testEmail.detailsTitle'))}
+            </p>
+            <p style="margin:0 0 6px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#374151;">
+              <span style="color:#6b7280;">${escapeHtml(t('emails.testEmail.sentAt'))}</span> ${escapeHtml(sentLabel)}
+            </p>
+            <p style="margin:0 0 6px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#374151;">
+              <span style="color:#6b7280;">${escapeHtml(t('emails.testEmail.from'))}</span> ${escapeHtml(fromEmail || '')}
+            </p>
+            <p style="margin:0 0 6px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#374151;">
+              <span style="color:#6b7280;">${escapeHtml(t('emails.testEmail.smtpHost'))}</span> ${escapeHtml(smtpHost || '')}
+            </p>
+            <p style="margin:0 0 6px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#374151;">
+              <span style="color:#6b7280;">${escapeHtml(t('emails.testEmail.smtpPort'))}</span> ${escapeHtml(smtpPort || '')}
+            </p>
+            <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#374151;">
+              <span style="color:#6b7280;">${escapeHtml(t('emails.testEmail.security'))}</span> ${escapeHtml(secureLabel)}
+            </p>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:24px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#6b7280;">
+        ${escapeHtml(t('emails.testEmail.body3'))}<br>
+        <strong style="color:#374151;">${escapeHtml(t('emails.testEmail.body4', { siteName: brand }))}</strong>
+      </p>`;
+
+    return {
+      subject: t('emails.testEmail.subject', { siteName: brand }),
+      text: `${t('emails.testEmail.greeting')}
+
+${t('emails.testEmail.body1', { siteName: brand })}
+
+${t('emails.testEmail.body2')}
+
+${t('emails.testEmail.detailsTitle')}
+${t('emails.testEmail.sentAt')}: ${sentLabel}
+${t('emails.testEmail.from')}: ${fromEmail || ''}
+${t('emails.testEmail.smtpHost')}: ${smtpHost || ''}
+${t('emails.testEmail.smtpPort')}: ${smtpPort || ''}
+${t('emails.testEmail.security')}: ${secureLabel}
+
+${t('emails.testEmail.body3')}
+${t('emails.testEmail.body4', { siteName: brand })}`,
+      html: wrapTransactionalEmail({
+        siteName: brand,
+        headline: t('emails.testEmail.headline'),
+        bodyHtml,
+        footerNote: '',
+        logoHtml: siteLogoEmbed.html,
+      }),
+      attachments: siteLogoEmbed.attachments,
+    };
+  },
+
+  /**
    * Bulk multi-select field update — one email listing all affected tasks for a recipient.
    */
   bulkTaskNotification: async (data) => {

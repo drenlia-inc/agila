@@ -22,18 +22,17 @@ const SECRET_KEYS = new Set([
 export type AdminSettingsTabId =
   | 'site-settings'
   | 'system-settings'
+  | 'notifications'
   | 'app-settings'
   | 'project-settings';
 
-export type SystemSettingsSubTabId =
-  | 'sso'
+export type SystemSettingsSubTabId = 'sso' | 'storage' | 'file-uploads' | 'ai';
+
+export type NotificationsHubSubTabId =
+  | 'notification-settings'
   | 'mail-server'
-  | 'storage'
-  | 'file-uploads'
-  | 'ai'
-  | 'notifications'
   | 'webhooks'
-  | 'notification-queue';
+  | 'queue';
 
 export type ProjectHubSubTabId =
   | 'project'
@@ -84,6 +83,11 @@ function isMailKey(key: string): boolean {
   return key.startsWith('SMTP_') || key.startsWith('MAIL_');
 }
 
+/** SMTP / MAIL_* drafts commit via Test Email, not the shared Save banner. */
+export function isAdminMailSettingKey(key: string): boolean {
+  return isMailKey(key);
+}
+
 function isStorageKey(key: string): boolean {
   return (
     key.startsWith('S3_') ||
@@ -121,14 +125,11 @@ function isNotificationKey(key: string): boolean {
 }
 
 function isSystemSettingsKey(key: string): boolean {
-  return (
-    isSsoKey(key) ||
-    isMailKey(key) ||
-    isStorageKey(key) ||
-    isUploadKey(key) ||
-    isAiKey(key) ||
-    isNotificationKey(key)
-  );
+  return isSsoKey(key) || isStorageKey(key) || isUploadKey(key) || isAiKey(key);
+}
+
+function isNotificationsHubKey(key: string): boolean {
+  return isMailKey(key) || isNotificationKey(key);
 }
 
 function isProjectSettingsKey(key: string): boolean {
@@ -139,7 +140,8 @@ function isAppSettingsKey(key: string): boolean {
   if (
     isProjectSettingsKey(key) ||
     isSiteSettingsKey(key) ||
-    isSystemSettingsKey(key)
+    isSystemSettingsKey(key) ||
+    isNotificationsHubKey(key)
   ) {
     return false;
   }
@@ -158,6 +160,7 @@ function isAppSettingsKey(key: string): boolean {
 export function adminTabForSettingKey(key: string): AdminSettingsTabId | null {
   if (SKIP_KEYS.has(key) || key.endsWith('_SET') || !isValidAdminSettingKey(key)) return null;
   if (isSiteSettingsKey(key)) return 'site-settings';
+  if (isNotificationsHubKey(key)) return 'notifications';
   if (isSystemSettingsKey(key)) return 'system-settings';
   if (isProjectSettingsKey(key)) return 'project-settings';
   if (isAppSettingsKey(key)) return 'app-settings';
@@ -229,6 +232,7 @@ export function adminSettingsHaveChanges(
 
   for (const key of keys) {
     if (SKIP_KEYS.has(key) || key.endsWith('_SET') || !isValidAdminSettingKey(key)) continue;
+    if (isMailKey(key)) continue;
     if (valuesDiffer(key, saved, draft)) return true;
   }
 
@@ -245,6 +249,7 @@ export function getDirtyAdminSettingsTabs(
 
   for (const key of keys) {
     if (SKIP_KEYS.has(key) || key.endsWith('_SET') || !isValidAdminSettingKey(key)) continue;
+    if (isMailKey(key)) continue;
     if (!valuesDiffer(key, saved, draft)) continue;
     const tab = adminTabForSettingKey(key);
     if (tab) dirty.add(tab);
@@ -289,18 +294,27 @@ export function getDirtyAppSettingsSubTabs(
 export function systemSettingsSubTabForKey(key: string): SystemSettingsSubTabId | null {
   if (SKIP_KEYS.has(key) || key.endsWith('_SET') || !isValidAdminSettingKey(key)) return null;
   if (isSsoKey(key)) return 'sso';
-  if (isMailKey(key)) return 'mail-server';
   if (isStorageKey(key)) return 'storage';
   if (isUploadKey(key)) return 'file-uploads';
   if (isAiKey(key)) return 'ai';
-  if (isNotificationKey(key)) return 'notifications';
+  return null;
+}
+
+export function notificationsHubSubTabForKey(key: string): NotificationsHubSubTabId | null {
+  if (SKIP_KEYS.has(key) || key.endsWith('_SET') || !isValidAdminSettingKey(key)) return null;
+  if (isMailKey(key)) return 'mail-server';
+  if (isNotificationKey(key)) {
+    if (key === 'NOTIFICATION_QUEUE_RETENTION_DAYS') return 'queue';
+    if (key === 'TASK_NOTIFICATION_CHANNELS') return 'webhooks';
+    return 'notification-settings';
+  }
   return null;
 }
 
 export function getDirtySystemSettingsSubTabs(
   saved: Record<string, string | undefined>,
   draft: Record<string, string | undefined>,
-  options?: { aiLocalDirty?: boolean; queueRetentionLocalDirty?: boolean }
+  options?: { aiLocalDirty?: boolean }
 ): Set<SystemSettingsSubTabId> {
   const dirty = new Set<SystemSettingsSubTabId>();
   const keys = new Set([...Object.keys(saved), ...Object.keys(draft)]);
@@ -313,7 +327,26 @@ export function getDirtySystemSettingsSubTabs(
   }
 
   if (options?.aiLocalDirty) dirty.add('ai');
-  if (options?.queueRetentionLocalDirty) dirty.add('notification-queue');
+  return dirty;
+}
+
+export function getDirtyNotificationsHubSubTabs(
+  saved: Record<string, string | undefined>,
+  draft: Record<string, string | undefined>,
+  options?: { queueRetentionLocalDirty?: boolean }
+): Set<NotificationsHubSubTabId> {
+  const dirty = new Set<NotificationsHubSubTabId>();
+  const keys = new Set([...Object.keys(saved), ...Object.keys(draft)]);
+
+  for (const key of keys) {
+    if (SKIP_KEYS.has(key) || key.endsWith('_SET') || !isValidAdminSettingKey(key)) continue;
+    if (isMailKey(key)) continue;
+    if (!valuesDiffer(key, saved, draft)) continue;
+    const sub = notificationsHubSubTabForKey(key);
+    if (sub) dirty.add(sub);
+  }
+
+  if (options?.queueRetentionLocalDirty) dirty.add('queue');
   return dirty;
 }
 
@@ -365,12 +398,20 @@ export function revertAdminSettingsWhere(
 
 function systemSubTabKeyPredicate(sub: SystemSettingsSubTabId): (key: string) => boolean {
   if (sub === 'sso') return isSsoKey;
-  if (sub === 'mail-server') return isMailKey;
   if (sub === 'storage') return isStorageKey;
   if (sub === 'file-uploads') return isUploadKey;
   if (sub === 'ai') return isAiKey;
-  if (sub === 'notifications' || sub === 'webhooks') return isNotificationKey;
-  if (sub === 'notification-queue') {
+  return () => false;
+}
+
+function notificationsHubSubTabKeyPredicate(
+  sub: NotificationsHubSubTabId
+): (key: string) => boolean {
+  if (sub === 'mail-server') return isMailKey;
+  if (sub === 'notification-settings' || sub === 'webhooks') {
+    return (key) => isNotificationKey(key) && key !== 'NOTIFICATION_QUEUE_RETENTION_DAYS';
+  }
+  if (sub === 'queue') {
     return (key) => key === 'NOTIFICATION_QUEUE_RETENTION_DAYS';
   }
   return () => false;
@@ -397,6 +438,10 @@ export function revertAdminSettingsForHash(
     const sub = systemSettingsSubTabFromBare(bare);
     return revertAdminSettingsWhere(saved, draft, systemSubTabKeyPredicate(sub));
   }
+  if (bare.startsWith('admin#notifications')) {
+    const sub = notificationsHubSubTabFromBare(bare);
+    return revertAdminSettingsWhere(saved, draft, notificationsHubSubTabKeyPredicate(sub));
+  }
   if (bare.startsWith('admin#app-settings')) {
     const sub: AppSettingsSubTabId = bare.endsWith('#troubleshooting') ? 'troubleshooting' : 'ui';
     return revertAdminSettingsWhere(
@@ -417,7 +462,9 @@ export function adminHashUsesLocalDiscard(hash: string): boolean {
   return (
     bare.endsWith('#ai') ||
     bare.endsWith('#file-uploads') ||
+    bare.endsWith('#notification-settings') ||
     bare.endsWith('#notifications') ||
+    bare.endsWith('#queue') ||
     bare.endsWith('#notification-queue') ||
     bare.endsWith('#reporting') ||
     bare.endsWith('#lifecycle')
@@ -425,14 +472,17 @@ export function adminHashUsesLocalDiscard(hash: string): boolean {
 }
 
 function systemSettingsSubTabFromBare(bare: string): SystemSettingsSubTabId {
-  if (bare.endsWith('#mail-server')) return 'mail-server';
   if (bare.endsWith('#storage')) return 'storage';
   if (bare.endsWith('#file-uploads')) return 'file-uploads';
   if (bare.endsWith('#ai')) return 'ai';
-  if (bare.endsWith('#notifications')) return 'notifications';
-  if (bare.endsWith('#webhooks')) return 'webhooks';
-  if (bare.endsWith('#notification-queue')) return 'notification-queue';
   return 'sso';
+}
+
+function notificationsHubSubTabFromBare(bare: string): NotificationsHubSubTabId {
+  if (bare.endsWith('#mail-server')) return 'mail-server';
+  if (bare.endsWith('#webhooks')) return 'webhooks';
+  if (bare.endsWith('#queue') || bare.endsWith('#notification-queue')) return 'queue';
+  return 'notification-settings';
 }
 
 function projectHubSubTabFromBare(bare: string): ProjectHubSubTabId {

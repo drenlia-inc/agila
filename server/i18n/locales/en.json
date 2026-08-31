@@ -180,6 +180,21 @@
       "body5": "Best regards,",
       "body6": "The {siteName} Team"
     },
+    "testEmail": {
+      "subject": "Email test — {siteName}",
+      "headline": "Email test successful",
+      "greeting": "Hello,",
+      "body1": "This is a test message from {siteName}.",
+      "body2": "If you can read this, your mail server configuration is working.",
+      "detailsTitle": "Test details",
+      "sentAt": "Sent at",
+      "from": "From",
+      "smtpHost": "SMTP host",
+      "smtpPort": "SMTP port",
+      "security": "Security",
+      "body3": "Best regards,",
+      "body4": "The {siteName} Team"
+    },
     "commentNotification": {
       "subject": "💬 New comment on: {taskTitle}",
       "title": "New Comment",

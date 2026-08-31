@@ -1972,7 +1972,7 @@ export default function HelpModal({
         Settings,
         'text-indigo-600 dark:text-indigo-400',
         'bg-indigo-50 dark:bg-indigo-900/40',
-        { titleTarget: adminGo('admin#system-settings#mail-server', HELP_HL.mail) }
+        { titleTarget: adminGo('admin#notifications#mail-server', HELP_HL.mail) }
       ),
       renderChecklistSection(
         'help.admin.storage',
@@ -2020,7 +2020,7 @@ export default function HelpModal({
         MessageSquare,
         'text-pink-600 dark:text-pink-400',
         'bg-pink-50 dark:bg-pink-900/40',
-        { titleTarget: adminGo('admin#system-settings#notifications', HELP_HL.notifications) }
+        { titleTarget: adminGo('admin#notifications#notification-settings', HELP_HL.notifications) }
       ),
       renderChecklistSection(
         'help.admin.notificationQueue',
@@ -2032,7 +2032,7 @@ export default function HelpModal({
         ListChecks,
         'text-fuchsia-600 dark:text-fuchsia-400',
         'bg-fuchsia-50 dark:bg-fuchsia-900/40',
-        { titleTarget: adminGo('admin#system-settings#notification-queue', HELP_HL.notificationQueue) }
+        { titleTarget: adminGo('admin#notifications#queue', HELP_HL.notificationQueue) }
       ),
       renderChecklistSection(
         'help.admin.tags',

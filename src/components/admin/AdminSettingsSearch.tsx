@@ -174,7 +174,7 @@ const AdminSettingsSearch: React.FC<AdminSettingsSearchProps> = ({
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
           placeholder={t('search.placeholder')}
-          className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 py-1.5 pl-8 pr-2 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 py-1.5 pl-8 pr-2 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-300 dark:placeholder:text-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
 
@@ -228,8 +228,11 @@ function tabLabelKey(tab: string): string {
     users: 'users',
     'site-settings': 'siteSettings',
     'system-settings': 'systemSettings',
+    notifications: 'notifications',
     sso: 'sso',
     'mail-server': 'mailServer',
+    'notification-settings': 'notificationSettings',
+    queue: 'queue',
     storage: 'storage',
     tags: 'tags',
     priorities: 'priorities',
@@ -240,7 +243,6 @@ function tabLabelKey(tab: string): string {
     lifecycle: 'lifecycle',
     licensing: 'licensing',
     'notification-queue': 'notificationQueue',
-    notifications: 'notifications',
     'file-uploads': 'fileUploads',
     ai: 'ai',
   };

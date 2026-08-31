@@ -24,6 +24,10 @@ import {
   markGoogleSsoManagedEligible,
   mirrorActiveGoogleSsoToPlatformShadow,
 } from '../utils/googleSsoMode.js';
+import {
+  markMailManagedEligible,
+  mirrorActiveMailToPlatformShadow,
+} from '../utils/mailMode.js';
 import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
 import { getRequestStoragePaths } from '../services/storage/index.js';
 import { getObject, filenameFromPublicUrl, purgeManagedTenantObjects } from '../services/storage/objectStorage.js';
@@ -428,6 +432,21 @@ router.put('/settings', authenticateAdminPortal, async (req, res) => {
       if (managedPush) {
         await mirrorActiveGoogleSsoToPlatformShadow(db);
         await markGoogleSsoManagedEligible(db);
+      }
+    }
+    const mailKeys = [
+      'SMTP_HOST',
+      'SMTP_PASSWORD',
+      'MAIL_MANAGED',
+      'SMTP_MODE',
+    ];
+    if (results.some((row) => mailKeys.includes(row.key))) {
+      const managedMail =
+        String(settings.SMTP_MODE || '').trim().toLowerCase() === 'managed' ||
+        String(settings.MAIL_MANAGED || '').trim() === 'true';
+      if (managedMail) {
+        await mirrorActiveMailToPlatformShadow(db);
+        await markMailManagedEligible(db);
       }
     }
     for (const row of results) {
@@ -1348,19 +1367,18 @@ router.post('/settings', authenticateAdminPortal, async (req, res) => {
       });
     }
 
-    // MIGRATED: Check if setting already exists using sqlManager
     const existingSetting = await settingsQueries.checkSettingExists(db, key);
-    if (existingSetting) {
-      return res.status(400).json({ 
-        success: false,
-        error: t('errors.settingWithKeyAlreadyExists') 
-      });
+    if (isSecretSettingKey(key)) {
+      await upsertSecretSetting(db, key, value);
+    } else {
+      await settingsQueries.upsertSetting(db, key, value);
     }
 
-    // MIGRATED: Insert new setting using sqlManager
-    await settingsQueries.createSetting(db, key, value);
-
-    console.log(`✅ Admin portal created setting: ${key} = ${value}`);
+    console.log(
+      existingSetting
+        ? `✅ Admin portal upserted setting: ${key}`
+        : `✅ Admin portal created setting: ${key}`
+    );
 
     const tenantIdCreateSetting = getTenantId(req);
     await notificationService.publish(

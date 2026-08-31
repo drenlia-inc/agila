@@ -4,22 +4,37 @@ import { ADMIN_TABS } from '../constants';
 export const ADMIN_NAVIGATE_EVENT = 'easy-kanban:admin-navigate';
 
 export type AdminNavigateDetail = {
-  /** Hash without leading #, e.g. admin#system-settings#mail-server */
+  /** Hash without leading #, e.g. admin#system-settings#sso */
   hash: string;
 };
 
 /** Legacy top-level tab ids → canonical compound hashes after Admin reorg. */
 export const ADMIN_LEGACY_TAB_HASH: Record<string, string> = {
   sso: 'admin#system-settings#sso',
-  'mail-server': 'admin#system-settings#mail-server',
+  'mail-server': 'admin#notifications#mail-server',
   storage: 'admin#system-settings#storage',
   lifecycle: 'admin#project-settings#lifecycle',
-  'notification-queue': 'admin#system-settings#notification-queue',
+  'notification-queue': 'admin#notifications#queue',
+  queue: 'admin#notifications#queue',
+  'notification-settings': 'admin#notifications#notification-settings',
   'sprint-settings': 'admin#project-settings#sprint-settings',
   reporting: 'admin#project-settings#reporting',
   ai: 'admin#system-settings#ai',
   'file-uploads': 'admin#system-settings#file-uploads',
   uploads: 'admin#system-settings#file-uploads',
+  webhooks: 'admin#notifications#webhooks',
+};
+
+const NOTIFICATIONS_HASH_REWRITES: Record<string, string> = {
+  'admin#system-settings#mail-server': 'admin#notifications#mail-server',
+  'admin#system-settings#notifications': 'admin#notifications#notification-settings',
+  'admin#system-settings#webhooks': 'admin#notifications#webhooks',
+  'admin#system-settings#notification-queue': 'admin#notifications#queue',
+  'admin#app-settings#notifications': 'admin#notifications#notification-settings',
+  'admin#app-settings#notification-queue': 'admin#notifications#queue',
+  'admin#notifications': 'admin#notifications#notification-settings',
+  'admin#notifications#notifications': 'admin#notifications#notification-settings',
+  'admin#notifications#notification-queue': 'admin#notifications#queue',
 };
 
 /** Map tour / owner-setup tab ids (and subtab data-tour-id suffixes) to hashes. */
@@ -30,25 +45,22 @@ export function adminHashForTabId(tabId: string): string {
   }
   if (tabId === 'system-settings') return 'admin#system-settings#sso';
   if (tabId === 'app-settings') return 'admin#app-settings#user-interface';
-  if (tabId === 'notifications') return 'admin#system-settings#notifications';
-  if (tabId === 'webhooks') return 'admin#system-settings#webhooks';
+  if (tabId === 'notifications') return 'admin#notifications#notification-settings';
   return `admin#${tabId}`;
 }
 
 /**
- * Rewrite legacy Admin hashes to the new System / Project Settings structure.
+ * Rewrite legacy Admin hashes to the current System / Notifications / Project structure.
  * Returns hash without leading #.
  */
 export function canonicalizeAdminHash(hash: string): string {
   const full = hash.startsWith('#') ? hash : `#${hash}`;
   const bare = full.replace(/^#/, '');
 
-  if (bare === 'admin#app-settings#notifications') {
-    return 'admin#system-settings#notifications';
+  if (NOTIFICATIONS_HASH_REWRITES[bare]) {
+    return NOTIFICATIONS_HASH_REWRITES[bare];
   }
-  if (bare === 'admin#app-settings#notification-queue') {
-    return 'admin#system-settings#notification-queue';
-  }
+
   if (bare === 'admin#app-settings#file-uploads') {
     return 'admin#system-settings#file-uploads';
   }
@@ -65,7 +77,6 @@ export function canonicalizeAdminHash(hash: string): string {
     return ADMIN_LEGACY_TAB_HASH[parts[1]];
   }
 
-  // Bare #admin#project-settings → project subtab
   if (bare === 'admin#project-settings') {
     return 'admin#project-settings#project';
   }
@@ -81,6 +92,7 @@ export function adminTabFromHash(hash: string): string | null {
   const bare = canonicalizeAdminHash(hash);
   const full = `#${bare}`;
 
+  if (full.startsWith('#admin#notifications')) return 'notifications';
   if (full.startsWith('#admin#system-settings')) return 'system-settings';
   if (full.startsWith('#admin#project-settings')) return 'project-settings';
   if (full.startsWith('#admin#app-settings')) return 'app-settings';

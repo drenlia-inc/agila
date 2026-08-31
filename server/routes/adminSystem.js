@@ -554,7 +554,8 @@ router.post('/test-email', authenticateToken, requireRole(['admin']), async (req
     const emailService = new EmailService.default(db);
     
     try {
-      const result = await emailService.sendTestEmail(req.user.email || 'admin@example.com');
+      const draft = req.body && typeof req.body === 'object' ? req.body : {};
+      const result = await emailService.sendTestEmail(req.user.email || 'admin@example.com', draft);
       res.json(result);
     } catch (error) {
       console.error('❌ Email test failed:', error);

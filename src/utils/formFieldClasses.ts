@@ -16,7 +16,7 @@ const EDITABLE_DARK: Record<FormFieldSurface, string> = {
 
 const EDITABLE_BORDER = 'border border-gray-300 dark:border-gray-600';
 const EDITABLE_TEXT =
-  'bg-white text-gray-900 dark:text-gray-100 placeholder:text-gray-400';
+  'bg-white text-gray-900 dark:text-gray-100 placeholder:text-gray-300 dark:placeholder:text-gray-600';
 
 type PySize = '1.5' | '2' | '2.5';
 const PY: Record<PySize, string> = { '1.5': 'py-1.5', '2': 'py-2', '2.5': 'py-2.5' };
@@ -43,7 +43,7 @@ export function formInputEditableClass(
 export function formInputLockedClass(opts?: { py?: PySize; rounded?: 'md' | 'lg' }): string {
   const py = PY[opts?.py ?? '2'];
   const rounded = opts?.rounded === 'lg' ? 'rounded-lg' : 'rounded-md';
-  return `px-3 ${py} text-sm ${rounded} ${formLockedSurfaceClass} placeholder:text-slate-400/70 shadow-none focus:outline-none focus:ring-0`;
+  return `px-3 ${py} text-sm ${rounded} ${formLockedSurfaceClass} placeholder:text-slate-300 dark:placeholder:text-slate-600 shadow-none focus:outline-none focus:ring-0`;
 }
 
 /** Pick editable vs locked input chrome; optional width/layout prefix. */
