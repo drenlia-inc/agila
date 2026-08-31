@@ -156,7 +156,7 @@ export default defineConfig({
     ws: false, // Disable WebSocket completely
     allowedHosts: (() => {
       // Extract hostnames from ALLOWED_ORIGINS (which may contain full URLs)
-      const defaultHosts = ['localhost', '127.0.0.1'];
+      const defaultHosts = ['localhost', '127.0.0.1', 'auth.agila.dev'];
       if (process.env.ALLOWED_ORIGINS) {
         const hosts = new Set(defaultHosts);
         process.env.ALLOWED_ORIGINS.split(',').forEach(origin => {

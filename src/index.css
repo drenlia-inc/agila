@@ -634,6 +634,19 @@ body.kanban-mod-shift .task-card {
   user-select: none;
 }
 
+/*
+ * Task drag: cards stay geometry targets (bounding boxes) but chrome must not
+ * hover — tooltips on days, sprint, dates, effort, comments, tags, assignee, etc.
+ */
+body.kanban-task-dragging .task-card,
+body.kanban-task-dragging .task-card * {
+  pointer-events: none !important;
+}
+body.kanban-task-dragging [role="tooltip"],
+body.kanban-task-dragging .comment-tooltip {
+  visibility: hidden !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .demo-guide-target,
   .demo-guide-cue,

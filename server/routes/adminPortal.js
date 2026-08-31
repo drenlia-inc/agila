@@ -10,6 +10,7 @@ import notificationService from '../services/notificationService.js';
 import { getLicenseManager } from '../config/license.js';
 import { getTranslator } from '../utils/i18n.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
+import { invalidateOAuthConfigCache } from '../utils/oauthConfigCache.js';
 import { getTenantDomain } from '../utils/tenantDomain.js';
 import { clearSqlDebugSettingsCache } from '../utils/sqlDebugSettingsCache.js';
 // MIGRATED: Import sqlManager modules
@@ -19,6 +20,10 @@ import {
   projectSecretForAdminApi,
   upsertSecretSetting
 } from '../utils/settingsSecrets.js';
+import {
+  markGoogleSsoManagedEligible,
+  mirrorActiveGoogleSsoToPlatformShadow,
+} from '../utils/googleSsoMode.js';
 import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
 import { getRequestStoragePaths } from '../services/storage/index.js';
 import { getObject, filenameFromPublicUrl, purgeManagedTenantObjects } from '../services/storage/objectStorage.js';
@@ -408,6 +413,23 @@ router.put('/settings', authenticateAdminPortal, async (req, res) => {
     }
 
     const tenantIdBulk = getTenantId(req);
+    const googleOAuthKeys = [
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+      'GOOGLE_CALLBACK_URL',
+      'GOOGLE_SSO_MANAGED',
+      'GOOGLE_SSO_MODE',
+    ];
+    if (results.some((row) => googleOAuthKeys.includes(row.key))) {
+      invalidateOAuthConfigCache(tenantIdBulk);
+      const managedPush =
+        String(settings.GOOGLE_SSO_MODE || '').trim().toLowerCase() === 'managed' ||
+        String(settings.GOOGLE_SSO_MANAGED || '').trim() === 'true';
+      if (managedPush) {
+        await mirrorActiveGoogleSsoToPlatformShadow(db);
+        await markGoogleSsoManagedEligible(db);
+      }
+    }
     for (const row of results) {
       await notificationService.publish(
         'settings-updated',
@@ -600,7 +622,10 @@ router.post('/users', authenticateAdminPortal, async (req, res) => {
         id: memberId,
         name: memberName,
         color: memberColor,
-        userId: userId
+        user_id: userId,
+        email,
+        isActive: !!isActive,
+        hasActivated: !!isActive,
       },
       timestamp: new Date().toISOString()
     }, tenantId).catch(err => {

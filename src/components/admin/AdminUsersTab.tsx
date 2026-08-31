@@ -9,7 +9,11 @@ import { CHROME_TOOLTIP_SURFACE_CLASS } from '../KanbanChromeTooltip';
 import { ModernCheckbox } from '../ModernCheckbox';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { useSettings } from '../../contexts/SettingsContext';
-import { ADMIN_TABLE_ROW_CLASS } from '../../utils/adminFieldLimits';
+import {
+  ADMIN_TABLE_ROW_ACTIVE_CLASS,
+  ADMIN_TABLE_ROW_CLASS,
+} from '../../utils/adminFieldLimits';
+import { MODAL_OVERLAY_Z_INDEX } from '../../constants/appConstants';
 import { formatToYYYYMMDDHHmmss } from '../../utils/dateUtils';
 import {
   adminInputLockedClass,
@@ -19,6 +23,9 @@ import {
   adminModalInputEditableClass,
   adminModalInputLockedClass,
 } from './AdminSection';
+import { AdminToggle } from './AdminToggle';
+import MemberColorPickerDialog from './MemberColorPickerDialog';
+import { DEFAULT_MEMBER_COLOR } from '../../constants/memberColorPalette';
 
 interface User {
   id: string;
@@ -44,6 +51,7 @@ interface AdminUsersTabProps {
   showDeleteConfirm: string | null;
   userTaskCounts: { [userId: string]: number };
   onRoleChange: (userId: string, role: 'admin' | 'user' | 'viewer') => Promise<void>;
+  onStatusChange: (userId: string, isActive: boolean) => Promise<void>;
   onDeleteUser: (userId: string) => Promise<void>;
   onConfirmDeleteUser: (userId: string, reassignToUserId?: string | null) => Promise<void>;
   onCancelDeleteUser: () => void;
@@ -73,6 +81,209 @@ function roleDotClass(role: RoleValue): string {
   if (role === 'admin') return 'bg-violet-500';
   if (role === 'viewer') return 'bg-sky-500';
   return 'bg-slate-400 dark:bg-slate-500';
+}
+
+type StatusValue = 'active' | 'inactive';
+const STATUS_OPTIONS: StatusValue[] = ['active', 'inactive'];
+
+function statusToneClasses(status: StatusValue): string {
+  if (status === 'active') {
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800';
+  }
+  return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800';
+}
+
+function statusDotClass(status: StatusValue): string {
+  return status === 'active' ? 'bg-emerald-500' : 'bg-orange-500';
+}
+
+function StatusBadgeSelect({
+  value,
+  onChange,
+  disabled = false,
+  title,
+  labels,
+}: {
+  value: boolean;
+  onChange: (isActive: boolean) => void;
+  disabled?: boolean;
+  title?: string;
+  labels: Record<StatusValue, string>;
+}) {
+  const statusValue: StatusValue = value ? 'active' : 'inactive';
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const updateMenuPos = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const menuWidth = Math.max(rect.width, 132);
+    let left = rect.left;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, rect.right - menuWidth);
+    }
+    const estimatedHeight = 88;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top =
+      spaceBelow < estimatedHeight && rect.top > estimatedHeight
+        ? rect.top - estimatedHeight - 4
+        : rect.bottom + 4;
+    setMenuPos({ top, left, width: menuWidth });
+  };
+
+  const selectStatus = (status: StatusValue) => {
+    const nextActive = status === 'active';
+    if (nextActive !== value) {
+      onChange(nextActive);
+    }
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const idx = Math.max(0, STATUS_OPTIONS.indexOf(statusValue));
+    setActiveIndex(idx);
+    updateMenuPos();
+    requestAnimationFrame(() => {
+      optionRefs.current[idx]?.focus();
+    });
+
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onReposition = () => updateMenuPos();
+    document.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', onReposition);
+    window.addEventListener('scroll', onReposition, true);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', onReposition);
+      window.removeEventListener('scroll', onReposition, true);
+    };
+  }, [open, statusValue]);
+
+  const onMenuKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      const next = (activeIndex + delta + STATUS_OPTIONS.length) % STATUS_OPTIONS.length;
+      setActiveIndex(next);
+      optionRefs.current[next]?.focus();
+      return;
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      selectStatus(STATUS_OPTIONS[activeIndex]);
+    }
+  };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        title={title}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={title}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((prev) => !prev);
+        }}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+        className={`inline-flex items-center justify-between gap-1.5 font-medium rounded-md border transition-colors max-w-[7.5rem] px-1.5 py-1 text-[11px] ${
+          disabled
+            ? adminInputLockedClass
+            : `${statusToneClasses(statusValue)} hover:brightness-[0.98] dark:hover:brightness-110 cursor-pointer`
+        }`}
+      >
+        <span className="truncate font-medium">{labels[statusValue]}</span>
+        <ChevronDown
+          size={12}
+          className={`shrink-0 opacity-70 transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
+      {open &&
+        menuPos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="listbox"
+            aria-label={title}
+            tabIndex={-1}
+            onKeyDown={onMenuKeyDown}
+            className="fixed z-[11000] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1"
+            style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          >
+            {STATUS_OPTIONS.map((status, index) => {
+              const selected = status === statusValue;
+              const active = index === activeIndex;
+              return (
+                <button
+                  key={status}
+                  ref={(el) => {
+                    optionRefs.current[index] = el;
+                  }}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  tabIndex={active ? 0 : -1}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => selectStatus(status)}
+                  className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors ${
+                    selected
+                      ? 'bg-blue-50 dark:bg-blue-950/40'
+                      : active
+                        ? 'bg-slate-100 dark:bg-slate-800'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
+                  }`}
+                >
+                  <span
+                    className={`shrink-0 h-2 w-2 rounded-full ${statusDotClass(status)}`}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1 flex items-center justify-between gap-2 text-[11px]">
+                    <span className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {labels[status]}
+                    </span>
+                    {selected && (
+                      <Check
+                        size={12}
+                        className="shrink-0 text-blue-600 dark:text-blue-400"
+                        aria-hidden
+                      />
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>,
+          document.body
+        )}
+    </>
+  );
 }
 
 function RoleBadgeSelect({
@@ -319,6 +530,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   showDeleteConfirm,
   userTaskCounts,
   onRoleChange,
+  onStatusChange,
   onDeleteUser,
   onConfirmDeleteUser,
   onCancelDeleteUser,
@@ -501,21 +713,19 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     }`;
   const [showAddUserForm, setShowAddUserForm] = useState(false);
   const [showEditUserForm, setShowEditUserForm] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
-  const [editingColor, setEditingColor] = useState<string>('#4ECDC4');
-  const [originalColor, setOriginalColor] = useState<string>('#4ECDC4');
+  const [colorPickerUserId, setColorPickerUserId] = useState<string | null>(null);
+  const [editingColor, setEditingColor] = useState<string>(DEFAULT_MEMBER_COLOR);
+  const [isSavingColor, setIsSavingColor] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isResendingInvitation, setIsResendingInvitation] = useState<boolean>(false);
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
-  const [colorPickerPosition, setColorPickerPosition] = useState<{top: number, left: number, userId: string} | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [hoveredButton, setHoveredButton] = useState<{userId: string, type: 'promote' | 'demote' | 'edit' | 'delete' | 'resend', position: {top: number, left: number}} | null>(null);
   
   const [deleteReassignToUserId, setDeleteReassignToUserId] = useState<string>(''); // '' = System
   // Refs for button positioning and focus
   const deleteButtonRefs = useRef<{[key: string]: HTMLButtonElement | null}>({});
-  const colorButtonRefs = useRef<{[key: string]: HTMLButtonElement | null}>({});
   const actionButtonRefs = useRef<{[key: string]: {[type: string]: HTMLButtonElement | null}}>({});
   const noButtonRef = useRef<HTMLButtonElement>(null);
   const [deleteButtonPosition, setDeleteButtonPosition] = useState<{top: number, left: number, userId: string, maxHeight?: number} | null>(null);
@@ -574,6 +784,13 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     return true;
   };
 
+  /** Admins may edit their own profile but cannot deactivate themselves. */
+  const canChangeUserActivation = (userId: string, userEmail: string) => {
+    if (userId === currentUser?.id) return false;
+    if (isLocalPseudoAccount(userEmail)) return false;
+    return canModifyUser(userEmail);
+  };
+
   /** Pseudo @local accounts never receive invite emails. */
   const isLocalPseudoAccount = (userEmail: string) =>
     typeof userEmail === 'string' && userEmail.toLowerCase().endsWith('@local');
@@ -595,26 +812,6 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       }, 50);
     }
   }, [showDeleteConfirm]);
-
-  // Handle click outside to close color picker
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (showColorPicker && colorPickerPosition) {
-        const target = event.target as Element;
-        // Check if click is outside the color picker and not on a color button
-        if (!target.closest('.color-picker-portal') && 
-            !colorButtonRefs.current[showColorPicker]?.contains(target)) {
-          setShowColorPicker(null);
-          setColorPickerPosition(null);
-        }
-      }
-    };
-
-    if (showColorPicker) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showColorPicker, colorPickerPosition]);
 
   // Cleanup preview URL on component unmount
   useEffect(() => {
@@ -700,59 +897,47 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     }),
     [t]
   );
+  const statusLabels = useMemo(
+    () => ({
+      active: t('users.active'),
+      inactive: t('users.inactive'),
+    }),
+    [t]
+  );
   
   const [newUser, setNewUser] = useState(getEmptyNewUser);
 
-  const handleColorChange = (userId: string, currentColor: string, event: React.MouseEvent) => {
-    setEditingColor(currentColor);
-    setOriginalColor(currentColor);
-    
-    // Calculate position for the color picker
-    const buttonRect = event.currentTarget.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const pickerHeight = 120; // Approximate height of the color picker
-    
-    // Check if there's enough space below the button
-    const spaceBelow = viewportHeight - buttonRect.bottom;
-    const spaceAbove = buttonRect.top;
-    
-    let top: number;
-    let left: number;
-    
-    if (spaceBelow >= pickerHeight + 10) {
-      // Position below the button
-      top = buttonRect.bottom + 10;
-    } else if (spaceAbove >= pickerHeight + 10) {
-      // Position above the button
-      top = buttonRect.top - pickerHeight - 10;
-    } else {
-      // Position in the center of the viewport
-      top = Math.max(10, (viewportHeight - pickerHeight) / 2);
-    }
-    
-    // Center horizontally relative to the button
-    left = buttonRect.left + (buttonRect.width / 2) - 60; // 60 is half the picker width
-    
-    // Ensure the picker doesn't go off the left or right edge
-    left = Math.max(10, Math.min(left, window.innerWidth - 120));
-    
-    setColorPickerPosition({ top, left, userId });
-    setShowColorPicker(userId);
+  const openColorPicker = (userId: string, currentColor: string) => {
+    setEditingColor(currentColor || DEFAULT_MEMBER_COLOR);
+    setColorPickerUserId(userId);
   };
 
-  const handleSaveColor = async (userId: string) => {
+  const handleCancelColorPicker = () => {
+    if (isSavingColor) return;
+    setColorPickerUserId(null);
+  };
+
+  const handleSaveColor = async (color: string) => {
+    if (!colorPickerUserId) return;
     try {
-      await onColorChange(userId, editingColor);
-      setShowColorPicker(null);
+      setIsSavingColor(true);
+      await onColorChange(colorPickerUserId, color);
+      setColorPickerUserId(null);
     } catch (err) {
       console.error('Failed to save color:', err);
+    } finally {
+      setIsSavingColor(false);
     }
   };
 
-  const handleCancelColor = () => {
-    setShowColorPicker(null);
-    setEditingColor(originalColor);
-  };
+  const colorPickerUser = colorPickerUserId
+    ? users.find((u) => u.id === colorPickerUserId)
+    : null;
+  const colorPickerUserLabel = colorPickerUser
+    ? colorPickerUser.displayName ||
+      `${colorPickerUser.firstName} ${colorPickerUser.lastName}`.trim() ||
+      colorPickerUser.email
+    : undefined;
 
   const handleUserAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -967,7 +1152,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
-      if (showAddUserForm || showEditUserForm || showDeleteConfirm || showColorPicker) return;
+      if (showAddUserForm || showEditUserForm || showDeleteConfirm || colorPickerUserId) return;
 
       const searchEl = searchInputRef.current;
       const searchFocused = searchEl != null && document.activeElement === searchEl;
@@ -1006,7 +1191,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     showAddUserForm,
     showEditUserForm,
     showDeleteConfirm,
-    showColorPicker,
+    colorPickerUserId,
     userSearch,
     hasActiveFilters,
   ]);
@@ -1313,8 +1498,19 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                     const roleSelectLocked =
                       user.id === currentUser?.id || !canModifyUser(user.email);
                     const isSystemAccount = isLocalPseudoAccount(user.email);
+                    const statusSelectLocked =
+                      isSystemAccount || !canChangeUserActivation(user.id, user.email);
+                    const isActiveUserRow =
+                      colorPickerUserId === user.id ||
+                      (showEditUserForm && editingUserData.id === user.id);
                     return (
-                <tr key={user.id} data-user-id={user.id} className={ADMIN_TABLE_ROW_CLASS}>
+                <tr
+                  key={user.id}
+                  data-user-id={user.id}
+                  className={`${ADMIN_TABLE_ROW_CLASS}${
+                    isActiveUserRow ? ` ${ADMIN_TABLE_ROW_ACTIVE_CLASS}` : ''
+                  }`}
+                >
                   <td className={tdNowrap}>
                     <div className="flex items-center gap-0.5 h-8">
                       <button 
@@ -1492,13 +1688,21 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                     </div>
                   </td>
                   <td className={tdNowrap}>
-                    <span className={`${pillClass} ${
-                      user.isActive 
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
-                        : 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800'
-                    }`}>
-                      {user.isActive ? t('users.active') : t('users.inactive')}
-                    </span>
+                    {isSystemAccount ? (
+                      <span className={`${pillClass} bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800`}>
+                        {t('users.active')}
+                      </span>
+                    ) : (
+                      <StatusBadgeSelect
+                        value={user.isActive}
+                        disabled={statusSelectLocked}
+                        title={t('users.changeStatus')}
+                        labels={statusLabels}
+                        onChange={(isActive) => {
+                          void onStatusChange(user.id, isActive);
+                        }}
+                      />
+                    )}
                   </td>
                   <td className={tdNowrap}>
                     <span className={`${pillClass} ${
@@ -1510,12 +1714,13 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                     </span>
                   </td>
                   <td className={tdNowrap}>
-                    <div 
-                      ref={(el) => { colorButtonRefs.current[user.id] = el; }}
-                      className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-600 cursor-pointer hover:scale-110 transition-transform shadow-sm"
-                      style={{ backgroundColor: user.memberColor || '#4ECDC4' }}
-                      onClick={(e) => handleColorChange(user.id, user.memberColor || '#4ECDC4', e)}
+                    <button
+                      type="button"
+                      className="h-6 w-6 rounded-full border border-slate-200 dark:border-slate-600 cursor-pointer hover:scale-110 transition-transform shadow-sm"
+                      style={{ backgroundColor: user.memberColor || DEFAULT_MEMBER_COLOR }}
+                      onClick={() => openColorPicker(user.id, user.memberColor || DEFAULT_MEMBER_COLOR)}
                       title={t('users.clickToChangeColor')}
+                      aria-label={t('users.clickToChangeColor')}
                     />
                   </td>
                   <td className={`${tdNowrap} text-xs tabular-nums text-slate-600 dark:text-slate-300`}>
@@ -1548,7 +1753,8 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       {/* Add User Modal */}
       {showAddUserForm && createPortal(
         <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 flex items-center justify-center bg-black/50 p-4"
+          style={{ zIndex: MODAL_OVERLAY_Z_INDEX }}
           role="presentation"
           onClick={() => {
             if (!isAddingUser) handleCancelAddUser();
@@ -1695,7 +1901,8 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       {/* Edit User Modal */}
       {showEditUserForm && createPortal(
         <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 flex items-center justify-center bg-black/50 p-4"
+          style={{ zIndex: MODAL_OVERLAY_Z_INDEX }}
           role="presentation"
           onClick={() => {
             if (!isSubmitting) handleCancelEditUser();
@@ -1829,24 +2036,15 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 </div>
               )}
               {!isLocalPseudoAccount(editingUserData.email) && (
-                <div className="flex items-center gap-2">
-                  <ModernCheckbox
-                    id="editIsActive"
-                    checked={editingUserData.isActive}
-                    disabled={!canModifyUser(editingUserData.email)}
-                    onChange={(e) => setEditingUserData(prev => ({ ...prev, isActive: e.target.checked }))}
-                  />
-                  <label
-                    htmlFor="editIsActive"
-                    className={`text-sm ${
-                      !canModifyUser(editingUserData.email)
-                        ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                        : 'text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    {t('users.active')}
-                  </label>
-                </div>
+                <AdminToggle
+                  id="editIsActive"
+                  checked={editingUserData.isActive}
+                  disabled={!canChangeUserActivation(editingUserData.id, editingUserData.email)}
+                  label={editingUserData.isActive ? t('users.active') : t('users.inactive')}
+                  onChange={(next) =>
+                    setEditingUserData((prev) => ({ ...prev, isActive: next }))
+                  }
+                />
               )}
               <div>
                 <label className={adminLabelClass}>{t('users.avatar')}</label>
@@ -2056,43 +2254,14 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
         document.body
       )}
 
-      {/* Color Picker Portal */}
-      {showColorPicker && colorPickerPosition && colorPickerPosition.userId === showColorPicker && createPortal(
-        <div 
-          className="color-picker-portal fixed bg-white p-3 rounded-lg shadow-xl border border-gray-200 min-w-[120px] max-w-xs z-[60]"
-          style={{
-            top: `${colorPickerPosition.top}px`,
-            left: `${colorPickerPosition.left}px`
-          }}
-        >
-          {/* Buttons positioned at the top for better visibility */}
-          <div className="flex space-x-2 justify-center mb-3">
-            <button
-              onClick={() => handleSaveColor(showColorPicker)}
-              className="px-3 py-1 text-xs bg-green-100 text-green-700 hover:bg-green-200 rounded transition-colors font-medium"
-            >
-              ✓
-            </button>
-            <button
-              onClick={handleCancelColor}
-              className="px-3 py-1 text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 rounded transition-colors"
-            >
-              ✕
-            </button>
-          </div>
-          
-          {/* Color picker positioned below buttons */}
-          <div className="flex justify-center">
-            <input
-              type="color"
-              value={editingColor}
-              onChange={(e) => setEditingColor(e.target.value)}
-              className="w-10 h-10 rounded border border-gray-300 cursor-pointer"
-            />
-          </div>
-        </div>,
-        document.body
-      )}
+      <MemberColorPickerDialog
+        open={colorPickerUserId != null}
+        initialColor={editingColor}
+        userLabel={colorPickerUserLabel}
+        isSaving={isSavingColor}
+        onCancel={handleCancelColorPicker}
+        onSave={handleSaveColor}
+      />
 
       {/* Portal-based Tooltips */}
       {hoveredButton && createPortal(

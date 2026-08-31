@@ -42,6 +42,19 @@
       }
     </style>
     <script>
+      // Auth hub must not paint the login SPA while handing OAuth back to the app host.
+      (function() {
+        var host = location.hostname || '';
+        var hash = location.hash || '';
+        if (!/^auth\./i.test(host)) return;
+        if (hash.indexOf('token=') === -1) return;
+        if (hash.indexOf('reset-password') !== -1 || hash.indexOf('activate-account') !== -1) return;
+        var domain = host.replace(/^auth\./i, '');
+        if (!domain || domain === host) return;
+        location.replace(location.protocol + '//kanban.' + domain + location.pathname + location.search + hash);
+      })();
+    </script>
+    <script>
       // Apply dark mode class immediately if needed (before React loads)
       (function() {
         const savedTheme = localStorage.getItem('theme');

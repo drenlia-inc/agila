@@ -29,6 +29,7 @@ export async function getUserById(db, userId) {
       google_avatar_url as "googleAvatarUrl",
       is_active as "isActive",
       force_logout as "forceLogout",
+      activated_at as "activatedAt",
       deactivated_at as "deactivatedAt",
       deactivated_by as "deactivatedBy",
       created_at as "createdAt",
@@ -439,8 +440,8 @@ export async function checkEmailExists(db, email, excludeUserId = null) {
  */
 export async function createUser(db, userId, email, passwordHash, firstName, lastName, isActive, authProvider = 'local') {
   const query = `
-    INSERT INTO users (id, email, password_hash, first_name, last_name, is_active, auth_provider) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    INSERT INTO users (id, email, password_hash, first_name, last_name, is_active, auth_provider, activated_at) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $6 THEN CURRENT_TIMESTAMP ELSE NULL END)
   `;
   
   const stmt = wrapQuery(db.prepare(query), 'INSERT');
@@ -478,6 +479,13 @@ export async function updateUser(db, userId, updates) {
   if (updates.isActive !== undefined) {
     fields.push(`is_active = $${paramIndex++}`);
     values.push(updates.isActive ? true : false);
+    if (updates.isActive) {
+      fields.push('activated_at = COALESCE(activated_at, CURRENT_TIMESTAMP)');
+      fields.push('deactivated_at = NULL');
+      fields.push('deactivated_by = NULL');
+    } else {
+      fields.push('deactivated_at = COALESCE(deactivated_at, CURRENT_TIMESTAMP)');
+    }
   }
   
   if (fields.length === 0) {

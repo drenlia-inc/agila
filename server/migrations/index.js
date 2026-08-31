@@ -1020,6 +1020,105 @@ const migrations = [
           : '✅ Migration 45: Testing French title already customized or updated'
       );
     }
+  },
+  {
+    version: 46,
+    name: 'add_google_sso_managed',
+    description: 'Add GOOGLE_SSO_MANAGED (default false so existing BYO tenants stay on their callback)',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const existing = await settingsQueries.getSettingByKey(db, 'GOOGLE_SSO_MANAGED');
+      if (!existing) {
+        await settingsQueries.createSetting(db, 'GOOGLE_SSO_MANAGED', 'false');
+      }
+      console.log('✅ Migration 46: GOOGLE_SSO_MANAGED present');
+    }
+  },
+  {
+    version: 47,
+    name: 'add_google_sso_mode_and_platform_shadow',
+    description:
+      'Add GOOGLE_SSO_MODE, managed-eligible flag, and platform shadow OAuth keys for restore',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const { getDecryptedSetting } = await import('../utils/settingsSecrets.js');
+      const { getAuthHubCallbackUrl } = await import('../utils/authHub.js');
+      const {
+        GOOGLE_SSO_MODE_KEY,
+        GOOGLE_SSO_MANAGED_ELIGIBLE_KEY,
+      } = await import('../constants/ssoSettings.js');
+
+      const read = async (key) => {
+        const row = await settingsQueries.getSettingByKey(db, key);
+        return String(row?.value ?? '').trim();
+      };
+
+      const managedFlag = await read('GOOGLE_SSO_MANAGED');
+      const clientId = await read('GOOGLE_CLIENT_ID');
+      const callbackUrl = await read('GOOGLE_CALLBACK_URL');
+      const clientSecret = await getDecryptedSetting(db, 'GOOGLE_CLIENT_SECRET');
+
+      let mode = await read(GOOGLE_SSO_MODE_KEY);
+      if (!mode) {
+        if (managedFlag === 'true') mode = 'managed';
+        else if (clientId) mode = 'byo';
+        else mode = 'off';
+        await settingsQueries.upsertSetting(db, GOOGLE_SSO_MODE_KEY, mode);
+      }
+
+      const eligibleExisting = await read(GOOGLE_SSO_MANAGED_ELIGIBLE_KEY);
+      if (!eligibleExisting) {
+        const eligible = managedFlag === 'true' ? 'true' : 'false';
+        await settingsQueries.upsertSetting(db, GOOGLE_SSO_MANAGED_ELIGIBLE_KEY, eligible);
+      }
+
+      const shadowClientId = await read('PLATFORM_GOOGLE_CLIENT_ID');
+      if (!shadowClientId && managedFlag === 'true' && clientId && clientSecret) {
+        const hubCallback = callbackUrl || getAuthHubCallbackUrl();
+        await settingsQueries.upsertSetting(db, 'PLATFORM_GOOGLE_CLIENT_ID', clientId);
+        await settingsQueries.upsertSetting(db, 'PLATFORM_GOOGLE_CALLBACK_URL', hubCallback);
+        const { upsertSecretSetting } = await import('../utils/settingsSecrets.js');
+        await upsertSecretSetting(db, 'PLATFORM_GOOGLE_CLIENT_SECRET', clientSecret);
+      }
+
+      console.log(`✅ Migration 47: GOOGLE_SSO_MODE=${mode}, platform shadow backfilled when applicable`);
+    }
+  },
+  {
+    version: 48,
+    name: 'add_users_activated_at',
+    description: 'Track first activation so TEAM chips hide pending invites',
+    up: async (db) => {
+      await dbExec(db, 'ALTER TABLE users ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ NULL');
+      await dbExec(
+        db,
+        `UPDATE users
+         SET activated_at = COALESCE(updated_at, created_at)
+         WHERE is_active = true AND activated_at IS NULL`
+      );
+      await dbExec(
+        db,
+        `UPDATE users u
+         SET activated_at = COALESCE(u.updated_at, u.created_at)
+         WHERE u.activated_at IS NULL
+           AND EXISTS (
+             SELECT 1 FROM user_invitations ui
+             WHERE ui.user_id = u.id AND ui.used_at IS NOT NULL
+           )`
+      );
+      await dbExec(
+        db,
+        `UPDATE users u
+         SET activated_at = COALESCE(u.updated_at, u.created_at)
+         WHERE u.is_active = false
+           AND u.activated_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM user_invitations ui
+             WHERE ui.user_id = u.id AND ui.used_at IS NULL
+           )`
+      );
+      console.log('✅ Migration 48: users.activated_at present and backfilled');
+    }
   }
 ];
 

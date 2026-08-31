@@ -185,6 +185,7 @@
     "emptyColumnHint": "Ajoutez une tâche ou déposez-en une ici.",
     "emptyBoardHint": "Ce tableau n'a pas encore de tâches — utilisez Ajouter une tâche dans une colonne pour commencer.",
     "dropHere": "Déposer ici",
+    "returnHere": "Remettre ici",
     "dropTaskHere": "Déposer la tâche ici !",
     "dropColumnHere": "Déposer ici",
     "dropZone": "Zone de dépôt",

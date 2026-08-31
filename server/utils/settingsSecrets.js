@@ -108,3 +108,8 @@ export async function upsertSecretSetting(db, key, incomingValue) {
     hasValue: hasSecretValue(resolved.valueToStore)
   };
 }
+
+/** Wipe a secret even when the admin payload is empty (remove provider). */
+export async function clearSecretSetting(db, key) {
+  await settingsQueries.upsertSetting(db, key, '');
+}

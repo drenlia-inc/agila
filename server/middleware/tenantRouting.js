@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { initializeDatabase } from '../config/database.js';
 import notificationService from '../services/notificationService.js';
 import { getTenantDomain } from '../utils/tenantDomain.js';
+import { isAuthHubHostname, isReservedTenantSubdomain } from '../utils/authHub.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -60,7 +61,10 @@ const extractTenantId = (hostname) => {
     if (parts.length >= 2) {
       const tenantId = parts[0];
       // Validate tenant ID (alphanumeric and hyphens only)
-      if (/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(tenantId)) {
+      if (
+        /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(tenantId) &&
+        !isReservedTenantSubdomain(tenantId)
+      ) {
         return tenantId;
       }
     }
@@ -216,6 +220,23 @@ export const tenantRouting = async (req, res, next) => {
     }
     
     let tenantId = extractTenantId(hostname);
+
+    if (isAuthHubHostname(hostname)) {
+      req.authHub = true;
+      req.tenantId = null;
+      if (!req.locals) req.locals = {};
+      req.locals.db = null;
+      req.locals.tenantStoragePaths = getTenantStoragePaths(null);
+      const hubOk =
+        PROBE_PATHS.has(req.path) || req.path.startsWith('/api/auth/google');
+      if (!hubOk) {
+        if (req.path === '/' || req.path === '') {
+          return res.status(404).type('text/plain').send('Not found');
+        }
+        return res.status(404).json({ error: 'Not found' });
+      }
+      return next();
+    }
     
     if (isMultiTenant()) {
       const domain = getTenantDomain();

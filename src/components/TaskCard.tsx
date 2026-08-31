@@ -2133,7 +2133,7 @@ const TaskCard = React.memo(function TaskCard({
           cardWidthAnchorRef={cardElRef}
         />
 
-        {/* Bulk-select checkbox — fixed under grip / agent icon; hidden during inline title/description edit. */}
+        {/* Bulk-select checkbox — fixed under the drag handle; hidden during inline title/description edit. */}
         {toggleChecked && !isEditingTitle && !isEditingDescription && (
           <label
             className="absolute left-1 top-[23px] z-[6] flex h-[22px] w-[22px] cursor-pointer items-center justify-center"

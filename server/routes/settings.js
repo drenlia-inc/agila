@@ -4,7 +4,10 @@ import { wrapQuery } from '../utils/queryLogger.js';
 import { getStorageUsage, getStorageLimit, formatBytes } from '../utils/storageUtils.js';
 import notificationService from '../services/notificationService.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
-import { invalidateOAuthConfigCache } from '../utils/oauthConfigCache.js';
+import {
+  invalidateOAuthConfigCache,
+  isOAuthSettingsCacheKey,
+} from '../utils/oauthConfigCache.js';
 import { settings as settingsQueries, users as userQueries, members as memberQueries } from '../utils/sqlManager/index.js';
 import { FE_PUBLIC_DEBUG_FLAG_KEYS, BULK_DEBUG_SETTING_KEYS } from '../constants/debugSettings.js';
 import { AI_PUBLIC_SETTING_KEYS } from '../constants/aiSettings.js';
@@ -24,6 +27,26 @@ import {
 } from '../utils/settingsSecrets.js';
 import { avatarUpload } from '../config/multer.js';
 import { STORAGE_MANAGED_HIDDEN_KEYS } from '../constants/storageSettings.js';
+import {
+  SSO_HUB_CALLBACK_DISPLAY_KEY,
+  SSO_ADMIN_INTERNAL_KEYS,
+  SSO_MANAGED_HIDDEN_KEYS,
+  isSsoLastSuccessKey,
+  GOOGLE_SSO_MODE_KEY,
+  GOOGLE_SSO_RESUME_MODE_KEY,
+  applyPublicSsoSettings,
+} from '../constants/ssoSettings.js';
+import { getAuthHubCallbackUrl } from '../utils/authHub.js';
+import {
+  disableGoogleSso,
+  enableGoogleSso,
+  mirrorActiveGoogleSsoToPlatformShadow,
+  normalizeGoogleSsoMode,
+  removeGoogleSso,
+  removeSimpleSso,
+  restoreManagedGoogleSso,
+  resolveGoogleSsoMode,
+} from '../utils/googleSsoMode.js';
 import {
   commitUploadedFile,
   deleteObject,
@@ -124,6 +147,12 @@ router.get('/', async (req, res, next) => {
       'WEBSITE_URL',
       'MAIL_ENABLED',
       'GOOGLE_CLIENT_ID',
+      'GOOGLE_SSO_MANAGED',
+      'GOOGLE_SSO_MODE',
+      'GITHUB_CLIENT_ID',
+      'GITHUB_SSO_MODE',
+      'M365_CLIENT_ID',
+      'M365_SSO_MODE',
       'HIGHLIGHT_OVERDUE_TASKS',
       'EFFORT_UNIT',
       'DEFAULT_FINISHED_COLUMN_NAMES',
@@ -158,6 +187,7 @@ router.get('/', async (req, res, next) => {
     await applyEffectiveAiEnabledToSettings(db, settingsObj);
     settingsObj.DEPLOY_MULTI_TENANT = process.env.MULTI_TENANT === 'true' ? 'true' : 'false';
     settingsObj.DEPLOY_DEMO_ENABLED = process.env.DEMO_ENABLED === 'true' ? 'true' : 'false';
+    applyPublicSsoSettings(settingsObj);
     // Per-tenant OAuth and site metadata must not be cached by browsers or intermediaries
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json(settingsObj);
@@ -254,10 +284,30 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
     // Check if email / storage is managed
     const mailManaged = settings.find(s => s.key === 'MAIL_MANAGED')?.value === 'true';
     const storageManaged = settings.find(s => s.key === 'STORAGE_MANAGED')?.value === 'true';
+    const ssoMode = normalizeGoogleSsoMode(
+      settings.find((s) => s.key === GOOGLE_SSO_MODE_KEY)?.value,
+      {
+        managedFlag: settings.find((s) => s.key === 'GOOGLE_SSO_MANAGED')?.value,
+        clientId: settings.find((s) => s.key === 'GOOGLE_CLIENT_ID')?.value,
+      }
+    );
+    const ssoEligible =
+      settings.find((s) => s.key === 'GOOGLE_SSO_MANAGED_ELIGIBLE')?.value === 'true';
+    const ssoResume = String(
+      settings.find((s) => s.key === GOOGLE_SSO_RESUME_MODE_KEY)?.value || ''
+    )
+      .trim()
+      .toLowerCase();
+    const ssoManaged = ssoMode === 'managed';
+    const hideGoogleCreds =
+      ssoManaged || (ssoMode === 'off' && ssoEligible && ssoResume !== 'byo');
     
     settings.forEach(setting => {
       if (!/^[A-Z][A-Z0-9_]*$/.test(setting.key)) {
         return; // ignore corrupt keys (e.g. leftover React event props)
+      }
+      if (SSO_ADMIN_INTERNAL_KEYS.includes(setting.key)) {
+        return;
       }
       // Hide sensitive SMTP fields when email is managed (credentials and server details)
       // But allow SMTP_FROM_EMAIL and SMTP_FROM_NAME to be visible/editable
@@ -271,12 +321,21 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
         if (setting.key === 'S3_SECRET_ACCESS_KEY') {
           settingsObj.S3_SECRET_ACCESS_KEY_SET = 'false';
         }
+      } else if (hideGoogleCreds && SSO_MANAGED_HIDDEN_KEYS.includes(setting.key)) {
+        settingsObj[setting.key] = '';
+        if (setting.key === 'GOOGLE_CLIENT_SECRET') {
+          settingsObj.GOOGLE_CLIENT_SECRET_SET = 'false';
+        }
       } else if (isSecretSettingKey(setting.key)) {
         projectSecretForAdminApi(setting.key, setting.value, settingsObj);
       } else {
         settingsObj[setting.key] = setting.value;
       }
     });
+
+    if (ssoManaged || (hideGoogleCreds && ssoEligible)) {
+      settingsObj[SSO_HUB_CALLBACK_DISPLAY_KEY] = getAuthHubCallbackUrl();
+    }
 
     // Multi-tenant: overlay platform runner env so Admin shows the shared runner (read-only in UI)
     if (process.env.MULTI_TENANT === 'true') {
@@ -458,8 +517,7 @@ router.put('/bulk', authenticateToken, requireRole(['admin']), async (req, res, 
       clearSqlDebugSettingsCache();
     }
 
-    // Google SSO auth routes cache OAuth settings (including debug flag)
-    if (Object.prototype.hasOwnProperty.call(applied, 'SERVER_DEBUG_GOOGLE_SSO')) {
+    if (Object.keys(applied).some((key) => isOAuthSettingsCacheKey(key))) {
       invalidateOAuthConfigCache(getTenantId(req));
     }
 
@@ -529,6 +587,28 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
       if (storageManaged) {
         return res.status(403).json({
           error: 'S3 storage settings are managed by the platform and cannot be updated'
+        });
+      }
+    }
+
+    if (SSO_ADMIN_INTERNAL_KEYS.includes(key)) {
+      return res.status(403).json({
+        error: 'Platform OAuth shadow settings cannot be updated from the admin panel',
+      });
+    }
+
+    if (isSsoLastSuccessKey(key)) {
+      return res.status(403).json({
+        error: 'SSO last-used timestamps are recorded by the server and cannot be updated',
+      });
+    }
+
+    if (SSO_MANAGED_HIDDEN_KEYS.includes(key)) {
+      const ssoMode = await resolveGoogleSsoMode(db);
+      if (ssoMode === 'managed') {
+        return res.status(403).json({
+          error:
+            'Google OAuth credentials are managed by the platform. Switch to your own Google client before editing them.',
         });
       }
     }
@@ -690,11 +770,16 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
 
     const dbgSettings = await serverDebug(db, 'SERVER_DEBUG_SETTINGS');
 
-    // If this is a Google OAuth setting, reload the OAuth configuration
-    if (key === 'GOOGLE_CLIENT_ID' || key === 'GOOGLE_CALLBACK_URL' || key === 'GOOGLE_CLIENT_SECRET') {
-      if (dbgSettings) console.log(`Google OAuth setting updated: ${key} - Hot reloading OAuth config...`);
+    if (isOAuthSettingsCacheKey(key)) {
+      if (dbgSettings) console.log(`OAuth setting updated: ${key} — invalidating SSO cache`);
       invalidateOAuthConfigCache(getTenantId(req));
-      if (dbgSettings) console.log('✅ OAuth configuration cache invalidated - new settings will be loaded on next OAuth request');
+    }
+
+    if (['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'].includes(key)) {
+      const currentMode = await resolveGoogleSsoMode(db);
+      if (currentMode !== 'managed' && String(safeValue || '').trim()) {
+        await settingsQueries.upsertSetting(db, GOOGLE_SSO_MODE_KEY, 'byo');
+      }
     }
 
     // Publish to Redis for real-time updates
@@ -1034,6 +1119,182 @@ router.get('/info', authenticateToken, async (req, res, next) => {
   } catch (error) {
     console.error('Error getting storage info:', error);
     res.status(500).json({ error: 'Failed to get storage information' });
+  }
+});
+
+function googleSsoClientPatch(mode, extras = {}) {
+  const hubCallback = getAuthHubCallbackUrl();
+  if (mode === 'managed') {
+    return {
+      GOOGLE_SSO_MODE: 'managed',
+      GOOGLE_SSO_MANAGED: 'true',
+      GOOGLE_CLIENT_ID: '',
+      GOOGLE_CLIENT_SECRET: '',
+      GOOGLE_CLIENT_SECRET_SET: 'false',
+      GOOGLE_CALLBACK_URL: '',
+      [SSO_HUB_CALLBACK_DISPLAY_KEY]: hubCallback,
+      ...extras,
+    };
+  }
+  if (mode === 'off') {
+    return {
+      GOOGLE_SSO_MODE: 'off',
+      GOOGLE_SSO_MANAGED: 'false',
+      ...extras,
+    };
+  }
+  if (mode === 'byo') {
+    return {
+      GOOGLE_SSO_MODE: 'byo',
+      GOOGLE_SSO_MANAGED: 'false',
+      ...extras,
+    };
+  }
+  return extras;
+}
+
+router.post('/google-sso/disable', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const tenantId = getTenantId(req);
+    const result = await disableGoogleSso(db, tenantId);
+    const resume = result.resume || 'byo';
+    const settings = googleSsoClientPatch(
+      'off',
+      resume === 'managed'
+        ? {
+            GOOGLE_SSO_RESUME_MODE: resume,
+            GOOGLE_CLIENT_ID: '',
+            GOOGLE_CLIENT_SECRET: '',
+            GOOGLE_CLIENT_SECRET_SET: 'false',
+            GOOGLE_CALLBACK_URL: '',
+            [SSO_HUB_CALLBACK_DISPLAY_KEY]: getAuthHubCallbackUrl(),
+          }
+        : { GOOGLE_SSO_RESUME_MODE: resume }
+    );
+    await notificationService.publish(
+      'settings-updated',
+      { settings, timestamp: new Date().toISOString() },
+      tenantId
+    );
+    res.json({ ok: true, mode: 'off', resume: result.resume, settings });
+  } catch (error) {
+    console.error('Disable Google SSO error:', error);
+    res.status(500).json({ error: 'Failed to disable Google sign-in' });
+  }
+});
+
+router.post('/google-sso/remove', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const tenantId = getTenantId(req);
+    await removeGoogleSso(db, tenantId);
+    const settings = {
+      GOOGLE_SSO_MODE: '',
+      GOOGLE_SSO_MANAGED: 'false',
+      GOOGLE_CLIENT_ID: '',
+      GOOGLE_CLIENT_SECRET: '',
+      GOOGLE_CLIENT_SECRET_SET: 'false',
+      GOOGLE_CALLBACK_URL: '',
+    };
+    await notificationService.publish(
+      'settings-updated',
+      { settings, timestamp: new Date().toISOString() },
+      tenantId
+    );
+    res.json({ ok: true, settings });
+  } catch (error) {
+    console.error('Remove Google SSO error:', error);
+    res.status(500).json({ error: 'Failed to remove Google sign-in' });
+  }
+});
+
+async function postSimpleSsoRemove(req, res, provider) {
+  try {
+    const db = getRequestDatabase(req);
+    const tenantId = getTenantId(req);
+    const result = await removeSimpleSso(db, tenantId, provider);
+    const settings = {
+      ...result.settings,
+      [`${provider === 'github' ? 'GITHUB' : 'M365'}_CLIENT_SECRET_SET`]: 'false',
+    };
+    await notificationService.publish(
+      'settings-updated',
+      { settings, timestamp: new Date().toISOString() },
+      tenantId
+    );
+    res.json({ ok: true, settings });
+  } catch (error) {
+    console.error(`Remove ${provider} SSO error:`, error);
+    res.status(500).json({ error: 'Failed to remove sign-in provider' });
+  }
+}
+
+router.post('/github-sso/remove', authenticateToken, requireRole(['admin']), (req, res) =>
+  postSimpleSsoRemove(req, res, 'github')
+);
+
+router.post('/m365-sso/remove', authenticateToken, requireRole(['admin']), (req, res) =>
+  postSimpleSsoRemove(req, res, 'm365')
+);
+
+router.post('/google-sso/enable', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const tenantId = getTenantId(req);
+    const result = await enableGoogleSso(db, tenantId);
+    if (!result.ok) {
+      if (result.error === 'not_eligible') {
+        return res.status(403).json({
+          error: 'This instance is not eligible for platform Google sign-in',
+          code: 'not_eligible',
+        });
+      }
+      return res.status(503).json({
+        error: 'Platform Google sign-in is temporarily unavailable. Try again or contact support.',
+        code: 'platform_unavailable',
+      });
+    }
+    const settings = googleSsoClientPatch(result.mode || (result.ok ? 'managed' : ''));
+    await notificationService.publish(
+      'settings-updated',
+      { settings, timestamp: new Date().toISOString() },
+      tenantId
+    );
+    res.json({ ok: true, mode: result.mode, source: result.source, settings });
+  } catch (error) {
+    console.error('Enable Google SSO error:', error);
+    res.status(500).json({ error: 'Failed to enable Google sign-in' });
+  }
+});
+
+router.post('/google-sso/restore-managed', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const tenantId = getTenantId(req);
+    const result = await restoreManagedGoogleSso(db, tenantId);
+    if (!result.ok) {
+      if (result.error === 'not_eligible') {
+        return res.status(403).json({
+          error: 'This instance is not eligible for platform Google sign-in',
+          code: 'not_eligible',
+        });
+      }
+      return res.status(503).json({
+        error: 'Platform Google sign-in is temporarily unavailable. Try again or contact support.',
+        code: 'platform_unavailable',
+      });
+    }
+    const settings = googleSsoClientPatch('managed');
+    await notificationService.publish(
+      'settings-updated',
+      { settings, timestamp: new Date().toISOString() },
+      tenantId
+    );
+    res.json({ ok: true, mode: 'managed', source: result.source, settings });
+  } catch (error) {
+    console.error('Restore managed Google SSO error:', error);
+    res.status(500).json({ error: 'Failed to restore platform Google sign-in' });
   }
 });
 

@@ -22,11 +22,31 @@ type ColumnOverlap = {
   bottom: number;
 };
 
+/**
+ * Live board only. Trash stays mounted (even when collapsed) with the same
+ * `data-kanban-column-id` values; an unscoped querySelector hits those first
+ * and every insert resolves to 0 (top of an empty trash column).
+ */
+function liveBoardRoot(): ParentNode | null {
+  if (typeof document === 'undefined') return null;
+  return document.querySelector('[data-kanban-scroll="board"]');
+}
+
+function columnRootById(columnId: string): HTMLElement | null {
+  const scope = liveBoardRoot() ?? (typeof document !== 'undefined' ? document : null);
+  if (!scope) return null;
+  const root = scope.querySelector(
+    `[data-kanban-column-id="${cssEscape(columnId)}"]`
+  );
+  return root instanceof HTMLElement ? root : null;
+}
+
 function eachKanbanColumn(
   visit: (id: string, rect: DOMRect, el: HTMLElement) => void
 ): void {
-  if (typeof document === 'undefined') return;
-  const roots = document.querySelectorAll('[data-kanban-column-id]');
+  const scope = liveBoardRoot();
+  if (!scope) return;
+  const roots = scope.querySelectorAll('[data-kanban-column-id]');
   for (const root of roots) {
     if (!(root instanceof HTMLElement)) continue;
     const id = root.getAttribute('data-kanban-column-id');
@@ -138,10 +158,8 @@ export function overlayIntersectsColumn(
   columnId: string
 ): boolean {
   if (typeof document === 'undefined') return false;
-  const root = document.querySelector(
-    `[data-kanban-column-id="${cssEscape(columnId)}"]`
-  );
-  if (!(root instanceof HTMLElement)) return false;
+  const root = columnRootById(columnId);
+  if (!root) return false;
   return rectIntersectionArea(overlay, root.getBoundingClientRect()) > 0;
 }
 
@@ -272,10 +290,10 @@ export function resolveColumnIdUnderRect(
 type DragOrigin = { columnId: string; insertIndex: number };
 
 /**
- * Same-column: covering a card above origin opens the hole before it (2 → top
- * without reaching the header). Covering a card at/after origin opens the hole
- * after it (1 → 2). Cross-column: wide top zone on the first card (~60%),
- * otherwise the 45% split (upper half = before, lower = between 1 and 2).
+ * Same-column: the vacated slot stays targetable. The card that slid into it
+ * uses an upper-half “put back” zone; the card immediately above uses a
+ * lower-half put-back zone. Other cards keep before/after. Cross-column:
+ * wide top zone on the first card (~60%), otherwise the 45% split.
  */
 function insertIndexOnCard(
   card: { index: number; top: number; height: number },
@@ -285,11 +303,21 @@ function insertIndexOnCard(
 ): number {
   const sameCol = !!origin && origin.columnId === columnId;
   if (sameCol && origin) {
-    if (card.index < origin.insertIndex) return card.index;
+    const originIdx = origin.insertIndex;
+    const frac = (y - card.top) / Math.max(1, card.height);
+    // Card that filled the hole: upper half returns to origin.
+    if (card.index === originIdx) {
+      return frac < 0.55 ? originIdx : card.index + 1;
+    }
+    // Card immediately above the hole: lower half returns to origin.
+    if (card.index === originIdx - 1) {
+      return frac < 0.45 ? card.index : originIdx;
+    }
+    if (card.index < originIdx) return card.index;
     return card.index + 1;
   }
-  const frac = card.index === 0 ? 0.6 : 0.45;
-  return y < card.top + card.height * frac ? card.index : card.index + 1;
+  const split = card.index === 0 ? 0.6 : 0.45;
+  return y < card.top + card.height * split ? card.index : card.index + 1;
 }
 
 /**
@@ -305,10 +333,8 @@ export function resolveInsertIndexFromOverlay(
 ): number | null {
   if (typeof document === 'undefined') return null;
 
-  const root = document.querySelector(
-    `[data-kanban-column-id="${cssEscape(columnId)}"]`
-  );
-  if (!(root instanceof HTMLElement)) return null;
+  const root = columnRootById(columnId);
+  if (!root) return null;
 
   const outside = insertOutsideTaskList(root, overlay.top, overlay.bottom);
   if (outside != null) return outside;
@@ -420,10 +446,12 @@ export function resolveKanbanDropTarget(args: {
   const sideways = overlayHasMovedSideways(overlay, overlayStartLeft);
 
   let columnId: string | null = null;
-  // Pointer in a dest column always wins. Overlay dest only after a real
-  // sideways move — otherwise a 12px sliver during a long same-column scroll
-  // locks every later slot to the adjacent column.
+  // Pointer column always wins when we know it — including origin. Overlay /
+  // painted dest after a sideways sliver used to steal same-column drags
+  // (ghost often sits ≥40px off the grab point) and freeze the dest slot.
   if (pointerCol && origin && pointerCol !== origin.columnId) {
+    columnId = pointerCol;
+  } else if (pointerCol && origin && pointerCol === origin.columnId) {
     columnId = pointerCol;
   } else if (overlayCol && origin && overlayCol !== origin.columnId && sideways) {
     columnId = overlayCol;
@@ -437,10 +465,8 @@ export function resolveKanbanDropTarget(args: {
   if (!columnId) return null;
 
   if (pointerCol === columnId) {
-    const root = document.querySelector(
-      `[data-kanban-column-id="${cssEscape(columnId)}"]`
-    );
-    if (root instanceof HTMLElement) {
+    const root = columnRootById(columnId);
+    if (root) {
       const holeInsert = placeholderInsertAtPointer(root, pointerY);
       if (holeInsert != null) return { columnId, insertIndex: holeInsert };
     }
@@ -510,10 +536,8 @@ export function resolveInsertIndexUnderPointer(
 ): number | null {
   if (typeof document === 'undefined') return null;
 
-  const root = document.querySelector(
-    `[data-kanban-column-id="${cssEscape(columnId)}"]`
-  );
-  if (!(root instanceof HTMLElement)) return null;
+  const root = columnRootById(columnId);
+  if (!root) return null;
 
   const holeInsert = placeholderInsertAtPointer(root, pointerY);
   if (holeInsert != null) return holeInsert;

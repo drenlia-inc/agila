@@ -1,9 +1,18 @@
 import { isMaskedApiKeyDisplay } from './maskSecret';
 
-const SKIP_KEYS = new Set(['WEBSITE_URL', 'APP_URL']);
+const SKIP_KEYS = new Set([
+  'WEBSITE_URL',
+  'APP_URL',
+  'GOOGLE_SSO_HUB_CALLBACK_URL',
+  'GOOGLE_SSO_LAST_SUCCESS_AT',
+  'GITHUB_SSO_LAST_SUCCESS_AT',
+  'M365_SSO_LAST_SUCCESS_AT',
+]);
 const SECRET_KEYS = new Set([
   'SMTP_PASSWORD',
   'GOOGLE_CLIENT_SECRET',
+  'GITHUB_CLIENT_SECRET',
+  'M365_CLIENT_SECRET',
   'AI_API_KEY',
   'AI_RUNNER_TOKEN',
   'S3_SECRET_ACCESS_KEY',
@@ -63,7 +72,12 @@ function isSiteSettingsKey(key: string): boolean {
 }
 
 function isSsoKey(key: string): boolean {
-  return key.startsWith('GOOGLE_');
+  return (
+    key.startsWith('GOOGLE_') ||
+    key.startsWith('GITHUB_') ||
+    key.startsWith('M365_') ||
+    key.startsWith('PLATFORM_GOOGLE_')
+  );
 }
 
 function isMailKey(key: string): boolean {

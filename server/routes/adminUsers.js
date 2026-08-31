@@ -187,7 +187,12 @@ router.put('/:userId', authenticateToken, requireRole(['admin']), async (req, re
 
     // Pseudo accounts: allow name edits only — never change email or activation
     const nextEmail = isPseudoAccount ? currentUser.email : email;
-    const nextIsActive = isPseudoAccount ? !!currentUser.is_active : !!isActive;
+    let nextIsActive = isPseudoAccount ? !!currentUser.is_active : !!isActive;
+
+    // Prevent admins from deactivating their own account
+    if (userId === req.user.id && !nextIsActive) {
+      return res.status(400).json({ error: 'Cannot deactivate your own account' });
+    }
 
     // Check if user is being activated (changing from inactive to active)
     const isBeingActivated = !currentUser.is_active && nextIsActive;
@@ -560,7 +565,10 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         id: memberId,
         name: memberName,
         color: memberColor,
-        userId: userId
+        user_id: userId,
+        email,
+        isActive: isActive || false,
+        hasActivated: Boolean(isActive),
       },
       timestamp: new Date().toISOString()
     }, getTenantId(req));

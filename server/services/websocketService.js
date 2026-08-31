@@ -9,6 +9,10 @@ import { extractTenantId, getTenantDatabase } from '../middleware/tenantRouting.
 import { wrapQuery } from '../utils/queryLogger.js';
 import { wsVerboseLog } from '../utils/serverDebug.js';
 import { getTenantDomain } from '../utils/tenantDomain.js';
+import {
+  invalidateOAuthConfigCache,
+  oauthSettingsEventTouchesCache,
+} from '../utils/oauthConfigCache.js';
 
 function userSocketRoom(tenantId, userId) {
   return tenantId ? `user-${tenantId}-${userId}` : `user-${userId}`;
@@ -576,6 +580,9 @@ class WebSocketService {
 
     // Admin settings events - broadcast to tenant-specific clients
     postgresNotificationService.subscribeToAllTenants('settings-updated', (data, tenantId) => {
+      if (oauthSettingsEventTouchesCache(data)) {
+        invalidateOAuthConfigCache(tenantId);
+      }
       if (tenantId) {
         this.io?.to(`tenant-${tenantId}`).emit('settings-updated', data);
       } else {

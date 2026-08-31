@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { loginSsoProviders } from '../utils/ssoAdminValidation';
 import { ArrowLeft, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { login } from '../api';
 import { setExplicitGuestLanguage } from '../utils/guestLanguage';
@@ -33,7 +34,11 @@ export default function ActivateAccount({ token, email, onBackToLogin, onAutoLog
   const [error, setError] = useState('');
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
   const [success, setSuccess] = useState(false);
-  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
+  const [ssoProviders, setSsoProviders] = useState({
+    google: false,
+    github: false,
+    m365: false,
+  });
 
   useEffect(() => {
     const syncTheme = () => setTheme(readDocumentTheme());
@@ -86,7 +91,7 @@ export default function ActivateAccount({ token, email, onBackToLogin, onAutoLog
         const response = await fetch('/api/settings');
         if (response.ok) {
           const settings = await response.json();
-          setGoogleOAuthEnabled(!!settings.GOOGLE_CLIENT_ID);
+          setSsoProviders(loginSsoProviders(settings));
         }
       } catch (error) {
         console.warn('Could not check Google OAuth status:', error);
@@ -158,7 +163,7 @@ export default function ActivateAccount({ token, email, onBackToLogin, onAutoLog
   }, [token, email, isLoadingProps, t]);
 
   const handleGoogleSignIn = async () => {
-    if (!googleOAuthEnabled) {
+    if (!ssoProviders.google) {
       setError(t('activateAccount.googleOAuthNotConfigured'));
       return;
     }
@@ -442,7 +447,7 @@ export default function ActivateAccount({ token, email, onBackToLogin, onAutoLog
         </form>
 
         {/* Google Sign-In Option */}
-        {googleOAuthEnabled && (
+        {ssoProviders.google && (
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
