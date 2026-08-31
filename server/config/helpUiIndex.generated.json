@@ -22,10 +22,10 @@
       "id": "help:github-sso",
       "attr": "help",
       "value": "github-sso",
-      "en": "This must match exactly what you configure in Google Cloud Console. Include the full URL with protocol: {{callbackUrl}}",
-      "fr": "Cela doit correspondre exactement à ce que vous configurez dans Google Cloud Console. Incluez l'URL complète avec le protocole : {{callbackUrl}}",
-      "searchEn": "This must match exactly what you configure in Google Cloud Console. Include the full URL with protocol: {{callbackUrl}} This must match exactly what you configure in Google Cloud Console. Include the full URL with protocol: {{callbackUrl}} e.g., {{callbackUrl}} GitHub Single Sign-on Configuration Disable GitHub sign-in github-sso",
-      "searchFr": "Cela doit correspondre exactement à ce que vous configurez dans Google Cloud Console. Incluez l'URL complète avec le protocole : {{callbackUrl}} Cela doit correspondre exactement à ce que vous configurez dans Google Cloud Console. Incluez l'URL complète avec le protocole : {{callbackUrl}} ex. : {{callbackUrl}} Configuration de l’authentification unique GitHub Désactiver la connexion GitHub github-sso",
+      "en": "GitHub Single Sign-on Configuration",
+      "fr": "Configuration de l’authentification unique GitHub",
+      "searchEn": "GitHub Single Sign-on Configuration GitHub Single Sign-on Configuration Disabled github-sso",
+      "searchFr": "Configuration de l’authentification unique GitHub Configuration de l’authentification unique GitHub Désactivé github-sso",
       "kind": "view",
       "mode": "kanban",
       "highlights": [
@@ -56,10 +56,10 @@
       "id": "help:m365-sso",
       "attr": "help",
       "value": "m365-sso",
-      "en": "GitHub Callback URL",
-      "fr": "URL de rappel GitHub",
-      "searchEn": "GitHub Callback URL GitHub Callback URL Must match the Authorization callback URL in GitHub: {{callbackUrl}} e.g., {{callbackUrl}} Microsoft 365 Single Sign-on Configuration Disable Microsoft 365 sign-in m365-sso",
-      "searchFr": "URL de rappel GitHub URL de rappel GitHub Doit correspondre à l’URL de rappel d’autorisation dans GitHub : {{callbackUrl}} ex. : {{callbackUrl}} Configuration de l’authentification unique Microsoft 365 Désactiver la connexion Microsoft 365 m365-sso",
+      "en": "e.g., {{callbackUrl}}",
+      "fr": "ex. : {{callbackUrl}}",
+      "searchEn": "e.g., {{callbackUrl}} e.g., {{callbackUrl}} Microsoft 365 Single Sign-on Configuration Disabled m365-sso",
+      "searchFr": "ex. : {{callbackUrl}} ex. : {{callbackUrl}} Configuration de l’authentification unique Microsoft 365 Désactivé m365-sso",
       "kind": "view",
       "mode": "kanban",
       "highlights": [
@@ -568,8 +568,8 @@
       "value": "GOOGLE_SSO_MANAGED",
       "en": "Disable Google sign-in",
       "fr": "Désactiver la connexion Google",
-      "searchEn": "Disable Google sign-in Disable Google sign-in This instance uses the platform Google client. Sign-in returns through auth.agila.dev, then back to this site. You do not need a Cloud Console project for this instance. Hub callback GOOGLE_SSO_MANAGED",
-      "searchFr": "Désactiver la connexion Google Désactiver la connexion Google Cette instance utilise le client Google de la plateforme. La connexion revient par auth.agila.dev, puis sur ce site. Vous n’avez pas besoin d’un projet Cloud Console pour cette instance. URL de rappel du hub GOOGLE_SSO_MANAGED",
+      "searchEn": "Disable Google sign-in Disable Google sign-in Google sign-in is off. Platform credentials stay saved. Re-enable to restore managed sign-in. Google sign-in is off. Your client settings stay saved. Re-enable to use them again. This instance uses the platform Google client. Sign-in returns through auth.agila.dev, then back to this site. You do not need a Cloud Console project for this instance. Hub callback GOOGLE_SSO_MANAGED",
+      "searchFr": "Désactiver la connexion Google Désactiver la connexion Google La connexion Google est désactivée. Les identifiants de la plateforme restent enregistrés. Réactivez pour rétablir la connexion gérée. La connexion Google est désactivée. Votre configuration client reste enregistrée. Réactivez pour la réutiliser. Cette instance utilise le client Google de la plateforme. La connexion revient par auth.agila.dev, puis sur ce site. Vous n’avez pas besoin d’un projet Cloud Console pour cette instance. URL de rappel du hub GOOGLE_SSO_MANAGED",
       "kind": "admin",
       "hash": "#admin#system-settings#sso",
       "highlights": [
@@ -585,8 +585,8 @@
       "value": "GOOGLE_SSO_MODE",
       "en": "No sign-in providers are configured. Add a provider to get started.",
       "fr": "Aucun fournisseur de connexion n’est configuré. Ajoutez-en un pour commencer.",
-      "searchEn": "No sign-in providers are configured. Add a provider to get started. No sign-in providers are configured. Add a provider to get started. Google Single Sign-on Configuration GOOGLE_SSO_MODE",
-      "searchFr": "Aucun fournisseur de connexion n’est configuré. Ajoutez-en un pour commencer. Aucun fournisseur de connexion n’est configuré. Ajoutez-en un pour commencer. Configuration de l’authentification unique Google GOOGLE_SSO_MODE",
+      "searchEn": "No sign-in providers are configured. Add a provider to get started. No sign-in providers are configured. Add a provider to get started. Google Single Sign-on Configuration Managed GOOGLE_SSO_MODE",
+      "searchFr": "Aucun fournisseur de connexion n’est configuré. Ajoutez-en un pour commencer. Aucun fournisseur de connexion n’est configuré. Ajoutez-en un pour commencer. Configuration de l’authentification unique Google Géré GOOGLE_SSO_MODE",
       "kind": "admin",
       "hash": "#admin#system-settings#sso",
       "highlights": [
@@ -653,10 +653,10 @@
       "value": "MAIL_ENABLED",
       "en": "Switch to Custom SMTP",
       "fr": "Passer à SMTP personnalisé",
-      "searchEn": "Switch to Custom SMTP Switch to Custom SMTP Mail Server Status Email functionality is disabled in demo mode to prevent sending emails from demo environments. ⚠️ Fill in the required fields below and test the mail server configuration. The toggle will be enabled after a successful test. Mail server tested successfully! You can manually enable/disable it as needed. If disabled, you'll need to test again before re-enabling. MAIL_ENABLED",
-      "searchFr": "Passer à SMTP personnalisé Passer à SMTP personnalisé État du serveur de messagerie La fonctionnalité email est désactivée en mode démo pour empêcher l'envoi d'emails depuis les environnements de démonstration. ⚠️ Remplissez les champs requis ci-dessous et testez la configuration du serveur de messagerie. Le bouton sera activé après un test réussi. Serveur de messagerie testé avec succès ! Vous pouvez l'activer/désactiver manuellement selon vos besoins. S'il est désactivé, vous devrez tester à nouveau avant de le réactiver. MAIL_ENABLED",
+      "searchEn": "Switch to Custom SMTP Switch to Custom SMTP Mail Server Status Email functionality is disabled in demo mode to prevent sending emails from demo environments. Mail server tested successfully! You can manually enable/disable it as needed. If disabled, you'll need to test again before re-enabling. Disabled (Demo) MAIL_ENABLED",
+      "searchFr": "Passer à SMTP personnalisé Passer à SMTP personnalisé État du serveur de messagerie La fonctionnalité email est désactivée en mode démo pour empêcher l'envoi d'emails depuis les environnements de démonstration. Serveur de messagerie testé avec succès ! Vous pouvez l'activer/désactiver manuellement selon vos besoins. S'il est désactivé, vous devrez tester à nouveau avant de le réactiver. Désactivé (Démo) MAIL_ENABLED",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"MAIL_ENABLED\"]"
       ],
@@ -673,7 +673,7 @@
       "searchEn": "MAIL SECTION  MAIL_SECTION",
       "searchFr": "MAIL SECTION  MAIL_SECTION",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"MAIL_SECTION\"]"
       ],
@@ -690,7 +690,7 @@
       "searchEn": "Save Configuration Save Configuration Email testing is disabled in demo mode Email testing is not needed for managed email service Fill in all required fields to test email MAIL_TEST_EMAIL",
       "searchFr": "Enregistrer la configuration Enregistrer la configuration Le test d'email est désactivé en mode démo Le test d'email n'est pas nécessaire pour le service de messagerie géré Remplissez tous les champs requis pour tester l'email MAIL_TEST_EMAIL",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"MAIL_TEST_EMAIL\"]"
       ],
@@ -707,7 +707,7 @@
       "searchEn": "Keep sent/failed (days) Email Webhooks Automatically delete sent and failed queue rows older than this many days. Pending notifications are never auto-deleted. Keep sent/failed (days) NOTIFICATION_QUEUE_RETENTION_DAYS",
       "searchFr": "Conserver envoyés/échoués (jours) Email Webhooks Supprime automatiquement les lignes envoyées ou échouées plus anciennes que ce nombre de jours. Les notifications en attente ne sont jamais purgées automatiquement. Conserver envoyés/échoués (jours) NOTIFICATION_QUEUE_RETENTION_DAYS",
       "kind": "admin",
-      "hash": "#admin#system-settings#notification-queue",
+      "hash": "#admin#notifications#queue",
       "highlights": [
         "[data-setting-key=\"NOTIFICATION_QUEUE_RETENTION_DAYS\"]"
       ],
@@ -724,7 +724,7 @@
       "searchEn": "Notifications A comment is added to a task I'm involved in Get notified when comments are added to tasks you're assigned to, watching, collaborating on, or requested A task is created and I'm the requester Get notified when tasks you requested are created A task is updated where I'm the requester Get notified when tasks you requested are modified These defaults apply to email when email delivery is enabled. They do not send while webhooks-only is selected. Email Throttling NOTIFICATIONS_SECTION",
       "searchFr": "Notifications Un commentaire est ajouté à une tâche à laquelle je participe Être notifié lorsque des commentaires sont ajoutés aux tâches qui vous sont assignées, que vous surveillez, sur lesquelles vous collaborez, ou que vous avez demandées Une tâche est créée et je suis le demandeur Être notifié lorsque les tâches que vous avez demandées sont créées Une tâche est mise à jour où je suis le demandeur Être notifié lorsque les tâches que vous avez demandées sont modifiées Ces valeurs par défaut s'appliquent à l'email lorsque l'envoi email est activé. Elles n'envoient rien si « webhooks uniquement » est sélectionné. Limitation des emails NOTIFICATIONS_SECTION",
       "kind": "admin",
-      "hash": "#admin#system-settings#notifications",
+      "hash": "#admin#notifications#notification-settings",
       "highlights": [
         "[data-setting-key=\"NOTIFICATIONS_SECTION\"]"
       ],
@@ -962,7 +962,7 @@
       "searchEn": "From Email 587 (TLS), 465 (SSL), 25 (plain). Tab into this field to auto-fill with common port. From Email Email address that appears as sender From Name SMTP_FROM_EMAIL",
       "searchFr": "Email expéditeur 587 (TLS), 465 (SSL), 25 (plain). Appuyez sur Tab dans ce champ pour le remplir automatiquement avec le port commun. Email expéditeur Adresse email qui apparaît comme expéditeur Nom expéditeur SMTP_FROM_EMAIL",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"SMTP_FROM_EMAIL\"]"
       ],
@@ -979,7 +979,7 @@
       "searchEn": "From Name Tab into this field to auto-fill with common port. From Email Email address that appears as sender From Name Kanban Admin Display name that appears as sender SMTP Username SMTP_FROM_NAME",
       "searchFr": "Nom expéditeur Appuyez sur Tab dans ce champ pour le remplir automatiquement avec le port commun. Email expéditeur Adresse email qui apparaît comme expéditeur Nom expéditeur Administrateur Kanban Nom d'affichage qui apparaît comme expéditeur Nom d'utilisateur SMTP SMTP_FROM_NAME",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"SMTP_FROM_NAME\"]"
       ],
@@ -996,7 +996,7 @@
       "searchEn": "SMTP Host SMTP Host Hostname or IP of your SMTP server. SMTP_HOST",
       "searchFr": "Hôte SMTP Hôte SMTP Nom d'hôte ou IP de votre serveur SMTP. SMTP_HOST",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"SMTP_HOST\"]"
       ],
@@ -1013,7 +1013,7 @@
       "searchEn": "SMTP Password Display name that appears as sender SMTP Username Usually your email address SMTP Password SMTP_PASSWORD",
       "searchFr": "Mot de passe SMTP Nom d'affichage qui apparaît comme expéditeur Nom d'utilisateur SMTP Généralement votre adresse email Mot de passe SMTP SMTP_PASSWORD",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"SMTP_PASSWORD\"]"
       ],
@@ -1030,7 +1030,7 @@
       "searchEn": "SMTP Port Hostname or IP of your SMTP server. Tab into this field to auto-fill with Gmail example. SMTP Port SMTP_PORT",
       "searchFr": "Port SMTP Nom d'hôte ou IP de votre serveur SMTP. Appuyez sur Tab dans ce champ pour le remplir automatiquement avec l'exemple Gmail. Port SMTP SMTP_PORT",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"SMTP_PORT\"]"
       ],
@@ -1047,7 +1047,7 @@
       "searchEn": "SMTP Security Leave blank to keep current password Enter your SMTP password Use App Password for Gmail SMTP Security TLS (Recommended) SSL None (Plain) TLS recommended for modern servers SMTP_SECURE",
       "searchFr": "Sécurité SMTP Laisser vide pour conserver le mot de passe actuel Entrer votre mot de passe SMTP Utilisez un mot de passe d'application pour Gmail Sécurité SMTP TLS (Recommandé) SSL Aucun (Plain) TLS recommandé pour les serveurs modernes SMTP_SECURE",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"SMTP_SECURE\"]"
       ],
@@ -1064,7 +1064,7 @@
       "searchEn": "SMTP Username Email address that appears as sender From Name Kanban Admin Display name that appears as sender SMTP Username Usually your email address SMTP_USERNAME",
       "searchFr": "Nom d'utilisateur SMTP Adresse email qui apparaît comme expéditeur Nom expéditeur Administrateur Kanban Nom d'affichage qui apparaît comme expéditeur Nom d'utilisateur SMTP Généralement votre adresse email SMTP_USERNAME",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"SMTP_USERNAME\"]"
       ],
@@ -1132,7 +1132,7 @@
       "searchEn": "Task email notifications Task email notifications Delivery is set to webhooks only, so task emails are not queued. Webhook messages still go through the Notification Queue. Switch back to Email or Email and webhooks to use this pause switch. When off, task activity emails stay in the Notification Queue and are not sent. User invitations and password reset emails are not affected. TASK_EMAIL_NOTIFICATIONS_ENABLED",
       "searchFr": "Notifications email de tâches Notifications email de tâches L'envoi est défini sur webhooks uniquement, donc les emails de tâches ne sont pas mis en file. Les messages webhook passent toujours par la file d'attente. Revenez à Email ou Email et webhooks pour utiliser cette pause. Lorsque c'est désactivé, les emails d'activité de tâches restent dans la file d'attente et ne sont pas envoyés. Les emails d'invitation et de réinitialisation de mot de passe ne sont pas affectés. TASK_EMAIL_NOTIFICATIONS_ENABLED",
       "kind": "admin",
-      "hash": "#admin#system-settings#mail-server",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-setting-key=\"TASK_EMAIL_NOTIFICATIONS_ENABLED\"]"
       ],
@@ -1183,7 +1183,7 @@
       "searchEn": "Event types Minimum priority Any priority Event types Task messages include title, ID, actor, requester, assignee, and date/time. Board messages include board title, ID, project, actor, and date/time. WEBHOOK_EVENT_TYPES",
       "searchFr": "Types d'événements Priorité minimale Toutes les priorités Types d'événements Les messages de tâche incluent le titre, l'ID, l'acteur, le demandeur, l'assigné et la date/heure. Les messages de tableau incluent le titre, l'ID, le projet, l'acteur et la date/heure. WEBHOOK_EVENT_TYPES",
       "kind": "admin",
-      "hash": "#admin#system-settings#webhooks",
+      "hash": "#admin#notifications#webhooks",
       "highlights": [
         "[data-setting-key=\"WEBHOOK_EVENT_TYPES\"]"
       ],
@@ -1248,8 +1248,8 @@
       "value": "admin-ai",
       "en": "Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs.",
       "fr": "Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code.",
-      "searchEn": "Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings ta",
-      "searchFr": "Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos t",
+      "searchEn": "Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. S",
+      "searchFr": "Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de mess",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1265,8 +1265,8 @@
       "value": "admin-app-settings",
       "en": "Configure application settings, user preferences, and system behavior in the App Settings tab.",
       "fr": "Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application.",
-      "searchEn": "Configure application settings, user preferences, and system behavior in the App Settings tab. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting",
-      "searchFr": "Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dan",
+      "searchEn": "Configure application settings, user preferences, and system behavior in the App Settings tab. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and tr",
+      "searchFr": "Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'applicat",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1299,8 +1299,8 @@
       "value": "admin-file-uploads",
       "en": "Set attachment size limits and which file types users may upload.",
       "fr": "Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser.",
-      "searchEn": "Set attachment size limits and which file types users may upload. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. a",
-      "searchFr": "Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâche",
+      "searchEn": "Set attachment size limits and which file types users may upload. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue.",
+      "searchFr": "Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, conne",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1367,12 +1367,29 @@
       "value": "admin-mail-server",
       "en": "Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality.",
       "fr": "Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail.",
-      "searchEn": "Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored —",
-      "searchFr": "Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Configurez les par",
+      "searchEn": "Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels",
+      "searchFr": "Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails systèm",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
         "[data-tour-id=\"admin-mail-server\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-notifications",
+      "attr": "tour",
+      "value": "admin-notifications",
+      "en": "Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue.",
+      "fr": "Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente.",
+      "searchEn": "Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to ",
+      "searchFr": "Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie p",
+      "kind": "admin",
+      "hash": "#admin",
+      "highlights": [
+        "[data-tour-id=\"admin-notifications\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
@@ -1384,8 +1401,8 @@
       "value": "admin-priorities",
       "en": "Set up priority levels for your tasks to help team members understand urgency.",
       "fr": "Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence.",
-      "searchEn": "Set up priority levels for your tasks to help team members understand urgency. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning perio",
-      "searchFr": "Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l",
+      "searchEn": "Set up priority levels for your tasks to help team members understand urgency. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints fo",
+      "searchFr": "Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences uti",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1401,8 +1418,8 @@
       "value": "admin-project-settings",
       "en": "Manage project-specific settings, workflows, and custom configurations in Project Settings.",
       "fr": "Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet.",
-      "searchEn": "Manage project-specific settings, workflows, and custom configurations in Project Settings. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achieve",
-      "searchFr": "Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planif",
+      "searchEn": "Manage project-specific settings, workflows, and custom configurations in Project Settings. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features includi",
+      "searchFr": "Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du pr",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1435,7 +1452,7 @@
       "value": "admin-site-settings",
       "en": "Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header.",
       "fr": "Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application.",
-      "searchEn": "Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. Use this button to show or hide the system metrics panel. When enabled, you'll see real-time monitoring of RAM, CPU, and disk usage. Your preference is saved and will persist across sessions. The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance.",
+      "searchEn": "Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. Use this button to show or hide the system metrics panel. When enabled, you'll see real-time monitoring of RAM, CPU, and disk usage. Your preference is saved and will persist across sessions. The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SS",
       "searchFr": "Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Utilisez ce bouton pour afficher ou masquer le panneau de métriques système. Lorsqu'il est activé, vous verrez la surveillance en temps réel de la RAM, du CPU et de l'utilisation du disque. Votre préférence est enregistrée et persistera entre les sessions. Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, ",
       "kind": "admin",
       "hash": "#admin",
@@ -1469,8 +1486,8 @@
       "value": "admin-sso",
       "en": "Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials.",
       "fr": "Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth.",
-      "searchEn": "Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatibl",
-      "searchFr": "Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Configurez les paramètres du serveur de messagerie pour l'envoi de",
+      "searchEn": "Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and config",
+      "searchFr": "Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1486,8 +1503,8 @@
       "value": "admin-storage",
       "en": "Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends.",
       "fr": "Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends.",
-      "searchEn": "Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment s",
-      "searchFr": "Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionn",
+      "searchEn": "Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and co",
+      "searchFr": "Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 ",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1501,10 +1518,10 @@
       "id": "tour:admin-system-settings",
       "attr": "tour",
       "value": "admin-system-settings",
-      "en": "System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance.",
-      "fr": "Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance.",
-      "searchEn": "System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, mail, storage, file uploads, AI, and notification delivery for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Configure email server settings for sending notifications, invitations, and other system emai",
-      "searchFr": "Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, la messagerie, le stockage, les téléversements, l'IA et l'envoi des notifications pour cette instance. Configurez l'aut",
+      "en": "System Settings groups SSO, storage, file uploads, and AI for this instance.",
+      "fr": "Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance.",
+      "searchEn": "System Settings groups SSO, storage, file uploads, and AI for this instance. The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. In the admin panel, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size ",
+      "searchFr": "Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore. Dans le panneau d'administration, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez l",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1554,8 +1571,8 @@
       "value": "admin-tags",
       "en": "Create and manage tags to categorize and organize your tasks effectively.",
       "fr": "Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches.",
-      "searchEn": "Create and manage tags to categorize and organize your tasks effectively. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific s",
-      "searchFr": "Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les me",
+      "searchEn": "Create and manage tags to categorize and organize your tasks effectively. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom con",
+      "searchFr": "Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [

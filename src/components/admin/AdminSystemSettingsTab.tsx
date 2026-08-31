@@ -2,14 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Sparkles } from 'lucide-react';
 import AdminSSOTab from './AdminSSOTab';
-import AdminMailTab from './AdminMailTab';
 import AdminStorageTab from './AdminStorageTab';
 import AdminFileUploadsTab from './AdminFileUploadsTab';
 import AdminAISettingsTab from './AdminAISettingsTab';
-import AdminNotificationQueueTab from './AdminNotificationQueueTab';
-import AdminNotificationsSettingsTab from './AdminNotificationsSettingsTab';
-import AdminWebhooksTab from './AdminWebhooksTab';
-import { BetaSup } from '../HelpAssistantTitle';
 import { AdminDirtyDot } from './AdminFieldDraftControls';
 import {
   getDirtySystemSettingsSubTabs,
@@ -32,15 +27,6 @@ interface AdminSystemSettingsTabProps {
   onSettingsReload?: (options?: { quiet?: boolean }) => Promise<void>;
   /** Patch saved + draft settings without a full Admin reload (keeps modals mounted). */
   onApplySettingsPatch?: (patch: Record<string, string | undefined>) => void;
-  onTestEmail: () => Promise<void>;
-  onMailServerDisabled: () => void;
-  isTestingEmail: boolean;
-  showTestEmailModal: boolean;
-  testEmailResult: any;
-  onCloseTestModal: () => void;
-  showTestEmailErrorModal: boolean;
-  testEmailError: string;
-  onCloseTestErrorModal: () => void;
   onLocalDirtyChange?: (dirty: boolean) => void;
   onRegisterLocalSave?: (save: (() => Promise<void>) | null) => void;
   discardNonce?: number;
@@ -48,36 +34,24 @@ interface AdminSystemSettingsTabProps {
 
 function subTabFromHash(hash: string): SystemSettingsSubTab {
   const bare = hash.replace(/^#/, '');
-  if (bare.endsWith('#mail-server')) return 'mail-server';
   if (bare.endsWith('#storage')) return 'storage';
   if (bare.endsWith('#file-uploads')) return 'file-uploads';
   if (bare.endsWith('#ai')) return 'ai';
-  if (bare.endsWith('#notifications')) return 'notifications';
-  if (bare.endsWith('#webhooks')) return 'webhooks';
-  if (bare.endsWith('#notification-queue')) return 'notification-queue';
   return 'sso';
 }
 
 const HASH_BY_TAB: Record<SystemSettingsSubTab, string> = {
   sso: '#admin#system-settings#sso',
-  'mail-server': '#admin#system-settings#mail-server',
   storage: '#admin#system-settings#storage',
   'file-uploads': '#admin#system-settings#file-uploads',
   ai: '#admin#system-settings#ai',
-  notifications: '#admin#system-settings#notifications',
-  webhooks: '#admin#system-settings#webhooks',
-  'notification-queue': '#admin#system-settings#notification-queue',
 };
 
 const TOUR_ID_BY_TAB: Record<SystemSettingsSubTab, string> = {
   sso: 'admin-sso',
-  'mail-server': 'admin-mail-server',
   storage: 'admin-storage',
   'file-uploads': 'admin-file-uploads',
   ai: 'admin-ai',
-  notifications: 'admin-notifications',
-  webhooks: 'admin-webhooks',
-  'notification-queue': 'admin-notification-queue',
 };
 
 const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
@@ -90,15 +64,6 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
   onAutoSave,
   onSettingsReload,
   onApplySettingsPatch,
-  onTestEmail,
-  onMailServerDisabled,
-  isTestingEmail,
-  showTestEmailModal,
-  testEmailResult,
-  onCloseTestModal,
-  showTestEmailErrorModal,
-  testEmailError,
-  onCloseTestErrorModal,
   onLocalDirtyChange,
   onRegisterLocalSave,
   discardNonce = 0,
@@ -116,19 +81,12 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
   const [aiLocalDirty, setAiLocalDirty] = useState(false);
   /** false when licensed Basic (AI_TIER=off); true when self-host or Pro */
   const [aiAllowedByPlan, setAiAllowedByPlan] = useState(true);
-  const [queueRetentionLocalDirty, setQueueRetentionLocalDirty] = useState(false);
   const aiSaveRef = useRef<(() => Promise<void>) | null>(null);
-  const queueSaveRef = useRef<(() => Promise<void>) | null>(null);
   const aiLocalDirtyRef = useRef(aiLocalDirty);
-  const queueRetentionLocalDirtyRef = useRef(queueRetentionLocalDirty);
   aiLocalDirtyRef.current = aiLocalDirty;
-  queueRetentionLocalDirtyRef.current = queueRetentionLocalDirty;
 
   const registerAiSave = useCallback((save: (() => Promise<void>) | null) => {
     aiSaveRef.current = save;
-  }, []);
-  const registerQueueSave = useCallback((save: (() => Promise<void>) | null) => {
-    queueSaveRef.current = save;
   }, []);
 
   useEffect(() => {
@@ -137,7 +95,6 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
       try {
         const { data } = await api.get('/auth/license-info');
         if (cancelled) return;
-        // Licensing disabled (self-host) → AI allowed
         if (!data?.enabled) {
           setAiAllowedByPlan(true);
           return;
@@ -149,7 +106,6 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
         } else if (tier === 'full' || tier === 'limited') {
           setAiAllowedByPlan(true);
         } else {
-          // Legacy: no AI_TIER — Basic plan has no AI
           setAiAllowedByPlan(support === 'pro' || support === 'community' || support === '');
         }
       } catch {
@@ -173,9 +129,6 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
       if (aiLocalDirtyRef.current && aiSaveRef.current) {
         await aiSaveRef.current();
       }
-      if (queueRetentionLocalDirtyRef.current && queueSaveRef.current) {
-        await queueSaveRef.current();
-      }
     });
     return () => onRegisterLocalSave(null);
   }, [onRegisterLocalSave]);
@@ -190,16 +143,15 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
   }, [activeSubTab]);
 
   useEffect(() => {
-    onLocalDirtyChange?.(aiLocalDirty || queueRetentionLocalDirty);
-  }, [aiLocalDirty, queueRetentionLocalDirty, onLocalDirtyChange]);
+    onLocalDirtyChange?.(aiLocalDirty);
+  }, [aiLocalDirty, onLocalDirtyChange]);
 
   const dirtySubTabs = useMemo(
     () =>
       getDirtySystemSettingsSubTabs(settings, editingSettings, {
         aiLocalDirty,
-        queueRetentionLocalDirty,
       }),
-    [settings, editingSettings, aiLocalDirty, queueRetentionLocalDirty]
+    [settings, editingSettings, aiLocalDirty]
   );
 
   const handleSubTabChange = (tab: SystemSettingsSubTab) => {
@@ -237,9 +189,8 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
       {panelActive ? (
         <AdminHubSubnavPortal>
           <div className={adminHubSubnavShellClass}>
-            <nav className="flex space-x-6 min-w-max" aria-label="System settings tabs">
+            <nav className="flex space-x-6 min-w-max" aria-label={t('systemSettings.subnav')}>
               {subNavBtn('sso', t('tabs.sso'))}
-              {subNavBtn('mail-server', t('tabs.mailServer'))}
               {subNavBtn('storage', t('tabs.storage'))}
               {subNavBtn('file-uploads', t('appSettings.fileUploads'))}
               {aiAllowedByPlan &&
@@ -256,15 +207,6 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
                     aria-hidden
                   />
                 )}
-              {subNavBtn('notifications', t('appSettings.notifications'))}
-              {subNavBtn(
-                'webhooks',
-                <>
-                  {t('webhooks.tabLabel')}
-                  <BetaSup />
-                </>
-              )}
-              {subNavBtn('notification-queue', t('appSettings.notificationQueue'))}
             </nav>
           </div>
         </AdminHubSubnavPortal>
@@ -281,32 +223,6 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
             onCancel={onCancel}
             onSettingsReload={onSettingsReload}
             onApplySettingsPatch={onApplySettingsPatch}
-          />
-        </div>
-      )}
-
-      {visitedSubTabs.has('mail-server') && (
-        <div
-          className={activeSubTab === 'mail-server' ? undefined : 'hidden'}
-          aria-hidden={activeSubTab !== 'mail-server'}
-        >
-          <AdminMailTab
-            settings={settings}
-            editingSettings={editingSettings}
-            onSettingsChange={onSettingsChange}
-            onSave={onSave}
-            onCancel={onCancel}
-            onTestEmail={onTestEmail}
-            onMailServerDisabled={onMailServerDisabled}
-            isTestingEmail={isTestingEmail}
-            showTestEmailModal={showTestEmailModal}
-            testEmailResult={testEmailResult}
-            onCloseTestModal={onCloseTestModal}
-            showTestEmailErrorModal={showTestEmailErrorModal}
-            testEmailError={testEmailError}
-            onCloseTestErrorModal={onCloseTestErrorModal}
-            onAutoSave={onAutoSave}
-            onSettingsReload={onSettingsReload}
           />
         </div>
       )}
@@ -353,48 +269,6 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
             onAutoSave={onAutoSave}
             onLocalDirtyChange={setAiLocalDirty}
             onRegisterLocalSave={registerAiSave}
-            discardNonce={discardNonce}
-          />
-        </div>
-      )}
-
-      {visitedSubTabs.has('notifications') && (
-        <div
-          className={activeSubTab === 'notifications' ? undefined : 'hidden'}
-          aria-hidden={activeSubTab !== 'notifications'}
-        >
-          <AdminNotificationsSettingsTab
-            settings={settings}
-            editingSettings={editingSettings}
-            onSettingsChange={onSettingsChange}
-            onSave={onSave}
-            discardNonce={discardNonce}
-          />
-        </div>
-      )}
-
-      {visitedSubTabs.has('webhooks') && (
-        <div
-          className={activeSubTab === 'webhooks' ? undefined : 'hidden'}
-          aria-hidden={activeSubTab !== 'webhooks'}
-        >
-          <AdminWebhooksTab
-            settings={settings}
-            editingSettings={editingSettings}
-            onSettingsChange={onSettingsChange}
-            onSave={onSave}
-          />
-        </div>
-      )}
-
-      {visitedSubTabs.has('notification-queue') && (
-        <div
-          className={`min-w-0 max-w-full ${activeSubTab === 'notification-queue' ? undefined : 'hidden'}`}
-          aria-hidden={activeSubTab !== 'notification-queue'}
-        >
-          <AdminNotificationQueueTab
-            onLocalDirtyChange={setQueueRetentionLocalDirty}
-            onRegisterLocalSave={registerQueueSave}
             discardNonce={discardNonce}
           />
         </div>

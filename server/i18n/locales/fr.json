@@ -180,6 +180,21 @@
       "body5": "Cordialement,",
       "body6": "L'équipe {siteName}"
     },
+    "testEmail": {
+      "subject": "Test e-mail — {siteName}",
+      "headline": "Test e-mail réussi",
+      "greeting": "Bonjour,",
+      "body1": "Ceci est un message de test de {siteName}.",
+      "body2": "Si vous pouvez lire ceci, la configuration de votre serveur de messagerie fonctionne.",
+      "detailsTitle": "Détails du test",
+      "sentAt": "Envoyé le",
+      "from": "De",
+      "smtpHost": "Hôte SMTP",
+      "smtpPort": "Port SMTP",
+      "security": "Sécurité",
+      "body3": "Cordialement,",
+      "body4": "L'équipe {siteName}"
+    },
     "commentNotification": {
       "subject": "💬 Nouveau commentaire sur : {taskTitle}",
       "title": "Nouveau commentaire",

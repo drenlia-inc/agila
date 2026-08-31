@@ -32,6 +32,8 @@ class EmailService {
       'SITE_LOGO',
       'SITE_LOGO_DARK',
       'HIDE_SITE_LOGO',
+      'APP_URL',
+      'WEBSITE_URL',
     ];
     
     // Use Promise.all to fetch all settings in parallel
@@ -120,8 +122,18 @@ class EmailService {
   /**
    * Validate email configuration for testing (doesn't require MAIL_ENABLED to be true)
    */
-  async validateEmailConfigForTesting() {
-    const settings = await this.getEmailSettings();
+  async validateEmailConfigForTesting(overrides = {}) {
+    const stored = await this.getEmailSettings();
+    const settings = { ...stored };
+    for (const [key, raw] of Object.entries(overrides || {})) {
+      if (!key.startsWith('SMTP_')) continue;
+      const value = String(raw ?? '').trim();
+      if (!value) continue;
+      if (key === 'SMTP_PASSWORD' && (value === '••••••••' || value === '***' || /\.\.\./.test(value))) {
+        continue;
+      }
+      settings[key] = value;
+    }
     
     // Check if demo mode is enabled
     if (process.env.DEMO_ENABLED === 'true') {
@@ -193,8 +205,8 @@ class EmailService {
   /**
    * Send test email to verify configuration
    */
-  async sendTestEmail(recipientEmail) {
-    const validation = await this.validateEmailConfigForTesting();
+  async sendTestEmail(recipientEmail, overrides = {}) {
+    const validation = await this.validateEmailConfigForTesting(overrides);
     if (!validation.valid) {
       throw validation;
     }
@@ -202,30 +214,31 @@ class EmailService {
     const settings = validation.settings;
     const transporter = await this.createTransporter(settings);
 
+    const rawBase = String(settings.APP_URL || settings.WEBSITE_URL || '').trim();
+    const baseUrl = /^https?:\/\//i.test(rawBase) ? rawBase.replace(/\/+$/, '') : '';
+    const sentAt = new Date().toISOString();
+    const emailTemplate = await EmailTemplates.testEmail({
+      siteName: settings.SITE_NAME || 'Agila',
+      siteLogo: settings.SITE_LOGO,
+      siteLogoDark: settings.SITE_LOGO_DARK,
+      hideSiteLogo: settings.HIDE_SITE_LOGO === 'true',
+      baseUrl,
+      db: this.db,
+      recipientEmail,
+      fromEmail: settings.SMTP_FROM_EMAIL,
+      smtpHost: settings.SMTP_HOST,
+      smtpPort: settings.SMTP_PORT,
+      smtpSecure: settings.SMTP_SECURE || 'tls',
+      sentAt,
+    });
+
     const testEmailContent = {
       from: `"${settings.SMTP_FROM_NAME || 'Agila'}" <${settings.SMTP_FROM_EMAIL}>`,
       to: recipientEmail,
-      subject: `Email Test - ${settings.SITE_NAME || 'Agila'}`,
-      text: `Hello!\n\nThis is a test email from your Agila application.\n\nIf you're reading this, your email configuration is working correctly!\n\nSent at: ${new Date().toISOString()}\n\nBest regards,\nAgila System`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2563eb;">📧 Email Test Successful!</h2>
-          <p>Hello!</p>
-          <p>This is a test email from your <strong>Agila</strong> application.</p>
-          <p>If you're reading this, your email configuration is working correctly! 🎉</p>
-          <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
-            <p><strong>Test Details:</strong></p>
-            <ul>
-              <li><strong>Sent at:</strong> ${new Date().toISOString()}</li>
-              <li><strong>From:</strong> ${settings.SMTP_FROM_EMAIL}</li>
-              <li><strong>SMTP Host:</strong> ${settings.SMTP_HOST}</li>
-              <li><strong>SMTP Port:</strong> ${settings.SMTP_PORT}</li>
-              <li><strong>Security:</strong> ${(settings.SMTP_SECURE || 'tls').toUpperCase()}</li>
-            </ul>
-          </div>
-          <p>Best regards,<br><strong>Agila System</strong></p>
-        </div>
-      `
+      subject: emailTemplate.subject,
+      text: emailTemplate.text,
+      html: emailTemplate.html,
+      attachments: emailTemplate.attachments || [],
     };
 
     console.log('📧 Sending test email to:', recipientEmail);

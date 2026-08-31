@@ -38,6 +38,13 @@ import {
   applyPublicSsoSettings,
   isDemoSsoDisabled,
 } from '../constants/ssoSettings.js';
+import {
+  MAIL_ADMIN_INTERNAL_KEYS,
+  SMTP_MANAGED_ELIGIBLE_KEY,
+  MAIL_MANAGED_HIDDEN_KEYS,
+  SMTP_MODE_KEY,
+  isDemoMailLocked,
+} from '../constants/mailSettings.js';
 import { getAuthHubCallbackUrl } from '../utils/authHub.js';
 import {
   disableGoogleSso,
@@ -49,6 +56,13 @@ import {
   restoreManagedGoogleSso,
   resolveGoogleSsoMode,
 } from '../utils/googleSsoMode.js';
+import {
+  mailClientPatch,
+  normalizeMailMode,
+  resolveMailMode,
+  restoreManagedMail,
+  switchToByoMail,
+} from '../utils/mailMode.js';
 import {
   commitUploadedFile,
   deleteObject,
@@ -284,7 +298,11 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
     const settingsObj = {};
     
     // Check if email / storage is managed
-    const mailManaged = settings.find(s => s.key === 'MAIL_MANAGED')?.value === 'true';
+    const mailMode = normalizeMailMode(settings.find((s) => s.key === SMTP_MODE_KEY)?.value, {
+      managedFlag: settings.find((s) => s.key === 'MAIL_MANAGED')?.value,
+      host: settings.find((s) => s.key === 'SMTP_HOST')?.value,
+    });
+    const mailManaged = mailMode === 'managed';
     const storageManaged = settings.find(s => s.key === 'STORAGE_MANAGED')?.value === 'true';
     const ssoMode = normalizeGoogleSsoMode(
       settings.find((s) => s.key === GOOGLE_SSO_MODE_KEY)?.value,
@@ -309,12 +327,14 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
       if (!/^[A-Z][A-Z0-9_]*$/.test(setting.key)) {
         return; // ignore corrupt keys (e.g. leftover React event props)
       }
-      if (SSO_ADMIN_INTERNAL_KEYS.includes(setting.key)) {
+      if (
+        SSO_ADMIN_INTERNAL_KEYS.includes(setting.key) ||
+        MAIL_ADMIN_INTERNAL_KEYS.includes(setting.key)
+      ) {
         return;
       }
-      // Hide sensitive SMTP fields when email is managed (credentials and server details)
-      // But allow SMTP_FROM_EMAIL and SMTP_FROM_NAME to be visible/editable
-      if (mailManaged && ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_SECURE'].includes(setting.key)) {
+      // Hide SMTP relay fields when mail is managed. From name/address stay for the banner only.
+      if (mailManaged && MAIL_MANAGED_HIDDEN_KEYS.includes(setting.key)) {
         settingsObj[setting.key] = '';
         if (setting.key === 'SMTP_PASSWORD') {
           settingsObj.SMTP_PASSWORD_SET = 'false';
@@ -343,6 +363,15 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
     if (isDemoSsoDisabled()) {
       settingsObj[GOOGLE_SSO_MANAGED_ELIGIBLE_KEY] = 'false';
     }
+    if (isDemoMailLocked()) {
+      settingsObj[SMTP_MANAGED_ELIGIBLE_KEY] = 'false';
+    } else {
+      const eligibleRow = settings.find((s) => s.key === SMTP_MANAGED_ELIGIBLE_KEY);
+      settingsObj[SMTP_MANAGED_ELIGIBLE_KEY] =
+        String(eligibleRow?.value || '').trim().toLowerCase() === 'true' ? 'true' : 'false';
+    }
+    settingsObj[SMTP_MODE_KEY] = mailMode;
+    settingsObj.MAIL_MANAGED = mailManaged ? 'true' : 'false';
 
     // Multi-tenant: overlay platform runner env so Admin shows the shared runner (read-only in UI)
     if (process.env.MULTI_TENANT === 'true') {
@@ -579,9 +608,9 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
     }
 
     // Managed mail: tenant cannot overwrite platform SMTP credentials
-    if (['SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_SECURE'].includes(key)) {
-      const mailManaged = (await getSettingValue(db, 'MAIL_MANAGED')) === 'true';
-      if (mailManaged) {
+    if (MAIL_MANAGED_HIDDEN_KEYS.includes(key)) {
+      const mailMode = await resolveMailMode(db);
+      if (mailMode === 'managed') {
         return res.status(403).json({
           error: 'SMTP server settings are managed by the platform and cannot be updated'
         });
@@ -598,9 +627,9 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
       }
     }
 
-    if (SSO_ADMIN_INTERNAL_KEYS.includes(key)) {
+    if (SSO_ADMIN_INTERNAL_KEYS.includes(key) || MAIL_ADMIN_INTERNAL_KEYS.includes(key)) {
       return res.status(403).json({
-        error: 'Platform OAuth shadow settings cannot be updated from the admin panel',
+        error: 'Platform shadow settings cannot be updated from the admin panel',
       });
     }
 
@@ -610,7 +639,11 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
       });
     }
 
-    if (key === GOOGLE_SSO_MANAGED_ELIGIBLE_KEY || key === GOOGLE_SSO_RESUME_MODE_KEY) {
+    if (
+      key === GOOGLE_SSO_MANAGED_ELIGIBLE_KEY ||
+      key === GOOGLE_SSO_RESUME_MODE_KEY ||
+      key === SMTP_MANAGED_ELIGIBLE_KEY
+    ) {
       return res.status(403).json({
         error: 'This setting is managed by the platform and cannot be updated',
       });
@@ -736,6 +769,17 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
     ) {
       return res.status(403).json({
         error: 'Platform Google sign-in can only be restored through the dedicated endpoint',
+      });
+    }
+
+    if (
+      key === SMTP_MODE_KEY &&
+      String(safeValue || '')
+        .trim()
+        .toLowerCase() === 'managed'
+    ) {
+      return res.status(403).json({
+        error: 'Platform mail can only be restored through the dedicated endpoint',
       });
     }
 
@@ -1053,67 +1097,55 @@ router.post('/clear-mail', authenticateToken, requireRole(['admin']), async (req
   
   try {
     const db = getRequestDatabase(req);
-    
-    // Define all mail-related settings to clear (empty strings)
-    const mailSettingsToClear = [
-      'SMTP_HOST',
-      'SMTP_PORT',
-      'SMTP_USERNAME',
-      'SMTP_PASSWORD',
-      'SMTP_FROM_EMAIL',
-      'SMTP_FROM_NAME',
-      'SMTP_SECURE' // Clear SMTP_SECURE so admin can set their own preference
-    ];
-    
-    // MIGRATED: Clear all mail-related settings using sqlManager
-    
-    // Collect queries and send as a batched transaction
-    const batchQueries = [];
-    
-    // Clear SMTP fields (set to empty strings)
-    for (const key of mailSettingsToClear) {
-      batchQueries.push({
-        query: `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP`,
-        params: [key, '']
-      });
-    }
-    
-    // Set MAIL_MANAGED to false and MAIL_ENABLED to false
-    batchQueries.push({
-      query: `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP`,
-      params: ['MAIL_MANAGED', 'false']
-    });
-    batchQueries.push({
-      query: `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP`,
-      params: ['MAIL_ENABLED', 'false']
-    });
-    
-    // Execute all inserts in a single batched transaction
-    await db.executeBatchTransaction(batchQueries);
-
-    
-    // Publish to Redis for real-time updates (single message for all changes)
+    await switchToByoMail(db);
+    const settings = mailClientPatch('byo');
     const tenantId = getTenantId(req);
-    if (await serverDebug(db, 'SERVER_DEBUG_SETTINGS')) {
-      console.log('📤 Publishing mail-settings-cleared to Redis');
-    }
-    await notificationService.publish('settings-updated', {
-      key: 'MAIL_SETTINGS_CLEARED',
-      value: 'all',
-      timestamp: new Date().toISOString(),
-      clearedSettings: [...mailSettingsToClear, 'MAIL_MANAGED', 'MAIL_ENABLED']
-    }, tenantId);
-    if (await serverDebug(db, 'SERVER_DEBUG_SETTINGS')) {
-      console.log('✅ Mail settings cleared and published to Redis');
-    }
-
-    res.json({ 
+    await notificationService.publish(
+      'settings-updated',
+      { settings, timestamp: new Date().toISOString() },
+      tenantId
+    );
+    res.json({
       message: 'Mail settings cleared successfully',
-      clearedSettings: [...mailSettingsToClear, 'MAIL_MANAGED', 'MAIL_ENABLED']
+      mode: 'byo',
+      settings,
     });
   } catch (error) {
     console.error('❌ Error clearing mail settings:', error);
-    res.status(500).json({ error: 'Failed to clear mail settings', details: error.message });
+    res.status(500).json({ error: 'Failed to clear mail settings' });
+  }
+});
+
+router.post('/mail/restore-managed', authenticateToken, requireRole(['admin']), async (req, res, next) => {
+  if (req.baseUrl !== '/api/admin/settings') {
+    return next();
+  }
+  try {
+    const db = getRequestDatabase(req);
+    const result = await restoreManagedMail(db);
+    if (!result.ok) {
+      if (result.error === 'not_eligible') {
+        return res.status(403).json({
+          error: 'This instance is not eligible for platform mail',
+          code: 'not_eligible',
+        });
+      }
+      return res.status(503).json({
+        error: 'Platform mail is temporarily unavailable. Try again or contact support.',
+        code: 'platform_unavailable',
+      });
+    }
+    const settings = mailClientPatch('managed');
+    const tenantId = getTenantId(req);
+    await notificationService.publish(
+      'settings-updated',
+      { settings, timestamp: new Date().toISOString() },
+      tenantId
+    );
+    res.json({ ok: true, mode: 'managed', source: result.source, settings });
+  } catch (error) {
+    console.error('Restore managed mail error:', error);
+    res.status(500).json({ error: 'Failed to restore platform mail' });
   }
 });
 

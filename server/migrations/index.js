@@ -1142,6 +1142,93 @@ const migrations = [
       }
       console.log('✅ Migration 49: empty Google SSO off-state cleared when never configured');
     }
+  },
+  {
+    version: 50,
+    name: 'add_mail_mode_and_platform_smtp_shadow',
+    description:
+      'Add SMTP_MODE, SMTP_MANAGED_ELIGIBLE, and platform SMTP shadow keys for restore',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const { getDecryptedSetting } = await import('../utils/settingsSecrets.js');
+      const { upsertSecretSetting } = await import('../utils/settingsSecrets.js');
+      const { SMTP_MODE_KEY, SMTP_MANAGED_ELIGIBLE_KEY } = await import(
+        '../constants/mailSettings.js'
+      );
+
+      const read = async (key) => {
+        const row = await settingsQueries.getSettingByKey(db, key);
+        return String(row?.value ?? '').trim();
+      };
+
+      const managedFlag = await read('MAIL_MANAGED');
+      const host = await read('SMTP_HOST');
+      const username = await read('SMTP_USERNAME');
+      const fromEmail = await read('SMTP_FROM_EMAIL');
+      const password = await getDecryptedSetting(db, 'SMTP_PASSWORD');
+
+      let mode = await read(SMTP_MODE_KEY);
+      if (!mode) {
+        if (managedFlag === 'true') mode = 'managed';
+        else if (host) mode = 'byo';
+        else mode = '';
+        await settingsQueries.upsertSetting(db, SMTP_MODE_KEY, mode);
+      }
+
+      const eligibleExisting = await read(SMTP_MANAGED_ELIGIBLE_KEY);
+      if (!eligibleExisting) {
+        await settingsQueries.upsertSetting(
+          db,
+          SMTP_MANAGED_ELIGIBLE_KEY,
+          managedFlag === 'true' ? 'true' : 'false'
+        );
+      }
+
+      const shadowHost = await read('PLATFORM_SMTP_HOST');
+      if (!shadowHost && managedFlag === 'true' && host && username && password && fromEmail) {
+        await settingsQueries.upsertSetting(db, 'PLATFORM_SMTP_HOST', host);
+        await settingsQueries.upsertSetting(db, 'PLATFORM_SMTP_PORT', (await read('SMTP_PORT')) || '587');
+        await settingsQueries.upsertSetting(db, 'PLATFORM_SMTP_USERNAME', username);
+        await upsertSecretSetting(db, 'PLATFORM_SMTP_PASSWORD', password);
+        await settingsQueries.upsertSetting(db, 'PLATFORM_SMTP_FROM_EMAIL', fromEmail);
+        await settingsQueries.upsertSetting(db, 'PLATFORM_SMTP_FROM_NAME', await read('SMTP_FROM_NAME'));
+        await settingsQueries.upsertSetting(
+          db,
+          'PLATFORM_SMTP_SECURE',
+          (await read('SMTP_SECURE')) || 'tls'
+        );
+      }
+
+      console.log(`✅ Migration 50: SMTP_MODE=${mode}, platform SMTP shadow backfilled when applicable`);
+    }
+  },
+  {
+    version: 51,
+    name: 'rename_mail_mode_to_smtp_mode',
+    description: 'Rename MAIL_MODE / MAIL_MANAGED_ELIGIBLE to SMTP_MODE / SMTP_MANAGED_ELIGIBLE',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const { SMTP_MODE_KEY, SMTP_MANAGED_ELIGIBLE_KEY } = await import(
+        '../constants/mailSettings.js'
+      );
+      const read = async (key) => {
+        const row = await settingsQueries.getSettingByKey(db, key);
+        return String(row?.value ?? '').trim();
+      };
+      const smtpMode = await read(SMTP_MODE_KEY);
+      const legacyMode = await read('MAIL_MODE');
+      if (!smtpMode && legacyMode) {
+        await settingsQueries.upsertSetting(db, SMTP_MODE_KEY, legacyMode);
+      }
+      const smtpEligible = await read(SMTP_MANAGED_ELIGIBLE_KEY);
+      const legacyEligible = await read('MAIL_MANAGED_ELIGIBLE');
+      if (!smtpEligible && legacyEligible) {
+        await settingsQueries.upsertSetting(db, SMTP_MANAGED_ELIGIBLE_KEY, legacyEligible);
+      }
+      if (legacyMode) await settingsQueries.upsertSetting(db, 'MAIL_MODE', '');
+      if (legacyEligible) await settingsQueries.upsertSetting(db, 'MAIL_MANAGED_ELIGIBLE', '');
+      console.log('✅ Migration 51: SMTP_MODE / SMTP_MANAGED_ELIGIBLE renamed from MAIL_*');
+    }
   }
 ];
 

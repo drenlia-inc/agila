@@ -9,6 +9,7 @@ import AdminPrioritiesTab from './admin/AdminPrioritiesTab';
 import AdminUsersTab from './admin/AdminUsersTab';
 import AdminAppSettingsTab from './admin/AdminAppSettingsTab';
 import AdminSystemSettingsTab from './admin/AdminSystemSettingsTab';
+import AdminNotificationsHubTab from './admin/AdminNotificationsHubTab';
 import AdminProjectHubTab from './admin/AdminProjectHubTab';
 import AdminLicensingTab from './admin/AdminLicensingTab';
 import AdminSettingsSearch from './admin/AdminSettingsSearch';
@@ -30,6 +31,7 @@ import {
   adminHashUsesLocalDiscard,
   isLikelyDomEvent,
   isValidAdminSettingKey,
+  isAdminMailSettingKey,
   settingValueAsString,
 } from '../utils/adminSettingsDirty';
 import { clampActivityFeedInSettings } from '../utils/adminFieldLimits';
@@ -120,6 +122,7 @@ const ADMIN_NAV_TABS = [
   'users',
   'site-settings',
   'system-settings',
+  'notifications',
   'tags',
   'priorities',
   'app-settings',
@@ -551,7 +554,7 @@ const Admin: React.FC<AdminProps> = ({
         api.get('/admin/users'),
         getTags(),
         getPriorities(),
-        quiet ? refreshSettings() : Promise.resolve(null)
+        refreshSettings()
       ]);
       
       setUsers(usersResponse.data || []);
@@ -942,9 +945,16 @@ const Admin: React.FC<AdminProps> = ({
       const changedKeys: string[] = [];
       // Prefer explicit draft; ignore click events mistakenly passed via onClick={onSave}
       const draftSource =
-        newSettings && !isLikelyDomEvent(newSettings) ? newSettings : editingSettings;
+        newSettings && !isLikelyDomEvent(newSettings)
+          ? { ...editingSettings, ...newSettings }
+          : editingSettings;
       const settingsToSave = clampActivityFeedInSettings(draftSource);
-      if (settingsToSave !== draftSource) {
+      const feedChanged =
+        settingsToSave.DEFAULT_ACTIVITY_FEED_POSITION !==
+          draftSource.DEFAULT_ACTIVITY_FEED_POSITION ||
+        settingsToSave.DEFAULT_ACTIVITY_FEED_WIDTH !== draftSource.DEFAULT_ACTIVITY_FEED_WIDTH ||
+        settingsToSave.DEFAULT_ACTIVITY_FEED_HEIGHT !== draftSource.DEFAULT_ACTIVITY_FEED_HEIGHT;
+      if (feedChanged) {
         setEditingSettings(settingsToSave);
       }
       
@@ -1051,6 +1061,11 @@ const Admin: React.FC<AdminProps> = ({
       for (const [key, value] of sortAdminSettingsSaveEntries(Object.entries(settingsToSave))) {
         // Skip accidental DOM/React event props (from a prior buggy Save) and invalid keys
         if (!isValidAdminSettingKey(key)) {
+          continue;
+        }
+
+        // BYO SMTP commits via Test Email only — never via the shared Save banner.
+        if (isAdminMailSettingKey(key)) {
           continue;
         }
 
@@ -1502,66 +1517,44 @@ const Admin: React.FC<AdminProps> = ({
   const handleTestEmail = async () => {
     try {
       setIsTestingEmail(true);
-      
-      // First, save any unsaved SMTP settings (only save SMTP-related settings)
-      const smtpKeys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL', 'SMTP_FROM_NAME', 'SMTP_SECURE'];
-      let hasChanges = false;
-      for (const key of smtpKeys) {
-        // For SMTP_SECURE, use the dropdown's displayed value (which defaults to 'tls' if not in editingSettings)
-        // This ensures we save the default value even if it's not explicitly in editingSettings
-        let value = editingSettings[key];
-        
-        const currentValue = settings[key];
-        
-        // Normalize values: treat undefined and empty string as the same
-        let normalizedValue = settingValueAsString(value).trim();
 
-        // Write-only secret: empty or display mask means keep existing stored password
+      const smtpKeys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL', 'SMTP_FROM_NAME', 'SMTP_SECURE'];
+      const draft: Record<string, string> = {};
+      const pendingSaves: { key: string; value: string }[] = [];
+      for (const key of smtpKeys) {
+        let normalizedValue = settingValueAsString(editingSettings[key]).trim();
         if (key === 'SMTP_PASSWORD') {
           if (!normalizedValue || isMaskedApiKeyDisplay(normalizedValue)) {
             continue;
           }
         }
-        
-        // For SMTP_SECURE, always ensure it has a default value of 'tls' if empty
-        // This is critical because the dropdown shows 'tls' as default, so we must save it
         if (key === 'SMTP_SECURE' && !normalizedValue) {
-          normalizedValue = 'tls'; // Default value - this must be saved even if empty in editingSettings
+          normalizedValue = 'tls';
         }
-        
-        const normalizedCurrent = settingValueAsString(currentValue).trim();
-        
-        // Save if:
-        // 1. Value exists (not empty) AND is different from current, OR
-        // 2. For SMTP_SECURE, always save if current is empty/undefined (to ensure default is set)
-        const shouldSave = normalizedValue && (
-          normalizedValue !== normalizedCurrent || 
-          (key === 'SMTP_SECURE' && !normalizedCurrent)
+        const normalizedCurrent = settingValueAsString(settings[key]).trim();
+        const shouldSave = Boolean(
+          normalizedValue &&
+            (normalizedValue !== normalizedCurrent || (key === 'SMTP_SECURE' && !normalizedCurrent))
         );
-        
+        if (normalizedValue) {
+          draft[key] = normalizedValue;
+        }
         if (shouldSave) {
-          console.log(`Saving SMTP setting: ${key}`, {
-            oldValue: key === 'SMTP_PASSWORD' ? '(redacted)' : currentValue || '(empty)',
-            newValue: key === 'SMTP_PASSWORD' ? '(redacted)' : normalizedValue
-          });
-          await api.put('/admin/settings', { key, value: normalizedValue });
-          hasChanges = true;
+          pendingSaves.push({ key, value: normalizedValue });
         }
       }
-      
-      if (hasChanges) {
-        // Wait a bit to ensure database writes are committed
-        await new Promise(resolve => setTimeout(resolve, 200));
-        await loadData(); // Reload settings
+
+      const response = await api.post('/admin/test-email', draft);
+
+      for (const { key, value } of pendingSaves) {
+        await api.put('/admin/settings', { key, value });
+      }
+      if (pendingSaves.length > 0) {
+        await loadData({ quiet: true });
         if (onSettingsChanged) {
           onSettingsChanged();
         }
-        // Wait a bit more to ensure settings are refreshed in context
-        await new Promise(resolve => setTimeout(resolve, 200));
       }
-      
-      // Now test the email
-      const response = await api.post('/admin/test-email');
       
       // Auto-enable mail server if test succeeds and it's not already enabled
       if (response.data && editingSettings.MAIL_ENABLED !== 'true') {
@@ -1738,6 +1731,7 @@ const Admin: React.FC<AdminProps> = ({
                 {tab === 'users' && t('tabs.users')}
                 {tab === 'site-settings' && t('tabs.siteSettings')}
                 {tab === 'system-settings' && t('tabs.systemSettings')}
+                {tab === 'notifications' && t('tabs.notifications')}
                 {tab === 'tags' && t('tabs.tags')}
                 {tab === 'priorities' && t('tabs.priorities')}
                 {tab === 'app-settings' && t('tabs.appSettings')}
@@ -1816,6 +1810,29 @@ const Admin: React.FC<AdminProps> = ({
                 onAutoSave={handleAutoSaveSetting}
                 onSettingsReload={loadData}
                 onApplySettingsPatch={applySettingsPatch}
+                onLocalDirtyChange={(dirty) =>
+                  handleTabLocalDirty('system-settings', dirty)
+                }
+                onRegisterLocalSave={(save) =>
+                  registerTabLocalSave('system-settings', save)
+                }
+                discardNonce={settingsDiscardNonce}
+              />
+            </AdminTabPanel>
+          )}
+
+          {visitedTabs.has('notifications') && (
+            <AdminTabPanel active={activeTab === 'notifications'}>
+              <AdminNotificationsHubTab
+                panelActive={activeTab === 'notifications'}
+                settings={settings}
+                editingSettings={editingSettings}
+                onSettingsChange={setEditingSettings}
+                onSave={handleSaveSettings}
+                onCancel={handleCancelActivePanel}
+                onAutoSave={handleAutoSaveSetting}
+                onSettingsReload={loadData}
+                onApplySettingsPatch={applySettingsPatch}
                 onTestEmail={handleTestEmail}
                 onMailServerDisabled={handleMailServerDisabled}
                 isTestingEmail={isTestingEmail}
@@ -1826,10 +1843,10 @@ const Admin: React.FC<AdminProps> = ({
                 testEmailError={testEmailError}
                 onCloseTestErrorModal={() => setShowTestEmailErrorModal(false)}
                 onLocalDirtyChange={(dirty) =>
-                  handleTabLocalDirty('system-settings', dirty)
+                  handleTabLocalDirty('notifications', dirty)
                 }
                 onRegisterLocalSave={(save) =>
-                  registerTabLocalSave('system-settings', save)
+                  registerTabLocalSave('notifications', save)
                 }
                 discardNonce={settingsDiscardNonce}
               />

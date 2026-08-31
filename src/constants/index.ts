@@ -25,6 +25,7 @@ export const ADMIN_TABS = [
   'users',
   'site-settings',
   'system-settings',
+  'notifications',
   'tags',
   'priorities',
   'app-settings',

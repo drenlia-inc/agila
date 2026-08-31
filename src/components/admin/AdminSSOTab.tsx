@@ -278,7 +278,9 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
       if (id === 'google' && !String(payload.GOOGLE_CALLBACK_URL || '').trim()) {
         payload.GOOGLE_CALLBACK_URL = tenantGoogleCallbackUrl();
       }
-      await onSave(payload);
+      const draft = { ...editingSettings, ...payload };
+      onSettingsChange(draft);
+      await onSave(draft);
     } finally {
       setSavingProvider(null);
     }

@@ -8,7 +8,7 @@ export type AdminSearchEntry = {
   kind: 'tab' | 'setting';
   /** Main Admin tab id (ADMIN_TABS) */
   tab: string;
-  /** Full location hash, e.g. #admin#system-settings#mail-server or #admin#project-settings#lifecycle */
+  /** Full location hash, e.g. #admin#notifications#mail-server or #admin#project-settings#lifecycle */
   hash: string;
   /** Scroll target: [data-setting-key="…"] */
   settingKey?: string;
@@ -47,6 +47,14 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
     aliases: ['system', 'système', 'systeme', 'infrastructure'],
   },
   {
+    id: 'tab-notifications-hub',
+    kind: 'tab',
+    tab: 'notifications',
+    hash: '#admin#notifications#notification-settings',
+    labelKey: 'tabs.notifications',
+    aliases: ['notifications', 'alertes', 'email', 'smtp', 'webhooks'],
+  },
+  {
     id: 'tab-sso',
     kind: 'tab',
     tab: 'system-settings',
@@ -57,8 +65,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'tab-mail',
     kind: 'tab',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#mail-server',
+    tab: 'notifications',
+    hash: '#admin#notifications#mail-server',
     labelKey: 'tabs.mailServer',
     aliases: ['smtp', 'email', 'courriel', 'mail', 'messagerie'],
   },
@@ -89,16 +97,16 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'tab-notifications',
     kind: 'tab',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#notifications',
-    labelKey: 'appSettings.notifications',
+    tab: 'notifications',
+    hash: '#admin#notifications#notification-settings',
+    labelKey: 'tabs.notificationSettings',
     aliases: ['notification', 'email alerts', 'alertes'],
   },
   {
     id: 'tab-webhooks',
     kind: 'tab',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#webhooks',
+    tab: 'notifications',
+    hash: '#admin#notifications#webhooks',
     labelKey: 'webhooks.tabLabel',
     aliases: [
       'webhook',
@@ -115,9 +123,9 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'tab-notification-queue',
     kind: 'tab',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#notification-queue',
-    labelKey: 'tabs.notificationQueue',
+    tab: 'notifications',
+    hash: '#admin#notifications#queue',
+    labelKey: 'tabs.queue',
     aliases: ['queue', 'file', 'pending emails', 'e-mails en attente'],
   },
   {
@@ -260,12 +268,12 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
     aliases: ['callback', 'redirect', 'oauth'],
   },
 
-  // —— Mail (System Settings) ——
+  // —— Mail (Notifications) ——
   {
     id: 'smtp-host',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#mail-server',
+    tab: 'notifications',
+    hash: '#admin#notifications#mail-server',
     settingKey: 'SMTP_HOST',
     labelKey: 'mail.smtpHost',
     aliases: ['smtp', 'host', 'serveur'],
@@ -273,8 +281,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'smtp-port',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#mail-server',
+    tab: 'notifications',
+    hash: '#admin#notifications#mail-server',
     settingKey: 'SMTP_PORT',
     labelKey: 'mail.smtpPort',
     aliases: ['smtp', 'port'],
@@ -282,8 +290,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'smtp-username',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#mail-server',
+    tab: 'notifications',
+    hash: '#admin#notifications#mail-server',
     settingKey: 'SMTP_USERNAME',
     labelKey: 'mail.smtpUsername',
     aliases: ['smtp', 'username', 'utilisateur'],
@@ -291,8 +299,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'smtp-password',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#mail-server',
+    tab: 'notifications',
+    hash: '#admin#notifications#mail-server',
     settingKey: 'SMTP_PASSWORD',
     labelKey: 'mail.smtpPassword',
     aliases: ['smtp', 'password', 'mot de passe', 'mdp'],
@@ -300,8 +308,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'smtp-from-email',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#mail-server',
+    tab: 'notifications',
+    hash: '#admin#notifications#mail-server',
     settingKey: 'SMTP_FROM_EMAIL',
     labelKey: 'mail.fromEmail',
     aliases: ['from', 'expéditeur', 'expediteur', 'sender'],
@@ -309,8 +317,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'smtp-from-name',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#mail-server',
+    tab: 'notifications',
+    hash: '#admin#notifications#mail-server',
     settingKey: 'SMTP_FROM_NAME',
     labelKey: 'mail.fromName',
     aliases: ['from name', 'nom expéditeur'],
@@ -318,8 +326,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'smtp-secure',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#mail-server',
+    tab: 'notifications',
+    hash: '#admin#notifications#mail-server',
     settingKey: 'SMTP_SECURE',
     labelKey: 'mail.smtpSecurity',
     aliases: ['tls', 'ssl', 'security', 'sécurité'],
@@ -430,12 +438,12 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
     aliases: ['upload', 'fichiers', 'attachments', 'pièces jointes'],
   },
 
-  // —— Notifications (System Settings) ——
+  // —— Notifications hub ——
   {
     id: 'notifications',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#notifications',
+    tab: 'notifications',
+    hash: '#admin#notifications#notification-settings',
     settingKey: 'NOTIFICATIONS_SECTION',
     labelKey: 'appSettings.notifications',
     aliases: ['notification', 'email alerts', 'alertes'],
@@ -443,8 +451,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'webhook-delivery-channel',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#webhooks',
+    tab: 'notifications',
+    hash: '#admin#notifications#webhooks',
     settingKey: 'TASK_NOTIFICATION_CHANNELS',
     labelKey: 'webhooks.channelModeTitle',
     extraLabelKeys: [
@@ -461,8 +469,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'webhook-list',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#webhooks',
+    tab: 'notifications',
+    hash: '#admin#notifications#webhooks',
     settingKey: 'WEBHOOKS_LIST',
     labelKey: 'webhooks.listTitle',
     aliases: [
@@ -479,8 +487,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'webhook-event-types',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#webhooks',
+    tab: 'notifications',
+    hash: '#admin#notifications#webhooks',
     settingKey: 'WEBHOOK_EVENT_TYPES',
     labelKey: 'webhooks.eventTypes',
     extraLabelKeys: [
@@ -497,8 +505,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   {
     id: 'notification-queue-retention',
     kind: 'setting',
-    tab: 'system-settings',
-    hash: '#admin#system-settings#notification-queue',
+    tab: 'notifications',
+    hash: '#admin#notifications#queue',
     settingKey: 'NOTIFICATION_QUEUE_RETENTION_DAYS',
     labelKey: 'notificationQueue.retentionDays',
     aliases: ['retention', 'rétention', 'purge', 'queue cleanup', 'nettoyage file'],

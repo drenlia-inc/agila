@@ -197,13 +197,7 @@ export const getTourSteps = (): TourStepsConfig => {
       content: i18n.t('tour.steps.adminSso', { ns: 'common' }),
       placement: 'bottom',
     },
-    // Step 26: Admin Mail Server (System Settings subtab)
-    {
-      target: '[data-tour-id="admin-mail-server"]',
-      content: i18n.t('tour.steps.adminMailServer', { ns: 'common' }),
-      placement: 'bottom',
-    },
-    // Step 27: Admin Storage (System Settings subtab)
+    // Step 26: Admin Storage (System Settings subtab)
     {
       target: '[data-tour-id="admin-storage"]',
       content: i18n.t('tour.steps.adminStorage', { ns: 'common' }),
@@ -219,6 +213,18 @@ export const getTourSteps = (): TourStepsConfig => {
     {
       target: '[data-tour-id="admin-ai"]',
       content: i18n.t('tour.steps.adminAi', { ns: 'common' }),
+      placement: 'bottom',
+    },
+    // Admin Notifications (hub)
+    {
+      target: '[data-tour-id="admin-notifications"]',
+      content: i18n.t('tour.steps.adminNotifications', { ns: 'common' }),
+      placement: 'bottom',
+    },
+    // Admin Mail Server (Notifications subtab)
+    {
+      target: '[data-tour-id="admin-mail-server"]',
+      content: i18n.t('tour.steps.adminMailServer', { ns: 'common' }),
       placement: 'bottom',
     },
     // Step 30: Admin Tags
