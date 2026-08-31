@@ -26,6 +26,7 @@ import {
   resolveKanbanDropTarget,
   resolveColumnIdUnderPointer,
   resolveColumnIdUnderRect,
+  resolveInsertIndexUnderPointer,
   OVERLAY_SIDEWAYS_PX,
   type OverlayDropHit,
 } from '../../utils/dndInsertIndex';
@@ -371,20 +372,19 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     });
     const painted = readPaintedDropPlaceholder();
     const preview = lastPreviewRef.current;
-    const sideways =
-      overlay != null &&
-      overlayStartLeftRef.current != null &&
-      Math.abs(overlay.left - overlayStartLeftRef.current) >= OVERLAY_SIDEWAYS_PX;
     const pointerCol = resolveColumnIdUnderPointer(
       mouseXRef.current,
       mouseYRef.current
     );
     const liveDest =
       live && originColumnId && live.columnId !== originColumnId ? live : null;
+    // Overlay sliver alone must not keep dest: same-column drags often sit
+    // ≥40px sideways from grab offset and would commit to the wrong column.
     const keepStickyDest =
       !liveDest &&
       !!lastDestPreviewRef.current &&
-      (sideways || (!!pointerCol && pointerCol !== originColumnId));
+      !!pointerCol &&
+      pointerCol !== originColumnId;
     const chosen =
       liveDest ||
       (keepStickyDest ? lastDestPreviewRef.current : null) ||
@@ -810,36 +810,58 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
             pointerCol && pointerCol !== originColumnId ? pointerCol : null;
           const overlayDest =
             overlayCol && overlayCol !== originColumnId ? overlayCol : null;
-          if (pointerInOrigin && !sideways) {
+          const destInsertFor = (columnId: string, fallback: number) =>
+            resolveInsertIndexUnderPointer(
+              columnId,
+              mouseYRef.current,
+              excludeIds,
+              mouseXRef.current,
+              null,
+              origin
+            ) ?? fallback;
+          // Pointer still in the source column: stay there. Overlay sliver
+          // used to keep dest locked and freeze insert index.
+          if (pointerInOrigin) {
             lastDestPreviewRef.current = null;
           } else if (pointerDest && pointerDest !== last.columnId) {
+            const destInsert = destInsertFor(pointerDest, nextInsert);
             lastDestPreviewRef.current = {
               columnId: pointerDest,
-              insertIndex: nextInsert,
+              insertIndex: destInsert,
             };
             nextColumnId = pointerDest;
+            nextInsert = destInsert;
             setTaskDropLock(
               draggedTask.id,
               originColumnId,
               lastDestPreviewRef.current
             );
-          } else if (overlayDest && overlayDest !== last.columnId) {
+          } else if (overlayDest && overlayDest !== last.columnId && sideways) {
+            const destInsert = destInsertFor(overlayDest, nextInsert);
             lastDestPreviewRef.current = {
               columnId: overlayDest,
-              insertIndex: nextInsert,
+              insertIndex: destInsert,
             };
             nextColumnId = overlayDest;
+            nextInsert = destInsert;
             setTaskDropLock(
               draggedTask.id,
               originColumnId,
               lastDestPreviewRef.current
             );
-          } else if (!overlay) {
-            nextColumnId = last.columnId;
-            nextInsert = last.insertIndex;
-          } else if (pointerDest || overlayDest) {
-            nextColumnId = last.columnId;
-            nextInsert = last.insertIndex;
+          } else if (pointerDest) {
+            const destInsert = destInsertFor(pointerDest, last.insertIndex);
+            nextColumnId = pointerDest;
+            nextInsert = destInsert;
+            lastDestPreviewRef.current = {
+              columnId: pointerDest,
+              insertIndex: destInsert,
+            };
+            setTaskDropLock(
+              draggedTask.id,
+              originColumnId,
+              lastDestPreviewRef.current
+            );
           } else {
             lastDestPreviewRef.current = null;
           }

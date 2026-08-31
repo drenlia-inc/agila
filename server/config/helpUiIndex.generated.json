@@ -19,6 +19,23 @@
       "file": "src/components/ActivityFeed.tsx"
     },
     {
+      "id": "help:github-sso",
+      "attr": "help",
+      "value": "github-sso",
+      "en": "This must match exactly what you configure in Google Cloud Console. Include the full URL with protocol: {{callbackUrl}}",
+      "fr": "Cela doit correspondre exactement à ce que vous configurez dans Google Cloud Console. Incluez l'URL complète avec le protocole : {{callbackUrl}}",
+      "searchEn": "This must match exactly what you configure in Google Cloud Console. Include the full URL with protocol: {{callbackUrl}} This must match exactly what you configure in Google Cloud Console. Include the full URL with protocol: {{callbackUrl}} e.g., {{callbackUrl}} GitHub Single Sign-on Configuration Disable GitHub sign-in github-sso",
+      "searchFr": "Cela doit correspondre exactement à ce que vous configurez dans Google Cloud Console. Incluez l'URL complète avec le protocole : {{callbackUrl}} Cela doit correspondre exactement à ce que vous configurez dans Google Cloud Console. Incluez l'URL complète avec le protocole : {{callbackUrl}} ex. : {{callbackUrl}} Configuration de l’authentification unique GitHub Désactiver la connexion GitHub github-sso",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"github-sso\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
       "id": "help:kanban-column-filter",
       "attr": "help",
       "value": "kanban-column-filter",
@@ -34,6 +51,23 @@
       "adminOnly": false,
       "audience": "user",
       "file": "src/components/ColumnFilterDropdown.tsx"
+    },
+    {
+      "id": "help:m365-sso",
+      "attr": "help",
+      "value": "m365-sso",
+      "en": "GitHub Callback URL",
+      "fr": "URL de rappel GitHub",
+      "searchEn": "GitHub Callback URL GitHub Callback URL Must match the Authorization callback URL in GitHub: {{callbackUrl}} e.g., {{callbackUrl}} Microsoft 365 Single Sign-on Configuration Disable Microsoft 365 sign-in m365-sso",
+      "searchFr": "URL de rappel GitHub URL de rappel GitHub Doit correspondre à l’URL de rappel d’autorisation dans GitHub : {{callbackUrl}} ex. : {{callbackUrl}} Configuration de l’authentification unique Microsoft 365 Désactiver la connexion Microsoft 365 m365-sso",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"m365-sso\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/admin/AdminSSOTab.tsx"
     },
     {
       "id": "help:profile-activity-feed",
@@ -483,8 +517,8 @@
       "value": "GOOGLE_CALLBACK_URL",
       "en": "Google Callback URL",
       "fr": "URL de rappel Google",
-      "searchEn": "Google Callback URL Leave blank to keep current secret Enter Google OAuth Client Secret Keep this secret secure. Changes are applied immediately. Google Callback URL e.g., {{callbackUrl}} GOOGLE_CALLBACK_URL",
-      "searchFr": "URL de rappel Google Laisser vide pour conserver le secret actuel Entrer le secret client Google OAuth Gardez ce secret sécurisé. Les modifications sont appliquées immédiatement. URL de rappel Google ex. : {{callbackUrl}} GOOGLE_CALLBACK_URL",
+      "searchEn": "Google Callback URL  GOOGLE_CALLBACK_URL",
+      "searchFr": "URL de rappel Google  GOOGLE_CALLBACK_URL",
       "kind": "admin",
       "hash": "#admin#system-settings#sso",
       "highlights": [
@@ -492,7 +526,7 @@
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/admin/AdminSSOTab.tsx"
+      "file": "src/utils/ownerSetup.ts"
     },
     {
       "id": "setting:GOOGLE_CLIENT_ID",
@@ -500,8 +534,8 @@
       "value": "GOOGLE_CLIENT_ID",
       "en": "Google Client ID",
       "fr": "ID client Google",
-      "searchEn": "Google Client ID Single Sign-On Configuration Google Client ID Enter Google OAuth Client ID GOOGLE_CLIENT_ID",
-      "searchFr": "ID client Google Configuration de l'authentification unique ID client Google Entrer l'ID client Google OAuth GOOGLE_CLIENT_ID",
+      "searchEn": "Google Client ID  GOOGLE_CLIENT_ID",
+      "searchFr": "ID client Google  GOOGLE_CLIENT_ID",
       "kind": "admin",
       "hash": "#admin#system-settings#sso",
       "highlights": [
@@ -509,7 +543,7 @@
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/admin/AdminSSOTab.tsx"
+      "file": "src/utils/ownerSetup.ts"
     },
     {
       "id": "setting:GOOGLE_CLIENT_SECRET",
@@ -517,12 +551,46 @@
       "value": "GOOGLE_CLIENT_SECRET",
       "en": "Google Client Secret",
       "fr": "Secret client Google",
-      "searchEn": "Google Client Secret Google Client ID Enter Google OAuth Client ID Found in your Google Cloud Console under APIs & Services > Credentials Google Client Secret GOOGLE_CLIENT_SECRET",
-      "searchFr": "Secret client Google ID client Google Entrer l'ID client Google OAuth Trouvé dans votre Google Cloud Console sous APIs & Services > Credentials Secret client Google GOOGLE_CLIENT_SECRET",
+      "searchEn": "Google Client Secret  GOOGLE_CLIENT_SECRET",
+      "searchFr": "Secret client Google  GOOGLE_CLIENT_SECRET",
       "kind": "admin",
       "hash": "#admin#system-settings#sso",
       "highlights": [
         "[data-setting-key=\"GOOGLE_CLIENT_SECRET\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/utils/ownerSetup.ts"
+    },
+    {
+      "id": "setting:GOOGLE_SSO_MANAGED",
+      "attr": "setting",
+      "value": "GOOGLE_SSO_MANAGED",
+      "en": "Disable Google sign-in",
+      "fr": "Désactiver la connexion Google",
+      "searchEn": "Disable Google sign-in Disable Google sign-in This instance uses the platform Google client. Sign-in returns through auth.agila.dev, then back to this site. You do not need a Cloud Console project for this instance. Hub callback GOOGLE_SSO_MANAGED",
+      "searchFr": "Désactiver la connexion Google Désactiver la connexion Google Cette instance utilise le client Google de la plateforme. La connexion revient par auth.agila.dev, puis sur ce site. Vous n’avez pas besoin d’un projet Cloud Console pour cette instance. URL de rappel du hub GOOGLE_SSO_MANAGED",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"GOOGLE_SSO_MANAGED\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "setting:GOOGLE_SSO_MODE",
+      "attr": "setting",
+      "value": "GOOGLE_SSO_MODE",
+      "en": "No sign-in providers are configured. Add a provider to get started.",
+      "fr": "Aucun fournisseur de connexion n’est configuré. Ajoutez-en un pour commencer.",
+      "searchEn": "No sign-in providers are configured. Add a provider to get started. No sign-in providers are configured. Add a provider to get started. Google Single Sign-on Configuration GOOGLE_SSO_MODE",
+      "searchFr": "Aucun fournisseur de connexion n’est configuré. Ajoutez-en un pour commencer. Aucun fournisseur de connexion n’est configuré. Ajoutez-en un pour commencer. Configuration de l’authentification unique Google GOOGLE_SSO_MODE",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"GOOGLE_SSO_MODE\"]"
       ],
       "adminOnly": true,
       "audience": "admin",

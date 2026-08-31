@@ -20,6 +20,9 @@ export const ADMIN_NUMERIC_INPUT_CLASS =
 export const ADMIN_TABLE_ROW_CLASS =
   'hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150';
 
+/** Persistent row highlight while a user row is being edited (color picker / edit modal). */
+export const ADMIN_TABLE_ROW_ACTIVE_CLASS = 'bg-gray-50 dark:bg-gray-700/50';
+
 export const ACTIVITY_FEED_WIDTH = { min: 120, max: 400 } as const;
 export const ACTIVITY_FEED_HEIGHT = { min: 200, max: 800 } as const;
 /** @deprecated Prefer ACTIVITY_FEED_INSET — kept for any leftover imports */

@@ -32,7 +32,6 @@ interface AdminSystemSettingsTabProps {
   onSettingsReload?: (options?: { quiet?: boolean }) => Promise<void>;
   /** Patch saved + draft settings without a full Admin reload (keeps modals mounted). */
   onApplySettingsPatch?: (patch: Record<string, string | undefined>) => void;
-  onReloadOAuth?: () => void;
   onTestEmail: () => Promise<void>;
   onMailServerDisabled: () => void;
   isTestingEmail: boolean;
@@ -91,7 +90,6 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
   onAutoSave,
   onSettingsReload,
   onApplySettingsPatch,
-  onReloadOAuth,
   onTestEmail,
   onMailServerDisabled,
   isTestingEmail,
@@ -281,7 +279,8 @@ const AdminSystemSettingsTab: React.FC<AdminSystemSettingsTabProps> = ({
             onSettingsChange={onSettingsChange}
             onSave={onSave}
             onCancel={onCancel}
-            onReloadOAuth={onReloadOAuth || (() => {})}
+            onSettingsReload={onSettingsReload}
+            onApplySettingsPatch={onApplySettingsPatch}
           />
         </div>
       )}

@@ -8,7 +8,23 @@ import notificationService from '../services/notificationService.js';
 import { loginLimiter, activationLimiter, invitationVerifyLimiter, registrationLimiter, oauthUrlLimiter, oauthCallbackLimiter } from '../middleware/rateLimiters.js';
 import { createDefaultAvatar, getRandomColor } from '../utils/avatarGenerator.js';
 import { getTranslator } from '../utils/i18n.js';
-import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
+import { getTenantId, getRequestDatabase, getTenantDatabase, isMultiTenant } from '../middleware/tenantRouting.js';
+import {
+  getAuthHubCallbackUrl,
+  isAuthHubHostname,
+  isGoogleSsoManaged,
+  isReservedTenantSubdomain,
+  resolveHubCallbackReturnOrigin,
+  resolveOAuthReturnOrigin,
+  tenantPublicOrigin
+} from '../utils/authHub.js';
+import {
+  isGoogleSsoLoginEnabled,
+  normalizeGoogleSsoMode,
+} from '../utils/googleSsoMode.js';
+import { isDemoSsoDisabled } from '../constants/ssoSettings.js';
+import { completeInvitedUserSso } from '../utils/ssoExternalAuth.js';
+import { recordSsoLastSuccess } from '../utils/ssoLastSuccess.js';
 import {
   getCachedOAuthEntry,
   invalidateOAuthConfigCache,
@@ -206,6 +222,7 @@ router.post('/activate-account', activationLimiter, async (req, res) => {
         firstName: updatedUser.first_name,
         lastName: updatedUser.last_name,
         isActive: Boolean(updatedUser.is_active),
+        hasActivated: true,
         authProvider: updatedUser.auth_provider || null,
         googleAvatarUrl: updatedUser.google_avatar_url || null,
         createdAt: updatedUser.created_at,
@@ -435,6 +452,7 @@ async function getOAuthSettings(db, tenantId) {
   if (
     tenantId &&
     settingsObj.GOOGLE_CALLBACK_URL &&
+    !isGoogleSsoManaged(settingsObj) &&
     !String(settingsObj.GOOGLE_CALLBACK_URL).includes(`${tenantId}.`)
   ) {
     console.error(
@@ -466,30 +484,71 @@ async function getOAuthSettings(db, tenantId) {
 // Google OAuth endpoints
 const OAUTH_STATE_TTL = '10m';
 
-function createOAuthState() {
+function createOAuthState({
+  tenantId = null,
+  managed = false,
+  returnOrigin = '',
+  purpose = 'google_oauth',
+} = {}) {
   return jwt.sign(
-    { purpose: 'google_oauth', nonce: crypto.randomBytes(16).toString('hex') },
+    {
+      purpose,
+      nonce: crypto.randomBytes(16).toString('hex'),
+      ...(tenantId ? { tenantId } : {}),
+      ...(managed ? { managed: true } : {}),
+      ...(returnOrigin ? { returnOrigin } : {})
+    },
     JWT_SECRET,
     { expiresIn: OAUTH_STATE_TTL }
   );
 }
 
-function verifyOAuthState(state) {
+function verifyOAuthState(state, { requireTenant = false } = {}) {
   if (!state || typeof state !== 'string') {
-    return false;
+    return null;
   }
   try {
     const payload = jwt.verify(state, JWT_SECRET);
-    return payload?.purpose === 'google_oauth' && typeof payload?.nonce === 'string';
+    const purpose = String(payload?.purpose || '');
+    if (!purpose.endsWith('_oauth') || typeof payload?.nonce !== 'string') {
+      return null;
+    }
+    if (requireTenant) {
+      const tenantId = String(payload.tenantId || '').trim().toLowerCase();
+      if (!tenantId) return null;
+      return { ...payload, tenantId };
+    }
+    return payload;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function oauthRedirect(res, pathAndQuery, origin = '') {
+  const dest = origin ? `${origin}${pathAndQuery}` : pathAndQuery;
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  return res.redirect(302, dest);
 }
 
 router.get('/google/url', oauthUrlLimiter, async (req, res) => {
   try {
+    if (isDemoSsoDisabled()) {
+      return res.status(404).json({ error: 'Not found' });
+    }
     const db = getRequestDatabase(req);
+    if (req.authHub) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     const settingsObj = await getOAuthSettings(db, getTenantId(req));
+    const ssoMode = normalizeGoogleSsoMode(settingsObj.GOOGLE_SSO_MODE, {
+      managedFlag: settingsObj.GOOGLE_SSO_MANAGED,
+      clientId: settingsObj.GOOGLE_CLIENT_ID,
+    });
+    if (!isGoogleSsoLoginEnabled(ssoMode)) {
+      return res.status(400).json({ error: 'Google sign-in is disabled' });
+    }
     
     debugLog(settingsObj, '🔐 [GOOGLE SSO] Starting Google OAuth URL generation...');
     debugLog(settingsObj, '🔐 [GOOGLE SSO] Request headers:', {
@@ -507,16 +566,28 @@ router.get('/google/url', oauthUrlLimiter, async (req, res) => {
       clientIdPrefix: settingsObj.GOOGLE_CLIENT_ID ? settingsObj.GOOGLE_CLIENT_ID.substring(0, 20) + '...' : 'NOT_SET'
     });
     
-    if (!settingsObj.GOOGLE_CLIENT_ID || !settingsObj.GOOGLE_CLIENT_SECRET || !settingsObj.GOOGLE_CALLBACK_URL) {
+    const tenantId = getTenantId(req);
+    const useHub =
+      isGoogleSsoManaged(settingsObj) &&
+      (isMultiTenant() ? Boolean(tenantId) : true);
+    const redirectUri = useHub ? getAuthHubCallbackUrl() : settingsObj.GOOGLE_CALLBACK_URL;
+
+    if (!settingsObj.GOOGLE_CLIENT_ID || !settingsObj.GOOGLE_CLIENT_SECRET || !redirectUri) {
       console.error('🔐 [GOOGLE SSO] ❌ OAuth not fully configured');
       return res.status(400).json({ error: 'Google OAuth not fully configured. Please set Client ID, Client Secret, and Callback URL.' });
     }
 
-    const state = createOAuthState();
+    const returnOrigin =
+      useHub && !isMultiTenant() ? resolveOAuthReturnOrigin(req) : '';
+    const state = createOAuthState({
+      tenantId: useHub ? tenantId : null,
+      managed: useHub,
+      returnOrigin
+    });
     
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${encodeURIComponent(settingsObj.GOOGLE_CLIENT_ID)}` +
-      `&redirect_uri=${encodeURIComponent(settingsObj.GOOGLE_CALLBACK_URL)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&response_type=code` +
       `&scope=${encodeURIComponent('openid email profile')}` +
       `&state=${encodeURIComponent(state)}` +
@@ -526,7 +597,7 @@ router.get('/google/url', oauthUrlLimiter, async (req, res) => {
     debugLog(settingsObj, '🔐 [GOOGLE SSO] OAuth URL components:', {
       baseUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       clientId: settingsObj.GOOGLE_CLIENT_ID.substring(0, 20) + '...',
-      redirectUri: settingsObj.GOOGLE_CALLBACK_URL,
+      redirectUri,
       scope: 'openid email profile'
     });
     
@@ -538,12 +609,53 @@ router.get('/google/url', oauthUrlLimiter, async (req, res) => {
 });
 
 router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
+  let redirectOrigin = '';
   try {
+    if (isDemoSsoDisabled() && !req.authHub) {
+      return oauthRedirect(res, '/?error=oauth_failed', '');
+    }
     const { code, error, error_description, state } = req.query;
-    const db = getRequestDatabase(req);
-    
+    const hubHost = Boolean(req.authHub) || isAuthHubHostname(
+      String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0]
+    );
+    let tenantId = getTenantId(req);
+    let db = getRequestDatabase(req);
+
+    if (hubHost) {
+      const needTenant = isMultiTenant();
+      const payload = verifyOAuthState(state, { requireTenant: needTenant });
+      if (!payload) {
+        return res.status(400).type('text/plain').send('Invalid OAuth state');
+      }
+      if (needTenant) {
+        tenantId = payload.tenantId;
+        if (isReservedTenantSubdomain(tenantId)) {
+          return res.status(400).type('text/plain').send('Unknown tenant');
+        }
+        redirectOrigin = tenantPublicOrigin(tenantId);
+        if (!redirectOrigin) {
+          return res.status(400).type('text/plain').send('Unknown tenant');
+        }
+        const dbInfo = await getTenantDatabase(tenantId);
+        db = dbInfo.db;
+        req.tenantId = tenantId;
+      } else {
+        const dbInfo = await getTenantDatabase(null);
+        db = dbInfo.db;
+        redirectOrigin = resolveHubCallbackReturnOrigin(payload);
+        if (!redirectOrigin) {
+          console.error(
+            '🔐 [GOOGLE SSO] ❌ Hub callback missing return origin (set AUTH_HUB_RETURN_ORIGIN or ALLOWED_ORIGINS)'
+          );
+          return res.status(500).type('text/plain').send('OAuth return origin is not configured');
+        }
+      }
+      if (!req.locals) req.locals = {};
+      req.locals.db = db;
+    }
+
     // Get OAuth settings first to check debug mode
-    const settingsObj = await getOAuthSettings(db, getTenantId(req));
+    const settingsObj = await getOAuthSettings(db, tenantId);
     
     debugLog(settingsObj, '🔐 [GOOGLE SSO] ======== CALLBACK STARTED ========');
     debugLog(settingsObj, '🔐 [GOOGLE SSO] Raw callback URL:', req.originalUrl);
@@ -564,24 +676,29 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
         error_description,
         query: req.query
       });
-      return res.redirect(`/?error=oauth_${error}`);
+      return oauthRedirect(res, `/?error=oauth_${error}`, redirectOrigin);
     }
     
     if (!code) {
       console.error('🔐 [GOOGLE SSO] ❌ No authorization code received');
-      return res.redirect('/?error=oauth_failed');
+      return oauthRedirect(res, '/?error=oauth_failed', redirectOrigin);
     }
 
-    if (!verifyOAuthState(state)) {
+    if (!hubHost && !verifyOAuthState(state)) {
       console.error('🔐 [GOOGLE SSO] ❌ Invalid or missing OAuth state');
-      return res.redirect('/?error=oauth_invalid_state');
+      return oauthRedirect(res, '/?error=oauth_invalid_state', redirectOrigin);
     }
     
     debugLog(settingsObj, '🔐 [GOOGLE SSO] ✅ Authorization code received successfully');
     
-    if (!settingsObj.GOOGLE_CLIENT_ID || !settingsObj.GOOGLE_CLIENT_SECRET || !settingsObj.GOOGLE_CALLBACK_URL) {
+    const useHub =
+      hubHost ||
+      (isGoogleSsoManaged(settingsObj) && (isMultiTenant() ? Boolean(tenantId) : true));
+    const redirectUri = useHub ? getAuthHubCallbackUrl() : settingsObj.GOOGLE_CALLBACK_URL;
+
+    if (!settingsObj.GOOGLE_CLIENT_ID || !settingsObj.GOOGLE_CLIENT_SECRET || !redirectUri) {
       console.error('🔐 [GOOGLE SSO] ❌ OAuth settings not configured in callback');
-      return res.redirect('/?error=oauth_not_configured');
+      return oauthRedirect(res, '/?error=oauth_not_configured', redirectOrigin);
     }
     
     debugLog(settingsObj, '🔐 [GOOGLE SSO] Preparing token exchange with Google...');
@@ -592,7 +709,7 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
       client_secret: settingsObj.GOOGLE_CLIENT_SECRET,
       code,
       grant_type: 'authorization_code',
-      redirect_uri: settingsObj.GOOGLE_CALLBACK_URL
+      redirect_uri: redirectUri
     };
     
     debugLog(settingsObj, '🔐 [GOOGLE SSO] Token exchange payload:', {
@@ -621,7 +738,7 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
         statusText: tokenResponse.statusText,
         error: errorText
       });
-      return res.redirect('/?error=oauth_token_failed');
+      return oauthRedirect(res, '/?error=oauth_token_failed', redirectOrigin);
     }
     
     const tokenData = await tokenResponse.json();
@@ -650,7 +767,7 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
         statusText: userInfoResponse.statusText,
         error: errorText
       });
-      return res.redirect('/?error=oauth_userinfo_failed');
+      return oauthRedirect(res, '/?error=oauth_userinfo_failed', redirectOrigin);
     }
     
     const userInfo = await userInfoResponse.json();
@@ -676,7 +793,7 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
     if (!user) {
       console.log('🔐 [GOOGLE SSO] ❌ User not found in system:', userInfo.email);
       debugLog(settingsObj, '🔐 [GOOGLE SSO] User must be invited first before using Google OAuth');
-      return res.redirect('/?error=user_not_invited');
+      return oauthRedirect(res, '/?error=user_not_invited', redirectOrigin);
     } else {
       console.log('🔐 [GOOGLE SSO] ✅ Existing user found, checking if active...');
       
@@ -747,13 +864,13 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
             }
           } catch (error) {
             console.error('🔐 [GOOGLE SSO] ❌ Failed to activate invited user:', error);
-            return res.redirect('/?error=activation_failed');
+            return oauthRedirect(res, '/?error=activation_failed', redirectOrigin);
           }
         } else {
           // User was previously active but has been deactivated (not an invitation case)
           console.log('🔐 [GOOGLE SSO] ❌ User account is deactivated:', userInfo.email);
           debugLog(settingsObj, '🔐 [GOOGLE SSO] Deactivated user attempted to login via Google OAuth');
-          return res.redirect('/?error=account_deactivated');
+          return oauthRedirect(res, '/?error=account_deactivated', redirectOrigin);
         }
       } else {
         console.log('🔐 [GOOGLE SSO] ✅ User is active, proceeding with login');
@@ -802,6 +919,7 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
     };
     
     const token = jwt.sign(jwtPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    await recordSsoLastSuccess(db, 'google', getTenantId(req));
     console.log('🔐 [GOOGLE SSO] ✅ JWT token generated:', {
       userId: user.id,
       email: user.email,
@@ -813,9 +931,9 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
     // Redirect to login page with token and newUser flag
     console.log('🔐 [GOOGLE SSO] ======== AUTHENTICATION COMPLETE ========');
     if (isNewUser) {
-      res.redirect(`/#login?token=${token}&newUser=true`);
+      oauthRedirect(res, `/#login?token=${token}&newUser=true`, redirectOrigin);
     } else {
-      res.redirect(`/#login?token=${token}`);
+      oauthRedirect(res, `/#login?token=${token}`, redirectOrigin);
     }
     
   } catch (error) {
@@ -834,7 +952,188 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
         userAgent: req.headers['user-agent']?.substring(0, 100)
       }
     });
-    res.redirect('/?error=oauth_failed');
+    oauthRedirect(res, '/?error=oauth_failed', redirectOrigin);
+  }
+});
+
+function simpleSsoEnabled(settingsObj, modeKey, clientIdKey, secretKey, callbackKey) {
+  const mode = String(settingsObj[modeKey] || '').trim().toLowerCase();
+  const enabled = mode === 'byo' || (!mode && String(settingsObj[clientIdKey] || '').trim());
+  return Boolean(
+    enabled &&
+      settingsObj[clientIdKey] &&
+      settingsObj[secretKey] &&
+      settingsObj[callbackKey]
+  );
+}
+
+router.get('/github/url', oauthUrlLimiter, async (req, res) => {
+  try {
+    if (isDemoSsoDisabled() || req.authHub) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    const db = getRequestDatabase(req);
+    const settingsObj = await getOAuthSettings(db, getTenantId(req));
+    if (!simpleSsoEnabled(settingsObj, 'GITHUB_SSO_MODE', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GITHUB_CALLBACK_URL')) {
+      return res.status(400).json({ error: 'GitHub sign-in is disabled' });
+    }
+    const state = createOAuthState({ purpose: 'github_oauth' });
+    const url =
+      `https://github.com/login/oauth/authorize?` +
+      `client_id=${encodeURIComponent(settingsObj.GITHUB_CLIENT_ID)}` +
+      `&redirect_uri=${encodeURIComponent(settingsObj.GITHUB_CALLBACK_URL)}` +
+      `&scope=${encodeURIComponent('read:user user:email')}` +
+      `&state=${encodeURIComponent(state)}`;
+    res.json({ url });
+  } catch (error) {
+    console.error('GitHub OAuth URL error:', error);
+    res.status(500).json({ error: 'Failed to generate OAuth URL' });
+  }
+});
+
+router.get('/github/callback', oauthCallbackLimiter, async (req, res) => {
+  try {
+    if (isDemoSsoDisabled()) {
+      return oauthRedirect(res, '/?error=oauth_failed');
+    }
+    const { code, error, state } = req.query;
+    if (error || !code || !verifyOAuthState(state)) {
+      return oauthRedirect(res, '/?error=oauth_failed');
+    }
+    const db = getRequestDatabase(req);
+    const settingsObj = await getOAuthSettings(db, getTenantId(req));
+    if (!simpleSsoEnabled(settingsObj, 'GITHUB_SSO_MODE', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GITHUB_CALLBACK_URL')) {
+      return oauthRedirect(res, '/?error=oauth_not_configured');
+    }
+    const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: settingsObj.GITHUB_CLIENT_ID,
+        client_secret: settingsObj.GITHUB_CLIENT_SECRET,
+        code,
+        redirect_uri: settingsObj.GITHUB_CALLBACK_URL,
+      }),
+    });
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok || !tokenData.access_token) {
+      return oauthRedirect(res, '/?error=oauth_token_failed');
+    }
+    const userRes = await fetch('https://api.github.com/user', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}`, 'User-Agent': 'Agila' },
+    });
+    const ghUser = await userRes.json();
+    let email = String(ghUser.email || '').trim();
+    if (!email) {
+      const emailsRes = await fetch('https://api.github.com/user/emails', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}`, 'User-Agent': 'Agila' },
+      });
+      const emails = await emailsRes.json();
+      const primary = Array.isArray(emails)
+        ? emails.find((row) => row.primary && row.verified) || emails.find((row) => row.verified)
+        : null;
+      email = String(primary?.email || '').trim();
+    }
+    if (!email) {
+      return oauthRedirect(res, '/?error=oauth_userinfo_failed');
+    }
+    const finished = await completeInvitedUserSso(db, req, {
+      email,
+      avatarUrl: ghUser.avatar_url || '',
+      provider: 'github',
+    });
+    if (!finished.ok) {
+      return oauthRedirect(res, `/?error=${finished.error}`);
+    }
+    await recordSsoLastSuccess(db, 'github', getTenantId(req));
+    return oauthRedirect(res, `/#login?token=${finished.token}`);
+  } catch (error) {
+    console.error('GitHub OAuth callback error:', error);
+    return oauthRedirect(res, '/?error=oauth_failed');
+  }
+});
+
+router.get('/microsoft/url', oauthUrlLimiter, async (req, res) => {
+  try {
+    if (isDemoSsoDisabled() || req.authHub) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    const db = getRequestDatabase(req);
+    const settingsObj = await getOAuthSettings(db, getTenantId(req));
+    if (!simpleSsoEnabled(settingsObj, 'M365_SSO_MODE', 'M365_CLIENT_ID', 'M365_CLIENT_SECRET', 'M365_CALLBACK_URL')) {
+      return res.status(400).json({ error: 'Microsoft sign-in is disabled' });
+    }
+    const tenant = String(settingsObj.M365_TENANT_ID || 'common').trim() || 'common';
+    const state = createOAuthState({ purpose: 'm365_oauth' });
+    const url =
+      `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/authorize?` +
+      `client_id=${encodeURIComponent(settingsObj.M365_CLIENT_ID)}` +
+      `&redirect_uri=${encodeURIComponent(settingsObj.M365_CALLBACK_URL)}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent('openid profile email User.Read')}` +
+      `&state=${encodeURIComponent(state)}`;
+    res.json({ url });
+  } catch (error) {
+    console.error('Microsoft OAuth URL error:', error);
+    res.status(500).json({ error: 'Failed to generate OAuth URL' });
+  }
+});
+
+router.get('/microsoft/callback', oauthCallbackLimiter, async (req, res) => {
+  try {
+    if (isDemoSsoDisabled()) {
+      return oauthRedirect(res, '/?error=oauth_failed');
+    }
+    const { code, error, state } = req.query;
+    if (error || !code || !verifyOAuthState(state)) {
+      return oauthRedirect(res, '/?error=oauth_failed');
+    }
+    const db = getRequestDatabase(req);
+    const settingsObj = await getOAuthSettings(db, getTenantId(req));
+    if (!simpleSsoEnabled(settingsObj, 'M365_SSO_MODE', 'M365_CLIENT_ID', 'M365_CLIENT_SECRET', 'M365_CALLBACK_URL')) {
+      return oauthRedirect(res, '/?error=oauth_not_configured');
+    }
+    const tenant = String(settingsObj.M365_TENANT_ID || 'common').trim() || 'common';
+    const tokenResponse = await fetch(
+      `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: settingsObj.M365_CLIENT_ID,
+          client_secret: settingsObj.M365_CLIENT_SECRET,
+          code: String(code),
+          grant_type: 'authorization_code',
+          redirect_uri: settingsObj.M365_CALLBACK_URL,
+          scope: 'openid profile email User.Read',
+        }),
+      }
+    );
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok || !tokenData.access_token) {
+      return oauthRedirect(res, '/?error=oauth_token_failed');
+    }
+    const meRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const me = await meRes.json();
+    const email = String(me.mail || me.userPrincipalName || '').trim();
+    if (!email) {
+      return oauthRedirect(res, '/?error=oauth_userinfo_failed');
+    }
+    const finished = await completeInvitedUserSso(db, req, {
+      email,
+      avatarUrl: '',
+      provider: 'microsoft',
+    });
+    if (!finished.ok) {
+      return oauthRedirect(res, `/?error=${finished.error}`);
+    }
+    await recordSsoLastSuccess(db, 'm365', getTenantId(req));
+    return oauthRedirect(res, `/#login?token=${finished.token}`);
+  } catch (error) {
+    console.error('Microsoft OAuth callback error:', error);
+    return oauthRedirect(res, '/?error=oauth_failed');
   }
 });
 

@@ -789,12 +789,14 @@ function KanbanColumn({
       ? dragPreview.insertIndex
       : -1;
 
-  // No list hole while the pointer is still in the original slot — pickup overlay only.
-  const showDestPlaceholder =
-    rawInsertIndex >= 0 &&
-    (draggedTask?.columnId !== column.id || rawInsertIndex !== remappedOriginInsert);
-
+  // Keep a visible hole at every slot, including the original position, so
+  // putting a card back does not require nudging the next card out of the way.
+  const showDestPlaceholder = rawInsertIndex >= 0;
   const insertIndex = showDestPlaceholder ? rawInsertIndex : -1;
+  const isOriginPlaceholder =
+    showDestPlaceholder &&
+    draggedTask?.columnId === column.id &&
+    rawInsertIndex === remappedOriginInsert;
 
   const heightCacheRef = useRef<Map<string, number>>(new Map());
   const [heightVersion, setHeightVersion] = useState(0);
@@ -857,8 +859,7 @@ function KanbanColumn({
   const collapseOrigin =
     draggedLayoutIndices.size > 0 &&
     !!draggedTask &&
-    (showDestPlaceholder ||
-      (!!dragPreview && dragPreview.targetColumnId !== column.id));
+    draggedTask.columnId === column.id;
 
   const getItemSize = useCallback(
     (index: number) => {
@@ -987,7 +988,9 @@ function KanbanColumn({
                 : undefined
             }
           >
-            <ColumnDropHerePlaceholder label={t('column.dropHere')} />
+            <ColumnDropHerePlaceholder
+              label={isOriginPlaceholder ? t('column.returnHere') : t('column.dropHere')}
+            />
           </div>
         );
       }
@@ -1121,7 +1124,9 @@ function KanbanColumn({
                 : undefined
             }
           >
-            <ColumnDropHerePlaceholder label={t('column.dropHere')} />
+            <ColumnDropHerePlaceholder
+              label={isOriginPlaceholder ? t('column.returnHere') : t('column.dropHere')}
+            />
           </div>
         );
       }
@@ -1139,7 +1144,7 @@ function KanbanColumn({
     }
 
     return taskElements;
-    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, displayTitle, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
+    }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, displayTitle, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, isOriginPlaceholder, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
 
   const setColumnRef = (node: HTMLElement | null) => {
     columnElRef.current = node;

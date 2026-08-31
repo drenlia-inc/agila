@@ -25,7 +25,7 @@ import {
   isSystemMemberId,
   sortMembersAgentLast,
 } from '../utils/agentMemberUi';
-import { memberIsViewer, memberIsInactive } from '../utils/memberUtils';
+import { memberIsViewer, memberIsInactive, memberVisibleOnTeamBoard } from '../utils/memberUtils';
 import { UNASSIGNED_MEMBER_FILTER_ID } from '../constants/appConstants';
 import {
   loadUserPreferences,
@@ -752,8 +752,9 @@ export default function TeamMembers({
     [currentUserId]
   );
 
+  const teamBoardMembers = members.filter(memberVisibleOnTeamBoard);
   const displayMembers = sortMembersAgentLast(
-    showAgentTasks ? members : members.filter((m) => !isAgentMemberId(m.id)),
+    showAgentTasks ? teamBoardMembers : teamBoardMembers.filter((m) => !isAgentMemberId(m.id)),
     memberDisplayOrder,
     currentUserId
   );
@@ -1072,7 +1073,7 @@ export default function TeamMembers({
 
       {meetTheTeamOpen ? (
         <MeetTheTeamModal
-          members={members}
+          members={teamBoardMembers}
           currentUserId={currentUserId}
           memberDisplayOrder={memberDisplayOrder}
           onMemberDisplayOrderChange={handleMemberDisplayOrderChange}

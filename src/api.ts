@@ -44,7 +44,7 @@ export function clearAuthInterceptorBlock(): void {
   hasInvalidToken = false;
 }
 
-function hashHasOAuthToken(): boolean {
+export function hashHasOAuthToken(): boolean {
   try {
     const hash = window.location.hash || '';
     return (

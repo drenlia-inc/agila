@@ -1,6 +1,7 @@
 /** Per-tenant in-memory OAuth settings cache (Google SSO). */
 
 import { getTenantDomain } from './tenantDomain.js';
+import { getAuthHubHostname, isGoogleSsoManaged } from './authHub.js';
 
 function tenantKey(tenantId) {
   return tenantId || 'default';
@@ -24,6 +25,9 @@ export function oauthSettingsMatchTenant(tenantId, settings) {
   try {
     const host = new URL(callback).hostname.toLowerCase();
     const expected = `${String(tenantId).toLowerCase()}.${getTenantDomain().toLowerCase()}`;
+    if (isGoogleSsoManaged(settings) && host === getAuthHubHostname()) {
+      return true;
+    }
     return host === expected;
   } catch {
     return false;
@@ -59,6 +63,27 @@ export function setCachedOAuthSettings(tenantId, settings) {
     invalidated: false,
     timestamp: Date.now(),
   };
+}
+
+export function isOAuthSettingsCacheKey(key) {
+  const k = String(key || '');
+  if (k.endsWith('_LAST_SUCCESS_AT')) return false;
+  return (
+    k === 'SERVER_DEBUG_GOOGLE_SSO' ||
+    k.startsWith('GOOGLE_') ||
+    k.startsWith('PLATFORM_GOOGLE_') ||
+    k.startsWith('GITHUB_') ||
+    k.startsWith('M365_')
+  );
+}
+
+export function oauthSettingsEventTouchesCache(data) {
+  if (!data || typeof data !== 'object') return false;
+  if (isOAuthSettingsCacheKey(data.key)) return true;
+  if (data.settings && typeof data.settings === 'object') {
+    return Object.keys(data.settings).some((key) => isOAuthSettingsCacheKey(key));
+  }
+  return false;
 }
 
 /** Mark this tenant's OAuth cache stale so the next Google request reloads from the DB. */

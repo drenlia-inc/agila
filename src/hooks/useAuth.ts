@@ -37,6 +37,23 @@ function clearStoredIntendedDestination(): void {
   }
 }
 
+/** OAuth must finish on the app host — auth.* serves the same SPA but is not the product URL. */
+function redirectAuthHubOAuthToAppHost(): boolean {
+  const { hostname, protocol, pathname, search, hash } = window.location;
+  if (!/^auth\./i.test(hostname)) return false;
+  if (!api.hashHasOAuthToken()) return false;
+  const domain = hostname.replace(/^auth\./i, '');
+  if (!domain || domain === hostname) return false;
+  const appHost = `kanban.${domain}`;
+  window.location.replace(`${protocol}//${appHost}${pathname}${search}${hash}`);
+  return true;
+}
+
+// Run before the first React paint when the hub accidentally serves the SPA.
+if (typeof window !== 'undefined') {
+  redirectAuthHubOAuthToAppHost();
+}
+
 /** Pathname of `/project/#PROJ#TASK` or `/` for hash-only destinations. */
 function destinationPathname(dest: string): string {
   if (!dest.startsWith('/')) return '/';
@@ -344,15 +361,10 @@ export const useAuth = (callbacks: UseAuthCallbacks): UseAuthReturn => {
       return;
     }
 
-    // OAuth callback owns auth — don't race with a stale localStorage token
-    const hash = window.location.hash || '';
-    if (
-      hash.includes('token=') &&
-      !hash.includes('reset-password') &&
-      !hash.includes('activate-account')
-    ) {
+    // OAuth callback owns auth — keep authChecked false so App stays on the
+    // loader instead of flashing the login form (and then "Restoring session").
+    if (api.hashHasOAuthToken()) {
       console.log('🔑 Skipping mount auth check — OAuth token in URL hash');
-      setAuthChecked(true);
       return;
     }
     
@@ -464,10 +476,13 @@ export const useAuth = (callbacks: UseAuthCallbacks): UseAuthReturn => {
   useEffect(() => {
     // Check for token in URL hash (for OAuth callback)
     const hash = window.location.hash;
-    
-      
+
+    if (redirectAuthHubOAuthToAppHost()) {
+      return;
+    }
+
     // Skip password reset and account activation tokens - only handle OAuth tokens
-    if (hash.includes('token=') && !hash.includes('reset-password') && !hash.includes('activate-account')) {
+    if (api.hashHasOAuthToken()) {
       const tokenMatch = hash.match(/token=([^&]+)/);
       const errorMatch = hash.match(/error=([^&]+)/);
       
@@ -491,17 +506,14 @@ export const useAuth = (callbacks: UseAuthCallbacks): UseAuthReturn => {
           
           // Set OAuth processing flag to prevent interference BEFORE hash changes
           isProcessingOAuthRef.current = true;
-          
-          // Set authenticated immediately after media session is ready
-          setIsAuthenticated(true);
-          
-          // Fetch current user data and call handleLogin BEFORE redirecting
-          // This ensures APP_URL update happens before navigation
+
+          // Fetch current user, then mark authenticated once — avoids Login / ghost-session flash
           api.getCurrentUser()
           .then(async response => {
             setCurrentUser(response.user);
             // handleLogin applies intended destination (state or storage) or leaves #login → #kanban
             await handleLogin(response.user, token, true);
+            setAuthChecked(true);
             isProcessingOAuthRef.current = false;
           })
           .catch((error) => {
@@ -520,9 +532,11 @@ export const useAuth = (callbacks: UseAuthCallbacks): UseAuthReturn => {
       } else if (errorMatch) {
         // Handle OAuth errors
         console.error('OAuth error:', errorMatch[1]);
-        // Clear the URL hash and redirect to login
+        setAuthChecked(true);
         window.location.hash = '#login';
-        return; // Exit early to prevent routing conflicts
+        return;
+      } else {
+        setAuthChecked(true);
       }
     }
   }, []);

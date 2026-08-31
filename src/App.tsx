@@ -61,7 +61,7 @@ import TaskLinkingOverlay from './components/TaskLinkingOverlay';
 import NetworkStatusIndicator from './components/NetworkStatusIndicator';
 import VersionUpdateBanner from './components/VersionUpdateBanner';
 import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
-import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, ACTIVITY_FEED_DEFAULT_LIMIT, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById } from './api';
+import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, ACTIVITY_FEED_DEFAULT_LIMIT, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById, hashHasOAuthToken } from './api';
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { applyActiveColumnFilters } from './utils/columnFilters';
@@ -181,6 +181,7 @@ declare global {
 // Inner App component that uses hooks (must be inside SettingsProvider)
 function AppContent() {
   const { t } = useTranslation('tasks');
+  const { t: tCommon } = useTranslation('common');
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [boards, setBoards] = useState<Board[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<string | null>(null);
@@ -1689,6 +1690,7 @@ function AppContent() {
     websocketClient.onTaskCollaboratorRemoved(taskWebSocket.handleTaskCollaboratorRemoved);
     websocketClient.onMemberUpdated(memberWebSocket.handleMemberUpdated);
     websocketClient.onMemberCreated(memberWebSocket.handleMemberCreated);
+    websocketClient.onUserUpdated(memberWebSocket.handleUserUpdated);
     websocketClient.onMemberDeleted(memberWebSocket.handleMemberDeleted);
     websocketClient.onUserDeleted(memberWebSocket.handleUserDeleted);
     websocketClient.onUserProfileUpdated(memberWebSocket.handleUserProfileUpdated);
@@ -1741,6 +1743,7 @@ function AppContent() {
       websocketClient.offTaskCollaboratorRemoved(taskWebSocket.handleTaskCollaboratorRemoved);
       websocketClient.offMemberUpdated(memberWebSocket.handleMemberUpdated);
       websocketClient.offMemberCreated(memberWebSocket.handleMemberCreated);
+      websocketClient.offUserUpdated(memberWebSocket.handleUserUpdated);
       websocketClient.offMemberDeleted(memberWebSocket.handleMemberDeleted);
       websocketClient.offUserDeleted(memberWebSocket.handleUserDeleted);
       websocketClient.offUserProfileUpdated(memberWebSocket.handleUserProfileUpdated);
@@ -5079,11 +5082,15 @@ function AppContent() {
   useEffect(() => {
     // Set mini mode whenever we have a dragged task
     setIsTaskMiniMode(!!draggedTask);
-    
+    document.body.classList.toggle('kanban-task-dragging', !!draggedTask);
+
     // Only clear cursor if drag ends (draggedTask becomes null)
     if (!draggedTask && dragStartedRef.current) {
       clearCustomCursor(dragStartedRef);
     }
+    return () => {
+      document.body.classList.remove('kanban-task-dragging');
+    };
   }, [draggedTask]);
 
   const handleAddColumn = async (afterColumnId: string) => {
@@ -5860,7 +5867,7 @@ function AppContent() {
 
   // Handle task page (requires authentication)
   if (currentPage === 'task') {
-    if (!isAuthenticated && authChecked) {
+    if (!isAuthenticated && authChecked && !hashHasOAuthToken()) {
       return (
         <Login
           siteSettings={siteSettings}
@@ -5898,13 +5905,13 @@ function AppContent() {
     );
   }
 
-  // Show loading state while checking authentication
-  if (!authChecked) {
+  // Show loading state while checking authentication or finishing OAuth (#login?token=)
+  if (!authChecked || (!isAuthenticated && hashHasOAuthToken())) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">{tCommon('labels.loading')}</p>
         </div>
       </div>
     );
@@ -5934,7 +5941,7 @@ function AppContent() {
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Restoring session…</p>
+          <p className="text-gray-600">{tCommon('labels.restoringSession')}</p>
         </div>
       </div>
     );

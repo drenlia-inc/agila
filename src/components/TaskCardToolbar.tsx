@@ -383,12 +383,51 @@ export default function TaskCardToolbar({
 
   const agentLockedLabel = t('toolbar.disabledWhileAgent');
 
+  const archiveColumnId = getArchivedColumnId(columns);
+  const currentColumn = columns && columns[task.columnId];
+  const showArchiveButton = Boolean(archiveColumnId && !isArchivedColumnFlag(currentColumn));
+
+  const [hideCopyButton, setHideCopyButton] = useState(false);
+  useEffect(() => {
+    const card = cardWidthAnchorRef?.current;
+    if (!card) return;
+
+    const TOOLBAR_SLOT_PX = 22;
+    const TOOLBAR_GAP_PX = 2;
+    const LEFT_INSET_PX = 4;
+    const TRASH_FROM_RIGHT_PX = 96;
+    const TRASH_SLOT_PX = 22;
+    const GUTTER_PX = 8;
+
+    const sync = (cardWidth: number) => {
+      if (cardWidth <= 0) return;
+      const leftSlots =
+        1 +
+        (isAgentAssigned ? 1 : 0) +
+        (onStartLinking ? 1 : 0) +
+        (onTagAdd ? 1 : 0) +
+        1 +
+        (showArchiveButton ? 1 : 0);
+      const leftWidth =
+        LEFT_INSET_PX + leftSlots * TOOLBAR_SLOT_PX + Math.max(0, leftSlots - 1) * TOOLBAR_GAP_PX;
+      const reservedRight = TRASH_FROM_RIGHT_PX + TRASH_SLOT_PX;
+      setHideCopyButton(leftWidth + reservedRight + GUTTER_PX > cardWidth);
+    };
+
+    sync(card.getBoundingClientRect().width);
+    const ro = new ResizeObserver(([entry]) => {
+      sync(entry.contentRect.width);
+    });
+    ro.observe(card);
+    return () => ro.disconnect();
+  }, [cardWidthAnchorRef, isAgentAssigned, onStartLinking, onTagAdd, showArchiveButton]);
+
   const toolbarHoverVisibility = toolbarPinnedOpen
     ? 'pointer-events-auto opacity-100'
     : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100';
 
-  // Fixed slots: [AI or grip][grip if AI][actions] …… [trash][watchers][avatar]
-  // When no agent, grip occupies the AI activity button slot (no empty spacer).
+  // Fixed slots: [grip][AI if assigned][actions] …… [trash][watchers][avatar]
+  // Grip is always top-left. Agent activity sits immediately after it when assigned.
   // The indicators retain their original 46px maximum width, but now sit between
   // trash and avatar. Trash remains pinned regardless of indicators or agent state.
   const trashRightClass = 'right-24';
@@ -552,23 +591,19 @@ export default function TaskCardToolbar({
 
   return (
     <>
-      {/* Left cluster: AI (when assigned) + grip; grip takes AI slot when agent absent */}
+      {/* Left cluster: grip first; agent activity immediately after when assigned */}
       <div className="absolute top-1 left-1 z-[6] flex items-start gap-0.5">
+        {gripHandle}
         {isAgentAssigned ? (
-          <>
-            <AgentStatusButton
-              status={agentWorkStatus}
-              className={`p-1 rounded hover:bg-teal-100 dark:hover:bg-teal-900/40 ${toolbarReachClass}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenAgentActivity?.();
-              }}
-            />
-            {gripHandle}
-          </>
-        ) : (
-          gripHandle
-        )}
+          <AgentStatusButton
+            status={agentWorkStatus}
+            className={`inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center p-1 rounded hover:bg-teal-100 dark:hover:bg-teal-900/40 ${toolbarReachClass}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenAgentActivity?.();
+            }}
+          />
+        ) : null}
 
         <div
           className="flex h-[22px] items-center gap-0.5"
@@ -602,6 +637,7 @@ export default function TaskCardToolbar({
             </div>
           )}
 
+          {!hideCopyButton && (
           <div className={`flex h-[22px] items-center transition-opacity duration-200 ${toolbarHoverVisibility}`}>
             <KanbanChromeTooltip label={t('toolbar.copyTask')}>
               <button
@@ -612,13 +648,9 @@ export default function TaskCardToolbar({
               </button>
             </KanbanChromeTooltip>
           </div>
+          )}
 
-          {(() => {
-            const archiveColumnId = getArchivedColumnId(columns);
-            const currentColumn = columns && columns[task.columnId];
-            const isCurrentColumnArchived = isArchivedColumnFlag(currentColumn);
-
-            return archiveColumnId && !isCurrentColumnArchived ? (
+          {showArchiveButton && archiveColumnId && (
               <div className={`flex h-[22px] items-center transition-opacity duration-200 ${toolbarHoverVisibility}`}>
                 <KanbanChromeTooltip label={agentBlocking ? agentLockedLabel : t('toolbar.archiveTask')}>
                   <button
@@ -638,8 +670,7 @@ export default function TaskCardToolbar({
                   </button>
                 </KanbanChromeTooltip>
               </div>
-            ) : null;
-          })()}
+          )}
         </div>
       </div>
 

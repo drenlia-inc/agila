@@ -51,7 +51,7 @@ When designing or changing any screen, treat **density, alignment, and input aff
 ## API Routes & Endpoints
 - EVERY route must be authenticated by default using `authenticateToken` middleware.
 - Only make a route public if it is explicitly listed as public:
-  - **Authentication**: `/api/auth/login`, `/api/auth/activate-account`, `/api/auth/verify-invitation`, `/api/auth/google/*`, `/api/auth/demo-credentials`, `/api/auth/check-*`
+  - **Authentication**: `/api/auth/login`, `/api/auth/activate-account`, `/api/auth/verify-invitation`, `/api/auth/google/*`, `/api/auth/github/*`, `/api/auth/microsoft/*`, `/api/auth/demo-credentials`, `/api/auth/check-*`
   - **Password Reset**: `/api/password-reset/request`, `/api/password-reset/reset`, `/api/password-reset/verify/:token`
   - **Health Checks**: `/health`, `/ready`, `/api/ready`, `/api/version`
   - **Public Settings**: `/api/settings` (GET only, for site name, mail status, OAuth config)

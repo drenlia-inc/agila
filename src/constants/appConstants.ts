@@ -87,3 +87,6 @@ export function canStartOrRestartAgent(status: string | null | undefined): boole
 // Throttles to max 20 updates per second for better performance
 export const WEBSOCKET_THROTTLE_MS = 50;
 
+/** Full-screen modal backdrop — above ActivityFeed (8500) and app header (60). */
+export const MODAL_OVERLAY_Z_INDEX = 10100;
+

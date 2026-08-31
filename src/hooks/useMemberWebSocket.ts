@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { TeamMember, SavedFilterView } from '../types';
 import { getMembers, getCurrentUser } from '../api';
+import { normalizeTeamMemberFromEvent } from '../utils/memberUtils';
 
 interface UseMemberWebSocketProps {
   // State setters
@@ -36,35 +37,60 @@ export const useMemberWebSocket = ({
   
   const handleMemberCreated = useCallback((data: any) => {
     if (!data?.member) return;
+    const incoming = normalizeTeamMemberFromEvent(data.member, {
+      assumeInactiveIfLinked: true,
+    }) as TeamMember;
+    if (!incoming.id) return;
     // Merge into list — do not replace the whole members array with a single entry
     setMembers(prev => {
       const list = Array.isArray(prev) ? prev : [];
-      const exists = list.some(m => m.id === data.member.id);
+      const exists = list.some(m => m.id === incoming.id);
       if (exists) {
-        return list.map(m => (m.id === data.member.id ? { ...m, ...data.member } : m));
+        return list.map(m => (m.id === incoming.id ? { ...m, ...incoming } : m));
       }
-      return [...list, data.member];
+      return [...list, incoming];
+    });
+  }, [setMembers]);
+
+  const handleUserUpdated = useCallback((data: any) => {
+    const user = data?.user;
+    if (!user?.id) return;
+    const isActive =
+      user.isActive === false || user.isActive === 0 || user.isActive === 'false'
+        ? false
+        : user.isActive === undefined
+          ? undefined
+          : true;
+    setMembers((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      return list.map((member) => {
+        if (!member.user_id || String(member.user_id) !== String(user.id)) return member;
+        return {
+          ...member,
+          ...(user.email != null ? { email: String(user.email) } : {}),
+          ...(isActive !== undefined ? { isActive } : {}),
+          ...(isActive === true ? { hasActivated: true } : {}),
+        };
+      });
     });
   }, [setMembers]);
 
   const handleMemberUpdated = useCallback(async (data: any) => {
     // Update the specific member in the members list
     if (data.member) {
+      const incoming = normalizeTeamMemberFromEvent(data.member);
+      if (!incoming.id) return;
       setMembers(prevMembers => {
         const list = Array.isArray(prevMembers) ? prevMembers : [];
-        // Check if member exists in current list
-        const memberExists = list.some(member => member.id === data.member.id);
+        const memberExists = list.some(member => member.id === incoming.id);
         
         if (memberExists) {
-          // Update existing member
           return list.map(member => 
-            member.id === data.member.id ? { ...member, ...data.member } : member
+            member.id === incoming.id ? { ...member, ...incoming } : member
           );
-        } else {
-          // Member doesn't exist, add it to the list
-          console.log('📨 Adding new member to list:', data.member);
-          return [...list, data.member];
         }
+        console.log('📨 Adding new member to list:', incoming);
+        return [...list, incoming as TeamMember];
       });
     } else {
       // Fallback: refresh entire members list
@@ -172,6 +198,7 @@ export const useMemberWebSocket = ({
   return {
     handleMemberCreated,
     handleMemberUpdated,
+    handleUserUpdated,
     handleMemberDeleted,
     handleUserDeleted,
     handleUserProfileUpdated,

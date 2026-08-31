@@ -25,7 +25,10 @@ data:
   # Security configuration
   JWT_SECRET: "JWT_SECRET_PLACEHOLDER"
   # CORS / Socket.IO extras — tenants are {id}.agila.dev (example uses generic app)
-  ALLOWED_ORIGINS: "localhost,127.0.0.1,app.agila.dev,admin.agila.dev,agila.dev"
+  ALLOWED_ORIGINS: "localhost,127.0.0.1,app.agila.dev,kanban.agila.dev,admin.agila.dev,agila.dev,auth.agila.dev"
+  AUTH_HUB_PUBLIC_URL: "https://auth.agila.dev"
+  # Only for single-tenant / docker testing. Leave empty on K8s (return host is {tenant}.agila.dev).
+  AUTH_HUB_RETURN_ORIGIN: ""
   
   # License settings
   LICENSE_ENABLED: "true"

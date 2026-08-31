@@ -8,6 +8,8 @@ export interface TeamMember {
   bio?: string;
   /** false when linked user is inactive; omitted/true otherwise (Agent stubs, etc.) */
   isActive?: boolean;
+  /** True after first activation. Pending invites stay false so TEAM can hide them. */
+  hasActivated?: boolean;
   /** Linked user is a read-only viewer (no admin/user role). */
   isViewer?: boolean;
   avatarUrl?: string;

@@ -654,20 +654,26 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
       const token = part.toUpperCase();
       if (knownProjectIds.has(token)) {
         return (
-          <a
+          <KanbanChromeTooltip
             key={`${token}-${index}`}
-            href="#"
-            className={ACTIVITY_TASK_LINK_CLASS}
-            title={token}
-            aria-label={t('activityFeed.openProject', { project: token })}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onOpenProject?.(token);
-            }}
+            label={t('activityFeed.jumpToBoard', { project: token })}
+            placement="top"
+            portalZIndex={ACTIVITY_FEED_CHROME_Z}
+            wrapperClassName="inline"
           >
-            {highlightText(part, searchTerm)}
-          </a>
+            <a
+              href="#"
+              className={ACTIVITY_TASK_LINK_CLASS}
+              aria-label={t('activityFeed.jumpToBoard', { project: token })}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenProject?.(token);
+              }}
+            >
+              {highlightText(part, searchTerm)}
+            </a>
+          </KanbanChromeTooltip>
         );
       }
       const href = activityFeedTaskHref(token, resolvedProject);
@@ -675,29 +681,34 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
         activityTaskHint?.taskTicket?.toUpperCase() === token
           ? activityTaskHint.taskId
           : undefined;
+      const taskLinkLabel = onJumpToTask
+        ? t('activityFeed.jumpToTask', { ticket: token })
+        : t('activityFeed.openTask', { ticket: token });
       return (
-        <a
+        <KanbanChromeTooltip
           key={`${token}-${index}`}
-          href={href}
-          className={ACTIVITY_TASK_LINK_CLASS}
-          title={token}
-          aria-label={
-            onJumpToTask
-              ? t('activityFeed.jumpToTask', { ticket: token })
-              : t('activityFeed.openTask', { ticket: token })
-          }
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (onJumpToTask) {
-              onJumpToTask(token, hintTaskId);
-            } else {
-              navigateActivityFeedTaskLink(href);
-            }
-          }}
+          label={taskLinkLabel}
+          placement="top"
+          portalZIndex={ACTIVITY_FEED_CHROME_Z}
+          wrapperClassName="inline"
         >
-          {highlightText(part, searchTerm)}
-        </a>
+          <a
+            href={href}
+            className={ACTIVITY_TASK_LINK_CLASS}
+            aria-label={taskLinkLabel}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (onJumpToTask) {
+                onJumpToTask(token, hintTaskId);
+              } else {
+                navigateActivityFeedTaskLink(href);
+              }
+            }}
+          >
+            {highlightText(part, searchTerm)}
+          </a>
+        </KanbanChromeTooltip>
       );
     });
   };

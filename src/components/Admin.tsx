@@ -34,6 +34,15 @@ import {
 } from '../utils/adminSettingsDirty';
 import { clampActivityFeedInSettings } from '../utils/adminFieldLimits';
 import {
+  githubSsoKeysDirty,
+  m365SsoKeysDirty,
+  oauthSettingKeysDirty,
+  redactManagedSsoPatch,
+  sortAdminSettingsSaveEntries,
+  validateByoOAuthSave,
+  validateSimpleByoSave,
+} from '../utils/ssoAdminValidation';
+import {
   ADMIN_NAVIGATE_EVENT,
   AdminNavigateDetail,
   adminHashForTabId,
@@ -65,6 +74,26 @@ interface User {
   authProvider?: string;
   googleAvatarUrl?: string;
   memberColor?: string;
+}
+
+type AdminUserRole = 'admin' | 'user' | 'viewer';
+
+function isAdminUserRole(value: unknown): value is AdminUserRole {
+  return value === 'admin' || value === 'user' || value === 'viewer';
+}
+
+function patchUserRole(users: User[], userId: string, role: AdminUserRole): User[] {
+  return users.map((u) =>
+    String(u.id) === String(userId) ? { ...u, roles: [role] } : u
+  );
+}
+
+type UserListPatch = Partial<
+  Pick<User, 'email' | 'firstName' | 'lastName' | 'displayName' | 'isActive' | 'avatarUrl' | 'memberColor'>
+>;
+
+function patchUserInList(users: User[], userId: string, patch: UserListPatch): User[] {
+  return users.map((u) => (String(u.id) === String(userId) ? { ...u, ...patch } : u));
 }
 
 interface Settings {
@@ -377,12 +406,31 @@ const Admin: React.FC<AdminProps> = ({
       await refreshAdminUsers('creation');
     };
 
-    const handleUserUpdated = async () => {
-      await refreshAdminUsers('update');
+    const handleUserUpdated = (data: {
+      user?: {
+        id?: string;
+        email?: string;
+        firstName?: string;
+        lastName?: string;
+        isActive?: boolean;
+      };
+    }) => {
+      const user = data?.user;
+      if (!user?.id) return;
+      const patch: UserListPatch = {};
+      if (user.email !== undefined) patch.email = user.email;
+      if (user.firstName !== undefined) patch.firstName = user.firstName;
+      if (user.lastName !== undefined) patch.lastName = user.lastName;
+      if (user.isActive !== undefined) patch.isActive = user.isActive;
+      if (Object.keys(patch).length === 0) return;
+      setUsers((prev) => (Array.isArray(prev) ? patchUserInList(prev, user.id!, patch) : prev));
     };
 
-    const handleUserRoleUpdated = async () => {
-      await refreshAdminUsers('role update');
+    const handleUserRoleUpdated = (data: { userId?: string; role?: string }) => {
+      const { userId, role } = data ?? {};
+      if (userId && isAdminUserRole(role)) {
+        setUsers((prev) => (Array.isArray(prev) ? patchUserRole(prev, userId, role) : prev));
+      }
     };
 
     const handleUserDeleted = async (data: any) => {
@@ -395,8 +443,14 @@ const Admin: React.FC<AdminProps> = ({
       await refreshAdminUsers('deletion');
     };
 
-    const handleUserProfileUpdated = async () => {
-      await refreshAdminUsers('profile update');
+    const handleUserProfileUpdated = (data: { userId?: string; avatarPath?: string | null }) => {
+      const { userId, avatarPath } = data ?? {};
+      if (!userId) return;
+      setUsers((prev) =>
+        Array.isArray(prev)
+          ? patchUserInList(prev, userId, { avatarUrl: avatarPath || undefined })
+          : prev
+      );
     };
 
     // Settings event handlers
@@ -411,8 +465,8 @@ const Admin: React.FC<AdminProps> = ({
           for (const [key, value] of Object.entries(data.settings)) {
             patch[key] = asSettingString(value);
           }
-          setSettings((prev) => ({ ...prev, ...patch }));
-          setEditingSettings((prev) => ({ ...prev, ...patch }));
+          setSettings((prev) => ({ ...prev, ...redactManagedSsoPatch(prev, patch) }));
+          setEditingSettings((prev) => ({ ...prev, ...redactManagedSsoPatch(prev, patch) }));
           return;
         }
         // Update the specific setting directly from WebSocket data instead of fetching all settings
@@ -432,16 +486,12 @@ const Admin: React.FC<AdminProps> = ({
           const setFlagKey = `${data.key}_SET`;
           const setFlag =
             data[setFlagKey] !== undefined ? asSettingString(data[setFlagKey]) : undefined;
-          setSettings((prev) => ({
-            ...prev,
+          const patch: Record<string, string> = {
             [data.key]: value,
             ...(setFlag !== undefined ? { [setFlagKey]: setFlag } : {}),
-          }));
-          setEditingSettings((prev) => ({
-            ...prev,
-            [data.key]: value,
-            ...(setFlag !== undefined ? { [setFlagKey]: setFlag } : {}),
-          }));
+          };
+          setSettings((prev) => ({ ...prev, ...redactManagedSsoPatch(prev, patch) }));
+          setEditingSettings((prev) => ({ ...prev, ...redactManagedSsoPatch(prev, patch) }));
           // Agent row appears/disappears in Users when AI is toggled
           if (data.key === 'AI_ENABLED') {
             try {
@@ -506,21 +556,22 @@ const Admin: React.FC<AdminProps> = ({
       
       setUsers(usersResponse.data || []);
       
-      const loadedSettings =
-        refreshedSettings && Object.keys(refreshedSettings).length > 0
+      const refreshedOk =
+        refreshedSettings && Object.keys(refreshedSettings).length > 0;
+      // In-flight fetchSettings() returns {} — do not clobber a just-applied SSO remove patch.
+      if (!quiet || refreshedOk) {
+        const loadedSettings = refreshedOk
           ? refreshedSettings
           : systemSettings || {};
-      const settingsWithDefaults = {
-        ...loadedSettings,
-        TASK_DELETE_CONFIRM: loadedSettings.TASK_DELETE_CONFIRM || 'true',
-        ALLOW_USER_SELF_DELETE: loadedSettings.ALLOW_USER_SELF_DELETE || 'true',
-        // Ensure SMTP_SECURE has a default value if not in database
-        // This ensures it's always in editingSettings and will be saved when user clicks Save/Test
-        SMTP_SECURE: loadedSettings.SMTP_SECURE || 'tls'
-      };
-      
-      setSettings(settingsWithDefaults);
-      setEditingSettings(settingsWithDefaults);
+        const settingsWithDefaults = {
+          ...loadedSettings,
+          TASK_DELETE_CONFIRM: loadedSettings.TASK_DELETE_CONFIRM || 'true',
+          ALLOW_USER_SELF_DELETE: loadedSettings.ALLOW_USER_SELF_DELETE || 'true',
+          SMTP_SECURE: loadedSettings.SMTP_SECURE || 'tls'
+        };
+        setSettings(settingsWithDefaults);
+        setEditingSettings(settingsWithDefaults);
+      }
       setTags(tagsResponse || []);
       setPriorities(prioritiesResponse || []);
       
@@ -571,17 +622,92 @@ const Admin: React.FC<AdminProps> = ({
     }
   };
 
-  const handleRoleChange = async (userId: string, role: 'admin' | 'user' | 'viewer') => {
+  const handleRoleChange = async (userId: string, role: AdminUserRole) => {
+    let previousRoles: string[] | null = null;
+    setUsers((prev) => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.map((u) => {
+        if (String(u.id) !== String(userId)) return u;
+        previousRoles = u.roles;
+        return { ...u, roles: [role] };
+      });
+    });
+
     try {
       await api.put(`/admin/users/${userId}/role`, { role });
-      await loadData(); // Reload users
       toast.success(t('userRoleUpdatedSuccessfully'), '');
     } catch (err: any) {
+      if (previousRoles) {
+        setUsers((prev) =>
+          Array.isArray(prev)
+            ? prev.map((u) =>
+                String(u.id) === String(userId) ? { ...u, roles: previousRoles! } : u
+              )
+            : prev
+        );
+      }
       const errorMessage =
         err.response?.data?.error ||
         err.response?.data?.message ||
         err.message ||
         t('failedToUpdateUserRole');
+      toast.error(errorMessage, '');
+      console.error(err);
+    }
+  };
+
+  const handleUserStatusChange = async (userId: string, isActive: boolean) => {
+    if (userId === currentUser?.id && !isActive) {
+      toast.error(t('users.cannotDeactivateOwnAccount'), '');
+      return;
+    }
+
+    const user = users.find((u) => String(u.id) === String(userId));
+    if (!user) return;
+
+    let previousActive: boolean | null = null;
+    setUsers((prev) => {
+      if (!Array.isArray(prev)) return prev;
+      return prev.map((u) => {
+        if (String(u.id) !== String(userId)) return u;
+        previousActive = u.isActive;
+        return { ...u, isActive };
+      });
+    });
+
+    try {
+      await updateUser(userId, {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        isActive,
+      });
+      toast.success(t('userUpdatedSuccessfully'), '');
+      if (onUsersChanged) {
+        onUsersChanged();
+      }
+    } catch (err: any) {
+      if (previousActive != null) {
+        setUsers((prev) =>
+          Array.isArray(prev)
+            ? prev.map((u) =>
+                String(u.id) === String(userId) ? { ...u, isActive: previousActive! } : u
+              )
+            : prev
+        );
+      }
+      let errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        t('failedToUpdateUser');
+      if (
+        err.response?.status === 403 &&
+        (errorMessage.includes('limit') || errorMessage.includes('Limit'))
+      ) {
+        errorMessage =
+          err.response?.data?.message || err.response?.data?.error || t('users.userLimitReached');
+      }
       toast.error(errorMessage, '');
       console.error(err);
     }
@@ -765,7 +891,9 @@ const Admin: React.FC<AdminProps> = ({
   const handleUserColorChange = async (userId: string, color: string) => {
     try {
       await api.put(`/admin/users/${userId}/color`, { color });
-      await loadData(); // Reload users
+      setUsers((prev) =>
+        Array.isArray(prev) ? patchUserInList(prev, userId, { memberColor: color }) : prev
+      );
       if (onUsersChanged) {
         onUsersChanged();
       }
@@ -780,7 +908,9 @@ const Admin: React.FC<AdminProps> = ({
   const handleUserRemoveAvatar = async (userId: string) => {
     try {
       await api.delete(`/admin/users/${userId}/avatar`);
-      await loadData();
+      setUsers((prev) =>
+        Array.isArray(prev) ? patchUserInList(prev, userId, { avatarUrl: undefined }) : prev
+      );
       if (onUsersChanged) {
         onUsersChanged();
       }
@@ -884,8 +1014,41 @@ const Admin: React.FC<AdminProps> = ({
         }
       }
 
+      const oauthDraftDirty = oauthSettingKeysDirty(settings, settingsToSave);
+      const byoValidation = validateByoOAuthSave(settings, settingsToSave, oauthDraftDirty);
+      if (byoValidation === 'missing_credentials') {
+        toast.error(t('sso.byoRequiresCredentials'), '');
+        return false;
+      }
+      const githubDirty = githubSsoKeysDirty(settings, settingsToSave);
+      if (
+        validateSimpleByoSave(settings, settingsToSave, {
+          modeKey: 'GITHUB_SSO_MODE',
+          clientIdKey: 'GITHUB_CLIENT_ID',
+          secretKey: 'GITHUB_CLIENT_SECRET',
+          callbackKey: 'GITHUB_CALLBACK_URL',
+          dirty: githubDirty,
+        }) === 'missing_credentials'
+      ) {
+        toast.error(t('sso.githubRequiresCredentials'), '');
+        return false;
+      }
+      const m365Dirty = m365SsoKeysDirty(settings, settingsToSave);
+      if (
+        validateSimpleByoSave(settings, settingsToSave, {
+          modeKey: 'M365_SSO_MODE',
+          clientIdKey: 'M365_CLIENT_ID',
+          secretKey: 'M365_CLIENT_SECRET',
+          callbackKey: 'M365_CALLBACK_URL',
+          dirty: m365Dirty,
+        }) === 'missing_credentials'
+      ) {
+        toast.error(t('sso.m365RequiresCredentials'), '');
+        return false;
+      }
+
       // Save each setting individually
-      for (const [key, value] of Object.entries(settingsToSave)) {
+      for (const [key, value] of sortAdminSettingsSaveEntries(Object.entries(settingsToSave))) {
         // Skip accidental DOM/React event props (from a prior buggy Save) and invalid keys
         if (!isValidAdminSettingKey(key)) {
           continue;
@@ -903,6 +1066,18 @@ const Admin: React.FC<AdminProps> = ({
 
         // Client-only flags from admin GET (e.g. SMTP_PASSWORD_SET) — not DB keys
         if (key.endsWith('_SET')) {
+          continue;
+        }
+
+        if (key === 'GOOGLE_SSO_HUB_CALLBACK_URL') {
+          continue;
+        }
+
+        if (
+          key === 'GOOGLE_SSO_LAST_SUCCESS_AT' ||
+          key === 'GITHUB_SSO_LAST_SUCCESS_AT' ||
+          key === 'M365_SSO_LAST_SUCCESS_AT'
+        ) {
           continue;
         }
 
@@ -924,7 +1099,7 @@ const Admin: React.FC<AdminProps> = ({
 
         // Write-only secrets: empty/mask means keep existing value (do not PUT)
         if (
-          ['SMTP_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'AI_API_KEY', 'AI_RUNNER_TOKEN', 'S3_SECRET_ACCESS_KEY'].includes(key) &&
+          ['SMTP_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'GITHUB_CLIENT_SECRET', 'M365_CLIENT_SECRET', 'AI_API_KEY', 'AI_RUNNER_TOKEN', 'S3_SECRET_ACCESS_KEY'].includes(key) &&
           isMaskedApiKeyDisplay(valueToSave)
         ) {
           continue;
@@ -937,6 +1112,8 @@ const Admin: React.FC<AdminProps> = ({
             const secretKeys = [
               'SMTP_PASSWORD',
               'GOOGLE_CLIENT_SECRET',
+              'GITHUB_CLIENT_SECRET',
+              'M365_CLIENT_SECRET',
               'AI_API_KEY',
               'AI_RUNNER_TOKEN',
               'S3_SECRET_ACCESS_KEY',
@@ -963,18 +1140,6 @@ const Admin: React.FC<AdminProps> = ({
           onSettingsChanged();
         }
 
-        const oauthKeysChanged = changedKeys.some((key) =>
-          ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'].includes(key)
-        );
-        if (oauthKeysChanged) {
-          try {
-            await api.post('/auth/reload-oauth');
-          } catch (oauthErr) {
-            toast.error(t('failedToReloadOAuth'), '');
-            console.error(oauthErr);
-          }
-        }
-        
         // Check if this is only UPLOAD_LIMITS_ENFORCED (which has its own toast message)
         const isOnlyUploadLimitsEnforced = changedKeys.length === 1 && changedKeys[0] === 'UPLOAD_LIMITS_ENFORCED';
         
@@ -1029,16 +1194,6 @@ const Admin: React.FC<AdminProps> = ({
       toast.error(t('failedToSaveSetting', { key }), '');
       console.error(err);
       throw err;
-    }
-  };
-
-  const handleReloadOAuth = async () => {
-    try {
-      await api.post('/auth/reload-oauth');
-      toast.success(t('oauthReloadedSuccessfully'), '');
-    } catch (err: any) {
-      toast.error(t('failedToReloadOAuth'), '');
-      console.error(err);
     }
   };
 
@@ -1133,29 +1288,43 @@ const Admin: React.FC<AdminProps> = ({
     try {
       // Update user basic info
       await updateUser(userData.id, userData);
-      
+
+      const patch: UserListPatch = {
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        isActive: userData.isActive,
+      };
+
       // Update display name in members table
       if (userData.displayName) {
-        await api.put(`/admin/users/${userData.id}/member-name`, { 
-          displayName: userData.displayName.trim() 
+        const trimmedDisplayName = userData.displayName.trim();
+        await api.put(`/admin/users/${userData.id}/member-name`, {
+          displayName: trimmedDisplayName,
         });
+        patch.displayName = trimmedDisplayName;
       }
-      
+
       // Upload avatar if selected
       if (userData.selectedFile) {
         const formData = new FormData();
         formData.append('avatar', userData.selectedFile);
-        await api.post(`/admin/users/${userData.id}/avatar`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+        const avatarResponse = await api.post(`/admin/users/${userData.id}/avatar`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
+        if (avatarResponse.data?.avatarUrl) {
+          patch.avatarUrl = avatarResponse.data.avatarUrl;
+        }
       }
-      
-      await loadData(); // Reload users
-      
+
+      setUsers((prev) =>
+        Array.isArray(prev) ? patchUserInList(prev, userData.id, patch) : prev
+      );
+
       if (onUsersChanged) {
         onUsersChanged();
       }
-      
+
       toast.success(t('userUpdatedSuccessfully'), '');
     } catch (err: any) {
       console.error('❌ Failed to save user:', err);
@@ -1608,6 +1777,7 @@ const Admin: React.FC<AdminProps> = ({
                 showDeleteConfirm={showDeleteConfirm}
                 userTaskCounts={userTaskCounts}
                 onRoleChange={handleRoleChange}
+                onStatusChange={handleUserStatusChange}
                 onDeleteUser={handleDeleteUser}
                 onConfirmDeleteUser={confirmDeleteUser}
                 onCancelDeleteUser={cancelDeleteUser}
@@ -1646,7 +1816,6 @@ const Admin: React.FC<AdminProps> = ({
                 onAutoSave={handleAutoSaveSetting}
                 onSettingsReload={loadData}
                 onApplySettingsPatch={applySettingsPatch}
-                onReloadOAuth={handleReloadOAuth}
                 onTestEmail={handleTestEmail}
                 onMailServerDisabled={handleMailServerDisabled}
                 isTestingEmail={isTestingEmail}

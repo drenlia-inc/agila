@@ -100,7 +100,11 @@ export async function getInvitationByToken(db, token, email) {
 export async function activateUser(db, userId, passwordHash) {
   const query = `
     UPDATE users 
-    SET is_active = true, password_hash = $1, updated_at = CURRENT_TIMESTAMP
+    SET is_active = true,
+        password_hash = $1,
+        activated_at = COALESCE(activated_at, CURRENT_TIMESTAMP),
+        deactivated_at = NULL,
+        updated_at = CURRENT_TIMESTAMP
     WHERE id = $2
   `;
   
@@ -305,6 +309,8 @@ export async function updateUserAuthProvider(db, userId, authProvider, googleAva
       SET is_active = true,
           auth_provider = $1, 
           google_avatar_url = $2,
+          activated_at = COALESCE(activated_at, CURRENT_TIMESTAMP),
+          deactivated_at = NULL,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = $3
     `;
@@ -413,7 +419,7 @@ export async function getOAuthSettings(db) {
   const query = `
     SELECT key, value 
     FROM ${table}
-    WHERE key IN ($1, $2, $3, $4, $5)
+    WHERE key IN ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
   `;
   
   const stmt = wrapQuery(db.prepare(query), 'SELECT');
@@ -421,8 +427,20 @@ export async function getOAuthSettings(db) {
     'GOOGLE_CLIENT_ID',
     'GOOGLE_CLIENT_SECRET',
     'GOOGLE_CALLBACK_URL',
+    'GOOGLE_SSO_MANAGED',
+    'GOOGLE_SSO_MODE',
+    'GOOGLE_SSO_MANAGED_ELIGIBLE',
     'SERVER_DEBUG_GOOGLE_SSO',
-    'GOOGLE_SSO_DEBUG'
+    'GOOGLE_SSO_DEBUG',
+    'GITHUB_CLIENT_ID',
+    'GITHUB_CLIENT_SECRET',
+    'GITHUB_CALLBACK_URL',
+    'GITHUB_SSO_MODE',
+    'M365_CLIENT_ID',
+    'M365_CLIENT_SECRET',
+    'M365_TENANT_ID',
+    'M365_CALLBACK_URL',
+    'M365_SSO_MODE'
   );
   
   const settingsObj = {};
@@ -435,13 +453,15 @@ export async function getOAuthSettings(db) {
     settingsObj.SERVER_DEBUG_GOOGLE_SSO === 'true' || settingsObj.GOOGLE_SSO_DEBUG === 'true';
   settingsObj.SERVER_DEBUG_GOOGLE_SSO = debugOn ? 'true' : 'false';
 
-  if (settingsObj.GOOGLE_CLIENT_SECRET) {
+  const secretKeys = ['GOOGLE_CLIENT_SECRET', 'GITHUB_CLIENT_SECRET', 'M365_CLIENT_SECRET'];
+  for (const secretKey of secretKeys) {
+    if (!settingsObj[secretKey]) continue;
     try {
       const { decryptSettingValue } = await import('../../utils/secretCrypto.js');
-      settingsObj.GOOGLE_CLIENT_SECRET = decryptSettingValue(settingsObj.GOOGLE_CLIENT_SECRET);
+      settingsObj[secretKey] = decryptSettingValue(settingsObj[secretKey]);
     } catch (err) {
-      console.error('Failed to decrypt GOOGLE_CLIENT_SECRET:', err.message);
-      settingsObj.GOOGLE_CLIENT_SECRET = '';
+      console.error(`Failed to decrypt ${secretKey}:`, err.message);
+      settingsObj[secretKey] = '';
     }
   }
   
