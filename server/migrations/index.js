@@ -1229,6 +1229,73 @@ const migrations = [
       if (legacyEligible) await settingsQueries.upsertSetting(db, 'MAIL_MANAGED_ELIGIBLE', '');
       console.log('✅ Migration 51: SMTP_MODE / SMTP_MANAGED_ELIGIBLE renamed from MAIL_*');
     }
+  },
+  {
+    version: 52,
+    name: 'add_storage_mode_and_platform_s3_shadow',
+    description:
+      'Add STORAGE_MODE, STORAGE_MANAGED_ELIGIBLE, and platform S3 shadow keys for restore',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const { getDecryptedSetting, upsertSecretSetting } = await import(
+        '../utils/settingsSecrets.js'
+      );
+      const { STORAGE_MODE_KEY, STORAGE_MANAGED_ELIGIBLE_KEY } = await import(
+        '../constants/storageSettings.js'
+      );
+
+      const read = async (key) => {
+        const row = await settingsQueries.getSettingByKey(db, key);
+        return String(row?.value ?? '').trim();
+      };
+
+      const managedFlag = await read('STORAGE_MANAGED');
+      const bucket = await read('S3_BUCKET');
+      const accessKeyId = await read('S3_ACCESS_KEY_ID');
+      const secret = await getDecryptedSetting(db, 'S3_SECRET_ACCESS_KEY');
+
+      let mode = await read(STORAGE_MODE_KEY);
+      if (!mode) {
+        if (managedFlag === 'true') mode = 'managed';
+        else if (bucket) mode = 'byo';
+        else mode = '';
+        await settingsQueries.upsertSetting(db, STORAGE_MODE_KEY, mode);
+      }
+
+      await settingsQueries.upsertSetting(
+        db,
+        'STORAGE_MANAGED',
+        mode === 'managed' ? 'true' : 'false'
+      );
+
+      const eligibleExisting = await read(STORAGE_MANAGED_ELIGIBLE_KEY);
+      if (!eligibleExisting) {
+        await settingsQueries.upsertSetting(
+          db,
+          STORAGE_MANAGED_ELIGIBLE_KEY,
+          managedFlag === 'true' || mode === 'managed' ? 'true' : 'false'
+        );
+      }
+
+      const shadowBucket = await read('PLATFORM_S3_BUCKET');
+      if (!shadowBucket && mode === 'managed' && bucket && accessKeyId && secret) {
+        await settingsQueries.upsertSetting(db, 'PLATFORM_S3_ENDPOINT', await read('S3_ENDPOINT'));
+        await settingsQueries.upsertSetting(db, 'PLATFORM_S3_REGION', await read('S3_REGION'));
+        await settingsQueries.upsertSetting(db, 'PLATFORM_S3_BUCKET', bucket);
+        await settingsQueries.upsertSetting(db, 'PLATFORM_S3_ACCESS_KEY_ID', accessKeyId);
+        await upsertSecretSetting(db, 'PLATFORM_S3_SECRET_ACCESS_KEY', secret);
+        await settingsQueries.upsertSetting(
+          db,
+          'PLATFORM_S3_FORCE_PATH_STYLE',
+          (await read('S3_FORCE_PATH_STYLE')) || 'false'
+        );
+        await settingsQueries.upsertSetting(db, 'PLATFORM_S3_KEY_PREFIX', await read('S3_KEY_PREFIX'));
+      }
+
+      console.log(
+        `✅ Migration 52: STORAGE_MODE=${mode}, platform S3 shadow backfilled when applicable`
+      );
+    }
   }
 ];
 

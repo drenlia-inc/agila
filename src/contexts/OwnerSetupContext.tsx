@@ -128,19 +128,24 @@ export const OwnerSetupProvider: React.FC<OwnerSetupProviderProps> = ({
 
   const guideFieldContext = useMemo(() => {
     const rawMail = mergedSettings.MAIL_MANAGED;
+    const rawStorageMode = mergedSettings.STORAGE_MODE;
     const rawStorage = mergedSettings.STORAGE_MANAGED;
+    const storageKnown =
+      (rawStorageMode !== undefined && rawStorageMode !== '') ||
+      (rawStorage !== undefined && rawStorage !== '');
     return {
       multiTenant: isMultiTenantDeploy(),
       mailManaged:
         rawMail === undefined || rawMail === ''
           ? undefined
           : String(rawMail).toLowerCase() === 'true',
-      storageManaged:
-        rawStorage === undefined || rawStorage === ''
-          ? undefined
-          : String(rawStorage).toLowerCase() === 'true',
+      storageManaged: storageKnown
+        ? String(rawStorageMode || '').toLowerCase() === 'managed' ||
+          (String(rawStorageMode || '').trim() === '' &&
+            String(rawStorage || '').toLowerCase() === 'true')
+        : undefined,
     };
-  }, [mergedSettings.MAIL_MANAGED, mergedSettings.STORAGE_MANAGED]);
+  }, [mergedSettings.MAIL_MANAGED, mergedSettings.STORAGE_MODE, mergedSettings.STORAGE_MANAGED]);
 
   // Detect owner + load progress
   useEffect(() => {

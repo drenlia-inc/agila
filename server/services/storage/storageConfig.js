@@ -62,10 +62,15 @@ export async function loadStorageConfig(db) {
 
   const backendRaw = (await get('STORAGE_BACKEND', 'disk')).toLowerCase();
   const backend = backendRaw === 's3' ? 's3' : 'disk';
+  const { normalizeStorageMode } = await import('../../utils/storageMode.js');
+  const storageMode = normalizeStorageMode(await get('STORAGE_MODE', ''), {
+    managedFlag: await get('STORAGE_MANAGED', 'false'),
+    bucket: await get('S3_BUCKET', ''),
+  });
 
   return {
     backend,
-    managed: (await get('STORAGE_MANAGED', 'false')) === 'true',
+    managed: storageMode === 'managed',
     endpoint: await get('S3_ENDPOINT', ''),
     region: await get('S3_REGION', ''),
     bucket: await get('S3_BUCKET', ''),

@@ -220,7 +220,7 @@ function prefixBelongsToTenant(prefix, tenantId) {
 }
 
 /**
- * Permanently delete all objects under the tenant's S3_KEY_PREFIX when STORAGE_MANAGED=true.
+ * Permanently delete all objects under the tenant's S3_KEY_PREFIX when STORAGE_MODE=managed.
  * No-op (skipped) for custom / unmanaged storage so we never touch a customer bucket from destroy.
  *
  * @param {*} db
@@ -236,7 +236,7 @@ function prefixBelongsToTenant(prefix, tenantId) {
 export async function purgeManagedTenantObjects(db, options = {}) {
   const config = await loadStorageConfig(db);
   if (!config.managed) {
-    return { skipped: true, reason: 'STORAGE_MANAGED is not true' };
+    return { skipped: true, reason: 'STORAGE_MODE is not managed' };
   }
 
   const validation = validateS3Config(config);
@@ -304,7 +304,8 @@ function sameS3Target(a, b) {
 async function persistLiveS3Config(db, config) {
   const { upsertSecretSetting } = await import('../../utils/settingsSecrets.js');
   await settingsQueries.upsertSetting(db, 'STORAGE_BACKEND', 's3');
-  await settingsQueries.upsertSetting(db, 'STORAGE_MANAGED', 'false');
+  const { markStorageByoAfterCutover } = await import('../../utils/storageMode.js');
+  await markStorageByoAfterCutover(db);
   await settingsQueries.upsertSetting(db, 'S3_ENDPOINT', config.endpoint || '');
   await settingsQueries.upsertSetting(db, 'S3_REGION', config.region || '');
   await settingsQueries.upsertSetting(db, 'S3_BUCKET', config.bucket || '');

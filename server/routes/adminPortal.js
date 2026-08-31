@@ -28,6 +28,10 @@ import {
   markMailManagedEligible,
   mirrorActiveMailToPlatformShadow,
 } from '../utils/mailMode.js';
+import {
+  markStorageManagedEligible,
+  mirrorActiveS3ToPlatformShadow,
+} from '../utils/storageMode.js';
 import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
 import { getRequestStoragePaths } from '../services/storage/index.js';
 import { getObject, filenameFromPublicUrl, purgeManagedTenantObjects } from '../services/storage/objectStorage.js';
@@ -179,7 +183,7 @@ router.put('/owner', authenticateAdminPortal, async (req, res) => {
 /**
  * Permanently delete all objects under this tenant's managed S3 prefix.
  * Used by the admin portal before DROP SCHEMA on instance destroy.
- * Skips when STORAGE_MANAGED is not true (custom buckets are left alone).
+ * Skips when STORAGE_MODE is not managed (custom buckets are left alone).
  */
 router.post('/storage/purge-managed', authenticateAdminPortal, async (req, res) => {
   try {
@@ -447,6 +451,18 @@ router.put('/settings', authenticateAdminPortal, async (req, res) => {
       if (managedMail) {
         await mirrorActiveMailToPlatformShadow(db);
         await markMailManagedEligible(db);
+      }
+    }
+    const storageKeys = ['S3_BUCKET', 'S3_SECRET_ACCESS_KEY', 'STORAGE_MANAGED', 'STORAGE_MODE'];
+    if (results.some((row) => storageKeys.includes(row.key))) {
+      const managedStorage =
+        String(settings.STORAGE_MODE || '').trim().toLowerCase() === 'managed' ||
+        String(settings.STORAGE_MANAGED || '').trim() === 'true';
+      if (managedStorage) {
+        await mirrorActiveS3ToPlatformShadow(db);
+        if (String(settings.STORAGE_MANAGED_ELIGIBLE || '').trim().toLowerCase() !== 'false') {
+          await markStorageManagedEligible(db);
+        }
       }
     }
     for (const row of results) {

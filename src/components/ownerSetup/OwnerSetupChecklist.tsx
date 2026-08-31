@@ -84,23 +84,32 @@ const OwnerSetupChecklist: React.FC = () => {
     const rawMail = (systemSettings?.MAIL_MANAGED ?? siteSettings?.MAIL_MANAGED) as
       | string
       | undefined;
+    const rawStorageMode = (systemSettings?.STORAGE_MODE ?? siteSettings?.STORAGE_MODE) as
+      | string
+      | undefined;
     const rawStorage = (systemSettings?.STORAGE_MANAGED ?? siteSettings?.STORAGE_MANAGED) as
       | string
       | undefined;
+    const storageKnown =
+      (rawStorageMode !== undefined && rawStorageMode !== '') ||
+      (rawStorage !== undefined && rawStorage !== '');
     return {
       multiTenant: isMultiTenantDeploy(),
       mailManaged:
         rawMail === undefined || rawMail === ''
           ? undefined
           : String(rawMail).toLowerCase() === 'true',
-      storageManaged:
-        rawStorage === undefined || rawStorage === ''
-          ? undefined
-          : String(rawStorage).toLowerCase() === 'true',
+      storageManaged: storageKnown
+        ? String(rawStorageMode || '').toLowerCase() === 'managed' ||
+          (String(rawStorageMode || '').trim() === '' &&
+            String(rawStorage || '').toLowerCase() === 'true')
+        : undefined,
     };
   }, [
     siteSettings?.MAIL_MANAGED,
     systemSettings?.MAIL_MANAGED,
+    siteSettings?.STORAGE_MODE,
+    systemSettings?.STORAGE_MODE,
     siteSettings?.STORAGE_MANAGED,
     systemSettings?.STORAGE_MANAGED,
   ]);

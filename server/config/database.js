@@ -1008,7 +1008,9 @@ const initializeDefaultData = async (db, tenantId = null) => {
       ['STORAGE_LIMIT', '5368709120'], // 5GB storage limit in bytes (5 * 1024^3)
       ['STORAGE_USED', '0'], // Current storage usage in bytes
       ['STORAGE_BACKEND', 'disk'], // disk | s3
+      ['STORAGE_MODE', ''],
       ['STORAGE_MANAGED', 'false'],
+      ['STORAGE_MANAGED_ELIGIBLE', 'false'],
       ['S3_ENDPOINT', ''],
       ['S3_REGION', ''],
       ['S3_BUCKET', ''],
@@ -1177,40 +1179,61 @@ const initializeDefaultData = async (db, tenantId = null) => {
           ['PLATFORM_SMTP_SECURE', 'tls']
         ];
         
-        const managedSmtpStmt = db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP');
+        const licensedSeedStmt = db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP');
         for (const [key, value] of managedSmtpSettings) {
-          await wrapQuery(managedSmtpStmt, 'INSERT').run(key, value);
+          await wrapQuery(licensedSeedStmt, 'INSERT').run(key, value);
         }
         console.log('✅ Configured managed SMTP settings');
+        }
 
-        // Managed S3 (optional — only when MANAGED_S3_BUCKET is set)
-        if (process.env.MANAGED_S3_BUCKET) {
+        // Platform S3 (optional). Prefer PLATFORM_S3_* env; MANAGED_S3_* is a legacy alias.
+        const existingStorageMode = String(
+          (await wrapQuery(db.prepare('SELECT value FROM settings WHERE key = ?'), 'SELECT').get('STORAGE_MODE'))
+            ?.value || ''
+        )
+          .trim()
+          .toLowerCase();
+        const platformS3Env = (suffix) =>
+          process.env[`PLATFORM_S3_${suffix}`] || process.env[`MANAGED_S3_${suffix}`] || '';
+        const platformS3Bucket = platformS3Env('BUCKET');
+        if (existingStorageMode === 'byo') {
+          console.log('ℹ️  STORAGE_MODE=byo — leaving licensed storage seed unchanged');
+        } else if (platformS3Bucket) {
           const { encryptSettingValue: encryptS3Secret } = await import('../utils/secretCrypto.js');
-          const managedS3SecretPlain = process.env.MANAGED_S3_SECRET_ACCESS_KEY || '';
+          const managedS3SecretPlain = platformS3Env('SECRET_ACCESS_KEY');
           const managedS3SecretStored = managedS3SecretPlain
             ? encryptS3Secret(managedS3SecretPlain)
             : '';
           const tenantPrefix =
             tenantId && process.env.MULTI_TENANT === 'true'
               ? `tenants/${tenantId}/`
-              : (process.env.MANAGED_S3_KEY_PREFIX || '');
+              : platformS3Env('KEY_PREFIX');
           const managedS3Settings = [
             ['STORAGE_BACKEND', 's3'],
+            ['STORAGE_MODE', 'managed'],
             ['STORAGE_MANAGED', 'true'],
-            ['S3_ENDPOINT', process.env.MANAGED_S3_ENDPOINT || ''],
-            ['S3_REGION', process.env.MANAGED_S3_REGION || ''],
-            ['S3_BUCKET', process.env.MANAGED_S3_BUCKET],
-            ['S3_ACCESS_KEY_ID', process.env.MANAGED_S3_ACCESS_KEY_ID || ''],
+            ['STORAGE_MANAGED_ELIGIBLE', 'true'],
+            ['S3_ENDPOINT', platformS3Env('ENDPOINT')],
+            ['S3_REGION', platformS3Env('REGION')],
+            ['S3_BUCKET', platformS3Bucket],
+            ['S3_ACCESS_KEY_ID', platformS3Env('ACCESS_KEY_ID')],
             ['S3_SECRET_ACCESS_KEY', managedS3SecretStored],
-            ['S3_FORCE_PATH_STYLE', process.env.MANAGED_S3_FORCE_PATH_STYLE || 'false'],
+            ['S3_FORCE_PATH_STYLE', platformS3Env('FORCE_PATH_STYLE') || 'false'],
             ['S3_KEY_PREFIX', tenantPrefix],
+            ['PLATFORM_S3_ENDPOINT', platformS3Env('ENDPOINT')],
+            ['PLATFORM_S3_REGION', platformS3Env('REGION')],
+            ['PLATFORM_S3_BUCKET', platformS3Bucket],
+            ['PLATFORM_S3_ACCESS_KEY_ID', platformS3Env('ACCESS_KEY_ID')],
+            ['PLATFORM_S3_SECRET_ACCESS_KEY', managedS3SecretStored],
+            ['PLATFORM_S3_FORCE_PATH_STYLE', platformS3Env('FORCE_PATH_STYLE') || 'false'],
+            ['PLATFORM_S3_KEY_PREFIX', tenantPrefix],
             ['STORAGE_TEST_OK', 'false']
           ];
+          const licensedS3Stmt = db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP');
           for (const [key, value] of managedS3Settings) {
-            await wrapQuery(managedSmtpStmt, 'INSERT').run(key, value);
+            await wrapQuery(licensedS3Stmt, 'INSERT').run(key, value);
           }
-          console.log('✅ Configured managed S3 storage settings');
-        }
+          console.log('✅ Configured platform S3 storage settings');
         }
       }
     }

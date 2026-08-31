@@ -92,7 +92,9 @@ function isStorageKey(key: string): boolean {
   return (
     key.startsWith('S3_') ||
     key === 'STORAGE_BACKEND' ||
+    key === 'STORAGE_MODE' ||
     key === 'STORAGE_MANAGED' ||
+    key === 'STORAGE_MANAGED_ELIGIBLE' ||
     key === 'STORAGE_TEST_OK' ||
     key === 'STORAGE_MIGRATION_STATUS' ||
     key === 'STORAGE_MIGRATION_DETAIL'

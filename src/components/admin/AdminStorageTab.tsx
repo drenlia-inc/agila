@@ -17,11 +17,14 @@ import {
   adminInputBoundedClass,
 } from './AdminSection';
 import { isMultiTenantDeploy } from '../../utils/ownerSetup';
+import { resolveStorageModeFromSettings } from '../../utils/storageAdminMode';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 
 interface Settings {
   STORAGE_BACKEND?: string;
+  STORAGE_MODE?: string;
   STORAGE_MANAGED?: string;
+  STORAGE_MANAGED_ELIGIBLE?: string;
   STORAGE_TEST_OK?: string;
   STORAGE_MIGRATION_STATUS?: string;
   STORAGE_MIGRATION_DETAIL?: string;
@@ -190,7 +193,7 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
     }
   }, []);
 
-  const isManaged = editingSettings.STORAGE_MANAGED === 'true';
+  const isManaged = resolveStorageModeFromSettings(editingSettings) === 'managed';
   const backend = (editingSettings.STORAGE_BACKEND || 'disk').toLowerCase();
   const savedBackend = (settings.STORAGE_BACKEND || 'disk').toLowerCase();
   const isS3 = backend === 's3';
@@ -513,6 +516,7 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
       patch.STORAGE_BACKEND = 'disk';
     } else if (data.ok && data.detail?.direction === 's3-to-s3' && data.detail?.cutoverApplied) {
       patch.STORAGE_BACKEND = 's3';
+      patch.STORAGE_MODE = 'byo';
       patch.STORAGE_MANAGED = 'false';
       patch.STORAGE_TEST_OK = 'true';
       patch.S3_ENDPOINT = destDraft.S3_ENDPOINT;
