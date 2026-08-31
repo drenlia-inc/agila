@@ -1062,7 +1062,7 @@ const migrations = [
       if (!mode) {
         if (managedFlag === 'true') mode = 'managed';
         else if (clientId) mode = 'byo';
-        else mode = 'off';
+        else mode = '';
         await settingsQueries.upsertSetting(db, GOOGLE_SSO_MODE_KEY, mode);
       }
 
@@ -1118,6 +1118,29 @@ const migrations = [
            )`
       );
       console.log('✅ Migration 48: users.activated_at present and backfilled');
+    }
+  },
+  {
+    version: 49,
+    name: 'clear_empty_google_sso_off',
+    description:
+      'Treat never-configured Google SSO as unset (empty mode), not Disabled with no credentials',
+    up: async (db) => {
+      const { settings: settingsQueries } = await import('../utils/sqlManager/index.js');
+      const { GOOGLE_SSO_MODE_KEY, GOOGLE_SSO_RESUME_MODE_KEY } = await import(
+        '../constants/ssoSettings.js'
+      );
+      const read = async (key) => {
+        const row = await settingsQueries.getSettingByKey(db, key);
+        return String(row?.value ?? '').trim();
+      };
+      const mode = await read(GOOGLE_SSO_MODE_KEY);
+      const resume = await read(GOOGLE_SSO_RESUME_MODE_KEY);
+      const clientId = await read('GOOGLE_CLIENT_ID');
+      if (mode === 'off' && !resume && !clientId) {
+        await settingsQueries.upsertSetting(db, GOOGLE_SSO_MODE_KEY, '');
+      }
+      console.log('✅ Migration 49: empty Google SSO off-state cleared when never configured');
     }
   }
 ];

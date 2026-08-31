@@ -7,6 +7,7 @@ import {
   GOOGLE_SSO_MODE_KEY,
   GOOGLE_SSO_MODES,
   GOOGLE_SSO_RESUME_MODE_KEY,
+  isDemoSsoDisabled,
 } from '../constants/ssoSettings.js';
 import {
   clearSecretSetting,
@@ -187,11 +188,22 @@ export async function enableGoogleSso(db, tenantId) {
   if (resume === 'managed') {
     return restoreManagedGoogleSso(db, tenantId);
   }
-  await setGoogleSsoModeState(db, 'byo', tenantId);
-  return { ok: true, mode: 'byo' };
+  const clientId = await getSettingValue(db, ACTIVE_KEYS.clientId);
+  if (clientId) {
+    await setGoogleSsoModeState(db, 'byo', tenantId);
+    return { ok: true, mode: 'byo' };
+  }
+  const eligible = await getSettingValue(db, GOOGLE_SSO_MANAGED_ELIGIBLE_KEY);
+  if (!isDemoSsoDisabled() && eligible === 'true') {
+    return restoreManagedGoogleSso(db, tenantId);
+  }
+  return { ok: false, error: 'missing_credentials' };
 }
 
 export async function restoreManagedGoogleSso(db, tenantId) {
+  if (isDemoSsoDisabled()) {
+    return { ok: false, error: 'not_eligible' };
+  }
   const eligible = await getSettingValue(db, GOOGLE_SSO_MANAGED_ELIGIBLE_KEY);
   if (eligible !== 'true') {
     return { ok: false, error: 'not_eligible' };

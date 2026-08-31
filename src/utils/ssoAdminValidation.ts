@@ -24,43 +24,6 @@ export function resolveGoogleSsoModeFromSettings(
   return 'off';
 }
 
-export function isGoogleSsoManagedEligible(settings: AdminSettingsMap): boolean {
-  return String(settings.GOOGLE_SSO_MANAGED_ELIGIBLE || '').trim() === 'true';
-}
-
-export function googleSsoResumeMode(settings: AdminSettingsMap): 'managed' | 'byo' {
-  const resume = String(settings.GOOGLE_SSO_RESUME_MODE || '').trim().toLowerCase();
-  if (resume === 'managed' || resume === 'byo') return resume;
-  if (isGoogleSsoManagedEligible(settings) && !String(settings.GOOGLE_CLIENT_ID || '').trim()) {
-    return 'managed';
-  }
-  return 'byo';
-}
-
-/** True when this instance has a Google SSO card (including disabled). Eligibility alone does not keep the card. */
-export function isGoogleSsoConfigured(settings: AdminSettingsMap): boolean {
-  const raw = String(settings.GOOGLE_SSO_MODE || '').trim().toLowerCase();
-  if (raw === 'managed' || raw === 'byo' || raw === 'off') return true;
-  if (String(settings.GOOGLE_CLIENT_ID || '').trim()) return true;
-  return false;
-}
-
-export function isSimpleSsoConfigured(
-  settings: AdminSettingsMap,
-  modeKey: string,
-  clientIdKey: string
-): boolean {
-  const raw = String(settings[modeKey] || '').trim().toLowerCase();
-  if (raw === 'byo' || raw === 'off') return true;
-  return Boolean(String(settings[clientIdKey] || '').trim());
-}
-
-export function isGoogleSsoLoginEnabled(settings: AdminSettingsMap): boolean {
-  if (isDemoSsoLocked(settings)) return false;
-  const mode = resolveGoogleSsoModeFromSettings(settings);
-  return mode === 'managed' || mode === 'byo';
-}
-
 export function isDemoSsoLocked(settings?: AdminSettingsMap): boolean {
   if (String(settings?.DEPLOY_DEMO_ENABLED || '').trim() === 'true') return true;
   try {
@@ -71,6 +34,48 @@ export function isDemoSsoLocked(settings?: AdminSettingsMap): boolean {
   } catch {
     return false;
   }
+}
+
+export function isGoogleSsoManagedEligible(settings: AdminSettingsMap): boolean {
+  if (isDemoSsoLocked(settings)) return false;
+  return String(settings.GOOGLE_SSO_MANAGED_ELIGIBLE || '').trim() === 'true';
+}
+
+export function googleSsoResumeMode(settings: AdminSettingsMap): 'managed' | 'byo' {
+  const resume = String(settings.GOOGLE_SSO_RESUME_MODE || '').trim().toLowerCase();
+  if (resume === 'managed' || resume === 'byo') return resume;
+  return 'byo';
+}
+
+/** True when this instance has a Google SSO card (including disabled). Bare `off` with no creds is not a card. */
+export function isGoogleSsoConfigured(settings: AdminSettingsMap): boolean {
+  const raw = String(settings.GOOGLE_SSO_MODE || '').trim().toLowerCase();
+  if (raw === 'managed' || raw === 'byo') return true;
+  if (raw === 'off') {
+    const resume = String(settings.GOOGLE_SSO_RESUME_MODE || '').trim().toLowerCase();
+    if (resume === 'managed' || resume === 'byo') return true;
+    return Boolean(String(settings.GOOGLE_CLIENT_ID || '').trim());
+  }
+  return Boolean(String(settings.GOOGLE_CLIENT_ID || '').trim());
+}
+
+export function isSimpleSsoConfigured(
+  settings: AdminSettingsMap,
+  modeKey: string,
+  clientIdKey: string
+): boolean {
+  const raw = String(settings[modeKey] || '').trim().toLowerCase();
+  if (raw === 'byo') return true;
+  if (raw === 'off') {
+    return Boolean(String(settings[clientIdKey] || '').trim());
+  }
+  return Boolean(String(settings[clientIdKey] || '').trim());
+}
+
+export function isGoogleSsoLoginEnabled(settings: AdminSettingsMap): boolean {
+  if (isDemoSsoLocked(settings)) return false;
+  const mode = resolveGoogleSsoModeFromSettings(settings);
+  return mode === 'managed' || mode === 'byo';
 }
 
 export function isSimpleSsoLoginEnabled(

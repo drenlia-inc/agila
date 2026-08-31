@@ -220,7 +220,10 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
       await reloadSettings();
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
-      if (code === 'not_eligible') {
+      if (code === 'missing_credentials') {
+        onSettingsChange(buildByoOAuthDraftFromOff(editingSettings));
+        closeConfirm();
+      } else if (code === 'not_eligible') {
         toast.error(t('sso.restoreManagedNotEligible'), '');
       } else if (code === 'platform_unavailable') {
         toast.error(t('sso.restoreManagedUnavailable'), '');
