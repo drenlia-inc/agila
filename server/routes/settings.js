@@ -33,8 +33,10 @@ import {
   SSO_MANAGED_HIDDEN_KEYS,
   isSsoLastSuccessKey,
   GOOGLE_SSO_MODE_KEY,
+  GOOGLE_SSO_MANAGED_ELIGIBLE_KEY,
   GOOGLE_SSO_RESUME_MODE_KEY,
   applyPublicSsoSettings,
+  isDemoSsoDisabled,
 } from '../constants/ssoSettings.js';
 import { getAuthHubCallbackUrl } from '../utils/authHub.js';
 import {
@@ -292,7 +294,8 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
       }
     );
     const ssoEligible =
-      settings.find((s) => s.key === 'GOOGLE_SSO_MANAGED_ELIGIBLE')?.value === 'true';
+      !isDemoSsoDisabled() &&
+      settings.find((s) => s.key === GOOGLE_SSO_MANAGED_ELIGIBLE_KEY)?.value === 'true';
     const ssoResume = String(
       settings.find((s) => s.key === GOOGLE_SSO_RESUME_MODE_KEY)?.value || ''
     )
@@ -335,6 +338,10 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
 
     if (ssoManaged || (hideGoogleCreds && ssoEligible)) {
       settingsObj[SSO_HUB_CALLBACK_DISPLAY_KEY] = getAuthHubCallbackUrl();
+    }
+
+    if (isDemoSsoDisabled()) {
+      settingsObj[GOOGLE_SSO_MANAGED_ELIGIBLE_KEY] = 'false';
     }
 
     // Multi-tenant: overlay platform runner env so Admin shows the shared runner (read-only in UI)
@@ -603,6 +610,12 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
       });
     }
 
+    if (key === GOOGLE_SSO_MANAGED_ELIGIBLE_KEY || key === GOOGLE_SSO_RESUME_MODE_KEY) {
+      return res.status(403).json({
+        error: 'This setting is managed by the platform and cannot be updated',
+      });
+    }
+
     if (SSO_MANAGED_HIDDEN_KEYS.includes(key)) {
       const ssoMode = await resolveGoogleSsoMode(db);
       if (ssoMode === 'managed') {
@@ -712,6 +725,17 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
         value: upsert.hasValue ? SECRET_SETTING_PLACEHOLDER : '',
         // Always string for admin settings maps (avoid boolean crashing FE .trim())
         [`${key}_SET`]: upsert.hasValue ? 'true' : 'false'
+      });
+    }
+
+    if (
+      key === GOOGLE_SSO_MODE_KEY &&
+      String(safeValue || '')
+        .trim()
+        .toLowerCase() === 'managed'
+    ) {
+      return res.status(403).json({
+        error: 'Platform Google sign-in can only be restored through the dedicated endpoint',
       });
     }
 
@@ -1244,6 +1268,12 @@ router.post('/google-sso/enable', authenticateToken, requireRole(['admin']), asy
     const tenantId = getTenantId(req);
     const result = await enableGoogleSso(db, tenantId);
     if (!result.ok) {
+      if (result.error === 'missing_credentials') {
+        return res.status(400).json({
+          error: 'Google OAuth credentials are required before enabling sign-in',
+          code: 'missing_credentials',
+        });
+      }
       if (result.error === 'not_eligible') {
         return res.status(403).json({
           error: 'This instance is not eligible for platform Google sign-in',
