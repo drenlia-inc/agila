@@ -4,6 +4,7 @@ import { JWT_SECRET, JWT_EXPIRES_IN, primaryRole } from '../middleware/auth.js';
 import { getTenantId } from '../middleware/tenantRouting.js';
 import { auth as authQueries } from './sqlManager/index.js';
 import { logMemberJoinedIfFirstTime } from '../services/activityLogger.js';
+import { recordInteractiveLogin } from './recordInteractiveLogin.js';
 
 /**
  * Finish SSO for an already-invited user (same rules as Google).
@@ -76,6 +77,7 @@ export async function completeInvitedUserSso(db, req, {
   const roles = await authQueries.getUserRoles(db, user.id);
   const userRoles = roles.map((r) => r.name);
   await authQueries.clearForceLogout(db, user.id);
+  await recordInteractiveLogin(db, user.id, getTenantId(req));
   const token = jwt.sign(
     {
       id: user.id,

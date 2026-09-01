@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Bug, Github, HelpCircle, Lightbulb, LogOut, User, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check, Eye, Shield } from 'lucide-react';
+import { Bug, Github, HelpCircle, Lightbulb, LogOut, Settings, User, UserPlus, Mail, X, Send, Monitor, MonitorOff, MoreHorizontal, Menu, Check, Eye, Shield } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CurrentUser, SiteSettings, TeamMember, Task } from '../../types';
 import type { HeaderSearchTask } from './HeaderTaskSearch';
@@ -767,22 +767,9 @@ const Header: React.FC<HeaderProps> = ({
                     {t('navigation.reports')}
                   </button>
                 )}
-                {currentUser.roles?.includes('admin') && (
-                  <button
-                    onClick={() => onPageChange('admin')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      currentPage === 'admin'
-                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                    data-tour-id="admin-tab"
-                  >
-                    {t('navigation.admin')}
-                  </button>
-                )}
               </div>
 
-              {/* Compact app nav: Boards / Reports / Admin / Invite */}
+              {/* Compact app nav: Boards / Reports / Invite */}
               <div className="relative lg:hidden" ref={appNavMenuRef}>
                 <KanbanChromeTooltip label={t('navigation.menu')}>
                   <button
@@ -841,21 +828,6 @@ const Header: React.FC<HeaderProps> = ({
                       >
                         <span>{t('navigation.reports')}</span>
                         {currentPage === 'reports' && <Check size={14} className="text-blue-600" />}
-                      </button>
-                    )}
-                    {currentUser.roles?.includes('admin') && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setShowAppNavMenu(false);
-                          onPageChange('admin');
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between gap-2"
-                        data-tour-id="admin-tab"
-                      >
-                        <span>{t('navigation.admin')}</span>
-                        {currentPage === 'admin' && <Check size={14} className="text-blue-600" />}
                       </button>
                     )}
                     {currentUser.roles?.includes('admin') && onInviteUser && (
@@ -1197,6 +1169,21 @@ const Header: React.FC<HeaderProps> = ({
                       <User size={18} />
                       {t('navigation.profile')}
                     </button>
+                    {isAdminAccount && !isViewOnlyAccount && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          onPageChange('admin');
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors whitespace-nowrap"
+                        data-tour-id="admin-tab"
+                      >
+                        <Settings size={18} />
+                        {t('navigation.settings')}
+                      </button>
+                    )}
                     {isAdminAccount && !isViewOnlyAccount && !isDemoMode && (
                       <>
                         <a

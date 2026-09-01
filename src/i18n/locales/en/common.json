@@ -59,13 +59,14 @@
     "readOnlyMode": "Your account is view-only. You cannot modify data.",
     "readOnlyBadge": "View only",
     "unassignedMember": "Unassigned",
-    "adminBadge": "Admin"
+    "adminBadge": "Administrator"
   },
   "navigation": {
     "boards": "Boards",
     "kanban": "Kanban",
     "reports": "Reports",
     "admin": "Admin",
+    "settings": "Settings",
     "profile": "Profile",
     "logout": "Logout",
     "invite": "Invite",

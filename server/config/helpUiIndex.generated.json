@@ -228,8 +228,8 @@
       "value": "switch-custom-storage",
       "en": "Managed Storage",
       "fr": "Stockage géré",
-      "searchEn": "Managed Storage Managed Storage Object storage is provided by Agila. Attachments and avatars use the platform S3 configuration. Use your own S3 bucket Configure the destination below, test it, then run Migrate S3 → S3. Platform credentials stay until cutover. switch-custom-storage",
-      "searchFr": "Stockage géré Stockage géré Le stockage objet est fourni par Agila. Les pièces jointes et avatars utilisent la configuration S3 de la plateforme. Utiliser votre propre bucket S3 Configurez la destination ci-dessous, testez-la, puis lancez Migrer S3 → S3. Les identifiants plateforme restent jusqu’au basculement. switch-custom-storage",
+      "searchEn": "Managed Storage Managed Storage Object storage is provided by Agila. Attachments and avatars use the platform S3 configuration. Use your own S3 bucket Configure the destination, test it, then run Migrate S3 → S3. Platform credentials stay until cutover. switch-custom-storage",
+      "searchFr": "Stockage géré Stockage géré Le stockage objet est fourni par Agila. Les pièces jointes et avatars utilisent la configuration S3 de la plateforme. Utiliser votre propre bucket S3 Configurez la destination, testez-la, puis lancez Migrer S3 → S3. Les identifiants plateforme restent jusqu’au basculement. switch-custom-storage",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1537,8 +1537,8 @@
       "value": "admin-tab",
       "en": "The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more.",
       "fr": "Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore.",
-      "searchEn": "The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. Reports Admin Menu admin-tab",
-      "searchFr": "Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore. Rapports Admin Menu admin-tab",
+      "searchEn": "The Admin panel provides comprehensive management tools for your Kanban application. Use this section to manage users, boards, columns, settings, and more. Profile Settings admin-tab",
+      "searchFr": "Le panneau d'administration fournit des outils de gestion complets pour votre application Kanban. Utilisez cette section pour gérer les utilisateurs, les tableaux, les colonnes, les paramètres et plus encore. Profil Paramètres admin-tab",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1554,8 +1554,8 @@
       "value": "admin-tabs",
       "en": "Security Warning",
       "fr": "Avertissement de sécurité",
-      "searchEn": "Security Warning Security Warning The default admin account (admin@example.com) still exists. This is a security risk. Please create a new admin user first, then delete this default account. Admin admin-tabs",
-      "searchFr": "Avertissement de sécurité Avertissement de sécurité Le compte administrateur par défaut (admin@example.com) existe toujours. C'est un risque de sécurité. Veuillez d'abord créer un nouvel utilisateur administrateur, puis supprimer ce compte par défaut. Admin admin-tabs",
+      "searchEn": "Security Warning Security Warning The default admin account (admin@example.com) still exists. This is a security risk. Please create a new admin user first, then delete this default account. Settings admin-tabs",
+      "searchFr": "Avertissement de sécurité Avertissement de sécurité Le compte administrateur par défaut (admin@example.com) existe toujours. C'est un risque de sécurité. Veuillez d'abord créer un nouvel utilisateur administrateur, puis supprimer ce compte par défaut. Paramètres admin-tabs",
       "kind": "admin",
       "hash": "#admin",
       "highlights": [
@@ -1962,8 +1962,8 @@
       "value": "reports-button",
       "en": "Access the Reports section to view analytics and insights about team performance, task completion, burndown charts, and detailed task listings. Reports are available when enabled in settings.",
       "fr": "Accédez à la section Rapports pour consulter les analyses et informations sur les performances de l'équipe, l'achèvement des tâches, les graphiques de burndown et les listes détaillées de tâches. Les rapports sont disponibles lorsqu'ils son",
-      "searchEn": "Access the Reports section to view analytics and insights about team performance, task completion, burndown charts, and detailed task listings. Reports are available when enabled in settings. Boards Reports Admin reports-button",
-      "searchFr": "Accédez à la section Rapports pour consulter les analyses et informations sur les performances de l'équipe, l'achèvement des tâches, les graphiques de burndown et les listes détaillées de tâches. Les rapports sont disponibles lorsqu'ils sont activés dans les paramètres. Tableaux Rapports Admin reports-button",
+      "searchEn": "Access the Reports section to view analytics and insights about team performance, task completion, burndown charts, and detailed task listings. Reports are available when enabled in settings. Boards Reports Menu reports-button",
+      "searchFr": "Accédez à la section Rapports pour consulter les analyses et informations sur les performances de l'équipe, l'achèvement des tâches, les graphiques de burndown et les listes détaillées de tâches. Les rapports sont disponibles lorsqu'ils sont activés dans les paramètres. Tableaux Rapports Menu reports-button",
       "kind": "page",
       "page": "reports",
       "highlights": [

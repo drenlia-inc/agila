@@ -129,6 +129,36 @@ export async function s3Delete(client, config, key) {
 }
 
 /**
+ * Count objects under a key prefix (ListObjectsV2, paginated). Empty prefix is refused.
+ * @param {any} client
+ * @param {import('./storageConfig.js').StorageConfig} config
+ * @param {string} prefix
+ * @returns {Promise<{ count: number, prefix: string }>}
+ */
+export async function s3CountPrefix(client, config, prefix) {
+  const { ListObjectsV2Command } = await loadAwsS3();
+  let normalized = String(prefix || '').trim().replace(/^\/+/, '');
+  if (normalized && !normalized.endsWith('/')) normalized += '/';
+  if (!normalized) {
+    throw new Error('Refusing S3 prefix list: empty key prefix');
+  }
+  let count = 0;
+  let continuationToken;
+  do {
+    const listed = await client.send(
+      new ListObjectsV2Command({
+        Bucket: config.bucket,
+        Prefix: normalized,
+        ContinuationToken: continuationToken
+      })
+    );
+    count += listed.KeyCount || (listed.Contents || []).length;
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return { count, prefix: normalized };
+}
+
+/**
  * Delete every object under a key prefix (paginated ListObjectsV2 + DeleteObjects).
  * Refuses an empty prefix so we never wipe an entire bucket by accident.
  *

@@ -165,7 +165,7 @@ export const getTourSteps = (): TourStepsConfig => {
     },
     // Step 21: Admin Tab (switches to admin page before showing)
     {
-      target: '[data-tour-id="admin-tab"]',
+      target: '[data-tour-id="admin-tabs"]',
       content: i18n.t('tour.steps.adminTab', { ns: 'common' }),
       placement: 'bottom',
       spotlightClicks: false,

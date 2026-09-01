@@ -13,7 +13,7 @@ import { getTranslator } from '../utils/i18n.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 import { getTenantDomain } from '../utils/tenantDomain.js';
 // MIGRATED: Import sqlManager modules
-import { users as userQueries, tasks as taskQueries, adminUsers as adminUserQueries, auth as authQueries, helpers, settings as settingsQueries } from '../utils/sqlManager/index.js';
+import { users as userQueries, tasks as taskQueries, adminUsers as adminUserQueries, auth as authQueries, helpers, settings as settingsQueries, members as memberQueries } from '../utils/sqlManager/index.js';
 import { commitUploadedFile, getRequestStoragePaths } from '../services/storage/index.js';
 import { validateUploadedFileMagic } from '../utils/fileMagicBytes.js';
 import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
@@ -64,6 +64,7 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
       isActive: !!user.is_active,
       createdAt: user.created_at,
       joined: user.created_at,
+      lastLoginAt: user.last_login_at || null,
       avatarUrl: user.avatar_path,
       authProvider: user.auth_provider || 'local',
       googleAvatarUrl: user.google_avatar_url,
@@ -294,6 +295,21 @@ router.put('/:userId/role', authenticateToken, requireRole(['admin']), async (re
         role: role,
         timestamp: new Date().toISOString()
       }, getTenantId(req));
+
+      const linkedMember = await memberQueries.getMemberByUserId(db, userId);
+      if (linkedMember) {
+        await notificationService.publish('member-updated', {
+          memberId: linkedMember.id,
+          member: {
+            id: linkedMember.id,
+            name: linkedMember.name,
+            color: linkedMember.color,
+            user_id: linkedMember.user_id,
+            isViewer: role === 'viewer'
+          },
+          timestamp: new Date().toISOString()
+        }, getTenantId(req));
+      }
     }
 
     res.json({ message: 'User role updated successfully' });

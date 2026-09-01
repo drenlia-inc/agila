@@ -8,6 +8,7 @@
  */
 
 import { wrapQuery } from '../queryLogger.js';
+import { AGENT_USER_ID, SYSTEM_USER_ID } from '../../constants/agentIdentity.js';
 
 /**
  * Get user by email for login (active users only)
@@ -61,6 +62,22 @@ export async function clearForceLogout(db, userId) {
   
   const stmt = wrapQuery(db.prepare(query), 'UPDATE');
   return await stmt.run(userId);
+}
+
+/**
+ * Record a successful interactive sign-in (password or SSO). Not /me token refresh.
+ */
+export async function recordLastLogin(db, userId) {
+  if (!userId || userId === AGENT_USER_ID || userId === SYSTEM_USER_ID) return null;
+  const query = `
+    UPDATE users
+    SET last_login_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+    RETURNING last_login_at
+  `;
+  const stmt = wrapQuery(db.prepare(query), 'UPDATE');
+  const row = await stmt.get(userId);
+  return row?.last_login_at ?? null;
 }
 
 /**

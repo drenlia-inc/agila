@@ -1691,6 +1691,7 @@ function AppContent() {
     websocketClient.onMemberUpdated(memberWebSocket.handleMemberUpdated);
     websocketClient.onMemberCreated(memberWebSocket.handleMemberCreated);
     websocketClient.onUserUpdated(memberWebSocket.handleUserUpdated);
+    websocketClient.onUserRoleUpdated(memberWebSocket.handleUserRoleUpdated);
     websocketClient.onMemberDeleted(memberWebSocket.handleMemberDeleted);
     websocketClient.onUserDeleted(memberWebSocket.handleUserDeleted);
     websocketClient.onUserProfileUpdated(memberWebSocket.handleUserProfileUpdated);
@@ -1744,6 +1745,7 @@ function AppContent() {
       websocketClient.offMemberUpdated(memberWebSocket.handleMemberUpdated);
       websocketClient.offMemberCreated(memberWebSocket.handleMemberCreated);
       websocketClient.offUserUpdated(memberWebSocket.handleUserUpdated);
+      websocketClient.offUserRoleUpdated(memberWebSocket.handleUserRoleUpdated);
       websocketClient.offMemberDeleted(memberWebSocket.handleMemberDeleted);
       websocketClient.offUserDeleted(memberWebSocket.handleUserDeleted);
       websocketClient.offUserProfileUpdated(memberWebSocket.handleUserProfileUpdated);

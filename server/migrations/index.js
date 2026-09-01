@@ -1296,6 +1296,15 @@ const migrations = [
         `✅ Migration 52: STORAGE_MODE=${mode}, platform S3 shadow backfilled when applicable`
       );
     }
+  },
+  {
+    version: 53,
+    name: 'add_users_last_login_at',
+    description: 'Record last successful sign-in on users.last_login_at',
+    up: async (db) => {
+      await dbExec(db, 'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ NULL');
+      console.log('✅ Migration 53: users.last_login_at');
+    }
   }
 ];
 
@@ -1318,12 +1327,15 @@ const INSERT_MIGRATION_SQL =
  */
 export const runMigrations = async (db) => {
   try {
+    const catalogLatest = migrations[migrations.length - 1]?.version ?? 0;
     console.log('\n🔄 Checking for pending database migrations...');
+    console.log(`   Catalog: ${migrations.length} migrations (latest v${catalogLatest})`);
 
     await dbExec(db, SCHEMA_MIGRATIONS_DDL);
 
+    const asVersion = (value) => Number(value);
     const appliedMigrations = await dbAll(db.prepare('SELECT version FROM schema_migrations ORDER BY version'));
-    const appliedVersions = new Set(appliedMigrations.map(m => m.version));
+    const appliedVersions = new Set(appliedMigrations.map((m) => asVersion(m.version)));
 
     // Migrations 1-10 have been integrated into CREATE_TABLES_SQL in database.js
     const integratedMigrationNames = [
@@ -1353,9 +1365,13 @@ export const runMigrations = async (db) => {
     }
 
     const updatedAppliedMigrations = await dbAll(db.prepare('SELECT version FROM schema_migrations ORDER BY version'));
-    const updatedAppliedVersions = new Set(updatedAppliedMigrations.map(m => m.version));
+    const updatedAppliedVersions = new Set(updatedAppliedMigrations.map((m) => asVersion(m.version)));
+    const appliedMax = updatedAppliedMigrations.length
+      ? Math.max(...updatedAppliedMigrations.map((m) => asVersion(m.version)))
+      : 0;
+    console.log(`   Applied max: v${appliedMax}`);
 
-    const pendingMigrations = migrations.filter(m => !updatedAppliedVersions.has(m.version));
+    const pendingMigrations = migrations.filter((m) => !updatedAppliedVersions.has(asVersion(m.version)));
 
     if (pendingMigrations.length === 0) {
       console.log('✅ Database is up to date (no pending migrations)\n');
