@@ -25,6 +25,7 @@ export {
   startStorageMigration,
   getStorageMigrationStatus,
   compareStorageObjects,
+  compareDiskToS3,
   compareS3ToS3,
   localDirForCategory,
   guessContentType

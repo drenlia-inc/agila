@@ -72,6 +72,7 @@ interface User {
   roles: string[];
   joined: string;
   createdAt: string;
+  lastLoginAt?: string | null;
   avatarUrl?: string;
   authProvider?: string;
   googleAvatarUrl?: string;
@@ -91,7 +92,17 @@ function patchUserRole(users: User[], userId: string, role: AdminUserRole): User
 }
 
 type UserListPatch = Partial<
-  Pick<User, 'email' | 'firstName' | 'lastName' | 'displayName' | 'isActive' | 'avatarUrl' | 'memberColor'>
+  Pick<
+    User,
+    | 'email'
+    | 'firstName'
+    | 'lastName'
+    | 'displayName'
+    | 'isActive'
+    | 'avatarUrl'
+    | 'memberColor'
+    | 'lastLoginAt'
+  >
 >;
 
 function patchUserInList(users: User[], userId: string, patch: UserListPatch): User[] {
@@ -416,6 +427,7 @@ const Admin: React.FC<AdminProps> = ({
         firstName?: string;
         lastName?: string;
         isActive?: boolean;
+        lastLoginAt?: string | null;
       };
     }) => {
       const user = data?.user;
@@ -425,6 +437,7 @@ const Admin: React.FC<AdminProps> = ({
       if (user.firstName !== undefined) patch.firstName = user.firstName;
       if (user.lastName !== undefined) patch.lastName = user.lastName;
       if (user.isActive !== undefined) patch.isActive = user.isActive;
+      if (user.lastLoginAt !== undefined) patch.lastLoginAt = user.lastLoginAt;
       if (Object.keys(patch).length === 0) return;
       setUsers((prev) => (Array.isArray(prev) ? patchUserInList(prev, user.id!, patch) : prev));
     };

@@ -5,6 +5,7 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { authenticateAdminPortal, adminPortalRateLimit } from '../middleware/adminAuth.js';
+import { inspectSnapshotLimiter } from '../middleware/rateLimiters.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import notificationService from '../services/notificationService.js';
 import { getLicenseManager } from '../config/license.js';
@@ -39,8 +40,24 @@ import path from 'path';
 
 const router = express.Router();
 
-// Apply rate limiting to all admin portal routes
-router.use(adminPortalRateLimit);
+function isInspectSupportRead(req) {
+  if (req.method !== 'GET') return false;
+  const path = String(req.path || '').replace(/\/+$/, '') || '/';
+  return (
+    path === '/inspect-snapshot' ||
+    path === '/storage/migrate-status' ||
+    /^\/users\/[^/]+\/avatar$/.test(path)
+  );
+}
+
+// Shared cap for mutating / expensive admin-portal routes. Inspect snapshot uses
+// its own limiter so live support refresh cannot starve Compare / migrate / settings.
+router.use((req, res, next) => {
+  if (isInspectSupportRead(req)) {
+    return inspectSnapshotLimiter(req, res, next);
+  }
+  return adminPortalRateLimit(req, res, next);
+});
 
 // OPTIONS requests are now handled by nginx - disable Express OPTIONS handler to avoid duplicate headers
 // router.options('*', (req, res) => {
@@ -95,6 +112,134 @@ router.get('/info', authenticateAdminPortal, async (req, res) => {
   }
 });
 
+/** One admin-portal request for Inspect live refresh (avoids 7× rate-limit hits). */
+router.get('/inspect-snapshot', authenticateAdminPortal, async (req, res) => {
+  const db = getRequestDatabase(req);
+  const hostname = req.get('host') || req.hostname;
+  const tenantId = req.tenantId || null;
+  const errors = {
+    info: null,
+    health: null,
+    settings: null,
+    users: null,
+    plan: null,
+    owner: null,
+    instanceStatus: null
+  };
+
+  const pack = async (name, fn) => {
+    try {
+      return await fn();
+    } catch (error) {
+      console.error(`inspect-snapshot ${name}:`, error);
+      errors[name] = error.message || `Failed to load ${name}`;
+      return null;
+    }
+  };
+
+  const [info, health, settings, users, plan, owner, instanceStatus] = await Promise.all([
+    pack('info', async () => {
+      const appUrlSetting = await helpers.getSetting(db, 'APP_URL');
+      return {
+        success: true,
+        data: {
+          instanceName: process.env.INSTANCE_NAME || 'easy-kanban-app',
+          instanceToken: process.env.INSTANCE_TOKEN ? 'configured' : 'not-configured',
+          domain: appUrlSetting || 'not-configured',
+          hostname,
+          tenantId,
+          version: process.env.APP_VERSION || '1.0.0',
+          environment: process.env.NODE_ENV || 'development',
+          timestamp: new Date().toISOString()
+        }
+      };
+    }),
+    pack('health', async () => {
+      const dbCheck = await healthQueries.checkDatabaseConnection(db);
+      return {
+        success: true,
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        database: dbCheck ? 'connected' : 'disconnected',
+        instanceToken: 'configured'
+      };
+    }),
+    pack('settings', async () => {
+      const rows = await settingsQueries.getAllSettings(db);
+      const settingsObj = {};
+      rows.forEach((setting) => {
+        if (isSecretSettingKey(setting.key)) {
+          projectSecretForAdminApi(setting.key, setting.value, settingsObj);
+        } else {
+          settingsObj[setting.key] = setting.value;
+        }
+      });
+      return { success: true, data: settingsObj };
+    }),
+    pack('users', async () => {
+      const usersRaw = await userQueries.getAllUsersWithRolesAndMembers(db);
+      const formattedUsers = usersRaw.map((user) => {
+        const firstName = user.first_name || '';
+        const lastName = user.last_name || '';
+        const displayName =
+          (user.member_name && String(user.member_name).trim()) ||
+          `${firstName} ${lastName}`.trim() ||
+          user.email;
+        return {
+          id: user.id,
+          email: user.email,
+          firstName,
+          lastName,
+          displayName,
+          isActive: Boolean(user.is_active),
+          roles: user.roles ? String(user.roles).split(',').filter(Boolean) : [],
+          createdAt: user.created_at,
+          authProvider: user.auth_provider || 'local',
+          googleAvatarUrl: user.google_avatar_url || null,
+          hasLocalAvatar: Boolean(user.avatar_path)
+        };
+      });
+      return { success: true, data: formattedUsers };
+    }),
+    pack('plan', async () => {
+      const licenseManager = getLicenseManager(db);
+      const licenseInfo = await licenseManager.getLicenseInfo();
+      if (!licenseInfo.enabled) {
+        const isDemoMode = process.env.DEMO_ENABLED === 'true';
+        return {
+          success: true,
+          data: {
+            plan: 'unlimited',
+            message: isDemoMode
+              ? 'Licensing disabled (demo mode - resets hourly)'
+              : 'Licensing disabled (self-hosted mode)',
+            features: []
+          }
+        };
+      }
+      return { success: true, data: licenseInfo };
+    }),
+    pack('owner', async () => {
+      const ownerEmail = (await helpers.getSetting(db, 'OWNER')) || null;
+      return { success: true, data: { owner: ownerEmail, timestamp: new Date().toISOString() } };
+    }),
+    pack('instanceStatus', async () => {
+      const status = (await helpers.getSetting(db, 'INSTANCE_STATUS')) || 'active';
+      return { success: true, data: { status } };
+    })
+  ]);
+
+  res.json({
+    info,
+    health,
+    settings,
+    users,
+    plan,
+    owner,
+    instanceStatus,
+    errors
+  });
+});
 
 // ================================
 // INSTANCE OWNER MANAGEMENT
@@ -213,7 +358,11 @@ router.post('/storage/migrate-disk-to-s3', authenticateAdminPortal, async (req, 
     const { startStorageMigration, getRequestStoragePaths } = await import('../services/storage/index.js');
     const storagePaths = getRequestStoragePaths(req);
     const deleteSource = req.body?.deleteSource === true;
-    const result = await startStorageMigration(db, storagePaths, 'disk-to-s3', { deleteSource });
+    const result = await startStorageMigration(db, storagePaths, 'disk-to-s3', {
+      deleteSource,
+      allowWhenManaged: true,
+      skipConnectionTest: true
+    });
     res.json({
       success: true,
       ...result
@@ -223,6 +372,25 @@ router.post('/storage/migrate-disk-to-s3', authenticateAdminPortal, async (req, 
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to start storage migration'
+    });
+  }
+});
+
+router.post('/storage/compare-disk-to-s3', authenticateAdminPortal, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const destination = req.body?.destination;
+    if (!destination || !String(destination.S3_BUCKET || '').trim()) {
+      return res.status(400).json({ success: false, error: 'destination.S3_BUCKET is required' });
+    }
+    const { compareDiskToS3, getRequestStoragePaths } = await import('../services/storage/index.js');
+    const result = await compareDiskToS3(db, getRequestStoragePaths(req), destination);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error comparing disk to S3:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to compare disk to S3'
     });
   }
 });
@@ -879,7 +1047,13 @@ router.put('/users/:userId', authenticateAdminPortal, async (req, res) => {
       if (memberAfter) {
         await notificationService.publish('member-updated', {
           memberId: memberAfter.id,
-          member: { id: memberAfter.id, name: memberAfter.name, color: memberAfter.color },
+          member: {
+            id: memberAfter.id,
+            name: memberAfter.name,
+            color: memberAfter.color,
+            user_id: memberAfter.user_id ?? userId,
+            isViewer: (userRolesResult || role) === 'viewer'
+          },
           timestamp: new Date().toISOString()
         }, tenantId).catch((err) => {
           console.error('Failed to publish member-updated event:', err);

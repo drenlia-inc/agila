@@ -546,7 +546,11 @@ async function acquireMigrationLock(db, direction, options = {}) {
   const config = await loadStorageConfig(db);
   let destConfig = null;
 
-  if (config.managed && (direction === 'disk-to-s3' || direction === 's3-to-disk')) {
+  if (
+    config.managed &&
+    (direction === 'disk-to-s3' || direction === 's3-to-disk') &&
+    !options.allowWhenManaged
+  ) {
     const err = new Error(
       'Disk ↔ S3 migration is not available while using managed platform storage'
     );
@@ -584,7 +588,12 @@ async function acquireMigrationLock(db, direction, options = {}) {
     if (!validation.ok) {
       throw new Error(validation.error || 'S3 is not configured');
     }
-    if (direction === 'disk-to-s3' && !config.testOk && !config.managed) {
+    if (
+      direction === 'disk-to-s3' &&
+      !config.testOk &&
+      !config.managed &&
+      !options.skipConnectionTest
+    ) {
       throw new Error('Run a successful S3 connection test before migrating to S3');
     }
   }
@@ -1040,15 +1049,12 @@ async function loadAttachmentTaskIndex(db) {
 }
 
 /**
- * Compare known attachment/avatar objects between local disk and S3 (read-only).
+ * Compare known attachment/avatar objects between local disk and an S3 config (read-only).
+ * @param {*} db
+ * @param {{ attachments?: string, avatars?: string }} storagePaths
+ * @param {object} config validated S3 destination (live or catalog override)
  */
-export async function compareStorageObjects(db, storagePaths) {
-  const config = await loadStorageConfig(db);
-  const validation = validateS3Config(config);
-  if (!validation.ok) {
-    throw new Error(validation.error || 'S3 is not configured');
-  }
-
+async function compareDiskAgainstS3Config(db, storagePaths, config) {
   const { createS3Client, s3Exists } = await s3();
   const client = await createS3Client(config);
   const { attNames, avatarNames, attDir, avDir } = await collectMigrationFilenames(
@@ -1121,7 +1127,55 @@ export async function compareStorageObjects(db, storagePaths) {
       missing: sum('missing')
     },
     bucket: config.bucket,
-    prefix: config.keyPrefix || ''
+    prefix: config.keyPrefix || '',
+    destination: {
+      bucket: config.bucket,
+      prefix: config.keyPrefix || '',
+      region: config.region || '',
+      endpoint: config.endpoint || ''
+    }
+  };
+}
+
+/**
+ * Compare known attachment/avatar objects between local disk and live S3 (read-only).
+ */
+export async function compareStorageObjects(db, storagePaths) {
+  const config = await loadStorageConfig(db);
+  const validation = validateS3Config(config);
+  if (!validation.ok) {
+    throw new Error(validation.error || 'S3 is not configured');
+  }
+  return compareDiskAgainstS3Config(db, storagePaths, config);
+}
+
+/**
+ * Compare disk files to a destination bucket without changing live tenant S3 settings.
+ * Used by inspect for self-hosted (disk) → platform S3.
+ */
+export async function compareDiskToS3(db, storagePaths, destination) {
+  const destConfig = storageConfigFromOverrides(destination || {}, { ...EMPTY_S3_BASE });
+  const destValidation = validateS3Config(destConfig);
+  if (!destValidation.ok) {
+    throw new Error(destValidation.error || 'Destination S3 is not configured');
+  }
+  const result = await compareDiskAgainstS3Config(db, storagePaths, destConfig);
+  const { createS3Client, s3CountPrefix } = await s3();
+  const destClient = await createS3Client(destConfig);
+  const listed = destConfig.keyPrefix
+    ? await s3CountPrefix(destClient, destConfig, destConfig.keyPrefix)
+    : { count: 0, prefix: '' };
+  return {
+    ...result,
+    direction: 'disk-to-s3',
+    destinationListed: listed.count,
+    totals: {
+      ...result.totals,
+      onDisk: result.totals.diskOnly + result.totals.both,
+      onPlatform: result.totals.s3Only + result.totals.both,
+      sourceOnly: result.totals.diskOnly,
+      destOnly: result.totals.s3Only
+    }
   };
 }
 

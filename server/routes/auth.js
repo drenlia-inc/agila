@@ -34,6 +34,7 @@ import {
 import { auth as authQueries, users as userQueries, settings as settingsQueries } from '../utils/sqlManager/index.js';
 import { parseBody, loginBodySchema, activateAccountBodySchema, registerBodySchema } from '../utils/requestValidation.js';
 import { logMemberJoinedIfFirstTime } from '../services/activityLogger.js';
+import { recordInteractiveLogin } from '../utils/recordInteractiveLogin.js';
 
 const router = express.Router();
 
@@ -69,6 +70,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     
     // MIGRATED: Clear force_logout flag using sqlManager
     await authQueries.clearForceLogout(db, user.id);
+    await recordInteractiveLogin(db, user.id, getTenantId(req));
     
     // Note: APP_URL is updated by the frontend after login, not here
     // The frontend knows the actual public-facing URL (window.location.origin)
@@ -937,6 +939,7 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
     
     // MIGRATED: Clear force_logout flag using sqlManager
     await authQueries.clearForceLogout(db, user.id);
+    await recordInteractiveLogin(db, user.id, getTenantId(req));
     
     // Note: APP_URL is updated by the frontend after login, not here
     // The frontend knows the actual public-facing URL (window.location.origin)

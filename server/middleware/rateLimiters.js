@@ -204,6 +204,17 @@ export const adminPortalLimiter = createLimiter({
   prefix: 'admin-portal'
 });
 
+/**
+ * GET /inspect-snapshot only. Separate bucket so live Inspect does not exhaust
+ * the shared admin-portal cap. Still bounded (DoS / token-guessing on this path).
+ */
+export const inspectSnapshotLimiter = createLimiter({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: { error: 'Too many inspect snapshot requests, please try again later' },
+  prefix: 'admin-portal-inspect'
+});
+
 // Google OAuth URL generation: 30 per 15 minutes
 export const oauthUrlLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,

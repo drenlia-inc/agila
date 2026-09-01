@@ -52,6 +52,21 @@ export const useMemberWebSocket = ({
     });
   }, [setMembers]);
 
+  const handleUserRoleUpdated = useCallback((data: { userId?: string; role?: string }) => {
+    const userId = data?.userId;
+    const role = data?.role;
+    if (!userId || !role) return;
+    const isViewer = role === 'viewer';
+    setMembers((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      return list.map((member) => {
+        if (!member.user_id || String(member.user_id) !== String(userId)) return member;
+        if (member.isViewer === isViewer) return member;
+        return { ...member, isViewer };
+      });
+    });
+  }, [setMembers]);
+
   const handleUserUpdated = useCallback((data: any) => {
     const user = data?.user;
     if (!user?.id) return;
@@ -199,6 +214,7 @@ export const useMemberWebSocket = ({
     handleMemberCreated,
     handleMemberUpdated,
     handleUserUpdated,
+    handleUserRoleUpdated,
     handleMemberDeleted,
     handleUserDeleted,
     handleUserProfileUpdated,

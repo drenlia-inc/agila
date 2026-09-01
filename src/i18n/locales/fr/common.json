@@ -59,13 +59,14 @@
     "readOnlyMode": "Votre compte est en lecture seule. Vous ne pouvez pas modifier les données.",
     "readOnlyBadge": "Lecture seule",
     "unassignedMember": "Non assignée",
-    "adminBadge": "Admin"
+    "adminBadge": "Administrateur"
   },
   "navigation": {
     "boards": "Tableaux",
     "kanban": "Kanban",
     "reports": "Rapports",
     "admin": "Admin",
+    "settings": "Paramètres",
     "profile": "Profil",
     "logout": "Déconnexion",
     "invite": "Inviter",

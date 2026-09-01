@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { Edit, Trash2, User as UserIcon, Mail, Loader2, Search, X, ArrowUp, ArrowDown, ChevronsUpDown, ChevronDown, Check } from 'lucide-react';
+import { Edit, Trash2, User as UserIcon, Mail, Loader2, Search, X, ArrowUp, ArrowDown, ChevronsUpDown, ChevronDown, Check, Eye, Shield } from 'lucide-react';
 import { getAuthenticatedAvatarUrl } from '../../utils/authImageUrl';
 import { AGENT_BOT_AVATAR_SRC } from '../../utils/agentMemberUi';
 import { toast } from '../../utils/toast';
@@ -16,7 +16,6 @@ import {
 import { MODAL_OVERLAY_Z_INDEX } from '../../constants/appConstants';
 import { formatToYYYYMMDDHHmmss } from '../../utils/dateUtils';
 import {
-  adminInputLockedClass,
   adminLabelClass,
   adminLabelLockedClass,
   adminLockedSurfaceClass,
@@ -37,6 +36,7 @@ interface User {
   roles: string[];
   joined: string;
   createdAt: string;
+  lastLoginAt?: string | null;
   avatarUrl?: string;
   authProvider?: string;
   googleAvatarUrl?: string;
@@ -81,6 +81,34 @@ function roleDotClass(role: RoleValue): string {
   if (role === 'admin') return 'bg-violet-500';
   if (role === 'viewer') return 'bg-sky-500';
   return 'bg-slate-400 dark:bg-slate-500';
+}
+
+function UserListAvatarRoleBadge({
+  role,
+  labels,
+}: {
+  role: RoleValue;
+  labels: Record<RoleValue, string>;
+}) {
+  if (role !== 'admin' && role !== 'viewer') return null;
+  const isAdmin = role === 'admin';
+  return (
+    <span
+      className={`absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-white dark:ring-slate-900 ${
+        isAdmin
+          ? 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300'
+          : 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+      }`}
+      aria-label={isAdmin ? labels.admin : labels.viewer}
+      title={isAdmin ? labels.admin : labels.viewer}
+    >
+      {isAdmin ? (
+        <Shield size={10} strokeWidth={2.5} aria-hidden />
+      ) : (
+        <Eye size={10} strokeWidth={2.5} aria-hidden />
+      )}
+    </span>
+  );
 }
 
 type StatusValue = 'active' | 'inactive';
@@ -212,9 +240,9 @@ function StatusBadgeSelect({
             setOpen(true);
           }
         }}
-        className={`inline-flex items-center justify-between gap-1.5 font-medium rounded-md border transition-colors max-w-[7.5rem] px-1.5 py-1 text-[11px] ${
+        className={`w-full inline-flex items-center justify-between gap-1.5 font-medium rounded-md border transition-colors px-1.5 py-1 text-[11px] ${
           disabled
-            ? adminInputLockedClass
+            ? adminLockedSurfaceClass
             : `${statusToneClasses(statusValue)} hover:brightness-[0.98] dark:hover:brightness-110 cursor-pointer`
         }`}
       >
@@ -423,9 +451,9 @@ function RoleBadgeSelect({
             ? `w-full inline-flex items-center justify-between gap-2 px-3 py-2.5 text-sm rounded-md transition-colors ${
                 disabled ? adminLockedSurfaceClass : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 cursor-pointer'
               }`
-            : `inline-flex items-center justify-between gap-1.5 font-medium rounded-md border transition-colors max-w-[7.5rem] px-1.5 py-1 text-[11px] ${
+            : `w-full inline-flex items-center justify-between gap-1.5 font-medium rounded-md border transition-colors px-1.5 py-1 text-[11px] ${
                 disabled
-                  ? adminInputLockedClass
+                  ? adminLockedSurfaceClass
                   : `${roleToneClasses(value)} hover:brightness-[0.98] dark:hover:brightness-110 cursor-pointer`
               }`
         }
@@ -554,7 +582,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   type StatusFilter = 'all' | 'active' | 'inactive';
   type RoleFilter = 'all' | 'admin' | 'member' | 'viewer';
   type AuthFilter = 'all' | 'local' | 'google';
-  type SortKey = 'name' | 'status' | 'auth' | 'joined' | 'role';
+  type SortKey = 'name' | 'status' | 'auth' | 'joined' | 'lastLogin' | 'role';
   type SortDir = 'asc' | 'desc';
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -565,6 +593,54 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const filterToolbarRef = useRef<HTMLDivElement>(null);
+
+  const userMatchesSearch = (user: User, q: string) => {
+    if (!q) return true;
+    const haystack = [
+      user.firstName,
+      user.lastName,
+      user.displayName,
+      user.email,
+      `${user.firstName || ''} ${user.lastName || ''}`,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(q);
+  };
+
+  const userMatchesStatus = (user: User, status: StatusFilter) => {
+    if (status === 'active') return user.isActive;
+    if (status === 'inactive') return !user.isActive;
+    return true;
+  };
+
+  const userMatchesRole = (user: User, role: RoleFilter) => {
+    if (role === 'admin') return user.roles.includes('admin');
+    if (role === 'viewer') return user.roles.includes('viewer');
+    if (role === 'member') {
+      return !user.roles.includes('admin') && !user.roles.includes('viewer');
+    }
+    return true;
+  };
+
+  const userMatchesAuth = (user: User, auth: AuthFilter) => {
+    if (auth === 'google') return user.authProvider === 'google';
+    if (auth === 'local') return user.authProvider !== 'google';
+    return true;
+  };
+
+  const searchQuery = userSearch.trim().toLowerCase();
+
+  const filteredUsers = useMemo(() => {
+    return visibleUsers.filter(
+      (user) =>
+        userMatchesStatus(user, statusFilter) &&
+        userMatchesRole(user, roleFilter) &&
+        userMatchesAuth(user, authFilter) &&
+        userMatchesSearch(user, searchQuery)
+    );
+  }, [visibleUsers, statusFilter, roleFilter, authFilter, searchQuery]);
 
   const userSummary = useMemo(() => {
     let active = 0;
@@ -577,44 +653,23 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     for (const user of visibleUsers) {
       if (user.isActive) active += 1;
       else inactive += 1;
-      if (user.roles.includes('admin')) admin += 1;
-      else if (user.roles.includes('viewer')) viewer += 1;
-      else member += 1;
-      if (user.authProvider === 'google') google += 1;
-      else local += 1;
+      if (!userMatchesSearch(user, searchQuery)) continue;
+      const okStatusAuth =
+        userMatchesStatus(user, statusFilter) && userMatchesAuth(user, authFilter);
+      const okStatusRole =
+        userMatchesStatus(user, statusFilter) && userMatchesRole(user, roleFilter);
+      if (okStatusAuth) {
+        if (user.roles.includes('admin')) admin += 1;
+        else if (user.roles.includes('viewer')) viewer += 1;
+        else member += 1;
+      }
+      if (okStatusRole) {
+        if (user.authProvider === 'google') google += 1;
+        else local += 1;
+      }
     }
     return { total: visibleUsers.length, active, inactive, admin, member, viewer, local, google };
-  }, [visibleUsers]);
-
-  const filteredUsers = useMemo(() => {
-    const q = userSearch.trim().toLowerCase();
-    return visibleUsers.filter((user) => {
-      if (statusFilter === 'active' && !user.isActive) return false;
-      if (statusFilter === 'inactive' && user.isActive) return false;
-      if (roleFilter === 'admin' && !user.roles.includes('admin')) return false;
-      if (roleFilter === 'viewer' && !user.roles.includes('viewer')) return false;
-      if (
-        roleFilter === 'member' &&
-        (user.roles.includes('admin') || user.roles.includes('viewer'))
-      ) {
-        return false;
-      }
-      if (authFilter === 'local' && user.authProvider === 'google') return false;
-      if (authFilter === 'google' && user.authProvider !== 'google') return false;
-      if (!q) return true;
-      const haystack = [
-        user.firstName,
-        user.lastName,
-        user.displayName,
-        user.email,
-        `${user.firstName || ''} ${user.lastName || ''}`,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [visibleUsers, statusFilter, roleFilter, authFilter, userSearch]);
+  }, [visibleUsers, statusFilter, roleFilter, authFilter, searchQuery]);
 
   const displayedUsers = useMemo(() => {
     const list = [...filteredUsers];
@@ -625,6 +680,11 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       u.roles.includes('admin') ? 0 : u.roles.includes('viewer') ? 2 : 1;
     const joinedOf = (u: User) => {
       const raw = u.joined || u.createdAt || '';
+      const t = Date.parse(raw);
+      return Number.isFinite(t) ? t : 0;
+    };
+    const lastLoginOf = (u: User) => {
+      const raw = u.lastLoginAt || '';
       const t = Date.parse(raw);
       return Number.isFinite(t) ? t : 0;
     };
@@ -647,6 +707,9 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
           break;
         case 'role':
           cmp = roleRank(a) - roleRank(b);
+          break;
+        case 'lastLogin':
+          cmp = lastLoginOf(a) - lastLoginOf(b);
           break;
         case 'joined':
           cmp = joinedOf(a) - joinedOf(b);
@@ -692,7 +755,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortKey(key);
-      setSortDir(key === 'joined' ? 'desc' : 'asc');
+      setSortDir(key === 'joined' || key === 'lastLogin' ? 'desc' : 'asc');
     }
   };
 
@@ -714,6 +777,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   const [showAddUserForm, setShowAddUserForm] = useState(false);
   const [showEditUserForm, setShowEditUserForm] = useState(false);
   const [colorPickerUserId, setColorPickerUserId] = useState<string | null>(null);
+  const colorButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [editingColor, setEditingColor] = useState<string>(DEFAULT_MEMBER_COLOR);
   const [isSavingColor, setIsSavingColor] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -1359,11 +1423,13 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   <button
                     type="button"
                     onClick={clearUserFilters}
-                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                    className="inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
                     title={t('users.clearFilters')}
                     aria-label={t('users.clearFilters')}
                   >
-                    <X size={12} />
+                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-rose-500 text-rose-600 dark:border-rose-400 dark:text-rose-400">
+                      <X size={10} strokeWidth={2.5} aria-hidden />
+                    </span>
                     <span>{t('users.clearFilters')}</span>
                   </button>
                 )}
@@ -1467,11 +1533,12 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   <>
               <colgroup>
                 <col className="w-[7.5rem]" />
-                <col className="w-[7.5rem]" />
+                <col className="w-[7.25rem]" />
                 <col />
-                <col className="w-[6.5rem]" />
-                <col className="w-[5.5rem]" />
-                <col className="w-[4.5rem]" />
+                <col className="w-[7.25rem]" />
+                <col className="w-[7.25rem]" />
+                <col className="w-[4rem]" />
+                <col className="w-[11rem]" />
                 <col className="w-[10rem]" />
               </colgroup>
               <thead>
@@ -1482,6 +1549,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   {sortHeader('status', t('users.tableHeaders.status'))}
                   {sortHeader('auth', t('users.tableHeaders.authType'))}
                   {staticHeader(t('users.tableHeaders.color'))}
+                  {sortHeader('lastLogin', t('users.tableHeaders.lastLogin'))}
                   {sortHeader('joined', t('users.tableHeaders.joined'))}
                 </tr>
               </thead>
@@ -1498,6 +1566,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                     const roleSelectLocked =
                       user.id === currentUser?.id || !canModifyUser(user.email);
                     const isSystemAccount = isLocalPseudoAccount(user.email);
+                    const isCurrentUserRow = user.id === currentUser?.id;
                     const statusSelectLocked =
                       isSystemAccount || !canChangeUserActivation(user.id, user.email);
                     const isActiveUserRow =
@@ -1626,7 +1695,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   </td>
                   <td className={tdNowrap}>
                     {isSystemAccount ? (
-                      <span className={`${pillClass} bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700`}>
+                      <span className={`${pillClass} w-full justify-start bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700`}>
                         —
                       </span>
                     ) : (
@@ -1643,7 +1712,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   </td>
                   <td className={`${tdClass} min-w-0`}>
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="shrink-0 h-8 w-8">
+                      <div className="relative shrink-0 h-8 w-8">
                         {user.email === 'agent@local' && !(user.googleAvatarUrl || user.avatarUrl) ? (
                           <img
                             src={AGENT_BOT_AVATAR_SRC}
@@ -1664,15 +1733,18 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                             {user.firstName?.[0]}{user.lastName?.[0]}
                           </div>
                         )}
+                        {!isSystemAccount && (
+                          <UserListAvatarRoleBadge role={primaryRole} labels={roleLabels} />
+                        )}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                             {displayName}
                           </div>
-                          {isSystemAccount && (
-                            <span className="shrink-0 inline-flex items-center px-1 py-px text-[9px] font-semibold uppercase tracking-wide leading-none rounded border bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800">
-                              {t('users.systemAccount')}
+                          {isCurrentUserRow && (
+                            <span className="shrink-0 inline-flex items-center px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide leading-none rounded border bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-700">
+                              {t('users.youBadge')}
                             </span>
                           )}
                         </div>
@@ -1689,8 +1761,8 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   </td>
                   <td className={tdNowrap}>
                     {isSystemAccount ? (
-                      <span className={`${pillClass} bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800`}>
-                        {t('users.active')}
+                      <span className={`${pillClass} w-full justify-start bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800`}>
+                        {t('users.system')}
                       </span>
                     ) : (
                       <StatusBadgeSelect
@@ -1705,23 +1777,43 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                     )}
                   </td>
                   <td className={tdNowrap}>
-                    <span className={`${pillClass} ${
-                      user.authProvider === 'google' 
-                        ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800'
-                        : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                    }`}>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                      {user.authProvider === 'google' ? (
+                        <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" aria-hidden>
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                        </svg>
+                      ) : null}
                       {user.authProvider === 'google' ? t('users.google') : t('users.local')}
                     </span>
                   </td>
                   <td className={tdNowrap}>
                     <button
                       type="button"
-                      className="h-6 w-6 rounded-full border border-slate-200 dark:border-slate-600 cursor-pointer hover:scale-110 transition-transform shadow-sm"
+                      ref={(el) => {
+                        colorButtonRefs.current[user.id] = el;
+                      }}
+                      className="h-5 w-5 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm hover:ring-2 hover:ring-slate-300 dark:hover:ring-slate-500"
                       style={{ backgroundColor: user.memberColor || DEFAULT_MEMBER_COLOR }}
-                      onClick={() => openColorPicker(user.id, user.memberColor || DEFAULT_MEMBER_COLOR)}
+                      onClick={() => {
+                        if (colorPickerUserId === user.id) {
+                          handleCancelColorPicker();
+                          return;
+                        }
+                        openColorPicker(user.id, user.memberColor || DEFAULT_MEMBER_COLOR);
+                      }}
                       title={t('users.clickToChangeColor')}
                       aria-label={t('users.clickToChangeColor')}
+                      aria-expanded={colorPickerUserId === user.id}
+                      aria-haspopup="dialog"
                     />
+                  </td>
+                  <td className={`${tdNowrap} text-xs tabular-nums text-slate-600 dark:text-slate-300`}>
+                    {user.lastLoginAt
+                      ? formatToYYYYMMDDHHmmss(user.lastLoginAt)
+                      : '—'}
                   </td>
                   <td className={`${tdNowrap} text-xs tabular-nums text-slate-600 dark:text-slate-300`}>
                     {formatToYYYYMMDDHHmmss(user.joined || user.createdAt)}
@@ -1731,7 +1823,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   })
                 ) : (
                 <tr>
-                  <td colSpan={7} className={`${tdClass} py-8 text-center text-sm text-slate-500 dark:text-slate-400`}>
+                  <td colSpan={8} className={`${tdClass} py-8 text-center text-sm text-slate-500 dark:text-slate-400`}>
                     {loading
                       ? t('users.loadingUsers')
                       : hasActiveFilters
@@ -2259,6 +2351,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
         initialColor={editingColor}
         userLabel={colorPickerUserLabel}
         isSaving={isSavingColor}
+        anchorEl={colorPickerUserId ? colorButtonRefs.current[colorPickerUserId] : null}
         onCancel={handleCancelColorPicker}
         onSave={handleSaveColor}
       />

@@ -276,7 +276,8 @@ export async function getAllUsersWithRolesAndMembers(db) {
       u.last_name, 
       u.is_active, 
       u.created_at, 
-      u.updated_at, 
+      u.updated_at,
+      u.last_login_at,
       u.avatar_path, 
       u.auth_provider, 
       u.google_avatar_url,
@@ -287,7 +288,7 @@ export async function getAllUsersWithRolesAndMembers(db) {
     LEFT JOIN user_roles ur ON u.id = ur.user_id
     LEFT JOIN roles r ON ur.role_id = r.id
     LEFT JOIN members m ON u.id = m.user_id
-    GROUP BY u.id, u.email, u.password_hash, u.first_name, u.last_name, u.is_active, u.created_at, u.updated_at, u.avatar_path, u.auth_provider, u.google_avatar_url
+    GROUP BY u.id, u.email, u.password_hash, u.first_name, u.last_name, u.is_active, u.created_at, u.updated_at, u.last_login_at, u.avatar_path, u.auth_provider, u.google_avatar_url
     ORDER BY u.created_at DESC
   `;
   

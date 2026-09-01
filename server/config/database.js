@@ -201,6 +201,7 @@ const CREATE_SCHEMA_SQL = `
       activated_at TIMESTAMPTZ NULL,
       deactivated_at TIMESTAMPTZ NULL,
       deactivated_by TEXT NULL,
+      last_login_at TIMESTAMPTZ NULL,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
@@ -823,6 +824,8 @@ const CREATE_SCHEMA_SQL = `
 // Create database tables (async for proxy support and PostgreSQL)
 const createTables = async (db) => {
   await dbExec(db, CREATE_SCHEMA_SQL);
+  // Existing DBs skip CREATE TABLE IF NOT EXISTS; keep additive user columns in sync.
+  await dbExec(db, 'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ NULL');
 };
 
 

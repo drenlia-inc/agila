@@ -591,6 +591,9 @@ async function initializeServices() {
     // Initialize WebSocket (now async due to Redis adapter setup)
     // CRITICAL: This must happen BEFORE server.listen() to ensure adapter is ready
     await websocketService.initialize(server);
+
+    const { startAdminPortalInspectNotify } = await import('./utils/adminPortalInspectNotify.js');
+    startAdminPortalInspectNotify();
     
     console.log('✅ Real-time services initialized');
     
