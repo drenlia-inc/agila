@@ -485,7 +485,9 @@ router.post('/migrate-storage', authenticateToken, requireRole(['admin']), async
       direction,
       {
         deleteSource,
-        destination: parsed.data.destination || undefined
+        destination: parsed.data.destination || undefined,
+        cutoverMode: parsed.data.cutoverMode || 'byo',
+        cutoverEligible: parsed.data.cutoverEligible
       }
     );
 
@@ -522,7 +524,13 @@ router.get('/migrate-storage/status', authenticateToken, requireRole(['admin']),
 router.post('/compare-storage', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    const { compareStorageObjects, getRequestStoragePaths } = await import('../services/storage/index.js');
+    const { compareStorageObjects, getRequestStoragePaths, loadStorageConfig } = await import('../services/storage/index.js');
+    const config = await loadStorageConfig(db);
+    if (config.managed) {
+      return res.status(400).json({
+        error: 'Disk ↔ S3 compare is not available while using managed platform storage'
+      });
+    }
     const result = await compareStorageObjects(db, getRequestStoragePaths(req));
     res.json(result);
   } catch (error) {

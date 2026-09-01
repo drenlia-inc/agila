@@ -7,6 +7,9 @@ const SKIP_KEYS = new Set([
   'GOOGLE_SSO_LAST_SUCCESS_AT',
   'GITHUB_SSO_LAST_SUCCESS_AT',
   'M365_SSO_LAST_SUCCESS_AT',
+  // Server-written migrate status — not a user draft (would stick "Unsaved" after S3 cutover).
+  'STORAGE_MIGRATION_STATUS',
+  'STORAGE_MIGRATION_DETAIL',
 ]);
 const SECRET_KEYS = new Set([
   'SMTP_PASSWORD',

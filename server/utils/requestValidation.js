@@ -560,7 +560,10 @@ export const migrateStorageBodySchema = z
     direction: z.enum(['disk-to-s3', 's3-to-disk', 's3-to-s3']),
     deleteSource: booleanish,
     /** Required for s3-to-s3: destination bucket (source = current live settings). */
-    destination: s3DestinationFieldsSchema.optional()
+    destination: s3DestinationFieldsSchema.optional(),
+    /** After s3-to-s3 copy: byo (leave platform) or managed (return to platform). */
+    cutoverMode: z.enum(['byo', 'managed']).optional(),
+    cutoverEligible: booleanish
   })
   .passthrough()
   .superRefine((val, ctx) => {

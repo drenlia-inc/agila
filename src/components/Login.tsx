@@ -281,6 +281,9 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
           key = 'login.accessDenied';
           break;
         case 'oauth_failed':
+        case 'oauth_token_failed':
+        case 'oauth_invalid_state':
+        case 'activation_failed':
           key = 'login.oauthFailed';
           break;
         case 'oauth_not_configured':

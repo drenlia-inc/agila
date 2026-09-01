@@ -2,7 +2,10 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 /** Compact amber hint for form footers next to Save / Cancel. */
-export const AdminUnsavedHint: React.FC<{ show: boolean }> = ({ show }) => {
+export const AdminUnsavedHint: React.FC<{ show: boolean; message?: string }> = ({
+  show,
+  message,
+}) => {
   const { t } = useTranslation('admin');
   if (!show) return null;
   return (
@@ -11,7 +14,7 @@ export const AdminUnsavedHint: React.FC<{ show: boolean }> = ({ show }) => {
         className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0"
         aria-hidden
       />
-      {t('unsavedChanges')}
+      {message || t('unsavedChanges')}
     </p>
   );
 };

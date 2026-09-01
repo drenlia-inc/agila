@@ -301,11 +301,19 @@ function sameS3Target(a, b) {
  * @param {*} db
  * @param {import('./storageConfig.js').StorageConfig} config
  */
-async function persistLiveS3Config(db, config) {
+async function persistLiveS3Config(db, config, options = {}) {
   const { upsertSecretSetting } = await import('../../utils/settingsSecrets.js');
+  const {
+    markStorageByoAfterCutover,
+    setStorageModeState,
+    writePlatformS3Shadow,
+    markStorageManagedEligible,
+  } = await import('../../utils/storageMode.js');
+  const cutoverMode = options.cutoverMode === 'managed' ? 'managed' : 'byo';
   await settingsQueries.upsertSetting(db, 'STORAGE_BACKEND', 's3');
-  const { markStorageByoAfterCutover } = await import('../../utils/storageMode.js');
-  await markStorageByoAfterCutover(db);
+  if (cutoverMode === 'byo') {
+    await markStorageByoAfterCutover(db);
+  }
   await settingsQueries.upsertSetting(db, 'S3_ENDPOINT', config.endpoint || '');
   await settingsQueries.upsertSetting(db, 'S3_REGION', config.region || '');
   await settingsQueries.upsertSetting(db, 'S3_BUCKET', config.bucket || '');
@@ -318,6 +326,21 @@ async function persistLiveS3Config(db, config) {
   );
   await settingsQueries.upsertSetting(db, 'S3_KEY_PREFIX', config.keyPrefix || '');
   await settingsQueries.upsertSetting(db, 'STORAGE_TEST_OK', 'true');
+  if (cutoverMode === 'managed') {
+    await writePlatformS3Shadow(db, {
+      endpoint: config.endpoint || '',
+      region: config.region || '',
+      bucket: config.bucket || '',
+      accessKeyId: config.accessKeyId || '',
+      secretAccessKey: config.secretAccessKey || '',
+      forcePathStyle: config.forcePathStyle ? 'true' : 'false',
+      keyPrefix: config.keyPrefix || '',
+    });
+    await setStorageModeState(db, 'managed');
+    if (String(options.cutoverEligible || '').toLowerCase() === 'true') {
+      await markStorageManagedEligible(db);
+    }
+  }
 }
 
 /**
@@ -522,6 +545,20 @@ async function acquireMigrationLock(db, direction, options = {}) {
 
   const config = await loadStorageConfig(db);
   let destConfig = null;
+
+  if (config.managed && (direction === 'disk-to-s3' || direction === 's3-to-disk')) {
+    const err = new Error(
+      'Disk ↔ S3 migration is not available while using managed platform storage'
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (direction === 's3-to-disk' && config.backend !== 's3') {
+    const err = new Error('Current storage backend is already disk');
+    err.statusCode = 400;
+    throw err;
+  }
 
   if (direction === 's3-to-s3') {
     if (config.backend !== 's3') {
@@ -785,8 +822,12 @@ async function executeMigrationWork(db, storagePaths, direction, options, config
 
     if (!hardFail) {
       if (direction === 's3-to-s3') {
-        await persistLiveS3Config(db, destConfig);
+        await persistLiveS3Config(db, destConfig, {
+          cutoverMode: options.cutoverMode === 'managed' ? 'managed' : 'byo',
+          cutoverEligible: options.cutoverEligible,
+        });
         detail.cutoverApplied = true;
+        detail.cutoverMode = options.cutoverMode === 'managed' ? 'managed' : 'byo';
         detail.cutoverBucket = destConfig.bucket;
         detail.cutoverPrefix = destConfig.keyPrefix || '';
       } else {
@@ -1081,6 +1122,110 @@ export async function compareStorageObjects(db, storagePaths) {
     },
     bucket: config.bucket,
     prefix: config.keyPrefix || ''
+  };
+}
+
+function emptyS3CompareBucket() {
+  return {
+    both: 0,
+    sourceOnly: 0,
+    destOnly: 0,
+    missing: 0,
+    items: { sourceOnly: [], destOnly: [], missing: [] }
+  };
+}
+
+/**
+ * Compare DB-referenced attachments/avatars between live S3 and a destination bucket.
+ * @param {*} db
+ * @param {{ attachments?: string, avatars?: string }} storagePaths
+ * @param {Record<string, string | boolean | undefined>} destination
+ */
+export async function compareS3ToS3(db, storagePaths, destination) {
+  const source = await loadStorageConfig(db);
+  if (source.backend !== 's3') {
+    throw new Error('Current storage backend must be S3 before comparing two buckets');
+  }
+  const sourceValidation = validateS3Config(source);
+  if (!sourceValidation.ok) {
+    throw new Error(sourceValidation.error || 'Source S3 is not configured');
+  }
+  const destConfig = storageConfigFromOverrides(destination || {}, { ...EMPTY_S3_BASE });
+  const destValidation = validateS3Config(destConfig);
+  if (!destValidation.ok) {
+    throw new Error(destValidation.error || 'Destination S3 is not configured');
+  }
+
+  const { createS3Client, s3Exists } = await s3();
+  const sourceClient = await createS3Client(source);
+  const destClient = await createS3Client(destConfig);
+  const { attNames, avatarNames } = await collectMigrationFilenames(db, storagePaths);
+  const avatarUsers = await loadAvatarUserIndex(db);
+  const attachmentTasks = await loadAttachmentTaskIndex(db);
+
+  async function compareCategory(category, names) {
+    const bucket = emptyS3CompareBucket();
+    for (const filename of names) {
+      const srcKey = buildObjectKey(source, category, filename);
+      const dstKey = buildObjectKey(destConfig, category, filename);
+      let onSrc = false;
+      let onDst = false;
+      try {
+        onSrc = await s3Exists(sourceClient, source, srcKey);
+        onDst = await s3Exists(destClient, destConfig, dstKey);
+      } catch (err) {
+        throw new Error(`S3 check failed for ${category}/${filename}: ${err.message}`);
+      }
+      let kind;
+      if (onSrc && onDst) kind = 'both';
+      else if (onSrc) kind = 'sourceOnly';
+      else if (onDst) kind = 'destOnly';
+      else kind = 'missing';
+      bucket[kind] += 1;
+      if (kind !== 'both') {
+        const item = { path: `${category}/${filename}`, filename };
+        if (category === 'avatars') {
+          const users = avatarUsers.get(filename);
+          if (users?.length) item.users = users;
+        }
+        if (category === 'attachments') {
+          const tasks = attachmentTasks.get(filename);
+          if (tasks?.length) item.tasks = tasks;
+        }
+        bucket.items[kind].push(item);
+      }
+    }
+    return bucket;
+  }
+
+  const attachments = await compareCategory('attachments', attNames);
+  const avatars = await compareCategory('avatars', avatarNames);
+  const sum = (key) => attachments[key] + avatars[key];
+
+  return {
+    ok: true,
+    sameTarget: sameS3Target(source, destConfig),
+    attachments,
+    avatars,
+    totals: {
+      scanned: attNames.size + avatarNames.size,
+      both: sum('both'),
+      sourceOnly: sum('sourceOnly'),
+      destOnly: sum('destOnly'),
+      missing: sum('missing')
+    },
+    source: {
+      bucket: source.bucket,
+      prefix: source.keyPrefix || '',
+      region: source.region || '',
+      endpoint: source.endpoint || ''
+    },
+    destination: {
+      bucket: destConfig.bucket,
+      prefix: destConfig.keyPrefix || '',
+      region: destConfig.region || '',
+      endpoint: destConfig.endpoint || ''
+    }
   };
 }
 

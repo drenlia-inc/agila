@@ -132,6 +132,78 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
+/** Shared palette — matches agila-web/admin transactional mail. */
+const EMAIL_BRAND = {
+  primary: '#0d9488',
+  ink: '#383E4A',
+  muted: '#64748b',
+  border: '#e2e8f0',
+  canvas: '#f8fafc',
+  canvasTop: '#ecfdf8',
+  white: '#ffffff',
+};
+
+/** Discourage Gmail/iOS dark-mode inversion so the logo/header stay on a light canvas. */
+function emailDarkModeGuardHead() {
+  return `
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light" />
+  <style type="text/css">
+    :root { color-scheme: light only; supported-color-schemes: light; }
+    body, .email-canvas, .email-card, .email-header, .email-body, .email-footer {
+      color-scheme: light only;
+    }
+    @media (prefers-color-scheme: dark) {
+      body, .email-canvas {
+        background-color: ${EMAIL_BRAND.canvas} !important;
+        background-image: linear-gradient(180deg, ${EMAIL_BRAND.canvasTop} 0%, ${EMAIL_BRAND.canvas} 28%, ${EMAIL_BRAND.canvas} 100%) !important;
+      }
+      .email-card {
+        background-color: ${EMAIL_BRAND.white} !important;
+        border-color: ${EMAIL_BRAND.border} !important;
+      }
+      .email-header {
+        background-color: ${EMAIL_BRAND.canvasTop} !important;
+        background-image: linear-gradient(180deg, ${EMAIL_BRAND.canvasTop} 0%, ${EMAIL_BRAND.white} 100%) !important;
+        border-color: ${EMAIL_BRAND.primary} !important;
+      }
+      .email-body, .email-footer {
+        background-color: ${EMAIL_BRAND.white} !important;
+        color: ${EMAIL_BRAND.ink} !important;
+      }
+      .email-body p, .email-body h1, .email-body h2, .email-body h3, .email-body td, .email-body li, .email-body div {
+        color: inherit;
+      }
+      .email-header img { opacity: 1 !important; filter: none !important; }
+    }
+  </style>`;
+}
+
+function emailBaseUrlFromData(data) {
+  if (data?.baseUrl) return String(data.baseUrl).replace(/\/$/, '');
+  if (data?.taskUrl) {
+    try {
+      return new URL(data.taskUrl).origin;
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+function buildBrandedEmailLogo(data, brand) {
+  const baseUrl = emailBaseUrlFromData(data);
+  const hideSiteLogo = Boolean(data?.hideSiteLogo);
+  const logoPath = hideSiteLogo ? '' : (data?.siteLogo || data?.siteLogoDark || '');
+  return buildEmailSiteLogo({
+    baseUrl: baseUrl || data?.baseUrl,
+    logoPath,
+    hideSiteLogo,
+    alt: brand,
+    embedDefaultBrandLogo: true,
+  });
+}
+
 function emailPriorityChip(name, hex) {
   const style = priorityBadgeStyle(hex);
   return `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background-color:${escapeHtml(style.backgroundColor)};color:${escapeHtml(style.color)};">${escapeHtml(name || '')}</span>`;
@@ -150,43 +222,54 @@ function emailTagChip(name, hex) {
  */
 function wrapTransactionalEmail({ siteName, headline, bodyHtml, footerNote, logoHtml }) {
   const brand = escapeHtml(siteName || 'Agila');
-  const headlineSafe = escapeHtml(headline);
+  const headlineSafe = headline ? escapeHtml(headline) : '';
+  const headlineRow = headlineSafe
+    ? `<h1 style="margin:0 0 20px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:1.3;font-weight:650;color:${EMAIL_BRAND.ink};">${headlineSafe}</h1>`
+    : '';
   const headerRow = logoHtml
     ? `<tr>
-            <td style="padding:28px 32px 20px;text-align:center;border-bottom:3px solid #0d9488;background:linear-gradient(180deg,#ecfdf8 0%,#ffffff 100%);">
+            <td class="email-header" bgcolor="${EMAIL_BRAND.canvasTop}" style="padding:28px 32px 20px;text-align:center;border-bottom:3px solid ${EMAIL_BRAND.primary};background-color:${EMAIL_BRAND.canvasTop};background-image:linear-gradient(180deg,${EMAIL_BRAND.canvasTop} 0%,${EMAIL_BRAND.white} 100%);">
               ${logoHtml}
             </td>
           </tr>`
     : `<tr>
-            <td style="background-color:#111827;padding:20px 28px;">
-              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#93c5fd;">${brand}</p>
+            <td class="email-header" bgcolor="${EMAIL_BRAND.canvasTop}" style="padding:28px 32px 20px;text-align:center;border-bottom:3px solid ${EMAIL_BRAND.primary};background-color:${EMAIL_BRAND.canvasTop};background-image:linear-gradient(180deg,${EMAIL_BRAND.canvasTop} 0%,${EMAIL_BRAND.white} 100%);">
+              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_BRAND.primary};">${brand}</p>
             </td>
           </tr>`;
   return `
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="margin:0;padding:0;background-color:#f3f4f6;">
-  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#f3f4f6;">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  ${emailDarkModeGuardHead()}
+</head>
+<body class="email-canvas" bgcolor="${EMAIL_BRAND.canvas}" style="margin:0;padding:0;background-color:${EMAIL_BRAND.canvas};background-image:linear-gradient(180deg,${EMAIL_BRAND.canvasTop} 0%,${EMAIL_BRAND.canvas} 28%,${EMAIL_BRAND.canvas} 100%);">
+  <table role="presentation" class="email-canvas" cellspacing="0" cellpadding="0" border="0" width="100%" bgcolor="${EMAIL_BRAND.canvas}" style="background-color:${EMAIL_BRAND.canvas};background-image:linear-gradient(180deg,${EMAIL_BRAND.canvasTop} 0%,${EMAIL_BRAND.canvas} 28%,${EMAIL_BRAND.canvas} 100%);">
     <tr>
       <td align="center" style="padding:32px 16px;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;background-color:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
+        <table role="presentation" class="email-card" cellspacing="0" cellpadding="0" border="0" width="100%" bgcolor="${EMAIL_BRAND.white}" style="max-width:560px;background-color:${EMAIL_BRAND.white};border-radius:16px;overflow:hidden;border:1px solid ${EMAIL_BRAND.border};">
           ${headerRow}
           <tr>
-            <td style="padding:32px 28px 8px 28px;">
-              <h1 style="margin:0 0 20px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:1.3;font-weight:650;color:#111827;">${headlineSafe}</h1>
+            <td class="email-body" bgcolor="${EMAIL_BRAND.white}" style="padding:32px 28px 8px 28px;background-color:${EMAIL_BRAND.white};color:${EMAIL_BRAND.ink};">
+              ${headlineRow}
               ${bodyHtml}
             </td>
           </tr>
-          <tr>
-            <td style="padding:8px 28px 28px 28px;">
-              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#9ca3af;">
-                ${footerNote || ''}
+          ${
+            footerNote
+              ? `<tr>
+            <td class="email-footer" bgcolor="${EMAIL_BRAND.white}" style="padding:8px 28px 28px 28px;background-color:${EMAIL_BRAND.white};">
+              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:${EMAIL_BRAND.muted};">
+                ${footerNote}
               </p>
             </td>
-          </tr>
+          </tr>`
+              : ''
+          }
         </table>
-        <p style="margin:16px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11px;color:#9ca3af;">
+        <p style="margin:16px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11px;color:${EMAIL_BRAND.muted};">
           ${brand}
         </p>
       </td>
@@ -602,25 +685,12 @@ ${t('emails.userInvite.body6', { siteName: brand })}`,
       }
     }
 
-    return {
-      subject: emailSubject,
-      text: `${t('emails.taskNotification.common.hi', { firstName })}
-
-${t('emails.taskNotification.common.actionInBoard', { actionMessage, boardName })}
-
-${taskHeading}
-${t('emails.taskNotification.common.project')} ${boardName}
-${t('emails.taskNotification.common.timestamp')} ${formattedTimestamp}
-${detailsTextPlain ? `${t('emails.taskNotification.common.details')}\n${detailsTextPlain}` : ''}
-${textChangeBlock}
-${t('emails.taskNotification.common.viewTask')}: ${taskUrl}
-
-${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agila' })}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <p style="color: #374151; margin: 0 0 8px 0; font-size: 16px;">${t('emails.taskNotification.common.hi', { firstName })}</p>
-            <p style="color: #6b7280; line-height: 1.6; font-size: 16px; margin: 0;">
+    const brand = siteName || 'Agila';
+    const siteLogoEmbed = buildBrandedEmailLogo(data, brand);
+    const notificationBodyHtml = `
+          <div style="background-color: ${EMAIL_BRAND.canvas}; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="color: ${EMAIL_BRAND.ink}; margin: 0 0 8px 0; font-size: 16px;">${t('emails.taskNotification.common.hi', { firstName })}</p>
+            <p style="color: ${EMAIL_BRAND.muted}; line-height: 1.6; font-size: 16px; margin: 0;">
               ${t('emails.taskNotification.common.actionInBoard', {
                 actionMessage: escapeHtml(actionMessage),
                 boardName: `<strong>${escapeHtml(boardName)}</strong>`,
@@ -628,11 +698,11 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
             </p>
           </div>
 
-          <div style="background-color: #fff; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h3 style="color: #1f2937; margin-top: 0; font-size: 18px;">${escapeHtml(taskHeading)}</h3>
-            <p style="color: #6b7280; margin: 5px 0;"><strong>${t('emails.taskNotification.common.project')}</strong> ${escapeHtml(boardName)}</p>
-            <p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>${t('emails.taskNotification.common.timestamp')}</strong> ${escapeHtml(formattedTimestamp)}</p>
-            ${detailsHtml ? `<div style="color: #374151; margin: 12px 0 0 0; line-height: 1.55;"><strong>${t('emails.taskNotification.common.details')}</strong><div style="margin-top:6px;">${detailsHtml}</div></div>` : ''}
+          <div style="background-color: ${EMAIL_BRAND.white}; border: 1px solid ${EMAIL_BRAND.border}; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: ${EMAIL_BRAND.ink}; margin-top: 0; font-size: 18px;">${escapeHtml(taskHeading)}</h3>
+            <p style="color: ${EMAIL_BRAND.muted}; margin: 5px 0;"><strong>${t('emails.taskNotification.common.project')}</strong> ${escapeHtml(boardName)}</p>
+            <p style="color: ${EMAIL_BRAND.muted}; margin: 5px 0; font-size: 14px;"><strong>${t('emails.taskNotification.common.timestamp')}</strong> ${escapeHtml(formattedTimestamp)}</p>
+            ${detailsHtml ? `<div style="color: ${EMAIL_BRAND.ink}; margin: 12px 0 0 0; line-height: 1.55;"><strong>${t('emails.taskNotification.common.details')}</strong><div style="margin-top:6px;">${detailsHtml}</div></div>` : ''}
             ${changeHtml}
           </div>
           
@@ -648,14 +718,35 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
             </table>
           </div>
           
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+          <hr style="border: none; border-top: 1px solid ${EMAIL_BRAND.border}; margin: 30px 0;">
           
-          <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+          <p style="color: ${EMAIL_BRAND.muted}; font-size: 12px; text-align: center;">
             ${receivingReason}<br>
-            <strong>${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agila' })}</strong>
-          </p>
-        </div>
-      `
+            <strong>${t('emails.taskNotification.common.teamSignature', { siteName: brand })}</strong>
+          </p>`;
+
+    return {
+      subject: emailSubject,
+      text: `${t('emails.taskNotification.common.hi', { firstName })}
+
+${t('emails.taskNotification.common.actionInBoard', { actionMessage, boardName })}
+
+${taskHeading}
+${t('emails.taskNotification.common.project')} ${boardName}
+${t('emails.taskNotification.common.timestamp')} ${formattedTimestamp}
+${detailsTextPlain ? `${t('emails.taskNotification.common.details')}\n${detailsTextPlain}` : ''}
+${textChangeBlock}
+${t('emails.taskNotification.common.viewTask')}: ${taskUrl}
+
+${t('emails.taskNotification.common.teamSignature', { siteName: brand })}`,
+      html: wrapTransactionalEmail({
+        siteName: brand,
+        headline: '',
+        bodyHtml: notificationBodyHtml,
+        footerNote: '',
+        logoHtml: siteLogoEmbed.html,
+      }),
+      attachments: siteLogoEmbed.attachments,
     };
   },
 
@@ -709,37 +800,21 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
     const ticketPrefix = taskTicket ? `[ ${taskTicket} ] ` : '';
     const commentText = (comment?.text || '').replace(/<[^>]*>/g, '');
 
-    return {
-      subject: `${ticketPrefix}${t('emails.commentNotification.subject', { taskTitle })}`,
-      text: `${t('emails.taskNotification.common.hi', { firstName })}
-
-${authorFirst} ${authorLast} ${t('emails.commentNotification.addedCommentToTask')}
-
-Task: ${taskHeading}
-${project ? `${t('emails.taskNotification.common.project')} ${project}` : ''}
-${t('emails.taskNotification.common.board')} ${boardName}
-
-Comment: ${commentText}
-
-${t('emails.taskNotification.common.viewTask')}: ${taskUrl}
-
-Best regards,
-${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agila' })}`,
-      attachments: emailAttachments,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h2 style="color: #374151; margin-top: 0;">${t('emails.taskNotification.common.hi', { firstName })}</h2>
-            <p style="color: #6b7280; line-height: 1.6;">
+    const brand = siteName || 'Agila';
+    const siteLogoEmbed = buildBrandedEmailLogo(data, brand);
+    const notificationBodyHtml = `
+          <div style="background-color: ${EMAIL_BRAND.canvas}; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h2 style="color: ${EMAIL_BRAND.ink}; margin-top: 0;">${t('emails.taskNotification.common.hi', { firstName })}</h2>
+            <p style="color: ${EMAIL_BRAND.muted}; line-height: 1.6;">
               <strong>${escapeHtml(authorFirst)} ${escapeHtml(authorLast)}</strong> ${t('emails.commentNotification.addedCommentToTask')}
             </p>
           </div>
 
-          <div style="background-color: #fff; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h3 style="color: #1f2937; margin-top: 0;">📝 ${escapeHtml(taskHeading)}</h3>
-            ${project ? `<p style="color: #6b7280; margin: 5px 0;"><strong>${t('emails.taskNotification.common.project')}</strong> ${escapeHtml(boardName)}</p>` : ''}
-            <p style="color: #6b7280; margin: 5px 0;"><strong>${t('emails.taskNotification.common.board')}</strong> ${escapeHtml(boardName)}</p>
-            <p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>${t('emails.taskNotification.common.timestamp')}</strong> ${escapeHtml(formattedTimestamp)}</p>
+          <div style="background-color: ${EMAIL_BRAND.white}; border: 1px solid ${EMAIL_BRAND.border}; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: ${EMAIL_BRAND.ink}; margin-top: 0;">${escapeHtml(taskHeading)}</h3>
+            ${project ? `<p style="color: ${EMAIL_BRAND.muted}; margin: 5px 0;"><strong>${t('emails.taskNotification.common.project')}</strong> ${escapeHtml(boardName)}</p>` : ''}
+            <p style="color: ${EMAIL_BRAND.muted}; margin: 5px 0;"><strong>${t('emails.taskNotification.common.board')}</strong> ${escapeHtml(boardName)}</p>
+            <p style="color: ${EMAIL_BRAND.muted}; margin: 5px 0; font-size: 14px;"><strong>${t('emails.taskNotification.common.timestamp')}</strong> ${escapeHtml(formattedTimestamp)}</p>
           </div>
 
           <div style="background-color: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 16px; margin-bottom: 20px;">
@@ -747,7 +822,7 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
               ${avatarHtml}
               <strong style="color: #0c4a6e; vertical-align: middle;">${escapeHtml(authorFirst)} ${escapeHtml(authorLast)}</strong>
             </div>
-            <div style="color: #374151; line-height: 1.6;">
+            <div style="color: ${EMAIL_BRAND.ink}; line-height: 1.6;">
               ${comment?.text || ''}
             </div>
           </div>
@@ -764,14 +839,37 @@ ${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agi
             </table>
           </div>
           
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+          <hr style="border: none; border-top: 1px solid ${EMAIL_BRAND.border}; margin: 30px 0;">
           
-          <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+          <p style="color: ${EMAIL_BRAND.muted}; font-size: 12px; text-align: center;">
             ${t('emails.taskNotification.common.receivingReason')}<br>
-            <strong>${t('emails.taskNotification.common.teamSignature', { siteName: siteName || 'Agila' })}</strong>
-          </p>
-        </div>
-      `
+            <strong>${t('emails.taskNotification.common.teamSignature', { siteName: brand })}</strong>
+          </p>`;
+
+    return {
+      subject: `${ticketPrefix}${t('emails.commentNotification.subject', { taskTitle })}`,
+      text: `${t('emails.taskNotification.common.hi', { firstName })}
+
+${authorFirst} ${authorLast} ${t('emails.commentNotification.addedCommentToTask')}
+
+Task: ${taskHeading}
+${project ? `${t('emails.taskNotification.common.project')} ${project}` : ''}
+${t('emails.taskNotification.common.board')} ${boardName}
+
+Comment: ${commentText}
+
+${t('emails.taskNotification.common.viewTask')}: ${taskUrl}
+
+Best regards,
+${t('emails.taskNotification.common.teamSignature', { siteName: brand })}`,
+      attachments: [...(emailAttachments || []), ...siteLogoEmbed.attachments],
+      html: wrapTransactionalEmail({
+        siteName: brand,
+        headline: '',
+        bodyHtml: notificationBodyHtml,
+        footerNote: '',
+        logoHtml: siteLogoEmbed.html,
+      }),
     };
   },
 
@@ -1092,6 +1190,36 @@ ${t('emails.testEmail.body4', { siteName: brand })}`,
       boardTitle: board,
     });
 
+    const brand = siteName || 'Agila';
+    const siteLogoEmbed = buildBrandedEmailLogo(data, brand);
+    const notificationBodyHtml = `
+          <h2 style="color: ${EMAIL_BRAND.ink}; margin-top: 0;">${t('emails.bulkTaskNotification.hi', { firstName })}</h2>
+          <p style="color: ${EMAIL_BRAND.ink}; line-height: 1.5;">
+            ${escapeHtml(
+              t('emails.bulkTaskNotification.intro', {
+                actorName: actorName || 'Someone',
+                count,
+                boardTitle: board,
+              })
+            )}
+          </p>
+          ${summaryDetails ? `<p style="color: ${EMAIL_BRAND.muted}; font-size: 14px;"><strong>${t('emails.taskNotification.common.details')}</strong> ${escapeHtml(summaryDetails)}</p>` : ''}
+          ${changeHtml}
+          <div style="margin: 20px 0;">
+            <div style="font-size: 11px; font-weight: 700; color: ${EMAIL_BRAND.muted}; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 8px;">
+              ${t('emails.bulkTaskNotification.tasksAffected')} (${count})
+            </div>
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width:100%; border: 1px solid ${EMAIL_BRAND.border}; border-radius: 6px; overflow: hidden;">
+              ${taskRowsHtml}
+            </table>
+          </div>
+          <p style="color: ${EMAIL_BRAND.muted}; font-size: 13px;"><strong>${t('emails.taskNotification.common.timestamp')}</strong> ${escapeHtml(formattedTimestamp)}</p>
+          <hr style="border: none; border-top: 1px solid ${EMAIL_BRAND.border}; margin: 24px 0;">
+          <p style="color: ${EMAIL_BRAND.muted}; font-size: 12px; text-align: center;">
+            ${t('emails.bulkTaskNotification.receivingReason')}<br>
+            <strong>${t('emails.bulkTaskNotification.teamSignature', { siteName: brand })}</strong>
+          </p>`;
+
     return {
       subject,
       text: `${t('emails.bulkTaskNotification.hi', { firstName })}
@@ -1108,40 +1236,15 @@ ${taskLinesText}
 ${formattedTimestamp}
 
 ${t('emails.bulkTaskNotification.receivingReason')}
-${t('emails.bulkTaskNotification.teamSignature', { siteName: siteName || 'Agila' })}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 24px;">
-            <h1 style="color: #2563eb; margin: 0;">📋 ${t('emails.bulkTaskNotification.title')}</h1>
-          </div>
-          <h2 style="color: #374151; margin-top: 0;">${t('emails.bulkTaskNotification.hi', { firstName })}</h2>
-          <p style="color: #374151; line-height: 1.5;">
-            ${escapeHtml(
-              t('emails.bulkTaskNotification.intro', {
-                actorName: actorName || 'Someone',
-                count,
-                boardTitle: board,
-              })
-            )}
-          </p>
-          ${summaryDetails ? `<p style="color: #4b5563; font-size: 14px;"><strong>${t('emails.taskNotification.common.details')}</strong> ${escapeHtml(summaryDetails)}</p>` : ''}
-          ${changeHtml}
-          <div style="margin: 20px 0;">
-            <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 8px;">
-              ${t('emails.bulkTaskNotification.tasksAffected')} (${count})
-            </div>
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width:100%; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden;">
-              ${taskRowsHtml}
-            </table>
-          </div>
-          <p style="color: #6b7280; font-size: 13px;"><strong>${t('emails.taskNotification.common.timestamp')}</strong> ${escapeHtml(formattedTimestamp)}</p>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-          <p style="color: #9ca3af; font-size: 12px; text-align: center;">
-            ${t('emails.bulkTaskNotification.receivingReason')}<br>
-            <strong>${t('emails.bulkTaskNotification.teamSignature', { siteName: siteName || 'Agila' })}</strong>
-          </p>
-        </div>
-      `,
+${t('emails.bulkTaskNotification.teamSignature', { siteName: brand })}`,
+      html: wrapTransactionalEmail({
+        siteName: brand,
+        headline: t('emails.bulkTaskNotification.title'),
+        bodyHtml: notificationBodyHtml,
+        footerNote: '',
+        logoHtml: siteLogoEmbed.html,
+      }),
+      attachments: siteLogoEmbed.attachments,
     };
   },
 };

@@ -27,7 +27,9 @@ data:
   # CORS / Socket.IO extras — tenants are {id}.agila.dev (example uses generic app)
   ALLOWED_ORIGINS: "localhost,127.0.0.1,app.agila.dev,kanban.agila.dev,admin.agila.dev,agila.dev,auth.agila.dev"
   AUTH_HUB_PUBLIC_URL: "https://auth.agila.dev"
-  # Only for single-tenant / docker testing. Leave empty on K8s (return host is {tenant}.agila.dev).
+  # Optional extra hub URLs (comma-separated) if ingress uses more than one auth hostname.
+  AUTH_HUB_PUBLIC_URLS: ""
+  # Only for single-tenant / docker testing. Leave empty on K8s (return host is {tenant}.{TENANT_DOMAIN}).
   AUTH_HUB_RETURN_ORIGIN: ""
   
   # License settings

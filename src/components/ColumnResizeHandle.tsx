@@ -12,7 +12,7 @@ interface ColumnResizeHandleProps {
 }
 
 type LineGeometry = {
-  left: number;
+  /** Column-local Y (not viewport) so horizontal scroll is CSS, not JS. */
   top: number;
   height: number;
   visible: boolean;
@@ -68,13 +68,12 @@ function emptyColumnBounds(columnWrap: HTMLElement): CardStackBounds {
 
 function measureLineGeometry(
   columnWrap: HTMLElement,
-  gapCenterX: number,
   stickyTopPx: number
 ): LineGeometry {
   const columnRect = columnWrap.getBoundingClientRect();
 
   if (columnRect.right < 0 || columnRect.left > window.innerWidth) {
-    return { left: gapCenterX, top: 0, height: 0, visible: false };
+    return { top: 0, height: 0, visible: false };
   }
 
   const columnId = columnWrap.getAttribute('data-kanban-column-id');
@@ -98,21 +97,21 @@ function measureLineGeometry(
     stackBottom = Math.min(stackBottom, bounds.bottom);
   }
 
-  const top = Math.max(anchorTop, pinBelowHeader);
-  const height = Math.max(MIN_LINE_HEIGHT_PX, stackBottom - top);
+  const topVp = Math.max(anchorTop, pinBelowHeader);
+  const height = Math.max(MIN_LINE_HEIGHT_PX, stackBottom - topVp);
 
   return {
-    left: gapCenterX,
-    top,
+    top: topVp - columnRect.top,
     height,
-    visible: height > 0 && stackBottom > top,
+    visible: height > 0 && stackBottom > topVp,
   };
 }
 
 /**
  * Resize handle between Kanban columns — spans the shared card stack on both sides
- * of the gap (stops at the shorter column's last card), sticky while scrolling,
- * blue on hover / drag.
+ * of the gap (stops at the shorter column's last card). Anchored in the column
+ * (`absolute`) so horizontal board scroll stays in sync; Y is measured below the
+ * sticky header. Hidden while a task/column is dragged so it cannot steal DnD.
  */
 const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
   onResize,
@@ -126,7 +125,6 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
   const [line, setLine] = useState<LineGeometry>({
-    left: 0,
     top: 0,
     height: 0,
     visible: false,
@@ -138,8 +136,7 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
     const marker = columnWrapRef.current;
     const columnWrap = marker?.parentElement;
     if (!marker || !columnWrap) return;
-    const gapCenterX = marker.getBoundingClientRect().left;
-    setLine(measureLineGeometry(columnWrap, gapCenterX, stickyTopPx));
+    setLine(measureLineGeometry(columnWrap, stickyTopPx));
   }, [stickyTopPx]);
 
   useLayoutEffect(() => {
@@ -242,11 +239,11 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
       {showLine && (
         <div
           ref={hitRef}
-          className={`fixed z-30 ${
+          className={`absolute z-30 ${
             resizeDisabled ? 'cursor-not-allowed opacity-30' : 'cursor-col-resize'
           }`}
           style={{
-            left: line.left,
+            right: '-12px',
             top: line.top,
             height: line.height,
             width: HIT_WIDTH_PX,
