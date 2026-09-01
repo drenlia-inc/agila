@@ -155,61 +155,65 @@ export default defineConfig({
     hmr: false, // Disable Hot Module Reload to prevent Socket.IO connection loops
     ws: false, // Disable WebSocket completely
     allowedHosts: (() => {
-      // Extract hostnames from ALLOWED_ORIGINS (which may contain full URLs)
-      const defaultHosts = ['localhost', '127.0.0.1', 'auth.agila.dev'];
-      if (process.env.ALLOWED_ORIGINS) {
-        const hosts = new Set(defaultHosts);
-        process.env.ALLOWED_ORIGINS.split(',').forEach(origin => {
-          // Remove protocol (http:// or https://) and port if present
-          const hostname = origin.trim()
-            .replace(/^https?:\/\//, '') // Remove protocol
-            .replace(/:\d+$/, '') // Remove port
-            .split('/')[0]; // Take only the hostname part
-          if (hostname && hostname !== 'true' && hostname !== 'false') {
-            hosts.add(hostname);
-          }
-        });
-        return Array.from(hosts);
+      // Leading "." = that host + all subdomains (Vite). Covers kanban / auth / auth-<slot>
+      // on TENANT_DOMAIN without listing each environment hostname.
+      const tenantDomain = String(process.env.TENANT_DOMAIN || 'agila.dev').trim().replace(/^\.+/, '');
+      const hosts = new Set(['localhost', '127.0.0.1', `.${tenantDomain}`]);
+      const addHost = (raw: string) => {
+        const hostname = raw.trim()
+          .replace(/^https?:\/\//, '')
+          .replace(/:\d+$/, '')
+          .split('/')[0];
+        if (hostname && hostname !== 'true' && hostname !== 'false') {
+          hosts.add(hostname);
+        }
+      };
+      for (const origin of String(process.env.ALLOWED_ORIGINS || '').split(',')) {
+        if (origin.trim()) addHost(origin);
       }
-      return defaultHosts;
+      addHost(process.env.AUTH_HUB_PUBLIC_URL || '');
+      for (const extra of String(process.env.AUTH_HUB_PUBLIC_URLS || '').split(',')) {
+        if (extra.trim()) addHost(extra);
+      }
+      return Array.from(hosts);
     })(),
     // CORS headers removed - let Express handle all CORS
     proxy: {
       '/api': {
-        target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
-        changeOrigin: true,
-        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
+        target: 'http://localhost:3222',
+        changeOrigin: false,
+        configure: withForwardedHostProxyConfigure,
       },
       '/health': {
-        target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
-        changeOrigin: true,
-        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
+        target: 'http://localhost:3222',
+        changeOrigin: false,
+        configure: withForwardedHostProxyConfigure,
       },
       '/attachments': {
-        target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
-        changeOrigin: true,
-        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
+        target: 'http://localhost:3222',
+        changeOrigin: false,
+        configure: withForwardedHostProxyConfigure,
       },
       '/avatars': {
-        target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
-        changeOrigin: true,
-        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
+        target: 'http://localhost:3222',
+        changeOrigin: false,
+        configure: withForwardedHostProxyConfigure,
       },
       '/api/files/attachments': {
-        target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
-        changeOrigin: true,
-        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
+        target: 'http://localhost:3222',
+        changeOrigin: false,
+        configure: withForwardedHostProxyConfigure,
       },
       '/api/files/avatars': {
-        target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
-        changeOrigin: true,
-        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
+        target: 'http://localhost:3222',
+        changeOrigin: false,
+        configure: withForwardedHostProxyConfigure,
       },
       '/socket.io': {
-        target: process.env.DOCKER_ENV === 'true' ? 'http://localhost:3222' : 'http://localhost:3222',
-        changeOrigin: true,
-        ws: true, // Enable WebSocket proxying
-        configure: (proxy, options) => resilientProxyConfigure(proxy, options),
+        target: 'http://localhost:3222',
+        changeOrigin: false,
+        ws: true,
+        configure: withForwardedHostProxyConfigure,
       },
     },
   },

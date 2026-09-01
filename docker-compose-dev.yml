@@ -45,7 +45,8 @@ services:
       # Example: If TENANT_DOMAIN=agila.dev, then customer1.agila.dev -> tenant ID: customer1
       - TENANT_DOMAIN=agila.dev
       - AUTH_HUB_PUBLIC_URL=${AUTH_HUB_PUBLIC_URL:-https://auth.agila.dev}
-      # After Google hits the hub host, send the browser back to this origin (same app as kanban).
+      - AUTH_HUB_PUBLIC_URLS=${AUTH_HUB_PUBLIC_URLS:-}
+      # Fallback if the OAuth state has no returnOrigin (signed in from this compose stack).
       - AUTH_HUB_RETURN_ORIGIN=${AUTH_HUB_RETURN_ORIGIN:-https://kanban.agila.dev}
       # Application version (optional, will override database value if set)
       - APP_VERSION=0.99-beta

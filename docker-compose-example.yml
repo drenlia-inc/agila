@@ -32,9 +32,11 @@ services:
       - TENANT_DOMAIN=agila.dev
       # Google SSO hub (managed mode). Public URL Google redirects to; must match Cloud Console.
       - AUTH_HUB_PUBLIC_URL=${AUTH_HUB_PUBLIC_URL:-https://auth.agila.dev}
+      # Optional extra hub hosts (comma-separated URLs) if this process answers more than one name.
+      - AUTH_HUB_PUBLIC_URLS=${AUTH_HUB_PUBLIC_URLS:-}
       # Single-tenant only: after the hub callback, send the browser back to this origin.
       # Leave empty / unset in multi-tenant K8s (return host is {tenant}.{TENANT_DOMAIN}).
-      - AUTH_HUB_RETURN_ORIGIN=${AUTH_HUB_RETURN_ORIGIN:-https://kanban.agila.dev}
+      - AUTH_HUB_RETURN_ORIGIN=${AUTH_HUB_RETURN_ORIGIN:-}
       # Application version (optional, will override database value if set)
       - APP_VERSION=1.0.0
       # Push agent runner (optional — enable AI in Admin → App Settings)

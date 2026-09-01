@@ -1,14 +1,12 @@
 # Agila
 
-**Agila**
-
 A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List, Gantt, and Calendar views, real-time collaboration, optional sprint timeboxing with burndown, and an optional **AI Agent** that can assist on tasks, work linked Git repos, or (for admins) run board automations. Built with React/TypeScript, Node.js/Express, and PostgreSQL.
 
 <img src="/screenshots/overview.png" alt="Screenshot of easy-kanban" width="100%">
 
 *[View sample screenshots →](/screenshots/SCREENSHOTS.md)*
 
-**Quick start (Docker):** `git clone https://github.com/drenlia-inc/agila.git && cd agila && cp docker-compose-example.yml docker-compose.yml && docker compose up --build` — then open http://localhost:3010. Default admin is created on first boot; see [Installation](#installation).
+**Quick start (Docker):** `git clone https://github.com/drenlia-inc/agila.git && cd agila && cp docker-compose-example.yml docker-compose.yml && docker compose up --build -d` — then open http://localhost:3010. Default admin is created on first boot; see [Installation](#installation).
 
 ## Key Features
 
@@ -20,7 +18,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **Multiple view modes**: Kanban (visual board), List (table format), Gantt (timeline), and Calendar (month/week/day) views
 - **Real-time collaboration** - see changes instantly as team members work
 - **User authentication** with local accounts and Google OAuth support
-- **Role-based access control** (Admin/User permissions)
+- **Role-based access control** (Admin/User/Viewer permissions)
 - **Theme support** - Light and dark mode
 
 ### AI Agent (optional)
@@ -114,36 +112,36 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 
 ## Permissions
 
-| Action | Admin | User |
-|--------|-------|------|
-| View kanban boards | ✓ | ✓ |
-| View List, Gantt, and Calendar views | ✓ | ✓ |
-| Create/edit/delete tasks | ✓ | ✓ |
-| Add comments and attachments | ✓ | ✓ |
-| Move tasks between columns | ✓ | ✓ |
-| Associate tasks with sprints | ✓ | ✓ |
-| Assign tasks to AI Agent (when enabled) | ✓ | ✓ |
-| Configure AI Agent / runner | ✓ | ✗ |
-| Create/edit/delete boards | ✓ | ✗ |
-| Soft-delete / restore boards (Lifecycle) | ✓ | ✗ |
-| Reorder boards and columns | ✓ | ✗ |
-| Manage columns (add/remove/reorder) | ✓ | ✗ |
-| Access Admin panel | ✓ | ✗ |
-| Manage users | ✓ | ✗ |
-| Configure site settings | ✓ | ✗ |
-| Configure Google OAuth | ✓ | ✗ |
-| Configure mail server | ✓ | ✗ |
-| Manage tags and priorities | ✓ | ✗ |
-| Lifecycle retention & permanent purge | ✓ | ✗ |
-| Export data (CSV/Excel) | ✓ | ✗ |
-| Access Reports (when enabled) | ✓ | ✓* |
-| View Leaderboard (when enabled) | ✓ | ✓* |
-| Update own profile | ✓ | ✓ |
-| Configure own notifications | ✓ | ✓ |
-| Manage own Dev credentials (API token / SSH) | ✓ | ✓ |
-| Multi-select / bulk task actions | ✓ | ✓ |
-| Restore own trashed tasks (board trash) | ✓ | ✓ |
-*Some reports may be restricted to admins only depending on settings
+| Action | Admin | User | Viewer |
+|--------|-------|------|--------|
+| View kanban boards | ✓ | ✓ | ✓ |
+| View List, Gantt, and Calendar views | ✓ | ✓ | ✓ |
+| Create/edit/delete tasks | ✓ | ✓ | ✗ |
+| Add comments and attachments | ✓ | ✓ | ✓ |
+| Move tasks between columns | ✓ | ✓ | ✗ |
+| Associate tasks with sprints | ✓ | ✓ | ✗ |
+| Assign tasks to AI Agent (when enabled) | ✓ | ✓ | ✗ |
+| Configure AI Agent / runner | ✓ | ✗ | ✗ |
+| Create/edit/delete boards | ✓ | ✗ | ✗ |
+| Soft-delete / restore boards (Lifecycle) | ✓ | ✗ | ✗ |
+| Reorder boards and columns | ✓ | ✗ | ✗ |
+| Manage columns (add/remove/reorder) | ✓ | ✗ | ✗ |
+| Access Admin panel | ✓ | ✗ | ✗ |
+| Manage users | ✓ | ✗ | ✗ |
+| Configure site settings | ✓ | ✗ | ✗ |
+| Configure Google OAuth | ✓ | ✗ | ✗ |
+| Configure mail server | ✓ | ✗ | ✗ |
+| Manage tags and priorities | ✓ | ✗ | ✗ |
+| Lifecycle retention & permanent purge | ✓ | ✗ | ✗ |
+| Export data (CSV/Excel) | ✓ | ✗ | ✗ |
+| Access Reports (when enabled) | ✓ | ✓* | ✓* |
+| View Leaderboard (when enabled) | ✓ | ✓* | ✓* |
+| Update own profile | ✓ | ✓ | ✓ |
+| Configure own notifications | ✓ | ✓ | ✓ |
+| Manage own Dev credentials (API token / SSH) | ✓ | ✓ | ✗ |
+| Multi-select / bulk task actions | ✓ | ✓ | ✗ |
+| Restore own trashed tasks (board trash) | ✓ | ✓ | ✗ |
+*Some reports may be restricted to admins only depending on settings. Viewers are read-only for board/task data; they can still comment, watch themselves, and save personal (non-shared) views.
 
 ## Requirements
 
@@ -157,10 +155,10 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 git clone https://github.com/drenlia-inc/agila.git
 cd agila
 cp docker-compose-example.yml docker-compose.yml
-docker compose up --build
+docker compose up --build -d
 ```
 
-(`npm run docker:dev` is the same command: `docker compose up --build`.)
+Containers start in the background. For a foreground session with live logs (typical local development), use `npm run docker:dev` (`docker compose up --build`, no `-d`).
 
 Before the first production run, edit `docker-compose.yml`:
 - `JWT_SECRET`: strong secret for authentication
@@ -174,14 +172,23 @@ More detail: [DOCKER.md](/DOCKER.md)
 
 ### Default admin (first boot)
 
-On a **new empty database**, Agila creates `admin@kanban.local` with a **random password** and prints it **once** in the app container logs:
+On a **new empty database**, Agila creates `admin@kanban.local` with a **random password** and prints it **once** in the app container logs (banner `ADMIN ACCOUNT CREDENTIALS`). After `docker compose up --build -d`, wait a few seconds for Postgres and first boot, then:
 
-```text
-Email: admin@kanban.local
-Password: <generated>
+```bash
+docker compose logs | grep -A5 'ADMIN ACCOUNT CREDENTIALS'
 ```
 
-Follow the logs with `docker compose logs -f agila`.
+You should see:
+
+```text
+   ADMIN ACCOUNT CREDENTIALS
+===========================================
+   Email: admin@kanban.local
+   Password: <generated>
+===========================================
+```
+
+If grep prints nothing, wait and run it again (or `docker compose logs -f` and watch for that banner).
 
 - **`DEMO_ENABLED=true`:** the login page also shows this password (and a one-click sign-in on the public demo).
 - **`DEMO_ENABLED=false`:** the password is **not** shown on the login page — only in those first-boot logs.
@@ -189,7 +196,7 @@ Follow the logs with `docker compose logs -f agila`.
 
 ## Database Backup & Restore
 
-**Breaking change:** Agila is **PostgreSQL-only**. SQLite (`kanban.db`) is no longer supported. All Docker editions (free, demo, basic, pro) run Postgres + Redis. Existing SQLite data must be migrated out-of-band or you must start with a fresh Postgres volume.
+Agila uses **PostgreSQL** for application data (and Redis for real-time). Docker Compose starts both with the app. Use the scripts below for dump/restore.
 
 ### Automated Backup Script
 
@@ -216,12 +223,19 @@ docker exec agila-postgres pg_dump -U kanban_user -d kanban --clean --if-exists 
 
 ### Restore Database
 
+Stop the **app** first (leave Postgres running). If the app is still writing while you load a dump, you can get mixed old/new rows or a failed restore.
+
 ```bash
+docker compose stop agila-app
+
 gunzip -c ./backups/kanban-latest.sql.gz \
   | docker exec -i agila-postgres psql -U kanban_user -d kanban
+# or: ./scripts/restore-postgres.sh
+
+docker compose start agila-app
 ```
 
-**Important:** Prefer restoring while the app is stopped or briefly unavailable to avoid concurrent writes during restore.
+The site is down only for those few commands. Do not `docker compose down` unless you intend to remove containers; the Postgres volume must stay so the restore has a database to load into.
 
 ## Security
 
@@ -230,13 +244,10 @@ The application includes JWT-based authentication and role-based access control.
 - Change the default admin password immediately
 - Set a strong `JWT_SECRET` in production
 - Keep `DEMO_ENABLED=false` (demo compose is the exception)
-- Do not set `ALLOW_TEST_ENDPOINTS` on real production hosts
 - Configure HTTPS/TLS at the reverse proxy
 - Attachments/avatars use an HttpOnly media cookie (not the session JWT in `?token=`)
 - Review **Admin → Troubleshooting → CSP reports** before enforcing Content-Security-Policy
 - Consider additional network security measures
-
-See also `AGENTS.md` (security checklist) and `audit/security-assessment-current-2026-08.md`.
 
 ## Authors and acknowledgment
 Developed with AI assistance

@@ -25,6 +25,7 @@ export {
   startStorageMigration,
   getStorageMigrationStatus,
   compareStorageObjects,
+  compareS3ToS3,
   localDirForCategory,
   guessContentType
 } from './objectStorage.js';

@@ -524,6 +524,23 @@ function verifyOAuthState(state, { requireTenant = false } = {}) {
   }
 }
 
+/** Managed SSO must use the tenant-stored hub callback (same URI Google authorized). */
+function managedGoogleRedirectUri(settingsObj) {
+  const fromSettings = String(settingsObj?.GOOGLE_CALLBACK_URL || '').trim();
+  if (fromSettings) return fromSettings;
+  return getAuthHubCallbackUrl();
+}
+
+function peekOAuthState(state) {
+  if (!state || typeof state !== 'string') return null;
+  try {
+    const payload = jwt.decode(state);
+    return payload && typeof payload === 'object' ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
 function oauthRedirect(res, pathAndQuery, origin = '') {
   const dest = origin ? `${origin}${pathAndQuery}` : pathAndQuery;
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -570,7 +587,7 @@ router.get('/google/url', oauthUrlLimiter, async (req, res) => {
     const useHub =
       isGoogleSsoManaged(settingsObj) &&
       (isMultiTenant() ? Boolean(tenantId) : true);
-    const redirectUri = useHub ? getAuthHubCallbackUrl() : settingsObj.GOOGLE_CALLBACK_URL;
+    const redirectUri = useHub ? managedGoogleRedirectUri(settingsObj) : settingsObj.GOOGLE_CALLBACK_URL;
 
     if (!settingsObj.GOOGLE_CLIENT_ID || !settingsObj.GOOGLE_CLIENT_SECRET || !redirectUri) {
       console.error('🔐 [GOOGLE SSO] ❌ OAuth not fully configured');
@@ -580,7 +597,7 @@ router.get('/google/url', oauthUrlLimiter, async (req, res) => {
     const returnOrigin =
       useHub && !isMultiTenant() ? resolveOAuthReturnOrigin(req) : '';
     const state = createOAuthState({
-      tenantId: useHub ? tenantId : null,
+      tenantId: tenantId || (useHub ? tenantId : null),
       managed: useHub,
       returnOrigin
     });
@@ -625,6 +642,15 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
       const needTenant = isMultiTenant();
       const payload = verifyOAuthState(state, { requireTenant: needTenant });
       if (!payload) {
+        const peeked = peekOAuthState(state);
+        const guessTenant = String(peeked?.tenantId || '').trim().toLowerCase();
+        const origin =
+          guessTenant && !isReservedTenantSubdomain(guessTenant)
+            ? tenantPublicOrigin(guessTenant)
+            : '';
+        if (origin) {
+          return oauthRedirect(res, '/?error=oauth_invalid_state', origin);
+        }
         return res.status(400).type('text/plain').send('Invalid OAuth state');
       }
       if (needTenant) {
@@ -652,6 +678,11 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
       }
       if (!req.locals) req.locals = {};
       req.locals.db = db;
+    }
+
+    if (!db) {
+      console.error('🔐 [GOOGLE SSO] ❌ No tenant database for Google callback');
+      return oauthRedirect(res, '/?error=oauth_failed', redirectOrigin);
     }
 
     // Get OAuth settings first to check debug mode
@@ -694,7 +725,7 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
     const useHub =
       hubHost ||
       (isGoogleSsoManaged(settingsObj) && (isMultiTenant() ? Boolean(tenantId) : true));
-    const redirectUri = useHub ? getAuthHubCallbackUrl() : settingsObj.GOOGLE_CALLBACK_URL;
+    const redirectUri = useHub ? managedGoogleRedirectUri(settingsObj) : settingsObj.GOOGLE_CALLBACK_URL;
 
     if (!settingsObj.GOOGLE_CLIENT_ID || !settingsObj.GOOGLE_CLIENT_SECRET || !redirectUri) {
       console.error('🔐 [GOOGLE SSO] ❌ OAuth settings not configured in callback');
@@ -736,7 +767,9 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
       console.error('🔐 [GOOGLE SSO] ❌ Google token exchange failed:', {
         status: tokenResponse.status,
         statusText: tokenResponse.statusText,
-        error: errorText
+        error: errorText,
+        tenantId: tenantId || null,
+        redirect_uri: redirectUri
       });
       return oauthRedirect(res, '/?error=oauth_token_failed', redirectOrigin);
     }
@@ -915,7 +948,8 @@ router.get('/google/callback', oauthCallbackLimiter, async (req, res) => {
       id: user.id, 
       email: user.email,
       role: primaryRole(userRoles),
-      roles: userRoles
+      roles: userRoles,
+      ...(tenantId ? { tenantId } : {})
     };
     
     const token = jwt.sign(jwtPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });

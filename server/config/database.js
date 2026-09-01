@@ -19,6 +19,7 @@ import { ensureDemoBacklogTasksUnassigned } from './demoDataSeed.js';
 import { seedWelcomeTasks } from './welcomeTasks.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { dbExec, dbGet, dbAll, dbRun } from '../utils/dbAsync.js';
+import * as settingsQueries from '../utils/sqlManager/settings.js';
 import { getTenantDomain, getManagedSmtpSeedDefaults } from '../utils/tenantDomain.js';
 import { getDefaultBoardColumns, DEFAULT_BOARD_COLUMNS_JSON } from '../utils/defaultBoardColumns.js';
 
@@ -1454,21 +1455,19 @@ const initializeDefaultData = async (db, tenantId = null) => {
     }
   }
   
-  // Update database if version is available
+  // Update database if version is available (schema-qualified — do not use bare settings)
   if (appVersion) {
-    const currentVersion = await wrapQuery(db.prepare('SELECT value FROM settings WHERE key = ?'), 'SELECT').get('APP_VERSION');
+    const currentVersion = await settingsQueries.getSettingByKey(db, 'APP_VERSION');
     
     if (!currentVersion) {
-      // APP_VERSION doesn't exist in settings, insert it
-      const insertVersionStmt = db.prepare('INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)');
-      await dbRun(insertVersionStmt, 'APP_VERSION', appVersion);
-      console.log(`✅ Initialized APP_VERSION=${appVersion}`);
+      await settingsQueries.upsertSetting(db, 'APP_VERSION', appVersion);
+      console.log(`✅ Initialized APP_VERSION=${appVersion} (${db.schema || 'public'})`);
       versionChanged = true;
     } else if (currentVersion.value !== appVersion) {
-      // APP_VERSION has changed, update it
-      const updateVersionStmt = db.prepare('UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?');
-      await dbRun(updateVersionStmt, appVersion, 'APP_VERSION');
-      console.log(`✅ Updated APP_VERSION from ${currentVersion.value} to ${appVersion}`);
+      await settingsQueries.upsertSetting(db, 'APP_VERSION', appVersion);
+      console.log(
+        `✅ Updated APP_VERSION from ${currentVersion.value} to ${appVersion} (${db.schema || 'public'})`
+      );
       console.log(`   🔄 Users will be notified to refresh their browsers`);
       versionChanged = true;
     }

@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { wrapQuery } from './queryLogger.js';
+import * as settingsQueries from './sqlManager/settings.js';
 
 // Helper function to get app version (from version.json or ENV or database)
 export const getAppVersion = async (db) => {
@@ -14,7 +14,7 @@ export const getAppVersion = async (db) => {
       return process.env.APP_VERSION;
     }
     if (db) {
-      const result = await wrapQuery(db.prepare('SELECT value FROM settings WHERE key = ?'), 'SELECT').get('APP_VERSION');
+      const result = await settingsQueries.getSettingByKey(db, 'APP_VERSION');
       return result?.value || '0';
     }
     return '0';

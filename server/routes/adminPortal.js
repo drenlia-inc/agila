@@ -227,6 +227,67 @@ router.post('/storage/migrate-disk-to-s3', authenticateAdminPortal, async (req, 
   }
 });
 
+router.post('/storage/compare-s3-to-s3', authenticateAdminPortal, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const destination = req.body?.destination;
+    if (!destination || !String(destination.S3_BUCKET || '').trim()) {
+      return res.status(400).json({ success: false, error: 'destination.S3_BUCKET is required' });
+    }
+    const { compareS3ToS3, getRequestStoragePaths } = await import('../services/storage/index.js');
+    const result = await compareS3ToS3(db, getRequestStoragePaths(req), destination);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error comparing S3 buckets:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to compare S3 buckets'
+    });
+  }
+});
+
+router.post('/storage/migrate-s3-to-s3', authenticateAdminPortal, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const destination = req.body?.destination;
+    if (!destination || !String(destination.S3_BUCKET || '').trim()) {
+      return res.status(400).json({ success: false, error: 'destination.S3_BUCKET is required' });
+    }
+    const { startStorageMigration, getRequestStoragePaths } = await import(
+      '../services/storage/index.js'
+    );
+    const result = await startStorageMigration(db, getRequestStoragePaths(req), 's3-to-s3', {
+      deleteSource: req.body?.deleteSource === true,
+      destination,
+      cutoverMode: req.body?.cutoverMode === 'managed' ? 'managed' : 'byo',
+      cutoverEligible: req.body?.cutoverEligible
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error starting s3-to-s3 migration:', error);
+    const status = error.statusCode === 409 ? 409 : 500;
+    res.status(status).json({
+      success: false,
+      error: error.message || 'Failed to start S3 migration'
+    });
+  }
+});
+
+router.get('/storage/migrate-status', authenticateAdminPortal, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const { getStorageMigrationStatus } = await import('../services/storage/index.js');
+    const progress = await getStorageMigrationStatus(db);
+    res.json({ success: true, ...progress });
+  } catch (error) {
+    console.error('Error reading storage migration status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to read migration status'
+    });
+  }
+});
+
 /**
  * Ensure EN/FR welcome tasks exist and assign them to the owner member.
  * Body: { email?: string } — defaults to OWNER setting.

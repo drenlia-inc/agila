@@ -2,15 +2,47 @@ import { getTenantDomain } from './tenantDomain.js';
 
 const RESERVED_SUBDOMAINS = new Set(['auth', 'admin', 'www', 'api', 'mail']);
 
-function isMultiTenantMode() {
-  return process.env.MULTI_TENANT === 'true';
+/**
+ * SSO hub hostnames are configured (AUTH_HUB_PUBLIC_URL / AUTH_HUB_PUBLIC_URLS),
+ * not listed per environment in code. On TENANT_DOMAIN we also reserve the
+ * first-label pattern `auth` / `auth-<slot>` so those hosts are never tenants.
+ */
+function isAuthHubSubdomainLabel(label) {
+  const s = String(label || '')
+    .trim()
+    .toLowerCase();
+  return s === 'auth' || /^auth-[a-z0-9]+$/.test(s);
+}
+
+function hostnameFromUrlOrHost(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  try {
+    const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+    return new URL(withScheme).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function configuredAuthHubHostnames() {
+  const hosts = new Set();
+  const primary = hostnameFromUrlOrHost(process.env.AUTH_HUB_PUBLIC_URL);
+  if (primary) hosts.add(primary);
+  for (const part of String(process.env.AUTH_HUB_PUBLIC_URLS || '').split(',')) {
+    const host = hostnameFromUrlOrHost(part);
+    if (host) hosts.add(host);
+  }
+  const fallback = hostnameFromUrlOrHost(getAuthHubPublicUrl());
+  if (fallback) hosts.add(fallback);
+  return hosts;
 }
 
 function allowedOAuthReturnHosts() {
   return new Set(
     String(process.env.ALLOWED_ORIGINS || '')
       .split(',')
-      .map((entry) => entry.trim().toLowerCase())
+      .map((entry) => hostnameFromUrlOrHost(entry))
       .filter(Boolean)
   );
 }
@@ -80,11 +112,22 @@ export function isAuthHubHostname(hostname) {
     .trim()
     .split(':')[0]
     .toLowerCase();
-  return Boolean(host) && host === getAuthHubHostname();
+  if (!host) return false;
+  if (configuredAuthHubHostnames().has(host)) return true;
+  const domain = getTenantDomain().toLowerCase();
+  if (host.endsWith(`.${domain}`)) {
+    const label = host.slice(0, -(domain.length + 1));
+    if (isAuthHubSubdomainLabel(label)) return true;
+  }
+  return false;
 }
 
 export function isReservedTenantSubdomain(label) {
-  return RESERVED_SUBDOMAINS.has(String(label || '').trim().toLowerCase());
+  const s = String(label || '')
+    .trim()
+    .toLowerCase();
+  if (RESERVED_SUBDOMAINS.has(s)) return true;
+  return isAuthHubSubdomainLabel(s);
 }
 
 export function tenantPublicOrigin(tenantId) {
@@ -138,14 +181,13 @@ export function isAllowedOAuthReturnOrigin(origin) {
   const allowed = allowedOAuthReturnHosts();
   if (allowed.has(host)) return true;
 
-  if (isMultiTenantMode()) {
-    const domain = getTenantDomain().toLowerCase();
-    if (host === domain) return true;
-    const suffix = `.${domain}`;
-    if (host.endsWith(suffix)) {
-      const subdomain = host.slice(0, -suffix.length).split('.').pop();
-      if (subdomain && !isReservedTenantSubdomain(subdomain)) return true;
-    }
+  // Any public host on TENANT_DOMAIN except reserved / hub labels (Docker + multi-tenant).
+  const domain = getTenantDomain().toLowerCase();
+  if (host === domain) return true;
+  const suffix = `.${domain}`;
+  if (host.endsWith(suffix)) {
+    const label = host.slice(0, -suffix.length).split('.').pop();
+    if (label && !isReservedTenantSubdomain(label)) return true;
   }
 
   return false;

@@ -37,15 +37,46 @@ function clearStoredIntendedDestination(): void {
   }
 }
 
-/** OAuth must finish on the app host — auth.* serves the same SPA but is not the product URL. */
+function tenantIdFromAccessToken(token: string): string | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(atob(padded));
+    const id = String(json?.tenantId || '').trim().toLowerCase();
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(id)) return null;
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+/** Same hub-label convention as server/utils/authHub.js (browser has no env). */
+function isBrowserAuthHubHost(hostname: string): boolean {
+  const host = String(hostname || '').toLowerCase();
+  if (/^auth\./i.test(host)) return true;
+  return /^auth-[a-z0-9]+\./i.test(host);
+}
+
+function apexDomainFromAuthHubHost(hostname: string): string {
+  return String(hostname || '')
+    .toLowerCase()
+    .replace(/^auth-[a-z0-9]+\./i, '')
+    .replace(/^auth\./i, '');
+}
+
+/** Token hash on a hub host belongs on `{tenantId}.{apex}` (JWT), never a hardcoded app host. */
 function redirectAuthHubOAuthToAppHost(): boolean {
   const { hostname, protocol, pathname, search, hash } = window.location;
-  if (!/^auth\./i.test(hostname)) return false;
+  if (!isBrowserAuthHubHost(hostname)) return false;
   if (!api.hashHasOAuthToken()) return false;
-  const domain = hostname.replace(/^auth\./i, '');
-  if (!domain || domain === hostname) return false;
-  const appHost = `kanban.${domain}`;
-  window.location.replace(`${protocol}//${appHost}${pathname}${search}${hash}`);
+  const domain = apexDomainFromAuthHubHost(hostname);
+  if (!domain || domain === hostname.toLowerCase()) return false;
+  const tokenMatch = hash.match(/token=([^&]+)/);
+  const token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : '';
+  const tenantId = tenantIdFromAccessToken(token);
+  if (!tenantId) return false;
+  window.location.replace(`${protocol}//${tenantId}.${domain}${pathname}${search}${hash}`);
   return true;
 }
 
