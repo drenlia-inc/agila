@@ -19,20 +19,37 @@
       "file": "src/components/ActivityFeed.tsx"
     },
     {
+      "id": "help:calendar-column-filter",
+      "attr": "help",
+      "value": "calendar-column-filter",
+      "en": "calendar column filter",
+      "fr": "calendar column filter",
+      "searchEn": "calendar column filter  calendar-column-filter",
+      "searchFr": "calendar column filter  calendar-column-filter",
+      "kind": "view",
+      "mode": "calendar",
+      "highlights": [
+        "[data-help-target=\"calendar-column-filter\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/ColumnFilterDropdown.tsx"
+    },
+    {
       "id": "help:github-sso",
       "attr": "help",
       "value": "github-sso",
       "en": "GitHub Single Sign-on Configuration",
       "fr": "Configuration de l’authentification unique GitHub",
-      "searchEn": "GitHub Single Sign-on Configuration GitHub Single Sign-on Configuration Disabled github-sso",
-      "searchFr": "Configuration de l’authentification unique GitHub Configuration de l’authentification unique GitHub Désactivé github-sso",
-      "kind": "view",
-      "mode": "kanban",
+      "searchEn": "GitHub Single Sign-on Configuration GitHub Single Sign-on Configuration Disabled oauth github login create add provider SSO github-sso",
+      "searchFr": "Configuration de l’authentification unique GitHub Configuration de l’authentification unique GitHub Désactivé oauth github connexion creer ajouter fournisseur SSO github-sso",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
       "highlights": [
         "[data-help-target=\"github-sso\"]"
       ],
-      "adminOnly": false,
-      "audience": "user",
+      "adminOnly": true,
+      "audience": "admin",
       "file": "src/components/admin/AdminSSOTab.tsx"
     },
     {
@@ -56,17 +73,17 @@
       "id": "help:m365-sso",
       "attr": "help",
       "value": "m365-sso",
-      "en": "e.g., {{callbackUrl}}",
-      "fr": "ex. : {{callbackUrl}}",
-      "searchEn": "e.g., {{callbackUrl}} e.g., {{callbackUrl}} Microsoft 365 Single Sign-on Configuration Disabled m365-sso",
-      "searchFr": "ex. : {{callbackUrl}} ex. : {{callbackUrl}} Configuration de l’authentification unique Microsoft 365 Désactivé m365-sso",
-      "kind": "view",
-      "mode": "kanban",
+      "en": "Microsoft 365 Single Sign-on Configuration",
+      "fr": "Configuration de l’authentification unique Microsoft 365",
+      "searchEn": "Microsoft 365 Single Sign-on Configuration e.g., {{callbackUrl}} Microsoft 365 Single Sign-on Configuration Disabled oauth microsoft azure entra login create add provider SSO m365-sso",
+      "searchFr": "Configuration de l’authentification unique Microsoft 365 ex. : {{callbackUrl}} Configuration de l’authentification unique Microsoft 365 Désactivé oauth microsoft azure entra connexion creer ajouter fournisseur SSO m365-sso",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
       "highlights": [
         "[data-help-target=\"m365-sso\"]"
       ],
-      "adminOnly": false,
-      "audience": "user",
+      "adminOnly": true,
+      "audience": "admin",
       "file": "src/components/admin/AdminSSOTab.tsx"
     },
     {
@@ -85,6 +102,23 @@
       "adminOnly": false,
       "audience": "user",
       "file": "src/components/Profile.tsx"
+    },
+    {
+      "id": "help:sso-add-provider",
+      "attr": "help",
+      "value": "sso-add-provider",
+      "en": "Remove {{provider}} sign-in",
+      "fr": "Retirer la connexion {{provider}}",
+      "searchEn": "Remove {{provider}} sign-in Remove {{provider}} sign-in Single sign-on Add provider add provider oauth sso microsoft github google sso-add-provider",
+      "searchFr": "Retirer la connexion {{provider}} Retirer la connexion {{provider}} Authentification unique Ajouter un fournisseur ajouter fournisseur oauth sso microsoft github google sso-add-provider",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-help-target=\"sso-add-provider\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
     },
     {
       "id": "help:task-page-link",
@@ -112,7 +146,7 @@
       "searchEn": "Add Priority Add Priority add-priority",
       "searchFr": "Ajouter une priorité Ajouter une priorité add-priority",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#priorities",
       "highlights": [
         "[data-owner-setup=\"add-priority\"]"
       ],
@@ -129,7 +163,7 @@
       "searchEn": "Add Tag Add Tag add-tag",
       "searchFr": "Ajouter une étiquette Ajouter une étiquette add-tag",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#tags",
       "highlights": [
         "[data-owner-setup=\"add-tag\"]"
       ],
@@ -146,7 +180,7 @@
       "searchEn": "Failed to check user limit. Please try again. Failed to check user limit. Please try again. User limit reached. Cannot create more users. Add User add-user",
       "searchFr": "Échec de la vérification de la limite d'utilisateurs. Veuillez réessayer. Échec de la vérification de la limite d'utilisateurs. Veuillez réessayer. Limite d'utilisateurs atteinte. Impossible de créer plus d'utilisateurs. Ajouter un utilisateur add-user",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#users",
       "highlights": [
         "[data-owner-setup=\"add-user\"]"
       ],
@@ -163,7 +197,7 @@
       "searchEn": "Create Sprint Create Sprint Edit Sprint Create a new sprint create-sprint",
       "searchFr": "Créer un sprint Créer un sprint Modifier le sprint Créer un nouveau sprint create-sprint",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#project-settings#sprint-settings",
       "highlights": [
         "[data-owner-setup=\"create-sprint\"]"
       ],
@@ -180,7 +214,7 @@
       "searchEn": "Open Customer Portal Open Customer Portal Website URL not configured. Please contact your system administrator to set the WEBSITE_URL in Site Settings. Overview Manage Subscription licensing-panel",
       "searchFr": "Ouvrir le portail client Ouvrir le portail client URL du site Web non configurée. Veuillez contacter votre administrateur système pour définir WEBSITE_URL dans les paramètres du site. Vue d'ensemble Gérer l'abonnement licensing-panel",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#licensing",
       "highlights": [
         "[data-owner-setup=\"licensing-panel\"]"
       ],
@@ -197,7 +231,7 @@
       "searchEn": "Force path-style URLs Force path-style URLs optional Leave off for Amazon S3. Turn on for MinIO and some S3-compatible providers. Testing… Test S3 connection Test passed. storage-test-connection",
       "searchFr": "Forcer les URL path-style Forcer les URL path-style optionnel Laissez désactivé pour Amazon S3. Activez pour MinIO et certains fournisseurs compatibles S3. Test en cours… Tester la connexion S3 Test réussi. storage-test-connection",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#system-settings#storage",
       "highlights": [
         "[data-owner-setup=\"storage-test-connection\"]"
       ],
@@ -214,7 +248,7 @@
       "searchEn": "Managed Email Service Managed Email Service Your email service is currently managed by Agila. This means emails are sent using our infrastructure with the sender address Switch to Custom SMTP switch-custom-smtp",
       "searchFr": "Service de messagerie géré Service de messagerie géré Votre service de messagerie est actuellement géré par Agila. Cela signifie que les emails sont envoyés en utilisant notre infrastructure avec l'adresse d'expéditeur Passer à SMTP personnalisé switch-custom-smtp",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-owner-setup=\"switch-custom-smtp\"]"
       ],
@@ -231,30 +265,13 @@
       "searchEn": "Managed Storage Managed Storage Object storage is provided by Agila. Attachments and avatars use the platform S3 configuration. Use your own S3 bucket Configure the destination, test it, then run Migrate S3 → S3. Platform credentials stay until cutover. switch-custom-storage",
       "searchFr": "Stockage géré Stockage géré Le stockage objet est fourni par Agila. Les pièces jointes et avatars utilisent la configuration S3 de la plateforme. Utiliser votre propre bucket S3 Configurez la destination, testez-la, puis lancez Migrer S3 → S3. Les identifiants plateforme restent jusqu’au basculement. switch-custom-storage",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#system-settings#storage",
       "highlights": [
         "[data-owner-setup=\"switch-custom-storage\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
       "file": "src/components/admin/AdminStorageTab.tsx"
-    },
-    {
-      "id": "setting:…",
-      "attr": "setting",
-      "value": "…",
-      "en": "…",
-      "fr": "…",
-      "searchEn": "…  …",
-      "searchFr": "…  …",
-      "kind": "admin",
-      "hash": "#admin",
-      "highlights": [
-        "[data-setting-key=\"…\"]"
-      ],
-      "adminOnly": true,
-      "audience": "admin",
-      "file": "src/constants/adminSearchIndex.ts"
     },
     {
       "id": "setting:AI_API_BASE_URL",
@@ -427,6 +444,57 @@
       "file": "src/components/admin/AdminAppSettingsTab.tsx"
     },
     {
+      "id": "setting:DEFAULT_ACTIVITY_FEED_HEIGHT",
+      "attr": "setting",
+      "value": "DEFAULT_ACTIVITY_FEED_HEIGHT",
+      "en": "Default Height",
+      "fr": "Hauteur par défaut",
+      "searchEn": "Default Height Default Height Default height in pixels ({{min}}–{{max}}) activity feed profile DEFAULT_ACTIVITY_FEED_HEIGHT",
+      "searchFr": "Hauteur par défaut Hauteur par défaut Hauteur par défaut en pixels ({{min}}–{{max}}) fil activite profil DEFAULT_ACTIVITY_FEED_HEIGHT",
+      "kind": "admin",
+      "hash": "#admin#app-settings#user-interface",
+      "highlights": [
+        "[data-setting-key=\"DEFAULT_ACTIVITY_FEED_HEIGHT\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAppSettingsTab.tsx"
+    },
+    {
+      "id": "setting:DEFAULT_ACTIVITY_FEED_POSITION",
+      "attr": "setting",
+      "value": "DEFAULT_ACTIVITY_FEED_POSITION",
+      "en": "Enabled",
+      "fr": "Activé",
+      "searchEn": "Enabled Enabled Disabled Default Position Which side to dock to, how far from that edge ({{min}}–{{max}}px), and how far from the top ({{yMin}}–{{yMax}}px). Inset is the gap from the edge — separate from panel width. activity feed profile DEFAULT_ACTIVITY_FEED_POSITION",
+      "searchFr": "Activé Activé Désactivé Position par défaut De quel côté ancrer le panneau, à quelle distance de ce bord ({{min}}–{{max}} px), et à quelle distance du haut ({{yMin}}–{{yMax}} px). La marge est l’espace depuis le bord — distincte de la largeur du panneau. fil activite profil DEFAULT_ACTIVITY_FEED_POSITION",
+      "kind": "admin",
+      "hash": "#admin#app-settings#user-interface",
+      "highlights": [
+        "[data-setting-key=\"DEFAULT_ACTIVITY_FEED_POSITION\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAppSettingsTab.tsx"
+    },
+    {
+      "id": "setting:DEFAULT_ACTIVITY_FEED_WIDTH",
+      "attr": "setting",
+      "value": "DEFAULT_ACTIVITY_FEED_WIDTH",
+      "en": "Default Position",
+      "fr": "Position par défaut",
+      "searchEn": "Default Position Default Position Default Width Default width in pixels ({{min}}–{{max}}) activity feed profile DEFAULT_ACTIVITY_FEED_WIDTH",
+      "searchFr": "Position par défaut Position par défaut Largeur par défaut Largeur par défaut en pixels ({{min}}–{{max}}) fil activite profil DEFAULT_ACTIVITY_FEED_WIDTH",
+      "kind": "admin",
+      "hash": "#admin#app-settings#user-interface",
+      "highlights": [
+        "[data-setting-key=\"DEFAULT_ACTIVITY_FEED_WIDTH\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminAppSettingsTab.tsx"
+    },
+    {
       "id": "setting:DEFAULT_BOARD_COLUMNS",
       "attr": "setting",
       "value": "DEFAULT_BOARD_COLUMNS",
@@ -455,6 +523,40 @@
       "hash": "#admin#project-settings#project",
       "highlights": [
         "[data-setting-key=\"DEFAULT_FINISHED_COLUMN_NAMES\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminProjectSettingsTab.tsx"
+    },
+    {
+      "id": "setting:DEFAULT_PROJ_PREFIX",
+      "attr": "setting",
+      "value": "DEFAULT_PROJ_PREFIX",
+      "en": "DEFAULT PROJ PREFIX",
+      "fr": "DEFAULT PROJ PREFIX",
+      "searchEn": "DEFAULT PROJ PREFIX  DEFAULT_PROJ_PREFIX",
+      "searchFr": "DEFAULT PROJ PREFIX  DEFAULT_PROJ_PREFIX",
+      "kind": "admin",
+      "hash": "#admin#project-settings#project",
+      "highlights": [
+        "[data-setting-key=\"DEFAULT_PROJ_PREFIX\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminProjectSettingsTab.tsx"
+    },
+    {
+      "id": "setting:DEFAULT_TASK_PREFIX",
+      "attr": "setting",
+      "value": "DEFAULT_TASK_PREFIX",
+      "en": "DEFAULT TASK PREFIX",
+      "fr": "DEFAULT TASK PREFIX",
+      "searchEn": "DEFAULT TASK PREFIX  DEFAULT_TASK_PREFIX",
+      "searchFr": "DEFAULT TASK PREFIX  DEFAULT_TASK_PREFIX",
+      "kind": "admin",
+      "hash": "#admin#project-settings#project",
+      "highlights": [
+        "[data-setting-key=\"DEFAULT_TASK_PREFIX\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
@@ -903,6 +1005,23 @@
       "file": "src/utils/ownerSetup.ts"
     },
     {
+      "id": "setting:SITE_LOGO_DARK",
+      "attr": "setting",
+      "value": "SITE_LOGO_DARK",
+      "en": "Site Logo",
+      "fr": "Logo du site",
+      "searchEn": "Site Logo  SITE_LOGO",
+      "searchFr": "Logo du site  SITE_LOGO",
+      "kind": "admin",
+      "hash": "#admin#site-settings",
+      "highlights": [
+        "[data-setting-key=\"SITE_LOGO_DARK\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/utils/ownerSetup.ts"
+    },
+    {
       "id": "setting:SITE_NAME",
       "attr": "setting",
       "value": "SITE_NAME",
@@ -1141,6 +1260,23 @@
       "file": "src/components/admin/AdminMailTab.tsx"
     },
     {
+      "id": "setting:TASK_NOTIFICATION_CHANNELS",
+      "attr": "setting",
+      "value": "TASK_NOTIFICATION_CHANNELS",
+      "en": "Delivery channel",
+      "fr": "Canal d'envoi",
+      "searchEn": "Delivery channel Delivery channel Choose whether task activity is emailed, sent to webhooks, or both. TASK_NOTIFICATION_CHANNELS",
+      "searchFr": "Canal d'envoi Canal d'envoi Choisissez si l'activité des tâches est envoyée par email, par webhooks, ou les deux. TASK_NOTIFICATION_CHANNELS",
+      "kind": "admin",
+      "hash": "#admin#notifications#webhooks",
+      "highlights": [
+        "[data-setting-key=\"TASK_NOTIFICATION_CHANNELS\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminNotificationChannelMode.tsx"
+    },
+    {
       "id": "setting:TROUBLESHOOTING_SECTION",
       "attr": "setting",
       "value": "TROUBLESHOOTING_SECTION",
@@ -1192,6 +1328,23 @@
       "file": "src/components/admin/AdminWebhooksTab.tsx"
     },
     {
+      "id": "setting:WEBHOOKS_LIST",
+      "attr": "setting",
+      "value": "WEBHOOKS_LIST",
+      "en": "Webhooks",
+      "fr": "Webhooks",
+      "searchEn": "Webhooks Test webhook Webhooks Loading… Create a new outgoing webhook WEBHOOKS_LIST",
+      "searchFr": "Webhooks Tester le webhook Webhooks Chargement… Créer un nouveau webhook sortant WEBHOOKS_LIST",
+      "kind": "admin",
+      "hash": "#admin#notifications#webhooks",
+      "highlights": [
+        "[data-setting-key=\"WEBHOOKS_LIST\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminWebhooksTab.tsx"
+    },
+    {
       "id": "tour:add-board-button",
       "attr": "tour",
       "value": "add-board-button",
@@ -1226,38 +1379,21 @@
       "file": "src/components/Column.tsx"
     },
     {
-      "id": "tour:admin-",
-      "attr": "tour",
-      "value": "admin-",
-      "en": "admin ",
-      "fr": "admin ",
-      "searchEn": "admin   admin-",
-      "searchFr": "admin   admin-",
-      "kind": "admin",
-      "hash": "#admin",
-      "highlights": [
-        "[data-tour-id=\"admin-\"]"
-      ],
-      "adminOnly": true,
-      "audience": "admin",
-      "file": "src/contexts/TourContext.tsx"
-    },
-    {
       "id": "tour:admin-ai",
       "attr": "tour",
       "value": "admin-ai",
-      "en": "Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs.",
-      "fr": "Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code.",
-      "searchEn": "Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. S",
-      "searchFr": "Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de mess",
+      "en": "admin ai",
+      "fr": "admin ai",
+      "searchEn": "admin-ai",
+      "searchFr": "admin-ai",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#system-settings#ai",
       "highlights": [
         "[data-tour-id=\"admin-ai\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/tour/TourSteps.tsx"
+      "file": "src/components/admin/AdminSystemSettingsTab.tsx"
     },
     {
       "id": "tour:admin-app-settings",
@@ -1268,13 +1404,30 @@
       "searchEn": "Configure application settings, user preferences, and system behavior in the App Settings tab. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and tr",
       "searchFr": "Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'applicat",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#app-settings#user-interface",
       "highlights": [
         "[data-tour-id=\"admin-app-settings\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
       "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-features",
+      "attr": "tour",
+      "value": "admin-features",
+      "en": "admin features",
+      "fr": "admin features",
+      "searchEn": "admin-features",
+      "searchFr": "admin-features",
+      "kind": "admin",
+      "hash": "#admin#project-settings#features",
+      "highlights": [
+        "[data-tour-id=\"admin-features\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminProjectHubTab.tsx"
     },
     {
       "id": "tour:admin-features-panel",
@@ -1285,7 +1438,7 @@
       "searchEn": "admin features panel  admin-features-panel",
       "searchFr": "admin features panel  admin-features-panel",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#project-settings#features",
       "highlights": [
         "[data-tour-id=\"admin-features-panel\"]"
       ],
@@ -1297,18 +1450,18 @@
       "id": "tour:admin-file-uploads",
       "attr": "tour",
       "value": "admin-file-uploads",
-      "en": "Set attachment size limits and which file types users may upload.",
-      "fr": "Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser.",
-      "searchEn": "Set attachment size limits and which file types users may upload. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue.",
-      "searchFr": "Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, conne",
+      "en": "admin file uploads",
+      "fr": "admin file uploads",
+      "searchEn": "admin-file-uploads",
+      "searchFr": "admin-file-uploads",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#system-settings#file-uploads",
       "highlights": [
         "[data-tour-id=\"admin-file-uploads\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/tour/TourSteps.tsx"
+      "file": "src/components/admin/AdminSystemSettingsTab.tsx"
     },
     {
       "id": "tour:admin-licensing",
@@ -1319,7 +1472,7 @@
       "searchEn": "View and manage your license information, usage limits, and subscription details. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team. Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore soft-deleted tasks and boards, or permanently purge them when they are no longer needed. View and manage your license information, usage limits, and subscription details. This system usage panel shows real-time resource monitoring: RAM usage, CPU usage, and disk space. It ",
       "searchFr": "Consultez et gérez vos informations de licence, limites d'utilisation et détails d'abonnement. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints actifs. Configurez les fonctionnalités de rapport, y compris la gamification, la visibilité du classement et les paramètres d'achievements. Activez ou désactivez diverses capacités de rapport pour votre équipe. Gérez le cycle de vie des éléments supprimés et archivés. Définissez les périodes de rétention (purge) automatique, restaurez les tâches et tableaux en suppression récupérable, ou purgez-les définitivement lorsqu'ils ne sont plus nécessaires. Consultez et g",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#licensing",
       "highlights": [
         "[data-tour-id=\"admin-licensing\"]"
       ],
@@ -1331,18 +1484,18 @@
       "id": "tour:admin-lifecycle",
       "attr": "tour",
       "value": "admin-lifecycle",
-      "en": "Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore soft-deleted tasks and boards, or permanently purge them when they are no longer needed.",
-      "fr": "Gérez le cycle de vie des éléments supprimés et archivés. Définissez les périodes de rétention (purge) automatique, restaurez les tâches et tableaux en suppression récupérable, ou purgez-les définitivement lorsqu'ils ne sont plus nécessaire",
-      "searchEn": "Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore soft-deleted tasks and boards, or permanently purge them when they are no longer needed. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team. Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore soft-deleted tasks and boards, or permanently purge them when they are no ",
-      "searchFr": "Gérez le cycle de vie des éléments supprimés et archivés. Définissez les périodes de rétention (purge) automatique, restaurez les tâches et tableaux en suppression récupérable, ou purgez-les définitivement lorsqu'ils ne sont plus nécessaires. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints actifs. Configurez les fonctionnalités de rapport, y compris la gamification, la visibilité du classement et les paramètres d'achievements. Activez ou désactivez diverses capacités de rapp",
+      "en": "admin lifecycle",
+      "fr": "admin lifecycle",
+      "searchEn": "admin-lifecycle",
+      "searchFr": "admin-lifecycle",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#project-settings#lifecycle",
       "highlights": [
         "[data-tour-id=\"admin-lifecycle\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/tour/TourSteps.tsx"
+      "file": "src/components/admin/AdminProjectHubTab.tsx"
     },
     {
       "id": "tour:admin-lifecycle-content",
@@ -1353,7 +1506,7 @@
       "searchEn": "admin lifecycle content  admin-lifecycle-content",
       "searchFr": "admin lifecycle content  admin-lifecycle-content",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#project-settings#lifecycle",
       "highlights": [
         "[data-tour-id=\"admin-lifecycle-content\"]"
       ],
@@ -1365,18 +1518,52 @@
       "id": "tour:admin-mail-server",
       "attr": "tour",
       "value": "admin-mail-server",
-      "en": "Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality.",
-      "fr": "Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail.",
-      "searchEn": "Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels",
-      "searchFr": "Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails systèm",
+      "en": "admin mail server",
+      "fr": "admin mail server",
+      "searchEn": "admin-mail-server",
+      "searchFr": "admin-mail-server",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#notifications#mail-server",
       "highlights": [
         "[data-tour-id=\"admin-mail-server\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/tour/TourSteps.tsx"
+      "file": "src/components/admin/AdminNotificationsHubTab.tsx"
+    },
+    {
+      "id": "tour:admin-notification-queue",
+      "attr": "tour",
+      "value": "admin-notification-queue",
+      "en": "admin notification queue",
+      "fr": "admin notification queue",
+      "searchEn": "admin-notification-queue",
+      "searchFr": "admin-notification-queue",
+      "kind": "admin",
+      "hash": "#admin#notifications#queue",
+      "highlights": [
+        "[data-tour-id=\"admin-notification-queue\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminNotificationsHubTab.tsx"
+    },
+    {
+      "id": "tour:admin-notification-settings",
+      "attr": "tour",
+      "value": "admin-notification-settings",
+      "en": "admin notification settings",
+      "fr": "admin notification settings",
+      "searchEn": "admin-notification-settings",
+      "searchFr": "admin-notification-settings",
+      "kind": "admin",
+      "hash": "#admin#notifications#notification-settings",
+      "highlights": [
+        "[data-tour-id=\"admin-notification-settings\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminNotificationsHubTab.tsx"
     },
     {
       "id": "tour:admin-notifications",
@@ -1387,7 +1574,7 @@
       "searchEn": "Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to ",
       "searchFr": "Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie p",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#notifications#notification-settings",
       "highlights": [
         "[data-tour-id=\"admin-notifications\"]"
       ],
@@ -1404,13 +1591,30 @@
       "searchEn": "Set up priority levels for your tasks to help team members understand urgency. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints fo",
       "searchFr": "Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences uti",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#priorities",
       "highlights": [
         "[data-tour-id=\"admin-priorities\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
       "file": "src/components/tour/TourSteps.tsx"
+    },
+    {
+      "id": "tour:admin-project-general",
+      "attr": "tour",
+      "value": "admin-project-general",
+      "en": "admin project general",
+      "fr": "admin project general",
+      "searchEn": "admin-project-general",
+      "searchFr": "admin-project-general",
+      "kind": "admin",
+      "hash": "#admin#project-settings#project",
+      "highlights": [
+        "[data-tour-id=\"admin-project-general\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminProjectHubTab.tsx"
     },
     {
       "id": "tour:admin-project-settings",
@@ -1421,7 +1625,7 @@
       "searchEn": "Manage project-specific settings, workflows, and custom configurations in Project Settings. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features includi",
       "searchFr": "Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du pr",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#project-settings#project",
       "highlights": [
         "[data-tour-id=\"admin-project-settings\"]"
       ],
@@ -1433,18 +1637,18 @@
       "id": "tour:admin-reporting",
       "attr": "tour",
       "value": "admin-reporting",
-      "en": "Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team.",
-      "fr": "Configurez les fonctionnalités de rapport, y compris la gamification, la visibilité du classement et les paramètres d'achievements. Activez ou désactivez diverses capacités de rapport pour votre équipe.",
-      "searchEn": "Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achievement settings. Enable or disable various reporting capabilities for your team. Manage the lifecycle of deleted and archived work. Set automatic retention (purge) periods, restore s",
-      "searchFr": "Configurez les fonctionnalités de rapport, y compris la gamification, la visibilité du classement et les paramètres d'achievements. Activez ou désactivez diverses capacités de rapport pour votre équipe. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints actifs. Configurez les fonctionnalités de rapport, y compris la gamification, la vi",
+      "en": "admin reporting",
+      "fr": "admin reporting",
+      "searchEn": "admin-reporting",
+      "searchFr": "admin-reporting",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#project-settings#reporting",
       "highlights": [
         "[data-tour-id=\"admin-reporting\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/tour/TourSteps.tsx"
+      "file": "src/components/admin/AdminProjectHubTab.tsx"
     },
     {
       "id": "tour:admin-site-settings",
@@ -1455,7 +1659,7 @@
       "searchEn": "Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. Use this button to show or hide the system metrics panel. When enabled, you'll see real-time monitoring of RAM, CPU, and disk usage. Your preference is saved and will persist across sessions. Settings (open it from your profile menu) is where you manage users, boards, columns, and instance configuration. In Settings, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or d",
       "searchFr": "Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Utilisez ce bouton pour afficher ou masquer le panneau de métriques système. Lorsqu'il est activé, vous verrez la surveillance en temps réel de la RAM, du CPU et de l'utilisation du disque. Votre préférence est enregistrée et persistera entre les sessions. Paramètres (ouvrez-les depuis le menu profil) est l'endroit où vous gérez les utilisateurs, les tableaux, les colonnes et la configuration de l'instance. Dans Paramètres, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titr",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#site-settings",
       "highlights": [
         "[data-tour-id=\"admin-site-settings\"]"
       ],
@@ -1467,52 +1671,52 @@
       "id": "tour:admin-sprint-settings",
       "attr": "tour",
       "value": "admin-sprint-settings",
-      "en": "Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints.",
-      "fr": "Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints act",
-      "searchEn": "Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom configurations in Project Settings. Create and manage sprints for your projects. Sprints are time-based planning periods used to organize tasks and track progress. Set sprint names, dates, and mark active sprints. Configure reporting features including gamification, leaderboard visibility, and achievement settings. E",
-      "searchFr": "Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre les progrès. Définissez les noms des sprints, les dates et marquez les sprints actifs. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'urgence. Configurez les paramètres de l'application, les préférences utilisateur et le comportement du système dans l'onglet Paramètres de l'application. Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet. Créez et gérez des sprints pour vos projets. Les sprints sont des périodes de pla",
+      "en": "admin sprint settings",
+      "fr": "admin sprint settings",
+      "searchEn": "admin-sprint-settings",
+      "searchFr": "admin-sprint-settings",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#project-settings#sprint-settings",
       "highlights": [
         "[data-tour-id=\"admin-sprint-settings\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/tour/TourSteps.tsx"
+      "file": "src/components/admin/AdminProjectHubTab.tsx"
     },
     {
       "id": "tour:admin-sso",
       "attr": "tour",
       "value": "admin-sso",
-      "en": "Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials.",
-      "fr": "Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth.",
-      "searchEn": "Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. In Settings, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the",
-      "searchFr": "Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Dans Paramètres, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou m",
+      "en": "admin sso",
+      "fr": "admin sso",
+      "searchEn": "admin-sso",
+      "searchFr": "admin-sso",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#system-settings#sso",
       "highlights": [
         "[data-tour-id=\"admin-sso\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/tour/TourSteps.tsx"
+      "file": "src/components/admin/AdminSystemSettingsTab.tsx"
     },
     {
       "id": "tour:admin-storage",
       "attr": "tour",
       "value": "admin-storage",
-      "en": "Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends.",
-      "fr": "Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends.",
-      "searchEn": "Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. In Settings, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure",
-      "searchFr": "Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou migrez entre les backends. Dans Paramètres, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment les pièces jointes et avatars sont stockés — disque local ou stockage objet compatible S3 — et testez ou mi",
+      "en": "admin storage",
+      "fr": "admin storage",
+      "searchEn": "admin-storage",
+      "searchFr": "admin-storage",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#system-settings#storage",
       "highlights": [
         "[data-tour-id=\"admin-storage\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/tour/TourSteps.tsx"
+      "file": "src/components/admin/AdminSystemSettingsTab.tsx"
     },
     {
       "id": "tour:admin-system-settings",
@@ -1523,7 +1727,7 @@
       "searchEn": "System Settings groups SSO, storage, file uploads, and AI for this instance. Settings (open it from your profile menu) is where you manage users, boards, columns, and instance configuration. In Settings, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Configure Single Sign-On (SSO) authentication using Google OAuth. Enable or disable Google login and manage OAuth credentials. Choose how attachments and avatars are stored — local disk or S3-compatible object storage — and test or migrate between backends. Set attachment size limits and which file types users may upload. adm",
       "searchFr": "Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Paramètres (ouvrez-les depuis le menu profil) est l'endroit où vous gérez les utilisateurs, les tableaux, les colonnes et la configuration de l'instance. Dans Paramètres, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Configurez les paramètres de base de votre site, y compris le nom du site et l'URL. L'URL du site est utilisée comme titre cliquable dans l'en-tête de l'application. Les Paramètres système regroupent le SSO, le stockage, les téléversements et l'IA pour cette instance. Configurez l'authentification Single Sign-On (SSO) à l'aide de Google OAuth. Activez ou désactivez la connexion Google et gérez les identifiants OAuth. Choisissez comment l",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#system-settings#sso",
       "highlights": [
         "[data-tour-id=\"admin-system-settings\"]"
       ],
@@ -1574,7 +1778,7 @@
       "searchEn": "Create and manage tags to categorize and organize your tasks effectively. Set attachment size limits and which file types users may upload. Enable the in-app Agent, connect an LLM provider, and configure the runner that executes coding jobs. Notifications groups email delivery settings, the mail server, webhooks, and the outgoing queue. Configure email server settings for sending notifications, invitations, and other system emails. Set up SMTP server details and test email functionality. Create and manage tags to categorize and organize your tasks effectively. Set up priority levels for your tasks to help team members understand urgency. Configure application settings, user preferences, and system behavior in the App Settings tab. Manage project-specific settings, workflows, and custom con",
       "searchFr": "Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Définissez les limites de taille et les types de fichiers que les utilisateurs peuvent téléverser. Activez l'Agent intégré, connectez un fournisseur LLM et configurez le runner qui exécute les tâches de code. Notifications regroupe les paramètres d'envoi d'e-mails, le serveur de messagerie, les webhooks et la file d'attente. Configurez les paramètres du serveur de messagerie pour l'envoi de notifications, d'invitations et d'autres e-mails système. Configurez les détails du serveur SMTP et testez la fonctionnalité e-mail. Créez et gérez des étiquettes pour catégoriser et organiser efficacement vos tâches. Configurez les niveaux de priorité pour vos tâches afin d'aider les membres de l'équipe à comprendre l'",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#tags",
       "highlights": [
         "[data-tour-id=\"admin-tags\"]"
       ],
@@ -1591,7 +1795,7 @@
       "searchEn": "In Settings, manage team members, create new users, and assign roles. In List View, you can show or hide columns to customize your view. Click the menu icon in the table header to toggle column visibility. Use this button to show or hide the system metrics panel. When enabled, you'll see real-time monitoring of RAM, CPU, and disk usage. Your preference is saved and will persist across sessions. Settings (open it from your profile menu) is where you manage users, boards, columns, and instance configuration. In Settings, manage team members, create new users, and assign roles. Configure your site's basic settings including site name and URL. The site URL is used as a clickable title in the application header. System Settings groups SSO, storage, file uploads, and AI for this instance. Config",
       "searchFr": "Dans Paramètres, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rôles. Dans la vue Liste, vous pouvez afficher ou masquer des colonnes pour personnaliser votre vue. Cliquez sur l'icône de menu dans l'en-tête du tableau pour basculer la visibilité des colonnes. Utilisez ce bouton pour afficher ou masquer le panneau de métriques système. Lorsqu'il est activé, vous verrez la surveillance en temps réel de la RAM, du CPU et de l'utilisation du disque. Votre préférence est enregistrée et persistera entre les sessions. Paramètres (ouvrez-les depuis le menu profil) est l'endroit où vous gérez les utilisateurs, les tableaux, les colonnes et la configuration de l'instance. Dans Paramètres, gérez les membres de l'équipe, créez de nouveaux utilisateurs et assignez des rô",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#users",
       "highlights": [
         "[data-tour-id=\"admin-users\"]"
       ],
@@ -1603,18 +1807,18 @@
       "id": "tour:admin-webhooks",
       "attr": "tour",
       "value": "admin-webhooks",
-      "en": "Send a test message to this webhook",
-      "fr": "Envoyer un message de test vers ce webhook",
-      "searchEn": "Send a test message to this webhook Send a test message to this webhook Test webhook Webhooks Loading… admin-webhooks",
-      "searchFr": "Envoyer un message de test vers ce webhook Envoyer un message de test vers ce webhook Tester le webhook Webhooks Chargement… admin-webhooks",
+      "en": "admin webhooks",
+      "fr": "admin webhooks",
+      "searchEn": "admin-webhooks",
+      "searchFr": "admin-webhooks",
       "kind": "admin",
-      "hash": "#admin",
+      "hash": "#admin#notifications#webhooks",
       "highlights": [
         "[data-tour-id=\"admin-webhooks\"]"
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/admin/AdminWebhooksTab.tsx"
+      "file": "src/components/admin/AdminNotificationsHubTab.tsx"
     },
     {
       "id": "tour:app-nav-menu",
@@ -1812,7 +2016,7 @@
       "searchEn": "In List View, you can show or hide columns to customize your view. Click the menu icon in the table header to toggle column visibility. Show/Hide Columns column-visibility",
       "searchFr": "Dans la vue Liste, vous pouvez afficher ou masquer des colonnes pour personnaliser votre vue. Cliquez sur l'icône de menu dans l'en-tête du tableau pour basculer la visibilité des colonnes. Afficher/Masquer les colonnes column-visibility",
       "kind": "view",
-      "mode": "kanban",
+      "mode": "list",
       "highlights": [
         "[data-tour-id=\"column-visibility\"]"
       ],

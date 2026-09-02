@@ -9,6 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { hashFromAdminTourValue, validateHelpGoEntries } from '../server/config/helpAdminGoHash.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -17,12 +18,15 @@ const OUT = path.join(ROOT, 'server/config/helpUiIndex.generated.json');
 
 const ATTRS = [
   { attr: 'data-setting-key', kind: 'setting' },
+  { attr: 'settingKey', kind: 'setting' },
   { attr: 'data-tour-id', kind: 'tour' },
   { attr: 'data-help-target', kind: 'help' },
   { attr: 'data-owner-setup', kind: 'ownerSetup' }
 ];
 
 const SKIP_VALUE = /\$\{|`/;
+const VALID_TARGET_ID = /^[A-Za-z][A-Za-z0-9_-]*$/;
+const SKIP_HARVEST_FILES = /(?:^|\/)adminSearchIndex\.ts$/;
 
 function walk(dir, acc = []) {
   for (const name of fs.readdirSync(dir)) {
@@ -145,31 +149,39 @@ function inferNav(kind, value, fileRel, adminByKey) {
   if (kind === 'ownerSetup') {
     return {
       navKind: 'admin',
-      hash: '#admin',
+      hash: hashFromFile(fileRel),
       adminOnly: true,
       highlights: [`[data-owner-setup="${value}"]`]
     };
   }
   if (kind === 'help') {
+    const highlights = [`[data-help-target="${value}"]`];
     if (value.startsWith('profile')) {
       return {
         navKind: 'profile',
         profileFocus: value.includes('activity') ? 'activityFeed' : 'displayName',
         adminOnly: false,
-        highlights: [`[data-help-target="${value}"]`]
+        highlights
       };
     }
-    return {
-      navKind: 'view',
-      mode: 'kanban',
-      adminOnly: false,
-      highlights: [`[data-help-target="${value}"]`]
-    };
+    if (inAdmin) {
+      return {
+        navKind: 'admin',
+        hash: hashFromFile(fileRel),
+        adminOnly: true,
+        highlights
+      };
+    }
+    if (value.includes('calendar')) {
+      return { navKind: 'view', mode: 'calendar', adminOnly: false, highlights };
+    }
+    return { navKind: 'view', mode: 'kanban', adminOnly: false, highlights };
   }
   // tour
   const highlights = [`[data-tour-id="${value}"]`];
   if (value.startsWith('admin-') || inAdmin) {
-    return { navKind: 'admin', hash: '#admin', adminOnly: true, highlights };
+    const hash = hashFromAdminTourValue(value) || hashFromFile(fileRel);
+    return { navKind: 'admin', hash, adminOnly: true, highlights };
   }
   if (value.includes('report')) {
     return { navKind: 'page', page: 'reports', adminOnly: false, highlights };
@@ -177,13 +189,39 @@ function inferNav(kind, value, fileRel, adminByKey) {
   if (value.includes('gantt')) {
     return { navKind: 'view', mode: 'gantt', adminOnly: false, highlights };
   }
-  if (value.includes('list-view') || value === 'list-view') {
+  if (value === 'column-visibility' || value.includes('list-view') || /ListView/.test(rel)) {
     return { navKind: 'view', mode: 'list', adminOnly: false, highlights };
   }
   if (value.includes('profile')) {
     return { navKind: 'view', mode: 'kanban', adminOnly: false, highlights };
   }
   return { navKind: 'view', mode: 'kanban', adminOnly: false, highlights };
+}
+
+function extractAttrValues(source, attr) {
+  const out = [];
+  const re = new RegExp(`${attr}=(\\{[^}]*\\}|["'\`][^"'\`]+["'\`])`, 'g');
+  let m;
+  while ((m = re.exec(source))) {
+    const raw = m[1];
+    if (raw.startsWith('{')) {
+      const quoted = raw.match(/["'`]([^"'`]+)["'`]/g) || [];
+      for (const q of quoted) {
+        const value = q.slice(1, -1).trim();
+        if (value && value !== 'undefined') out.push({ value, index: m.index });
+      }
+    } else {
+      out.push({ value: raw.slice(1, -1).trim(), index: m.index });
+    }
+  }
+  return out;
+}
+
+function isHarvestableValue(kind, value) {
+  if (!value || SKIP_VALUE.test(value) || !VALID_TARGET_ID.test(value)) return false;
+  if (value.endsWith('-')) return false;
+  if (kind === 'tour' && (value === 'admin' || value === 'admin-')) return false;
+  return true;
 }
 
 function buildEntries() {
@@ -195,21 +233,18 @@ function buildEntries() {
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
     const fileRel = path.relative(ROOT, file);
+    if (SKIP_HARVEST_FILES.test(fileRel.replace(/\\/g, '/'))) continue;
     for (const { attr, kind } of ATTRS) {
-      // Matches literals (attr="x") and conditional attributes (attr={cond ? 'x' : undefined});
-      // the brace-free lead-in keeps the match inside a single JSX expression.
-      const re = new RegExp(`${attr}=(?:\\{[^{}]{0,80}?)?["'\`]([^"'\`]+)["'\`]`, 'g');
-      let m;
-      while ((m = re.exec(source))) {
+      for (const hit of extractAttrValues(source, attr)) {
         if (kind === 'setting' || kind === 'ownerSetup') {
           if (/HelpModal\.tsx$/.test(fileRel)) continue;
         }
-        const value = m[1].trim();
-        if (!value || SKIP_VALUE.test(value)) continue;
+        const value = hit.value;
+        if (!isHarvestableValue(kind, value)) continue;
         const id = `${kind}:${value}`;
         if (seen.has(id)) continue;
         const nav = inferNav(kind, value, fileRel, adminByKey);
-        const nearby = nearbyTKeys(source, m.index);
+        const nearby = nearbyTKeys(source, hit.index);
         const fromNearby = nearby.map((k) => lookupLocale(locales, k));
         let en = '';
         let fr = '';
@@ -261,6 +296,21 @@ function buildEntries() {
           extraEn += ' full page task page TaskPage ticket direct link';
           extraFr += ' page tache vue page ticket lien direct';
         }
+        if (value === 'm365-sso') {
+          const lab = lookupLocale(locales, 'admin.sso.m365Title');
+          en = lab.en || en;
+          fr = lab.fr || fr;
+          extraEn += ' oauth microsoft azure entra login create add provider SSO';
+          extraFr += ' oauth microsoft azure entra connexion creer ajouter fournisseur SSO';
+        }
+        if (value === 'github-sso') {
+          extraEn += ' oauth github login create add provider SSO';
+          extraFr += ' oauth github connexion creer ajouter fournisseur SSO';
+        }
+        if (value === 'sso-add-provider') {
+          extraEn += ' add provider oauth sso microsoft github google';
+          extraFr += ' ajouter fournisseur oauth sso microsoft github google';
+        }
 
         seen.set(id, {
           id,
@@ -282,6 +332,39 @@ function buildEntries() {
         });
       }
     }
+    if (source.includes('TOUR_ID_BY_TAB')) {
+      const tourIds = source.matchAll(/'(admin-[a-z0-9-]+)'/g);
+      for (const tm of tourIds) {
+        const value = tm[1];
+        if (!isHarvestableValue('tour', value) || seen.has(`tour:${value}`)) continue;
+        const nav = inferNav('tour', value, fileRel, adminByKey);
+        seen.set(`tour:${value}`, {
+          id: `tour:${value}`,
+          attr: 'tour',
+          value,
+          en: value.replace(/[-_]/g, ' '),
+          fr: value.replace(/[-_]/g, ' '),
+          searchEn: value,
+          searchFr: value,
+          kind: nav.navKind,
+          hash: nav.hash || undefined,
+          highlights: nav.highlights,
+          adminOnly: Boolean(nav.adminOnly),
+          audience: nav.adminOnly ? 'admin' : 'user',
+          file: fileRel
+        });
+      }
+    }
+  }
+
+  const logo = seen.get('setting:SITE_LOGO');
+  if (logo && !seen.has('setting:SITE_LOGO_DARK')) {
+    seen.set('setting:SITE_LOGO_DARK', {
+      ...logo,
+      id: 'setting:SITE_LOGO_DARK',
+      value: 'SITE_LOGO_DARK',
+      highlights: ['[data-setting-key="SITE_LOGO_DARK"]']
+    });
   }
 
   return [...seen.values()].sort((a, b) => a.id.localeCompare(b.id));
@@ -293,6 +376,24 @@ function canonical(entries) {
 
 const check = process.argv.includes('--check');
 const entries = buildEntries();
+const helpModal = fs.readFileSync(path.join(SRC, 'components/HelpModal.tsx'), 'utf8');
+const helpModalHashes = [...helpModal.matchAll(/adminGo\(\s*'([^']+)'/g)].map((m) => m[1]);
+const hashErrors = validateHelpGoEntries(entries, helpModalHashes);
+for (const [key, meta] of parseAdminSearchIndex()) {
+  const row = entries.find((e) => e.id === `setting:${key}`);
+  if (!row) {
+    hashErrors.push(`adminSearchIndex setting ${key} has no harvested Go There row`);
+    continue;
+  }
+  if (row.hash !== meta.hash) {
+    hashErrors.push(`setting:${key} hash ${row.hash} != adminSearchIndex ${meta.hash}`);
+  }
+}
+if (hashErrors.length) {
+  console.error('Help Go There hashes failed validation:');
+  for (const err of hashErrors) console.error(`  - ${err}`);
+  process.exit(1);
+}
 const next = canonical(entries);
 
 if (check) {

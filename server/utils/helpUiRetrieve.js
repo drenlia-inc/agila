@@ -30,6 +30,12 @@ function expandQuestion(question) {
   if (/full.?page|task.?page|entire task|whole task|page view|page tache|vue page/.test(f)) {
     extra.push('task-page-link', 'direct link', 'ticket');
   }
+  if (/microsoft|m365|azure|entra/.test(f)) {
+    extra.push('m365-sso', 'microsoft', 'oauth', 'sso', 'add provider');
+  }
+  if (/\bgithub\b/.test(f) && /oauth|sso|login|connexion/.test(f)) {
+    extra.push('github-sso', 'oauth', 'sso', 'add provider');
+  }
   return extra.length ? `${question} ${extra.join(' ')}` : question;
 }
 

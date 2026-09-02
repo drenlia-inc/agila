@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { HELP_UI_REVEAL } from './helpUiReveal.js';
+import { refineAdminGoHash } from './helpAdminGoHash.js';
 
 const INDEX_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -27,11 +28,14 @@ export function findHelpUiTarget(id, isAdmin) {
 
 export function targetToGoThere(row) {
   if (!row) return null;
-  const highlights = Array.isArray(row.highlights) ? row.highlights : [];
+  const highlights = Array.isArray(row.highlights) ? [...row.highlights] : [];
+  if (row.id === 'help:m365-sso' || row.id === 'help:github-sso') {
+    highlights.push('[data-help-target="sso-add-provider"]');
+  }
   const reveal = HELP_UI_REVEAL[row.id] || [];
   const extra = reveal.length ? { reveal } : {};
   if (row.kind === 'admin') {
-    return { kind: 'admin', hash: row.hash || '#admin', highlights, ...extra };
+    return { kind: 'admin', hash: refineAdminGoHash(row, row.hash || '#admin'), highlights, ...extra };
   }
   if (row.kind === 'page') {
     return { kind: 'page', page: row.page || 'reports', highlights, ...extra };

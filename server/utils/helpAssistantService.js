@@ -11,6 +11,22 @@ import { retrieveHelpUiScored, isWeakHelpUiRetrieval } from './helpUiRetrieve.js
 
 const MAX_HISTORY = 10;
 
+function looksLikeMicrosoftSsoQuestion(text) {
+  const f = String(text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return /microsoft|m365|azure|entra/.test(f) && /oauth|sso|login|connexion|auth/.test(f);
+}
+
+function looksLikeGithubSsoQuestion(text) {
+  const f = String(text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return /\bgithub\b/.test(f) && /oauth|sso|login|connexion|auth/.test(f);
+}
+
 function looksLikeTaskPageQuestion(text) {
   const f = String(text || '')
     .normalize('NFD')
@@ -165,6 +181,24 @@ export async function runHelpAssistantChat({ db, isAdmin, language, messages }) 
             : 'Open Filter, then the Columns menu to show archived columns.'
       }
     : null;
+  const m365Override = looksLikeMicrosoftSsoQuestion(lastUser.content)
+    ? {
+        targetId: 'help:m365-sso',
+        answer:
+          lang === 'fr'
+            ? 'Ouvrez Paramètres → Paramètres système → SSO, puis Ajouter un fournisseur → Microsoft 365, et renseignez l’application Azure (ID client, secret, URL de callback).'
+            : 'Open Settings → System Settings → SSO, then Add provider → Microsoft 365, and enter your Azure app (client ID, secret, callback URL).'
+      }
+    : null;
+  const githubSsoOverride = looksLikeGithubSsoQuestion(lastUser.content)
+    ? {
+        targetId: 'help:github-sso',
+        answer:
+          lang === 'fr'
+            ? 'Ouvrez Paramètres → Paramètres système → SSO, puis Ajouter un fournisseur → GitHub, et renseignez l’OAuth GitHub (ID client, secret, URL de callback).'
+            : 'Open Settings → System Settings → SSO, then Add provider → GitHub, and enter your GitHub OAuth app (client ID, secret, callback URL).'
+      }
+    : null;
   const taskPageOverride = looksLikeTaskPageQuestion(lastUser.content)
     ? {
         targetId: 'help:task-page-link',
@@ -174,7 +208,7 @@ export async function runHelpAssistantChat({ db, isAdmin, language, messages }) 
             : 'Click the ticket ID (e.g. TASK-00001) on the card, in list view, or at the top of the side panel to open the full task page. Clicking the card body only opens the side panel.'
       }
     : null;
-  const override = feedOverride || archiveOverride || taskPageOverride;
+  const override = feedOverride || archiveOverride || m365Override || githubSsoOverride || taskPageOverride;
 
   if (!override && weak) {
     const unsure = unsureReply(lang, isAdmin);
