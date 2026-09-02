@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { onHelpReveal, takeHelpReveal } from '../../utils/helpGoThere';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { SsoLoginButton } from '../auth/SsoLoginButton';
@@ -175,6 +176,14 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
   const closeAddMenu = () => setAddMenuOpen(false);
   useDismissible(Boolean(confirmDialog), closeConfirm, 'data-sso-confirm-dialog');
   useDismissible(addMenuOpen, closeAddMenu, 'data-sso-add-menu');
+
+  useEffect(() => {
+    return onHelpReveal(() => {
+      if (takeHelpReveal('ssoAddMenu') && availableProviders.length > 0) {
+        setAddMenuOpen(true);
+      }
+    });
+  }, [availableProviders.length]);
 
   const handleInputChange = (key: string, value: string) => {
     onSettingsChange({ ...editingSettings, [key]: value });
@@ -647,7 +656,7 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
           </h3>
         </div>
         {availableProviders.length > 0 && (
-          <div className="relative shrink-0" data-sso-add-menu>
+          <div className="relative shrink-0" data-sso-add-menu data-help-target="sso-add-provider">
             <button
               type="button"
               onClick={() => setAddMenuOpen((open) => !open)}

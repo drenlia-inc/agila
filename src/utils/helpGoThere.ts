@@ -2,7 +2,7 @@
 
 export const HELP_GO_THERE_EVENT = 'agila:help-go-there';
 
-export type HelpRevealAction = 'boardToolbar' | 'searchFilters' | 'columnFilter' | 'trash';
+export type HelpRevealAction = 'boardToolbar' | 'searchFilters' | 'columnFilter' | 'trash' | 'ssoAddMenu';
 
 const pending = new Set<HelpRevealAction>();
 
@@ -12,7 +12,8 @@ export function queueHelpReveal(actions: readonly string[]): void {
       raw === 'boardToolbar' ||
       raw === 'searchFilters' ||
       raw === 'columnFilter' ||
-      raw === 'trash'
+      raw === 'trash' ||
+      raw === 'ssoAddMenu'
     ) {
       pending.add(raw);
     }
