@@ -149,7 +149,7 @@ import { clearCustomCursor } from './utils/cursorUtils';
 import { generateUniqueBoardName } from './utils/boardUtils';
 import { renumberColumns, isArchivedColumnFlag, reconcileVisibleColumnIds, sameColumnIdSet } from './utils/columnUtils';
 import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveKanbanDropIndex, snapshotColumnTaskOrder, restoreColumnTaskOrders, TaskDropPlacement } from './utils/taskReorderingUtils';
-import { getTaskColumnId, orderedCheckedTasksInColumn } from './utils/kanbanMultiSelect';
+import { getTaskColumnId, orderedCheckedTasksInColumn, snapshotTaskBoardLocation } from './utils/kanbanMultiSelect';
 import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
 import { hasEscapeConsumingOverlay, isEditableEscapeTarget } from './utils/escapeKeyUtils';
 import { focusHeaderTaskSearch } from './utils/keyboardShortcutUtils';
@@ -363,6 +363,32 @@ function AppContent() {
       });
       return updatedFilteredColumns;
     });
+  };
+
+  const insertTaskIntoLocalColumns = (task: Task) => {
+    const columnId = task.columnId;
+    if (!columnId) return;
+
+    const insertInto = (cols: Columns): Columns => {
+      const col = cols[columnId];
+      if (!col) return cols;
+      if (col.tasks.some((t) => t.id === task.id)) return cols;
+      const tasks = [...col.tasks, task].sort(
+        (a, b) => (a.position || 0) - (b.position || 0)
+      );
+      return { ...cols, [columnId]: { ...col, tasks } };
+    };
+
+    setColumns((prev) => insertInto(prev));
+    setBoards((prevBoards) =>
+      prevBoards.map((board) => {
+        if (task.boardId && board.id !== task.boardId) return board;
+        if (!board.columns) return board;
+        const next = insertInto(board.columns);
+        return next === board.columns ? board : { ...board, columns: next };
+      })
+    );
+    taskFilters.setFilteredColumns((prev) => insertInto(prev));
   };
 
   const handleTaskDelete = async (
@@ -639,7 +665,7 @@ function AppContent() {
   const [showColumnDeleteConfirm, setShowColumnDeleteConfirm] = useState<string | null>(null);
 
   const [crossBoardMovePending, setCrossBoardMovePending] = useState<{
-    taskId: string;
+    taskIds: string[];
     targetBoardId: string;
     relationshipCount: number;
   } | null>(null);
@@ -1550,6 +1576,24 @@ function AppContent() {
   
   // Track recently deleted tasks to prevent them from reappearing via WebSocket updates or refreshBoardData
   const recentlyDeletedTasksRef = useRef<Set<string>>(new Set());
+  /** taskId → source board; hide on that board only so dest refresh can still show it. */
+  const recentlyMovedOffBoardRef = useRef<Map<string, string>>(new Map());
+  const crossBoardMoveSnapshotRef = useRef<{
+    task: Task;
+    sourceBoardId: string;
+  } | null>(null);
+  const recordMoveBoardUndoRef = useRef<
+    | ((
+        taskIds: string[],
+        previousByTaskId: Record<string, Partial<Task>>,
+        anchorColumnIds?: string[]
+      ) => void)
+    | null
+  >(null);
+  const onBulkUndoRef = useRef<(() => Promise<void>) | null>(null);
+  const onBulkMoveToBoardRef = useRef<
+    ((taskIds: string[], boardId: string) => Promise<void>) | null
+  >(null);
   const taskWebSocketRef = useRef<{
     handleTaskRestored?: (
       data: any,
@@ -3154,9 +3198,23 @@ function AppContent() {
                 const column = board.columns[columnId];
                 if (column) {
                   // Filter out recently deleted tasks
-                  const filteredTasks = (column.tasks || []).filter(
-                    task => !recentlyDeletedTasksRef.current.has(task.id)
-                  );
+                  const filteredTasks = (column.tasks || []).filter((task) => {
+                    if (recentlyDeletedTasksRef.current.has(task.id)) {
+                      const movedFrom = recentlyMovedOffBoardRef.current.get(task.id);
+                      const taskBoard = task.boardId || (task as { boardid?: string }).boardid;
+                      if (
+                        movedFrom &&
+                        taskBoard === boardIdToHydrate &&
+                        movedFrom !== boardIdToHydrate
+                      ) {
+                        return true;
+                      }
+                      return false;
+                    }
+                    const movedFrom = recentlyMovedOffBoardRef.current.get(task.id);
+                    if (movedFrom && movedFrom === boardIdToHydrate) return false;
+                    return true;
+                  });
                   newColumns[columnId] = {
                     ...column,
                     tasks: filteredTasks
@@ -4535,10 +4593,15 @@ function AppContent() {
   const performCrossBoardMove = useCallback(async (
     taskId: string,
     targetBoardId: string,
-    options?: { skipEmail?: boolean }
+    options?: {
+      skipEmail?: boolean;
+      quiet?: boolean;
+      targetColumnId?: string;
+      position?: number;
+    }
   ) => {
     const targetBoard = boards.find((b) => b.id === targetBoardId);
-    if (targetBoard && hasWipLimit(targetBoard.wip_limit)) {
+    if (!options?.quiet && targetBoard && hasWipLimit(targetBoard.wip_limit)) {
       const nextCount =
         getBoardWipTaskCount(dedupeTasksInColumns(targetBoard.columns || {})) + 1;
       const status = getWipStatus(nextCount, targetBoard.wip_limit);
@@ -4555,15 +4618,25 @@ function AppContent() {
       }
     }
 
-    // Snapshot before HTTP so we can patch without waiting on WS (important on multi-pod).
-    let movedTask: Task | null = null;
-    let sourceBoardId: string | null = selectedBoardRef.current;
-    for (const column of Object.values(columns)) {
-      const found = column?.tasks?.find((t) => t.id === taskId);
-      if (found) {
-        movedTask = found;
-        sourceBoardId = found.boardId || sourceBoardId;
-        break;
+    recentlyDeletedTasksRef.current.delete(taskId);
+    recentlyMovedOffBoardRef.current.delete(taskId);
+
+    // Card is already gone if drop stripped it; keep that snapshot for toast / dest patch.
+    const existingSnap =
+      crossBoardMoveSnapshotRef.current?.task.id === taskId
+        ? crossBoardMoveSnapshotRef.current
+        : null;
+    let movedTask: Task | null = existingSnap?.task ?? null;
+    let sourceBoardId: string | null =
+      existingSnap?.sourceBoardId ?? selectedBoardRef.current;
+    if (!movedTask) {
+      for (const column of Object.values(columnsRef.current || columns)) {
+        const found = column?.tasks?.find((t) => t.id === taskId);
+        if (found) {
+          movedTask = found;
+          sourceBoardId = found.boardId || sourceBoardId;
+          break;
+        }
       }
     }
     if (!movedTask) {
@@ -4580,16 +4653,65 @@ function AppContent() {
       }
     }
 
-    const result = await moveTaskToBoard(taskId, targetBoardId, options);
+    if (movedTask && sourceBoardId && !existingSnap) {
+      recentlyMovedOffBoardRef.current.set(taskId, sourceBoardId);
+      recentlyDeletedTasksRef.current.add(taskId);
+      setTimeout(() => {
+        recentlyDeletedTasksRef.current.delete(taskId);
+        recentlyMovedOffBoardRef.current.delete(taskId);
+      }, 10000);
+      crossBoardMoveSnapshotRef.current = { task: movedTask, sourceBoardId };
+      removeTaskFromLocalColumns(taskId);
+      if (selectedTask?.id === taskId && selectedBoardRef.current !== targetBoardId) {
+        handleSelectTask(null);
+      }
+    }
+
+    let result: {
+      targetColumnId?: string;
+      targetColumnTitle?: string;
+      columnMatched?: boolean;
+      position?: number;
+    };
+    try {
+      result = await moveTaskToBoard(taskId, targetBoardId, {
+        skipEmail: options?.skipEmail,
+        targetColumnId: options?.targetColumnId,
+        position: options?.position,
+      });
+    } catch (error) {
+      recentlyDeletedTasksRef.current.delete(taskId);
+      recentlyMovedOffBoardRef.current.delete(taskId);
+      const snap = crossBoardMoveSnapshotRef.current;
+      crossBoardMoveSnapshotRef.current = null;
+      if (snap?.task.id === taskId) {
+        insertTaskIntoLocalColumns(snap.task);
+      } else if (sourceBoardId) {
+        await refreshBoardDataRef.current?.({
+          force: true,
+          forBoardId: sourceBoardId,
+        }).catch(() => {});
+      }
+      throw error;
+    }
     const targetColumnId =
-      (result as { targetColumnId?: string })?.targetColumnId || null;
+      options?.targetColumnId || result.targetColumnId || null;
+    const destPosition = (() => {
+      const raw =
+        typeof options?.position === 'number'
+          ? options.position
+          : result.position;
+      return typeof raw === 'number' && Number.isFinite(raw)
+        ? Math.max(0, Math.floor(raw))
+        : 0;
+    })();
 
     if (movedTask && targetColumnId) {
       const patched: Task = {
         ...movedTask,
         boardId: targetBoardId,
         columnId: targetColumnId,
-        position: 0,
+        position: destPosition,
       };
 
       const stripTask = (cols: Columns): Columns => {
@@ -4608,28 +4730,27 @@ function AppContent() {
         return next;
       };
 
-      const insertAtTop = (cols: Columns): Columns => {
+      const insertAtSlot = (cols: Columns): Columns => {
         const next = stripTask(cols);
         const col = next[targetColumnId];
         if (!col) return next;
         const withoutDup = (col.tasks || []).filter((t) => t.id !== taskId);
-        const shifted = withoutDup.map((t) => ({
-          ...t,
-          position: (typeof t.position === 'number' ? t.position : 0) + 1,
-        }));
+        const insertAt = Math.max(0, Math.min(destPosition, withoutDup.length));
+        const shifted = withoutDup.map((t) => {
+          const p = typeof t.position === 'number' ? t.position : 0;
+          return p >= insertAt ? { ...t, position: p + 1 } : t;
+        });
         next[targetColumnId] = {
           ...col,
-          tasks: [patched, ...shifted].sort(
+          tasks: [...shifted, { ...patched, position: insertAt }].sort(
             (a, b) => (a.position || 0) - (b.position || 0)
           ),
         };
         return next;
       };
 
-      if (selectedBoardRef.current === sourceBoardId) {
-        setColumns((prev) => stripTask(prev));
-      } else if (selectedBoardRef.current === targetBoardId) {
-        setColumns((prev) => insertAtTop(prev));
+      if (selectedBoardRef.current === targetBoardId) {
+        setColumns((prev) => insertAtSlot(prev));
       }
 
       setBoards((prev) =>
@@ -4638,19 +4759,14 @@ function AppContent() {
             return { ...board, columns: stripTask(board.columns || {}) };
           }
           if (board.id === targetBoardId) {
-            return { ...board, columns: insertAtTop(board.columns || {}) };
+            return { ...board, columns: insertAtSlot(board.columns || {}) };
           }
           return board;
         })
       );
 
-      if (selectedTask?.id === taskId) {
-        // Task left this board — close details so we do not edit a stale location.
-        if (selectedBoardRef.current !== targetBoardId) {
-          handleSelectTask(null);
-        } else {
-          handleSelectTask(patched);
-        }
+      if (selectedTask?.id === taskId && selectedBoardRef.current === targetBoardId) {
+        handleSelectTask(patched);
       }
 
       // Drop board-scoped links locally (server already deleted them).
@@ -4662,29 +4778,82 @@ function AppContent() {
       );
     }
 
-    // Reconcile target board into boards[] without replacing the visible board's columns
-    // when we stayed on the source (avoids the old force-refresh flash).
-    void refreshBoardData({
-      force: true,
-      forBoardId: targetBoardId,
-    }).catch(() => {
-      /* refreshBoardData already logs */
-    });
-  }, [refreshBoardData, boards, columns, selectedTask, handleSelectTask, taskLinking, t]);
+    if (!options?.quiet) {
+      const label =
+        movedTask?.ticket ||
+        movedTask?.title ||
+        t('kanbanSelect.movingSingle');
+      if (movedTask && sourceBoardId && !options?.skipEmail) {
+        const loc = snapshotTaskBoardLocation(
+          { ...movedTask, boardId: sourceBoardId },
+          columnsRef.current || columns,
+          sourceBoardId
+        );
+        recordMoveBoardUndoRef.current?.(
+          [taskId],
+          { [taskId]: loc },
+          loc.columnId ? [loc.columnId] : []
+        );
+      }
+      toast.show({
+        type: 'success',
+        title: t('kanbanSelect.movedToBoardTitle', {
+          board: targetBoard?.title || '',
+        }),
+        message: t('kanbanSelect.movedToBoardMessage', { label }),
+        duration: 8000,
+        ...(!options?.skipEmail
+          ? {
+              actionLabel: t('kanbanSelect.undoMoveSingle'),
+              onAction: () => {
+                void onBulkUndoRef.current?.();
+              },
+            }
+          : {}),
+      });
+      if (result.columnMatched === false) {
+        const destColumnTitle =
+          result.targetColumnTitle ||
+          targetBoard?.columns?.[result.targetColumnId || '']?.title ||
+          '';
+        toast.warning(
+          t('kanbanSelect.noMatchingColumnTitle'),
+          t('kanbanSelect.noMatchingColumnMessage', {
+            label,
+            column: destColumnTitle,
+          }),
+          8000
+        );
+      }
+    }
+    if (crossBoardMoveSnapshotRef.current?.task.id === taskId) {
+      crossBoardMoveSnapshotRef.current = null;
+    }
+  }, [boards, columns, selectedTask, handleSelectTask, taskLinking, t]);
 
   // Handle cross-board task drop (confirms when task has parent/child/related links — server removes them on move)
   const handleTaskDropOnBoard = useCallback(
     async (taskId: string, targetBoardId: string) => {
       try {
-        let relationshipCount = 0;
-        try {
-          const rels = await getTaskRelationships(taskId);
-          if (Array.isArray(rels)) relationshipCount = rels.length;
-        } catch (err) {
-          console.error('Could not load task relationships before cross-board move:', err);
+        const localRels = (taskLinking.boardRelationships || []).filter(
+          (rel: { taskId?: string; toTaskId?: string }) =>
+            rel.taskId === taskId || rel.toTaskId === taskId
+        );
+        let relationshipCount = localRels.length;
+        if (relationshipCount === 0) {
+          try {
+            const rels = await getTaskRelationships(taskId);
+            if (Array.isArray(rels)) relationshipCount = rels.length;
+          } catch (err) {
+            console.error('Could not load task relationships before cross-board move:', err);
+          }
         }
         if (relationshipCount > 0) {
-          setCrossBoardMovePending({ taskId, targetBoardId, relationshipCount });
+          setCrossBoardMovePending({
+            taskIds: [taskId],
+            targetBoardId,
+            relationshipCount,
+          });
           return;
         }
         await performCrossBoardMove(taskId, targetBoardId);
@@ -4693,7 +4862,7 @@ function AppContent() {
         toast.error(t('errors.moveTaskToBoardTitle'), t('errors.moveTaskToBoardMessage'));
       }
     },
-    [performCrossBoardMove, t]
+    [performCrossBoardMove, taskLinking.boardRelationships, t]
   );
 
   const handleConfirmCrossBoardMove = useCallback(async () => {
@@ -4701,7 +4870,11 @@ function AppContent() {
     if (!pending) return;
     setCrossBoardMoveBusy(true);
     try {
-      await performCrossBoardMove(pending.taskId, pending.targetBoardId);
+      if (pending.taskIds.length > 1) {
+        await onBulkMoveToBoardRef.current?.(pending.taskIds, pending.targetBoardId);
+      } else if (pending.taskIds[0]) {
+        await performCrossBoardMove(pending.taskIds[0], pending.targetBoardId);
+      }
       setCrossBoardMovePending(null);
     } catch (error) {
       console.error('Failed to move task to board:', error);
@@ -4712,7 +4885,8 @@ function AppContent() {
   }, [crossBoardMovePending, performCrossBoardMove, t]);
 
   const handleCancelCrossBoardMove = useCallback(() => {
-    if (!crossBoardMoveBusy) setCrossBoardMovePending(null);
+    if (crossBoardMoveBusy) return;
+    setCrossBoardMovePending(null);
   }, [crossBoardMoveBusy]);
 
   const findTaskInColumns = useCallback(
@@ -4811,7 +4985,42 @@ function AppContent() {
     clearBulkUndo,
     onBulkUndo,
     recordColumnMoveUndo,
+    recordMoveBoardUndo,
   } = kanbanMultiSelect;
+  recordMoveBoardUndoRef.current = recordMoveBoardUndo;
+  onBulkUndoRef.current = onBulkUndo;
+  onBulkMoveToBoardRef.current = onBulkMoveToBoard;
+
+  const handleBulkTaskDropOnBoard = useCallback(
+    async (taskIds: string[], targetBoardId: string) => {
+      if (taskIds.length === 0) return;
+      if (taskIds.length === 1) {
+        await handleTaskDropOnBoard(taskIds[0], targetBoardId);
+        return;
+      }
+      const linked = taskIds.filter((id) =>
+        (taskLinking.boardRelationships || []).some(
+          (rel: { taskId?: string; toTaskId?: string }) =>
+            rel.taskId === id || rel.toTaskId === id
+        )
+      );
+      if (linked.length > 0) {
+        setCrossBoardMovePending({
+          taskIds,
+          targetBoardId,
+          relationshipCount: linked.length,
+        });
+        return;
+      }
+      try {
+        await onBulkMoveToBoard(taskIds, targetBoardId);
+      } catch (error) {
+        console.error('Failed to move tasks to board:', error);
+        toast.error(t('errors.moveTaskToBoardTitle'), t('errors.moveTaskToBoardMessage'));
+      }
+    },
+    [handleTaskDropOnBoard, onBulkMoveToBoard, taskLinking.boardRelationships, t]
+  );
 
   const checkedTaskIdsRef = useRef(checkedTaskIds);
   checkedTaskIdsRef.current = checkedTaskIds;
@@ -5972,6 +6181,7 @@ function AppContent() {
         isOnline={isOnline}
         onTaskMove={handleKanbanBoardTaskMove}
         onTaskMoveToDifferentBoard={handleTaskDropOnBoard}
+        onBulkTaskMoveToDifferentBoard={handleBulkTaskDropOnBoard}
         onBulkTaskMove={handleBulkMoveTaskIds}
         checkedTaskIds={checkedTaskIds}
         checkedTaskIdsRef={checkedTaskIdsRef}

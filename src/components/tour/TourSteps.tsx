@@ -24,11 +24,13 @@ export const getTourSteps = (): TourStepsConfig => {
       disableBeacon: false,
       spotlightClicks: false,
     },
-    // Step 2: Kanban Columns
+    // Step 2: Kanban Columns (grid only — not the full-height scroller, or the
+    // tooltip is placed under the board and sits outside the viewport)
     {
-      target: '[data-tour-id="kanban-columns"]',
+      target: '[data-tour-id="kanban-columns-grid"]',
       content: i18n.t('tour.steps.kanbanColumns', { ns: 'common' }),
       placement: 'top',
+      offset: 16,
     },
     // Step 3: Add Task Button
     {
@@ -36,21 +38,14 @@ export const getTourSteps = (): TourStepsConfig => {
       content: i18n.t('tour.steps.addTaskButton', { ns: 'common' }),
       placement: 'top',
     },
-    // Step 4: Task Card Toolbar (instruct user to hover)
+    // Step 4: Task card (toolbar + pen) — one stop; a second card step repeated the same idea
     {
       target: '.task-card',
       content: i18n.t('tour.steps.taskCardToolbar', { ns: 'common' }),
       placement: 'top',
       disableBeacon: false,
     },
-    // Step 5: Task Quick Edit
-    {
-      target: '.task-card',
-      content: i18n.t('tour.steps.taskQuickEdit', { ns: 'common' }),
-      placement: 'right',
-      disableBeacon: false,
-    },
-    // Step 6: Sprint Association (calendar icon)
+    // Step 5: Sprint Association (calendar icon)
     {
       target: '[data-tour-id="sprint-association"]',
       content: i18n.t('tour.steps.sprintAssociation', { ns: 'common' }),

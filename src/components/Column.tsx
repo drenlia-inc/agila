@@ -1105,7 +1105,7 @@ function KanbanColumn({
 
     if (insertIndex >= withoutDraggedCount) {
       const top = windowed ? offsetForIndex(tasksForLayout.length) : null;
-      if (!windowed || (endIndex >= tasksForLayout.length && top != null)) {
+      if (!windowed || top != null) {
         taskElements.push(
           <div
             key="insertion-preview-end"
@@ -2111,6 +2111,7 @@ const BottomDropZone: React.FC<{ columnId: string }> = ({ columnId }) => {
   return (
     <div
       ref={setNodeRef}
+      data-kanban-column-bottom
       className="pointer-events-auto absolute inset-x-0 bottom-0 z-10 h-16 w-full"
       aria-hidden
     />

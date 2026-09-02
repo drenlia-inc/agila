@@ -20,7 +20,7 @@ Shape the board to how work actually moves; use soft WIP and optional sprints wh
 | Role       | What they can do for delivery                                                                          |
 | ---------- | ------------------------------------------------------------------------------------------------------ |
 | **Admin**  | Users, boards/columns, WIP & policy, Project/Features/Sprint settings, Reports config, Lifecycle/trash |
-| **User**   | Work the board: create/move tasks, comments, filters, views (no Admin panel)                           |
+| **User**   | Work the board: create/move tasks, comments, filters, views (no Settings)                              |
 | **Viewer** | Read-only boards; can comment and save personal views (no create/edit/drag of tasks)                   |
 
 
@@ -30,22 +30,22 @@ Shape the board to how work actually moves; use soft WIP and optional sprints wh
 
 ## First hour checklist
 
-**Google SSO (initial setup):** If your organization uses Google OAuth, configure SSO during setup—before invites go wide. Users can sign in with Google instead of creating another password, which speeds onboarding. See Admin → **System Settings → SSO** (or Help → Admin → SSO).
+**Google SSO (initial setup):** If your organization uses Google OAuth, configure SSO during setup—before invites go wide. Users can sign in with Google instead of creating another password, which speeds onboarding. See Settings → **System Settings → SSO** (or Help → Settings → SSO).
 
 Do these in order. Skip branding and AI until the team can move cards.
 
-1. **Invite the team** — header **Invite**, or Admin → Users (assign **User** or **Viewer** as needed).
+1. **Invite the team** — header **Invite**, or Settings → Users (assign **User** or **Viewer** as needed).
 2. **Create one board** — `+` on the board tabs. Prefer **one board per project** at first (most people work across several projects).
 3. **Shape columns** to match how work actually flows (example: To Do → In Progress → Review → Done). Add/reorder from the board; click a column title (admin) for name, soft WIP, and short policy notes.
-4. **Optional: define “finished”** — Admin → **Project Settings → Project** → finished column names (e.g. `Done`). Tasks in those columns are not treated as overdue.
-5. **Tune Features** — Admin → **Project Settings → Features**:
+4. **Optional: define “finished”** — Settings → **Project Settings → Project** → finished column names (e.g. `Done`). Tasks in those columns are not treated as overdue.
+5. **Tune Features** — Settings → **Project Settings → Features**:
   - Task counts on board tabs / columns: **on** (recommended)
   - Effort totals: optional (off by default)
   - Effort unit: hours or points (display only; values are not converted)
   - Highlight overdue: on if you want LATE badges
 6. **Optional: soft board WIP** — double-click the board tab → set a team-capacity limit for **active** work (see [WIP](#soft-wip-column-and-board)).
 7. **Optional: first sprint** — only if you use dated sprints:
-  - Create the sprint from the header sprint dropdown (**New sprint**) or Admin → **Project Settings → Sprints** (do this before you need to assign work to it).
+  - Create the sprint from the header sprint dropdown (**New sprint**) or Settings → **Project Settings → Sprints** (do this before you need to assign work to it).
   - In the header sprint dropdown, pick that sprint: **new tasks you add are placed in that sprint** (and dates follow the sprint window when applicable).
   - With **All sprints** selected, new tasks are not auto-assigned; use the **calendar icon on a card**, or **select cards with their checkbox and choose Sprint in the bulk action bar** to assign a sprint.
 8. **Create a few real tasks** and walk the flow once with the team.
@@ -148,7 +148,7 @@ WIP in Agila is **soft**: at or over the limit, the UI **warns**; moves and crea
   - A **specific sprint** selected → new tasks land in that sprint.
   - **All sprints** → new tasks stay unassigned; use the **calendar icon on a card**, or **select cards with their checkbox and choose Sprint in the bulk action bar** to assign a sprint.
   - **Backlog** filters to unassigned work.
-3. Enable **Reports** when you want burndown and team views (Admin → Project Settings → Reporting).
+3. Enable **Reports** when you want burndown and team views (Settings → Project Settings → Reporting).
 4. Create the next sprint before the current one ends so assignment never blocks planning.
 
 Sprints are **timeboxes for filtering and reporting**. The board remains the source of flow truth.
@@ -159,7 +159,7 @@ Sprints are **timeboxes for filtering and reporting**. The board remains the sou
 
 ## Visibility and Features
 
-**Admin → Project Settings → Features** controls board chrome, not permissions:
+**Settings → Project Settings → Features** controls board chrome, not permissions:
 
 - Board tab / column **task counts** (and WIP meters when a limit is set)
 - Board tab / column **effort totals**
@@ -182,7 +182,7 @@ Turn counts **on** for search, filters, and WIP coaching. Leave effort off until
 | Topic               | Practice                                                                          |
 | ------------------- | --------------------------------------------------------------------------------- |
 | **Done**            | Land in a finished-named column; keep finished names in Project settings          |
-| **Delete**          | Soft-delete → board trash; restore from trash or Admin → **Lifecycle**            |
+| **Delete**          | Soft-delete → board trash; restore from trash or Settings → **Lifecycle**            |
 | **Purge**           | Admins can permanently purge (e.g. Shift+click delete with confirm)—use sparingly |
 | **Archive columns** | For work you want off the active path without deleting                            |
 | **Retention**       | Set Lifecycle retention/auto-purge with an admin, and tell the team first—soft-deleted boards and tasks can be permanently removed after the retention period |

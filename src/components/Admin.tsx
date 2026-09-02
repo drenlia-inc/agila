@@ -1740,7 +1740,7 @@ const Admin: React.FC<AdminProps> = ({
               </div>
             </div>
           </div>
-          <nav className="flex gap-5 sm:gap-6 overflow-x-auto px-4 max-w-full border-b border-gray-100 dark:border-gray-700">
+          <nav className="flex gap-5 sm:gap-6 overflow-x-auto overflow-y-hidden px-4 max-w-full border-b border-gray-100 dark:border-gray-700">
             {ADMIN_NAV_TABS.map((tab) => (
               <button
                 key={tab}

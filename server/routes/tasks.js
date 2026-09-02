@@ -2781,7 +2781,7 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error || 'taskid and targetBoardId are required' });
   }
-  const { taskId, targetBoardId } = parsed.data;
+  const { taskId, targetBoardId, targetColumnId: requestedColumnId, position: requestedPosition } = parsed.data;
   const userId = req.user?.id || 'system';
   
   try {
@@ -2801,12 +2801,28 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
     const sourceColumn = await helpers.getColumnById(db, task.columnid || task.columnId);
     
     let targetColumn = null;
+    let columnMatched = false;
+    let restorePosition = 0;
+
+    if (requestedColumnId) {
+      const requested = await helpers.getColumnById(db, requestedColumnId);
+      const requestedBoardId =
+        requested?.boardId || requested?.boardid || requested?.board_id;
+      if (requested && String(requestedBoardId) === String(targetBoardId)) {
+        targetColumn = requested;
+        columnMatched = true;
+        if (typeof requestedPosition === 'number' && Number.isFinite(requestedPosition)) {
+          restorePosition = Math.max(0, Math.floor(requestedPosition));
+        }
+      }
+    }
     
     // Try to find a column with the same title in the target board
-    if (sourceColumn) {
+    if (!targetColumn && sourceColumn) {
       targetColumn = await helpers.getColumnByTitleInBoard(db, targetBoardId, sourceColumn.title);
       
       if (targetColumn) {
+        columnMatched = true;
         taskHttpLog(dbgHttp, `🎯 Smart placement: Found matching column "${sourceColumn.title}" in target board`);
       }
     }
@@ -2814,9 +2830,6 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
     // Fallback to first column if no matching column found
     if (!targetColumn) {
       targetColumn = await helpers.getFirstColumnInBoard(db, targetBoardId);
-      
-      if (sourceColumn && targetColumn) {
-      }
     }
     
     if (!targetColumn) {
@@ -2839,10 +2852,10 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
       params: [taskId, taskId]
     });
     
-    // Shift existing tasks in target column to make room at position 0
+    // Shift existing tasks in target column to make room at the restore slot
     batchQueries.push({
-      query: 'UPDATE tasks SET position = position + 1 WHERE columnid = ?',
-      params: [targetColumn.id]
+      query: 'UPDATE tasks SET position = position + 1 WHERE columnid = ? AND position >= ?',
+      params: [targetColumn.id, restorePosition]
     });
     
     // Update the existing task to move it to the new location
@@ -2851,14 +2864,14 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
         UPDATE tasks SET 
           columnid = ?, 
           boardid = ?, 
-          position = 0,
+          position = ?,
           pre_boardid = ?, 
           pre_columnid = ?,
           column_entered_at = ?,
           updated_at = ?
         WHERE id = ?
       `,
-      params: [targetColumn.id, targetBoardId, originalBoardId, originalColumnId, now, now, taskId]
+      params: [targetColumn.id, targetBoardId, restorePosition, originalBoardId, originalColumnId, now, now, taskId]
     });
     
     // Execute all updates in a single batched transaction
@@ -2945,6 +2958,9 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
       success: true, 
       newTaskId: taskId, // Return original taskId since we're not changing it
       targetColumnId: targetColumn.id,
+      targetColumnTitle: targetColumn.title || '',
+      columnMatched,
+      position: restorePosition,
       targetBoardId,
       message: 'Task moved successfully' 
     });

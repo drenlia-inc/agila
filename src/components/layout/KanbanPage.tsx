@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { DndContext, DragOverlay, useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
@@ -1283,6 +1283,43 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     return () => window.clearTimeout(timeoutId);
   }, [visibleColumnsForCurrentBoard, viewMode]);
 
+  // Stretch a short board to the viewport so leftover space matches page bg
+  // and a Windows-style horizontal scrollbar sits at the bottom, not mid-screen.
+  useLayoutEffect(() => {
+    if (viewMode !== 'kanban') return;
+    const el = columnsContainerRef.current;
+    if (!el) return;
+
+    const MAIN_LAYOUT_BOTTOM_PAD_PX = 24; // MainLayout py-6
+    let lastApplied = -1;
+
+    const applyMinHeight = () => {
+      const docTop = el.getBoundingClientRect().top + window.scrollY;
+      const viewportH = window.visualViewport?.height ?? window.innerHeight;
+      const next = Math.max(0, Math.round(viewportH - docTop - MAIN_LAYOUT_BOTTOM_PAD_PX));
+      if (Math.abs(next - lastApplied) < 1) return;
+      lastApplied = next;
+      el.style.minHeight = `${next}px`;
+    };
+
+    applyMinHeight();
+    window.addEventListener('resize', applyMinHeight);
+    window.visualViewport?.addEventListener('resize', applyMinHeight);
+
+    const resizeObserver = new ResizeObserver(applyMinHeight);
+    const header = document.querySelector('header[data-tour-id="navigation"]');
+    if (header) resizeObserver.observe(header);
+    const pageChrome = el.closest('.main-layout-container');
+    if (pageChrome) resizeObserver.observe(pageChrome);
+
+    return () => {
+      window.removeEventListener('resize', applyMinHeight);
+      window.visualViewport?.removeEventListener('resize', applyMinHeight);
+      resizeObserver.disconnect();
+      el.style.minHeight = '';
+    };
+  }, [viewMode, selectedBoard, trashOpen, appHeaderStickyTopPx, canMutate]);
+
   // Ensure scroll state is checked when switching to Kanban view
   useEffect(() => {
     if (viewMode === 'kanban') {
@@ -2171,6 +2208,7 @@ const BoardDropArea: React.FC<{ selectedBoard: string | null; style: React.CSSPr
     <div 
       ref={setNodeRef} 
       className="board-drop-area"
+      data-tour-id="kanban-columns-grid"
       style={{
         ...style
         // Background handled by CSS class to prevent flash

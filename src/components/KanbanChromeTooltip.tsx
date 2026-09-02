@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useIsMobileViewport } from '../hooks/useIsMobileViewport';
+import { useTourOptional } from '../contexts/TourContext';
 
 /**
  * Shared inverted chrome surface — high contrast in both themes:
@@ -129,6 +130,7 @@ export function KanbanChromeTooltip({
   dismissOnLabelChange = true,
 }: KanbanChromeTooltipProps) {
   const isMobile = useIsMobileViewport();
+  const tourRunning = Boolean(useTourOptional()?.isRunning);
   const [visible, setVisible] = useState(false);
   /** Positioned + ready to show (avoids off-screen → clamp jump). */
   const [portalStyle, setPortalStyle] = useState<React.CSSProperties | null>(null);
@@ -152,6 +154,7 @@ export function KanbanChromeTooltip({
   };
 
   const show = () => {
+    if (tourRunning) return;
     clearHideTimer();
     clearTimer();
     if (delayMs <= 0) {
@@ -205,6 +208,11 @@ export function KanbanChromeTooltip({
     if (!hasBody) hide();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasBody]);
+
+  useEffect(() => {
+    if (tourRunning) hide();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourRunning]);
 
   // Clicking another control (e.g. a different board tab) can skip mouseout when React re-renders.
   useEffect(() => {

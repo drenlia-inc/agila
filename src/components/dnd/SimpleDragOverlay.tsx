@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { DragOverlay as DndKitDragOverlay } from '@dnd-kit/core';
 import { useTranslation } from 'react-i18next';
 import { FileText } from 'lucide-react';
+import { snapPointerInsideOverlay } from '../../utils/dndOverlayModifiers';
+import { lastKanbanPointer, setLastKanbanPointer } from '../../utils/kanbanPointer';
 import { Task, TeamMember } from '../../types';
 import DOMPurify from 'dompurify';
 import { getAuthenticatedAttachmentUrl } from '../../utils/authImageUrl';
@@ -28,60 +31,83 @@ export const SimpleDragOverlay: React.FC<SimpleDragOverlayProps> = ({
   taskViewMode = 'expand',
 }) => {
   const multiCount = draggedTaskIds.length > 1 ? draggedTaskIds.length : 0;
+  const overlayModifiers = useMemo(() => {
+    if (draggedColumn || !draggedTask) return undefined;
+    if (isHoveringBoardTab) return undefined;
+    return [snapPointerInsideOverlay];
+  }, [draggedColumn, draggedTask, isHoveringBoardTab, multiCount]);
+
+  const tabChip =
+    isHoveringBoardTab && draggedTask
+      ? createPortal(
+          <TabDropPointerChip
+            member={members.find((m) => m.id === draggedTask.memberId)}
+            count={multiCount || 1}
+          />,
+          document.body
+        )
+      : null;
 
   return (
-    <DndKitDragOverlay 
-      dropAnimation={null}
-      style={{ pointerEvents: 'none' }}
-    >
-      {draggedColumn ? (
-        // Column drag preview
-        <ColumnDragPreview column={draggedColumn} />
-      ) : draggedTask ? (
-        isHoveringBoardTab ? (
-          // Small corner indicator when hovering over board tabs
-          <SmallTaskIndicator 
-            task={draggedTask} 
-            member={members.find(m => m.id === draggedTask.memberId)} 
-            count={multiCount || 1}
-          />
-        ) : (
+    <>
+      {tabChip}
+      <DndKitDragOverlay 
+        dropAnimation={null}
+        adjustScale={false}
+        modifiers={overlayModifiers}
+        style={{ pointerEvents: 'none' }}
+      >
+        {draggedColumn ? (
+          <ColumnDragPreview column={draggedColumn} />
+        ) : draggedTask && !isHoveringBoardTab ? (
           <TaskDragPreview
             task={draggedTask}
             member={members.find(m => m.id === draggedTask.memberId)}
             stackCount={multiCount}
             compact={taskViewMode === 'compact'}
           />
-        )
-      ) : null}
-    </DndKitDragOverlay>
+        ) : null}
+      </DndKitDragOverlay>
+    </>
   );
 };
 
-// Small task indicator for when hovering over board tabs
-const SmallTaskIndicator: React.FC<{ task: Task; member?: TeamMember; count?: number }> = ({
-  task,
+/** Chip glued to the live pointer — not dnd-kit’s card-sized overlay box. */
+const TabDropPointerChip: React.FC<{ member?: TeamMember; count: number }> = ({
   member,
-  count = 1,
+  count,
 }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const place = (x: number, y: number) => {
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+    };
+    place(lastKanbanPointer.x, lastKanbanPointer.y);
+    const onMove = (e: PointerEvent) => {
+      setLastKanbanPointer(e.clientX, e.clientY);
+      place(e.clientX, e.clientY);
+    };
+    document.addEventListener('pointermove', onMove, { passive: true });
+    return () => document.removeEventListener('pointermove', onMove);
+  }, []);
+
   return (
-    // Container matches the original task card size to maintain mouse offset
-    <div className="w-80 h-24 relative pointer-events-none">
-      {/* Small indicator positioned at top-left corner */}
-      <div className="absolute top-2 left-2 w-8 h-8 rounded-lg bg-white shadow-lg border-2 border-blue-500 flex items-center justify-center">
-        {/* Task background with assignee color */}
-        <div 
-          className="absolute inset-0 rounded-lg opacity-20"
-          style={{ backgroundColor: member?.color || '#3B82F6' }}
-        />
-        
-        {/* FileText icon (same as task details button) */}
-        <FileText size={16} className="text-blue-600 relative z-10" />
-        
-        {/* Small task count indicator */}
-        <div className="absolute -top-1 -right-1 min-w-[12px] h-3 px-0.5 bg-blue-500 rounded-full border border-white text-[8px] text-white flex items-center justify-center font-bold">
-          {count}
-        </div>
+    <div
+      ref={ref}
+      data-kanban-drag-overlay
+      className="pointer-events-none fixed z-[10050] flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg border-2 border-blue-500 bg-white shadow-lg"
+    >
+      <div
+        className="absolute inset-0 rounded-lg opacity-20"
+        style={{ backgroundColor: member?.color || '#3B82F6' }}
+      />
+      <FileText size={16} className="relative z-10 text-blue-600" />
+      <div className="absolute -top-1 -right-1 flex h-3 min-w-[12px] items-center justify-center rounded-full border border-white bg-blue-500 px-0.5 text-[8px] font-bold text-white">
+        {count}
       </div>
     </div>
   );

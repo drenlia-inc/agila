@@ -553,8 +553,11 @@ export default function TaskCardToolbar({
         ? 'pointer-events-auto opacity-50 group-hover:opacity-100'
         : toolbarHoverVisibility;
 
-  const assigneeAvatar = <MemberAvatar member={member} members={members} size="lg" />;
+  const assigneeAvatar = (
+    <MemberAvatar member={member} members={members} size="lg" nativeTitle={false} />
+  );
   const assigneeLabel = member?.name || t('taskCard.noAssignee');
+  const assigneeChangeLabel = t('toolbar.changeAssigneeNamed', { name: assigneeLabel });
 
   // Viewers: assignee avatar + watcher/collaborator counts only (no mutation controls).
   if (!canMutate) {
@@ -737,11 +740,12 @@ export default function TaskCardToolbar({
       <div className={`absolute top-1 right-2 ${showMemberSelect ? 'z-[110]' : 'z-20'}`}>
         <div className="relative">
           <KanbanChromeTooltip
-            label={agentBlocking ? agentLockedLabel : t('toolbar.changeAssignee')}
+            label={agentBlocking ? agentLockedLabel : assigneeChangeLabel}
           >
             <button
               ref={memberButtonRef}
               disabled={agentBlocking}
+              aria-label={agentBlocking ? agentLockedLabel : assigneeChangeLabel}
               onClick={(e) => {
                 if (agentBlocking) return;
                 handleMemberToggle(e);
