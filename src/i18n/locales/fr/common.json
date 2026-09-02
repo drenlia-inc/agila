@@ -20,7 +20,8 @@
     "no": "Non",
     "ok": "OK",
     "continue": "Continuer",
-    "back": "Retour"
+    "back": "Retour",
+    "dismiss": "Fermer"
   },
   "mobileWarning": {
     "title": "Pas encore adaptée au mobile",

@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -9,6 +10,8 @@ export interface Toast {
   title: string;
   message: string;
   duration?: number;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 class ToastManager {
@@ -68,7 +71,9 @@ class ToastManager {
       duration,
       type: toast.type,
       title: toast.title,
-      message: toast.message
+      message: toast.message,
+      actionLabel: toast.actionLabel,
+      onAction: toast.onAction,
     };
 
     this.toasts.push(newToast);
@@ -125,6 +130,7 @@ export const toast = new ToastManager();
 
 // Toast component
 export const ToastComponent: React.FC<{ toast: Toast; onDismiss: (id: string) => void }> = ({ toast: toastData, onDismiss }) => {
+  const { t } = useTranslation('common');
   const getToastStyles = () => {
     switch (toastData.type) {
       case 'success':
@@ -212,18 +218,32 @@ export const ToastComponent: React.FC<{ toast: Toast; onDismiss: (id: string) =>
           <h3 className={`text-sm font-medium ${styles.title}`}>
             {toastData.title}
           </h3>
-          <p className={`mt-1 text-sm ${styles.message}`}>
-            {toastData.message}
-          </p>
+          {toastData.message ? (
+            <p className={`mt-1 text-sm ${styles.message}`}>
+              {toastData.message}
+            </p>
+          ) : null}
+          {toastData.actionLabel && toastData.onAction ? (
+            <button
+              type="button"
+              onClick={() => {
+                toastData.onAction?.();
+                onDismiss(toastData.id);
+              }}
+              className={`mt-2 inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${styles.title} ${styles.border} hover:opacity-90`}
+            >
+              {toastData.actionLabel}
+            </button>
+          ) : null}
         </div>
         <div className="ml-4 flex-shrink-0">
           <button
             type="button"
             onClick={() => onDismiss(toastData.id)}
             className={`inline-flex rounded p-0.5 ${styles.button}`}
-            aria-label="Dismiss"
+            aria-label={t('buttons.dismiss')}
           >
-            <span className="sr-only">Dismiss</span>
+            <span className="sr-only">{t('buttons.dismiss')}</span>
             <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>

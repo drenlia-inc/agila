@@ -29,6 +29,8 @@ import {
 } from '../utils/kanbanChromeVisibility';
 import { getBoardTrashCount } from '../api';
 import { useIsMobileViewport } from '../hooks/useIsMobileViewport';
+import { boardTabIdUnderPointer } from '../utils/boardTabStrip';
+import { lastKanbanPointer } from '../utils/kanbanPointer';
 
 function parseBoardWipLimitValue(raw: string): number | null {
   const trimmed = String(raw ?? '').trim();
@@ -237,8 +239,6 @@ const DroppableBoardTab: React.FC<{
   draggedTask: Task | null;
   selectedBoardId: string | null;
   boardDropState: BoardDropState;
-  onHoverStart: (boardId: string) => void;
-  onHoverEnd: () => void;
 }> = ({ 
   board, 
   isSelected, 
@@ -252,10 +252,8 @@ const DroppableBoardTab: React.FC<{
   draggedTask,
   selectedBoardId,
   boardDropState,
-  onHoverStart,
-  onHoverEnd
 }) => {
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef } = useDroppable({
     id: `board-${board.id}`,
     data: {
       type: 'board',
@@ -264,48 +262,7 @@ const DroppableBoardTab: React.FC<{
   });
 
   const isDragActive = draggedTask !== null;
-  
-  // Get current mouse position to check if we're in the actual tab area
-  const [currentMouseY, setCurrentMouseY] = React.useState(0);
-  
-  React.useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setCurrentMouseY(e.clientY);
-    };
-    
-    if (isDragActive) {
-      document.addEventListener('mousemove', handleMouseMove);
-    }
-    
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [isDragActive]);
-  
-  // Check if mouse is actually in tab area (get tab bounds dynamically)
-  const isMouseInTabArea = React.useMemo(() => {
-    if (!isDragActive) return true; // Allow normal behavior when not dragging
-    
-    // Find the tab container to get bounds
-    const tabContainer =
-      document.querySelector('.board-tabs-scroll') ||
-      document.querySelector('[data-board-tabs-scroll]') ||
-      document.querySelector('.flex.items-center.space-x-1.overflow-x-auto') ||
-      document.querySelector('[class*="board-tabs"]') ||
-      document.querySelector('button[id^="board-"]')?.parentElement;
-    
-    if (tabContainer) {
-      const rect = tabContainer.getBoundingClientRect();
-      const tabTop = rect.top - 30; // Same 30px extension as in SimpleDragDropManager
-      const tabBottom = rect.bottom;
-      return currentMouseY >= tabTop && currentMouseY <= tabBottom;
-    }
-    
-    return false; // If we can't find tab container, don't allow hover
-  }, [isDragActive, currentMouseY]);
-  
-  // Only allow hovering if mouse is actually in tab area
-  const isHovering = isOver && isDragActive && isMouseInTabArea;
+  const isHovering = isDragActive && boardDropState.hoveredBoardId === board.id;
   const isDropReady = shouldShowDropReady(
     board.id,
     boardDropState.hoveredBoardId,
@@ -313,34 +270,7 @@ const DroppableBoardTab: React.FC<{
     Date.now()
   );
 
-  // Removed CSS hover state to prevent re-rendering issues
-
   const canDrop = draggedTask && canMoveTaskToBoard(draggedTask, board, selectedBoardId || '');
-
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
-    if (isHovering && canDrop) {
-      // Only call if we're not already hovering this board
-      if (boardDropState.hoveredBoardId !== board.id) {
-        onHoverStart(board.id);
-      }
-    } else if (!isHovering) {
-      // Only call if we were hovering this board
-      if (boardDropState.hoveredBoardId === board.id) {
-        // Short delay to prevent rapid switching between adjacent tabs
-        timeoutId = setTimeout(() => {
-          onHoverEnd();
-        }, 100);
-      }
-    }
-    
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [isHovering, canDrop, board.id, boardDropState.hoveredBoardId, onHoverStart, onHoverEnd]);
 
   // Handle click during drop-ready state
   const handleClick = (e: React.MouseEvent) => {
@@ -363,6 +293,7 @@ const DroppableBoardTab: React.FC<{
       delayMs={isDragActive ? 0 : undefined}
     >
       <div
+        data-board-tab-id={board.id}
         onClick={handleClick}
         style={{
           userSelect: isDragActive && canDrop ? 'none' : 'auto'
@@ -781,6 +712,23 @@ export default function BoardTabs({
       };
     });
   }, []);
+
+  // Highlight the tab under the pointer, not dnd-kit’s card-sized collision rect.
+  useEffect(() => {
+    if (!draggedTask) {
+      handleBoardHoverEnd();
+      return;
+    }
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const id = boardTabIdUnderPointer(lastKanbanPointer.x, lastKanbanPointer.y);
+      if (id) handleBoardHoverStart(id);
+      else handleBoardHoverEnd();
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [draggedTask, handleBoardHoverStart, handleBoardHoverEnd]);
 
   // Check scroll state
   const checkScrollState = () => {
@@ -1229,8 +1177,6 @@ export default function BoardTabs({
                           draggedTask={draggedTask}
                           selectedBoardId={selectedBoard}
                           boardDropState={boardDropState}
-                          onHoverStart={handleBoardHoverStart}
-                          onHoverEnd={handleBoardHoverEnd}
                         />
                     </div>
                   ))}
@@ -1255,8 +1201,6 @@ export default function BoardTabs({
                         draggedTask={draggedTask}
                         selectedBoardId={selectedBoard}
                         boardDropState={boardDropState}
-                        onHoverStart={handleBoardHoverStart}
-                        onHoverEnd={handleBoardHoverEnd}
                       />
                     ) : (
                       // Normal sortable tab button
@@ -1301,8 +1245,6 @@ export default function BoardTabs({
                           selectedBoardId={selectedBoard}
                           boardDropState={boardDropState}
                           onSelect={() => onSelectBoard(board.id)}
-                          onHoverStart={handleBoardHoverStart}
-                          onHoverEnd={handleBoardHoverEnd}
                         />
                     </div>
                   ))}
@@ -1325,8 +1267,6 @@ export default function BoardTabs({
                         draggedTask={draggedTask}
                         selectedBoardId={selectedBoard}
                         boardDropState={boardDropState}
-                        onHoverStart={handleBoardHoverStart}
-                        onHoverEnd={handleBoardHoverEnd}
                       />
                     ) : (
                       // Regular tab button

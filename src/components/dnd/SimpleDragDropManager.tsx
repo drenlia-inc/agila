@@ -28,8 +28,22 @@ import {
   resolveColumnIdUnderRect,
   resolveInsertIndexUnderPointer,
   OVERLAY_SIDEWAYS_PX,
+  resetInsertHysteresis,
+  resolveInsertIndexFromOverlay,
   type OverlayDropHit,
 } from '../../utils/dndInsertIndex';
+import {
+  autoScrollBoardTabs,
+  boardTabIdUnderPointer,
+  getBoardTabStripRect,
+  pointerInBoardTabStrip,
+} from '../../utils/boardTabStrip';
+import { setLastKanbanPointer } from '../../utils/kanbanPointer';
+import {
+  coordinatesForKeyboardSlot,
+  stepKeyboardMoveSlot,
+  type KeyboardMoveSlot,
+} from '../../utils/dndKeyboardMove';
 
 interface SimpleDragDropManagerProps {
   children: React.ReactNode;
@@ -39,6 +53,10 @@ interface SimpleDragDropManagerProps {
   isOnline?: boolean; // Network status - disable dragging when offline
   onTaskMove: (taskId: string, targetColumnId: string, placement: TaskDropPlacement) => Promise<void>;
   onTaskMoveToDifferentBoard: (taskId: string, targetBoardId: string) => Promise<void>;
+  onBulkTaskMoveToDifferentBoard?: (
+    taskIds: string[],
+    targetBoardId: string
+  ) => Promise<void>;
   /** Same-board follower multi-drag commit. */
   onBulkTaskMove?: (
     taskIds: string[],
@@ -147,7 +165,9 @@ const customCollisionDetection = (args: any) => {
     for (const container of allContainers) {
       const data = container.data?.current;
       if (data?.type === 'board' && data?.boardId) {
-        boardTabs.push(container);
+        if (pointer && pointerInBoardTabStrip(pointer.x, pointer.y)) {
+          boardTabs.push(container);
+        }
         continue;
       }
       const rect = container.rect?.current;
@@ -167,6 +187,15 @@ const customCollisionDetection = (args: any) => {
         ? underPointer
         : underPointer.concat(boardTabs);
     }
+  }
+
+  if (
+    !isDraggingColumn &&
+    (!pointer || !pointerInBoardTabStrip(pointer.x, pointer.y))
+  ) {
+    containers = containers.filter(
+      (container: any) => container.data?.current?.type !== 'board'
+    );
   }
 
   const scopedArgs = { ...args, droppableContainers: containers };
@@ -304,6 +333,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   isOnline = true,
   onTaskMove,
   onTaskMoveToDifferentBoard,
+  onBulkTaskMoveToDifferentBoard,
   onBulkTaskMove,
   checkedTaskIds,
   checkedTaskIdsRef,
@@ -322,7 +352,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   // Pointer / tab-hit geometry — refs only (never setState on mousemove; that re-rendered the whole app shell)
   const mouseYRef = useRef(0);
   const mouseXRef = useRef(0);
-  const tabAreaBoundsRef = useRef({ top: 0, bottom: 80 });
+  const tabAreaBoundsRef = useRef({ top: 0, bottom: 80, left: 0, right: Number.POSITIVE_INFINITY });
   const isHoveringBoardTabRef = useRef(false);
   
   // Cache for drag preview to avoid recalculating on every drag over event
@@ -339,9 +369,13 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const overlayStartTopRef = useRef<number | null>(null);
   const overlayStartLeftRef = useRef<number | null>(null);
   const isDraggingTaskRef = useRef(false);
+  const isKeyboardDragRef = useRef(false);
+  const keyboardSlotRef = useRef<KeyboardMoveSlot | null>(null);
   const draggedTaskIdRef = useRef<string | null>(null);
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
+  const currentBoardIdRef = useRef(currentBoardId);
+  currentBoardIdRef.current = currentBoardId;
   const liveCheckedRef = useRef(checkedTaskIds);
   liveCheckedRef.current = checkedTaskIds;
   const liveCheckedIds = (): Set<string> | undefined =>
@@ -350,7 +384,32 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const lastProcessTimeRef = useRef<number>(0);
   const THROTTLE_MS = 16; // ~60fps max
 
+  const publishKeyboardSlot = () => {
+    const slot = keyboardSlotRef.current;
+    if (!slot) return;
+    const origin = dragOriginRef.current;
+    const preview = {
+      targetColumnId: slot.columnId,
+      insertIndex: slot.insertIndex,
+      isCrossColumn: !!(origin && origin.columnId !== slot.columnId),
+    };
+    lastPreviewRef.current = preview;
+    const hit = { columnId: slot.columnId, insertIndex: slot.insertIndex };
+    pendingCommitRef.current = hit;
+    releaseDropRef.current = hit;
+    onDragPreviewChange?.(preview);
+  };
+  const publishKeyboardSlotRef = useRef(publishKeyboardSlot);
+  publishKeyboardSlotRef.current = publishKeyboardSlot;
+
   const capturePendingCommit = () => {
+    if (isKeyboardDragRef.current && keyboardSlotRef.current) {
+      const slot = keyboardSlotRef.current;
+      const hit = { columnId: slot.columnId, insertIndex: slot.insertIndex };
+      pendingCommitRef.current = hit;
+      releaseDropRef.current = hit;
+      return hit;
+    }
     const origin = dragOriginRef.current;
     const originColumnId = origin?.columnId || null;
     const overlay = getTaskDragOverlayRect() || overlayRectRef.current;
@@ -401,6 +460,21 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const capturePendingCommitRef = useRef(capturePendingCommit);
   capturePendingCommitRef.current = capturePendingCommit;
 
+  /** Pointer is in the tab strip — in-board insert must not commit. */
+  const pointerOnBoardTabStrip = () =>
+    !isKeyboardDragRef.current &&
+    pointerInBoardTabStrip(mouseXRef.current, mouseYRef.current);
+
+  const foreignBoardTabIdUnderPointer = (): string | null => {
+    if (!pointerOnBoardTabStrip()) return null;
+    const boardId = boardTabIdUnderPointer(
+      mouseXRef.current,
+      mouseYRef.current
+    );
+    if (!boardId || boardId === currentBoardIdRef.current) return null;
+    return boardId;
+  };
+
   const commitTaskDrop = async (taskId: string, reason: string): Promise<boolean> => {
     if (taskDropConsumedRef.current) return false;
     const origin = dragOriginRef.current;
@@ -449,6 +523,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     const handleMove = (e: MouseEvent | PointerEvent) => {
       mouseYRef.current = e.clientY;
       mouseXRef.current = e.clientX;
+      setLastKanbanPointer(e.clientX, e.clientY);
       if (!isDraggingTaskRef.current) return;
       const overlay = getTaskDragOverlayRect();
       if (overlay) overlayRectRef.current = overlay;
@@ -486,6 +561,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
         if (x < r.left + 48) scroller.scrollLeft -= 18;
         else if (x > r.right - 48) scroller.scrollLeft += 18;
       }
+      autoScrollBoardTabs(x, y);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -500,17 +576,29 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       const taskId = draggedTaskIdRef.current;
       if (!isDraggingTaskRef.current && !pendingCommitRef.current && !taskId) return;
       if (isDraggingTaskRef.current) {
-        capturePendingCommitRef.current();
         if (rafHandleRef.current !== null) {
           cancelAnimationFrame(rafHandleRef.current);
           rafHandleRef.current = null;
+        }
+        if (pointerOnBoardTabStrip()) {
+          pendingCommitRef.current = null;
+          releaseDropRef.current = null;
+          lastDestPreviewRef.current = null;
+        } else {
+          capturePendingCommitRef.current();
         }
       }
       if (!isLostCapture) {
         isDraggingTaskRef.current = false;
       }
       if (taskId) {
-        void commitTaskDropRef.current(taskId, 'destAtRelease');
+        if (pointerOnBoardTabStrip()) {
+          // Board-tab drop: keep the card at its origin until the user
+          // confirms / the move API runs. Do not commit the last column hole.
+          taskDropConsumedRef.current = true;
+        } else {
+          void commitTaskDropRef.current(taskId, 'destAtRelease');
+        }
         draggedTaskIdRef.current = null;
       }
     };
@@ -531,6 +619,37 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   }, []);
 
   // Small distance so a click/Cmd+click does not start a drag (avoids opacity-50 “disabled” flash).
+  const keyboardCoordinateGetter = (
+    event: KeyboardEvent,
+    args: Parameters<typeof sortableKeyboardCoordinates>[1]
+  ) => {
+    if (!isKeyboardDragRef.current) {
+      return sortableKeyboardCoordinates(event, args);
+    }
+    const keys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+    if (!keys.includes(event.code)) {
+      return args.currentCoordinates;
+    }
+    event.preventDefault();
+    const slot = keyboardSlotRef.current;
+    if (slot) {
+      const exclude =
+        activeBulkTaskIdsRef.current.length > 1
+          ? activeBulkTaskIdsRef.current
+          : draggedTaskIdRef.current
+            ? [draggedTaskIdRef.current]
+            : [];
+      keyboardSlotRef.current = stepKeyboardMoveSlot(
+        slot,
+        event.code,
+        columnsRef.current,
+        exclude
+      );
+      publishKeyboardSlotRef.current();
+    }
+    return coordinatesForKeyboardSlot(keyboardSlotRef.current!) ?? args.currentCoordinates;
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -538,7 +657,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       },
     }),
     useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
+      coordinateGetter: keyboardCoordinateGetter,
     }),
   );
   
@@ -558,7 +677,10 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     taskDropMovedEpoch = -1;
     overlayStartTopRef.current = null;
     overlayStartLeftRef.current = null;
+    resetInsertHysteresis();
     isDraggingTaskRef.current = false;
+    isKeyboardDragRef.current = false;
+    keyboardSlotRef.current = null;
     draggedTaskIdRef.current = null;
     
     // Reset counters
@@ -573,41 +695,21 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     
     const activeData = event.active.data?.current;
     
-    // Detect tab container bounds dynamically
     const detectTabBounds = () => {
-      // Look for board tabs container - try multiple selectors
-      const tabSelectors = [
-        '[class*="board-tabs"]',
-        '[class*="BoardTabs"]', 
-        '.flex.items-center.space-x-1.overflow-x-auto',
-        'div:has(> button[id^="board-"])',
-        // Fallback: find any element containing board tabs
-        'button[id^="board-"]'
-      ];
-      
-      let tabContainer = null;
-      for (const selector of tabSelectors) {
-        const element = document.querySelector(selector);
-        if (element) {
-          tabContainer = element.tagName === 'BUTTON' ? element.parentElement : element;
-          break;
-        }
-      }
-      
-      if (tabContainer) {
-        const rect = tabContainer.getBoundingClientRect();
-        const bounds = { 
-          top: rect.top - 30, // Extend 30px above the tabs for more room
-          bottom: rect.bottom 
+      const rect = getBoardTabStripRect();
+      if (rect) {
+        const bounds = {
+          top: rect.top,
+          bottom: rect.bottom,
+          left: rect.left,
+          right: rect.right,
         };
         tabAreaBoundsRef.current = bounds;
         return bounds;
-      } else {
-        // console.warn('⚠️ Could not find tab container, using fallback bounds');
-        const fallback = { top: 0, bottom: 80 };
-        tabAreaBoundsRef.current = fallback;
-        return fallback;
       }
+      const fallback = { top: 0, bottom: 0, left: 0, right: 0 };
+      tabAreaBoundsRef.current = fallback;
+      return fallback;
     };
     
     // Detect bounds at drag start
@@ -694,6 +796,16 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
         insertIndex: Math.max(0, remappedOrigin),
         y: mouseYRef.current,
       };
+      isKeyboardDragRef.current = isKeyboard;
+      if (isKeyboard) {
+        keyboardSlotRef.current = {
+          columnId: task.columnId,
+          insertIndex: Math.max(0, remappedOrigin),
+        };
+        publishKeyboardSlotRef.current();
+      } else {
+        keyboardSlotRef.current = null;
+      }
     } else if (activeData?.type === 'column') {
       const column = activeData.column as Column;
       onDraggedColumnChange?.(column);
@@ -731,12 +843,21 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       
       // FIRST: Check for mouse-based tab area detection (before any other logic)
       const isTaskDrag = active.data?.current?.type === 'task';
+
+      if (isTaskDrag && isKeyboardDragRef.current) {
+        publishKeyboardSlotRef.current();
+        return;
+      }
       
       if (isTaskDrag) {
         // Pure Y-coordinate based detection using dynamic tab bounds
         const bounds = tabAreaBoundsRef.current;
         const isInTabArea =
-          mouseYRef.current >= bounds.top && mouseYRef.current <= bounds.bottom;
+          pointerInBoardTabStrip(mouseXRef.current, mouseYRef.current) ||
+          (mouseXRef.current >= bounds.left &&
+            mouseXRef.current <= bounds.right &&
+            mouseYRef.current >= bounds.top &&
+            mouseYRef.current <= bounds.bottom);
         
         if (isInTabArea && !isHoveringBoardTabRef.current) {
           isHoveringBoardTabRef.current = true;
@@ -811,14 +932,21 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
           const overlayDest =
             overlayCol && overlayCol !== originColumnId ? overlayCol : null;
           const destInsertFor = (columnId: string, fallback: number) =>
-            resolveInsertIndexUnderPointer(
-              columnId,
-              mouseYRef.current,
-              excludeIds,
-              mouseXRef.current,
-              null,
-              origin
-            ) ?? fallback;
+            (overlay
+              ? resolveInsertIndexFromOverlay(
+                  columnId,
+                  overlay,
+                  excludeIds,
+                  origin
+                )
+              : resolveInsertIndexUnderPointer(
+                  columnId,
+                  mouseYRef.current,
+                  excludeIds,
+                  mouseXRef.current,
+                  null,
+                  origin
+                )) ?? fallback;
           // Pointer still in the source column: stay there. Overlay sliver
           // used to keep dest locked and freeze insert index.
           if (pointerInOrigin) {
@@ -942,23 +1070,31 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
         const task = activeData.task as Task;
         dndLog('🎯 Task data:', { taskId: task.id, taskTitle: task.title, taskColumnId: task.columnId, taskPosition: task.position });
         
-        if (overData?.type === 'board' && overData.boardId !== currentBoardId) {
-          const bounds = tabAreaBoundsRef.current;
-          const isInTabAreaAtDrop =
-            mouseYRef.current >= bounds.top && mouseYRef.current <= bounds.bottom;
-          
-          if (!isInTabAreaAtDrop) {
-            // Don't execute cross-board move if mouse is outside tab area
-            return;
+        const dropBoardId =
+          foreignBoardTabIdUnderPointer() ||
+          (!isKeyboardDragRef.current &&
+          overData?.type === 'board' &&
+          pointerOnBoardTabStrip() &&
+          overData.boardId !== currentBoardId
+            ? (overData.boardId as string)
+            : null);
+        if (dropBoardId) {
+          const checked = liveCheckedIds();
+          const moveIds =
+            bulkIds.length > 1
+              ? bulkIds
+              : checked && checked.size > 1 && checked.has(task.id)
+                ? Array.from(checked)
+                : [task.id];
+          dndLog('🔄 Cross-board move:', moveIds, '→', dropBoardId);
+          if (moveIds.length > 1 && onBulkTaskMoveToDifferentBoard) {
+            void onBulkTaskMoveToDifferentBoard(moveIds, dropBoardId);
+          } else {
+            void onTaskMoveToDifferentBoard(task.id, dropBoardId);
           }
-          
-          dndLog('🔄 Cross-board move (Y-coord approved):', task.id, '→', overData.boardId);
-          if (bulkIds.length > 1) {
-            dndLog('🎯 [handleDragEnd] Multi-drag board-tab drop deferred — no-op');
-            return;
-          }
-          await onTaskMoveToDifferentBoard(task.id, overData.boardId);
-          dndLog('✅ Cross-board move completed');
+          dndLog('✅ Cross-board move started');
+        } else if (pointerOnBoardTabStrip()) {
+          dndLog('🎯 Released on board tabs — leave task at origin');
         } else {
           dndLog('🎯 Same board move — Drop here preview first');
           await commitTaskDrop(task.id, 'destAtRelease');
@@ -1062,6 +1198,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       // Always clear drag UI state (preview, dragged task) — including when `over` was null
       // or when the user cancelled; otherwise insertion placeholders stay mounted and shift columns.
       lastPreviewRef.current = null;
+      resetInsertHysteresis();
       dragOriginRef.current = null;
       releaseDropRef.current = null;
       pendingCommitRef.current = null;
@@ -1073,6 +1210,8 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       isHoveringBoardTabRef.current = false;
       clearBulkDrag();
       setKeyboardMoveLabel(null);
+      isKeyboardDragRef.current = false;
+      keyboardSlotRef.current = null;
     }
   };
 
@@ -1082,6 +1221,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       void commitTaskDropRef.current(taskId, 'destAtRelease');
     }
     lastPreviewRef.current = null;
+    resetInsertHysteresis();
     isDraggingTaskRef.current = false;
     onDraggedTaskChange?.(null);
     onDraggedColumnChange?.(null);
@@ -1091,6 +1231,8 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     activeBulkTaskIdsRef.current = [];
     onDraggedTaskIdsChange?.([]);
     setKeyboardMoveLabel(null);
+    isKeyboardDragRef.current = false;
+    keyboardSlotRef.current = null;
   };
 
   return (
@@ -1161,6 +1303,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   // Compare callbacks by reference (they should be stable with useCallback)
   if (prevProps.onTaskMove !== nextProps.onTaskMove) return false; // Re-render
   if (prevProps.onTaskMoveToDifferentBoard !== nextProps.onTaskMoveToDifferentBoard) return false; // Re-render
+  if (prevProps.onBulkTaskMoveToDifferentBoard !== nextProps.onBulkTaskMoveToDifferentBoard) return false; // Re-render
   if (prevProps.onBulkTaskMove !== nextProps.onBulkTaskMove) return false; // Re-render
   if (prevProps.onClearChecked !== nextProps.onClearChecked) return false; // Re-render
   if (prevProps.onDraggedTaskIdsChange !== nextProps.onDraggedTaskIdsChange) return false; // Re-render

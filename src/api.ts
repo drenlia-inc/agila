@@ -407,12 +407,19 @@ export const renumberColumns = async (boardId: string) => {
 export const moveTaskToBoard = async (
   taskId: string,
   targetBoardId: string,
-  options?: { skipEmail?: boolean }
+  options?: {
+    skipEmail?: boolean;
+    quiet?: boolean;
+    targetColumnId?: string;
+    position?: number;
+  }
 ) => {
   const { data } = await api.post('/tasks/move-to-board', {
     taskId,
     targetBoardId,
     ...(options?.skipEmail ? { skipEmail: true } : {}),
+    ...(options?.targetColumnId ? { targetColumnId: options.targetColumnId } : {}),
+    ...(typeof options?.position === 'number' ? { position: options.position } : {}),
   });
   return data;
 };

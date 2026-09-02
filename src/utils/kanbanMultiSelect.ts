@@ -9,6 +9,29 @@ export function getTaskColumnId(taskId: string, columns: Columns): string | null
   return null;
 }
 
+/** Board / column / slot to restore after a cross-board move. */
+export function snapshotTaskBoardLocation(
+  task: Task,
+  columns: Columns,
+  fallbackBoardId?: string | null
+): { boardId?: string; columnId?: string; position?: number } {
+  const columnId =
+    getTaskColumnId(task.id, columns) ||
+    task.columnId ||
+    (task as { columnid?: string }).columnid;
+  const rawPos = task.position as number | string | undefined;
+  const asNumber = rawPos == null ? NaN : Number(rawPos);
+  return {
+    boardId:
+      task.boardId ||
+      (task as { boardid?: string }).boardid ||
+      fallbackBoardId ||
+      undefined,
+    columnId: columnId || undefined,
+    position: Number.isFinite(asNumber) ? asNumber : undefined,
+  };
+}
+
 export function getCheckedColumnIds(
   checkedTaskIds: Set<string>,
   columns: Columns

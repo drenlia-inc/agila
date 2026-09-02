@@ -1,15 +1,33 @@
 /**
- * Pointer-Y insert index for Kanban task lists.
+ * Kanban insert index from the drag ghost (overlay) edges.
  *
  * Use column bounding boxes (not elementsFromPoint) so the drag overlay cannot
  * steal hit-testing. Insert index is measured from visible `[data-kanban-task-row]`
  * slots in the layout list (dragged task already omitted from those rows).
  *
- * Geometry is visual: the in-flow Drop here hole shifts cards down, and the
- * pointer is tested against those shifted rects. Subtracting the hole height
- * and then applying a 16px "into next card" split made most of the placeholder
- * resolve as insert N+1 (card landed one slot below the hole).
+ * Geometry is visual: the in-flow Drop here hole shifts cards down. The ghost’s
+ * leading edge (bottom when moving down, top when moving up) is tested against
+ * card midlines. Pointer Y is a fallback when there is no overlay.
  */
+
+/** Extra px past a card midline before the hole steps (avoids flicker). */
+const INSERT_HYSTERESIS_PX = 6;
+/** Ghost past the task-list edge by this much snaps to top/bottom. */
+const COLUMN_EDGE_MAGNET_PX = 12;
+/** Overlay width in a second column that counts as “straddling”. */
+const STRADDLE_COLUMN_MIN_WIDTH = 24;
+
+type InsertHysteresis = {
+  columnId: string;
+  insertIndex: number;
+  midY: number;
+};
+
+let insertHysteresis: InsertHysteresis | null = null;
+
+export function resetInsertHysteresis(): void {
+  insertHysteresis = null;
+}
 
 type ColumnOverlap = {
   id: string;
@@ -223,6 +241,8 @@ export function findPlaceholderHitByOverlay(
     if (hr.height <= 0 || hr.width <= 0) continue;
     const area = rectIntersectionArea(overlay, hr);
     if (area < 32) continue;
+    // Ghost already past this hole — don't freeze insert on a stale Drop here.
+    if (overlay.top >= hr.bottom - 4 || overlay.bottom <= hr.top + 4) continue;
     const col = hole.closest('[data-kanban-column-id]');
     const columnId = col?.getAttribute('data-kanban-column-id');
     const insertIndex = Number(hole.dataset.insertIndex);
@@ -287,7 +307,186 @@ export function resolveColumnIdUnderRect(
   return hits[0].id;
 }
 
+/** Ghost covers two columns enough that the pointer should pick which one. */
+export function overlayStraddlesKanbanColumns(overlay: DOMRectReadOnly): boolean {
+  const hits = collectColumnOverlaps(overlay);
+  return hits.filter((h) => h.width >= STRADDLE_COLUMN_MIN_WIDTH && h.height >= 16)
+    .length >= 2;
+}
+
 type DragOrigin = { columnId: string; insertIndex: number };
+
+type LayoutRow = { index: number; top: number; height: number };
+
+function rowMidline(row: LayoutRow): number {
+  return row.top + row.height / 2;
+}
+
+type CardBox = { index: number; top: number; bottom: number };
+
+/** Visual task card, not the row (row can include gap / stretch). */
+function visibleCardBoxes(
+  root: HTMLElement,
+  excludeTaskIds?: string | string[] | null
+): CardBox[] {
+  const exclude = toExcludeSet(excludeTaskIds);
+  return Array.from(root.querySelectorAll<HTMLElement>('[data-kanban-task-row]'))
+    .filter((row) => !rowIsExcluded(row, exclude))
+    .map((row) => {
+      const index = Number(row.dataset.layoutIndex);
+      const card =
+        row.firstElementChild instanceof HTMLElement
+          ? row.firstElementChild
+          : row;
+      const rect = card.getBoundingClientRect();
+      return { index, top: rect.top, bottom: rect.bottom };
+    })
+    .filter((r) => Number.isFinite(r.index) && r.index >= 0 && r.bottom > r.top)
+    .sort((a, b) => a.index - b.index);
+}
+
+function stackEndIndex(root: HTMLElement, cards: CardBox[]): number {
+  const list = columnTaskList(root);
+  const count = list ? layoutCountForList(list) : null;
+  if (count != null) return count;
+  if (cards.length === 0) return 0;
+  return cards[cards.length - 1].index + 1;
+}
+
+function paintedHoleInColumn(root: HTMLElement): { index: number; top: number; bottom: number } | null {
+  const hole = root.querySelector('[data-kanban-drop-placeholder]');
+  if (!(hole instanceof HTMLElement)) return null;
+  const index = Number(hole.dataset.insertIndex);
+  if (!Number.isFinite(index)) return null;
+  const r = hole.getBoundingClientRect();
+  if (r.height < 8) return null;
+  return { index, top: r.top, bottom: r.bottom };
+}
+
+/**
+ * Slot 0 above the first card, or last+1 below the last card.
+ *
+ * The in-flow hole above the last card pushes that card down, so a slow drag
+ * never “gets past” last.bottom. Use the hole’s bottom / the last card’s
+ * unshifted box instead — once you cross that line, insert is last+1.
+ */
+export function resolveInsertAtColumnStackEnds(
+  columnId: string,
+  pointerY: number,
+  overlay?: DOMRectReadOnly | null,
+  excludeTaskIds?: string | string[] | null
+): number | null {
+  const root = columnRootById(columnId);
+  if (!root) return null;
+  const cards = visibleCardBoxes(root, excludeTaskIds);
+  const end = stackEndIndex(root, cards);
+  if (cards.length === 0) return end;
+
+  const first = cards[0];
+  const last = cards[cards.length - 1];
+  const hole = paintedHoleInColumn(root);
+  const holeShiftsLast = hole != null && hole.index <= last.index;
+  const holeH = holeShiftsLast ? Math.max(0, hole.bottom - hole.top) : 0;
+  const lastNaturalBottom = last.bottom - holeH;
+
+  const bottomZone = root.querySelector('[data-kanban-column-bottom]');
+  if (bottomZone instanceof HTMLElement) {
+    const br = bottomZone.getBoundingClientRect();
+    if (pointerY >= br.top - 2 && pointerY <= br.bottom + 8) return end;
+  }
+
+  // Hole is already before the last card — that card is shifted down by the
+  // hole. Crossing the hole’s bottom (onto the last card) is last+1.
+  if (hole && hole.index === last.index) {
+    if (
+      pointerY >= hole.bottom - 6 ||
+      (overlay != null &&
+        (overlay.top >= hole.bottom - 4 || overlay.bottom >= hole.bottom + 12))
+    ) {
+      return end;
+    }
+  }
+  if (pointerY >= lastNaturalBottom - 4) return end;
+  if (overlay && overlay.top >= lastNaturalBottom - 8) return end;
+
+  const topZone = document.getElementById(`${columnId}-task-top`);
+  if (topZone) {
+    const tr = topZone.getBoundingClientRect();
+    if (pointerY >= tr.top && pointerY <= tr.bottom + 4) return 0;
+  }
+  if (pointerY <= first.top + 4) return 0;
+  if (overlay && overlay.bottom <= first.top + 8) return 0;
+
+  return null;
+}
+
+/**
+ * Leading-edge vs card midlines. Down: ghost bottom crosses next midline →
+ * increment. Up: ghost top crosses previous midline → decrement.
+ */
+function insertIndexFromOverlayEdges(
+  rows: LayoutRow[],
+  overlay: DOMRectReadOnly,
+  movingDown: boolean,
+  layoutCount: number | null
+): number {
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  if (overlay.bottom <= first.top + COLUMN_EDGE_MAGNET_PX) {
+    return first.index === 0 ? 0 : first.index;
+  }
+  // Past the last card’s midline (or its bottom) → end of column.
+  if (
+    overlay.top >= rowMidline(last) - 2 ||
+    overlay.bottom >= last.top + last.height - 4
+  ) {
+    return layoutCount != null ? layoutCount : last.index + 1;
+  }
+
+  const edge = movingDown ? overlay.bottom : overlay.top;
+  let insert = last.index + 1;
+  for (const row of rows) {
+    if (edge < rowMidline(row)) {
+      insert = row.index;
+      break;
+    }
+    insert = row.index + 1;
+  }
+  return insert;
+}
+
+function applyInsertHysteresis(
+  columnId: string,
+  rows: LayoutRow[],
+  overlay: DOMRectReadOnly,
+  raw: number
+): number {
+  const midY = overlay.top + overlay.height / 2;
+  const last = insertHysteresis?.columnId === columnId ? insertHysteresis : null;
+  if (!last) {
+    insertHysteresis = { columnId, insertIndex: raw, midY };
+    return raw;
+  }
+  if (raw === last.insertIndex) {
+    insertHysteresis = { columnId, insertIndex: raw, midY };
+    return raw;
+  }
+  if (raw > last.insertIndex) {
+    const crossed = rows.find((r) => r.index === last.insertIndex);
+    if (crossed && overlay.bottom < rowMidline(crossed) + INSERT_HYSTERESIS_PX) {
+      insertHysteresis = { columnId, insertIndex: last.insertIndex, midY };
+      return last.insertIndex;
+    }
+  } else {
+    const prev = rows.find((r) => r.index === last.insertIndex - 1);
+    if (prev && overlay.top > rowMidline(prev) - INSERT_HYSTERESIS_PX) {
+      insertHysteresis = { columnId, insertIndex: last.insertIndex, midY };
+      return last.insertIndex;
+    }
+  }
+  insertHysteresis = { columnId, insertIndex: raw, midY };
+  return raw;
+}
 
 /**
  * Same-column: the vacated slot stays targetable. The card that slid into it
@@ -321,23 +520,29 @@ function insertIndexOnCard(
 }
 
 /**
- * Insert index from the dragged card overlapping in-column cards.
- * The ghost's box displaces the card it overlaps most — not the 12px gap
- * between cards, and not a single Y point on the overlay.
+ * Insert index from the ghost rect: leading edge vs card midlines, with a
+ * few px of hysteresis so the Drop here hole does not flicker.
  */
 export function resolveInsertIndexFromOverlay(
   columnId: string,
   overlay: DOMRectReadOnly,
   excludeTaskIds?: string | string[] | null,
-  origin?: { columnId: string; insertIndex: number } | null
+  _origin?: { columnId: string; insertIndex: number } | null,
+  pointerY?: number
 ): number | null {
   if (typeof document === 'undefined') return null;
 
   const root = columnRootById(columnId);
   if (!root) return null;
 
+  const midY = overlay.top + overlay.height / 2;
+  const remember = (insertIndex: number) => {
+    insertHysteresis = { columnId, insertIndex, midY };
+    return insertIndex;
+  };
+
   const outside = insertOutsideTaskList(root, overlay.top, overlay.bottom);
-  if (outside != null) return outside;
+  if (outside != null) return remember(outside);
 
   const exclude = toExcludeSet(excludeTaskIds);
   const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-kanban-task-row]'))
@@ -353,42 +558,20 @@ export function resolveInsertIndexFromOverlay(
   const list = columnTaskList(root);
   const layoutCount = list ? layoutCountForList(list) : null;
 
-  if (rows.length === 0) return layoutCount ?? 0;
+  if (rows.length === 0) return remember(layoutCount ?? 0);
 
-  const first = rows[0];
-  const last = rows[rows.length - 1];
-  if (overlay.bottom <= first.top + 2) {
-    return first.index === 0 ? 0 : first.index;
-  }
-  if (overlay.top >= last.top + last.height - 2) {
-    return layoutCount != null ? layoutCount : last.index + 1;
-  }
-
-  let best: { index: number; top: number; height: number; overlap: number } | null =
-    null;
-  for (const row of rows) {
-    const overlap = Math.max(
-      0,
-      Math.min(overlay.bottom, row.top + row.height) - Math.max(overlay.top, row.top)
-    );
-    if (overlap <= 0) continue;
-    if (!best || overlap > best.overlap) best = { ...row, overlap };
+  const lastRow = rows[rows.length - 1];
+  if (
+    (pointerY != null && pointerY >= lastRow.top + lastRow.height - 8) ||
+    overlay.top >= rowMidline(lastRow)
+  ) {
+    return remember(layoutCount != null ? layoutCount : lastRow.index + 1);
   }
 
-  if (!best) {
-    const midY = overlay.top + overlay.height / 2;
-    for (const row of rows) {
-      if (midY < row.top) return row.index;
-    }
-    return last.index + 1;
-  }
-
-  return insertIndexOnCard(
-    best,
-    overlay.top + overlay.height * 0.5,
-    columnId,
-    origin
-  );
+  const last = insertHysteresis?.columnId === columnId ? insertHysteresis : null;
+  const movingDown = last == null || midY >= last.midY;
+  const raw = insertIndexFromOverlayEdges(rows, overlay, movingDown, layoutCount);
+  return applyInsertHysteresis(columnId, rows, overlay, raw);
 }
 
 /**
@@ -422,9 +605,8 @@ export function resolveDropFromOverlay(
 }
 
 /**
- * Live drop target. Overlay crossing dest wins for sideways moves — the
- * pointer does not have to be inside that column. Pointer-in-dest still
- * wins for precise slot choice once you are there.
+ * Live drop target. Slot comes from the ghost edges. Pointer only picks the
+ * column when the ghost straddles two columns (or when there is no overlay).
  */
 export function resolveKanbanDropTarget(args: {
   pointerX: number;
@@ -443,26 +625,39 @@ export function resolveKanbanDropTarget(args: {
   const snap = overlay
     ? findPlaceholderHitByOverlay(overlay, excludeTaskIds)
     : null;
-  const sideways = overlayHasMovedSideways(overlay, overlayStartLeft);
+  const straddling = overlay ? overlayStraddlesKanbanColumns(overlay) : false;
 
   let columnId: string | null = null;
-  // Pointer column always wins when we know it — including origin. Overlay /
-  // painted dest after a sideways sliver used to steal same-column drags
-  // (ghost often sits ≥40px off the grab point) and freeze the dest slot.
-  if (pointerCol && origin && pointerCol !== origin.columnId) {
-    columnId = pointerCol;
-  } else if (pointerCol && origin && pointerCol === origin.columnId) {
-    columnId = pointerCol;
-  } else if (overlayCol && origin && overlayCol !== origin.columnId && sideways) {
+  if (overlay && !straddling && overlayCol) {
     columnId = overlayCol;
-  } else if (painted && origin && painted.columnId !== origin.columnId && sideways) {
-    columnId = painted.columnId;
-  } else if (snap && sideways) {
-    columnId = snap.columnId;
+  } else if (straddling && pointerCol) {
+    columnId = pointerCol;
+  } else if (pointerCol) {
+    columnId = pointerCol;
   } else {
-    columnId = pointerCol || origin?.columnId || overlayCol || null;
+    columnId = overlayCol || origin?.columnId || null;
   }
   if (!columnId) return null;
+
+  const endSlot = resolveInsertAtColumnStackEnds(
+    columnId,
+    pointerY,
+    overlay,
+    excludeTaskIds
+  );
+  if (endSlot != null) return { columnId, insertIndex: endSlot };
+
+  if (overlay) {
+    if (snap?.columnId === columnId) return snap;
+    const insertIndex = resolveInsertIndexFromOverlay(
+      columnId,
+      overlay,
+      excludeTaskIds,
+      origin,
+      pointerY
+    );
+    if (insertIndex != null) return { columnId, insertIndex };
+  }
 
   if (pointerCol === columnId) {
     const root = columnRootById(columnId);
@@ -476,15 +671,6 @@ export function resolveKanbanDropTarget(args: {
       excludeTaskIds,
       pointerX,
       null,
-      origin
-    );
-    if (insertIndex != null) return { columnId, insertIndex };
-  }
-  if (overlay) {
-    const insertIndex = resolveInsertIndexFromOverlay(
-      columnId,
-      overlay,
-      excludeTaskIds,
       origin
     );
     if (insertIndex != null) return { columnId, insertIndex };
@@ -617,8 +803,8 @@ function insertOutsideTaskList(
   if (!list) return null;
   const lr = list.getBoundingClientRect();
   const count = layoutCountForList(list);
-  if (top >= lr.bottom - 2) return count ?? null;
-  if (bottom <= lr.top + 2) return 0;
+  if (top >= lr.bottom - COLUMN_EDGE_MAGNET_PX) return count ?? null;
+  if (bottom <= lr.top + COLUMN_EDGE_MAGNET_PX) return 0;
   return null;
 }
 

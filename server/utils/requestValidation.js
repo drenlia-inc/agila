@@ -178,6 +178,14 @@ export const moveTaskToBoardBodySchema = z.object({
   taskId: idSchema,
   targetBoardId: idSchema,
   skipEmail: z.boolean().optional(),
+  /** Undo: place in this column on the target board (must belong to it). */
+  targetColumnId: idSchema.optional(),
+  /** Undo: restore this slot in the target column (0-based). */
+  position: z.preprocess((v) => {
+    if (v === '' || v === undefined || v === null) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }, z.number().min(0).optional()),
 });
 
 export const batchUpdateTasksBodySchema = z.object({
