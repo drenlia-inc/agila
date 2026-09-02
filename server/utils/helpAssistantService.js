@@ -48,8 +48,8 @@ function resolveFeedIntent({ text, language, isAdmin }) {
       targetId: 'setting:SHOW_ACTIVITY_FEED',
       answer:
         lang === 'fr'
-          ? 'Cela ne concerne que les nouveaux utilisateurs (Admin → Interface). Pour vous, c’est Profil → Fil d’activité.'
-          : 'That Admin toggle is only the default for new users. To hide it for you, use Profile → Activity feed.'
+          ? 'Cela ne concerne que les nouveaux utilisateurs (Paramètres → Interface). Pour vous, c’est Profil → Fil d’activité.'
+          : 'That Settings toggle is only the default for new users. To hide it for you, use Profile → Activity feed.'
     };
   }
 
@@ -182,15 +182,15 @@ export async function runHelpAssistantChat({ db, isAdmin, language, messages }) 
   }
 
   const roleLine = isAdmin
-    ? 'This user is an admin. Mention Admin defaults only if they ask about new users or instance-wide defaults. For “how do I…”, send them to the user control first.'
-    : 'This user is not an admin. Never mention Admin settings. Only user actions (board, profile, feed panel).';
+    ? 'This user is an admin. Mention Settings (Profile → Settings) defaults only if they ask about new users or instance-wide defaults. For “how do I…”, send them to the user control first.'
+    : 'This user is not an admin. Never mention Settings instance pages. Only user actions (board, profile, feed panel).';
 
   const system = `You are the in-app Help Assistant for Agila (Kanban board).
 Reply in ${lang === 'fr' ? 'French' : 'English'} only.
 Be brief: 1–2 short sentences. No preamble.
 ${roleLine}
 Do not invent features. Never say a feature does not exist, is missing, or that Agila has no such view/page/control.
-If the retrieved list does not clearly answer, set targetId to null and say you are not sure; tell the user to use the Help tabs (${helpTabsHint(lang, isAdmin)}). Never mention Delivery or Admin tabs unless this user is an admin.
+If the retrieved list does not clearly answer, set targetId to null and say you are not sure; tell the user to use the Help tabs (${helpTabsHint(lang, isAdmin)}). Never mention Delivery or Settings tabs unless this user is an admin.
 Do not output CSS, selectors, HTML, or JavaScript.
 Do not reveal secrets.
 

@@ -27,7 +27,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **Code** — Agent works a linked Git repository via the push runner (users add Profile → Dev credentials: API token and/or SSH key)
 - **Automation** (admins) — board automation with dry-run review, Apply, and Undo
 - **Live activity** on the card (queued / running / waiting) with pause, stop, and resume
-- Configure in **Admin → AI Settings** (enable AI, provider, model, runner URL/token). Details: [Documentation.md — AI Agent](/Documentation.md#ai-agent) and [`docs/AI_INTEGRATION.md`](/docs/AI_INTEGRATION.md)
+- Configure in **Settings → System Settings → AI** (enable AI, provider, model, runner URL/token). Details: [Documentation.md — AI Agent](/Documentation.md#ai-agent) and [`docs/AI_INTEGRATION.md`](/docs/AI_INTEGRATION.md)
 
 ### Task Management
 - **Task management** with priorities, comments, and file attachments
@@ -81,7 +81,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **System monitoring** - Real-time resource monitoring (RAM, CPU, disk usage)
 
 ### Data & Export
-- **Soft-delete restore** - Recover tasks and boards from trash (board trash + Admin → Lifecycle)
+- **Soft-delete restore** - Recover tasks and boards from trash (board trash + Settings → Lifecycle)
 - **Export functionality** - Export tasks to CSV or Excel format (admin only)
 - **Excel export** - Multi-sheet Excel files with proper formatting when exporting all boards
 - **File uploads** - Task attachments and user avatars with size and type restrictions
@@ -98,7 +98,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 **Product Owners / Scrum Masters:** after the instance is up, follow the **[Delivery Playbook](docs/DELIVERY_PLAYBOOK.md)** (first-hour setup, board & WIP conventions, rituals, anti-patterns).
 
 1. Log in with the default admin account (see [Installation](#installation))
-2. Go to the admin panel and setup:
+2. Open Settings from your profile menu and setup:
    1. The site name and URL in Site Settings
    2. In the App Settings, choose the default language (FR/EN)
    3. Review the Project Settings (and **Features** for board indicators / effort / overdue)
@@ -107,8 +107,8 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 3. Create team members in the Users Tab
 4. Go to Kanban View and set up your boards and columns
 5. Start creating and managing tasks
-6. Configure Google OAuth (optional) in Admin > SSO settings
-7. Configure AI Agent (optional) in Admin > AI Settings — for coding jobs, users then add Profile → Dev credentials
+6. Configure Google OAuth (optional) in Settings → System Settings → SSO
+7. Configure AI Agent (optional) in Settings → System Settings → AI — for coding jobs, users then add Profile → Dev credentials
 
 ## Permissions
 
@@ -126,7 +126,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 | Soft-delete / restore boards (Lifecycle) | ✓ | ✗ | ✗ |
 | Reorder boards and columns | ✓ | ✗ | ✗ |
 | Manage columns (add/remove/reorder) | ✓ | ✗ | ✗ |
-| Access Admin panel | ✓ | ✗ | ✗ |
+| Access Settings (profile menu) | ✓ | ✗ | ✗ |
 | Manage users | ✓ | ✗ | ✗ |
 | Configure site settings | ✓ | ✗ | ✗ |
 | Configure Google OAuth | ✓ | ✗ | ✗ |
@@ -246,7 +246,7 @@ The application includes JWT-based authentication and role-based access control.
 - Keep `DEMO_ENABLED=false` (demo compose is the exception)
 - Configure HTTPS/TLS at the reverse proxy
 - Attachments/avatars use an HttpOnly media cookie (not the session JWT in `?token=`)
-- Review **Admin → Troubleshooting → CSP reports** before enforcing Content-Security-Policy
+- Review **Settings → App Settings → Troubleshooting → CSP reports** before enforcing Content-Security-Policy
 - Consider additional network security measures
 
 ## Authors and acknowledgment

@@ -40,9 +40,9 @@ Agila is a comprehensive agile project management platform that combines Kanban 
 - **Team management** with color-coded member assignments
 - **Task management** with priorities, comments, attachments, and relationships
 - **Multi-select & bulk actions** - tag, copy, sprint, priority, archive, delete, move board; multi-drag between columns
-- **Soft delete & trash** - restore or permanently purge tasks and boards (board trash + Admin → Lifecycle); admins can Shift+click delete to purge without trash
+- **Soft delete & trash** - restore or permanently purge tasks and boards (board trash + Settings → Lifecycle); admins can Shift+click delete to purge without trash
 - **AI Agent** (optional) — assign tasks to an Agent that can comment (**Assist**), work a linked Git repo (**Code**), or (admins) run board **Automation** with dry-run Apply/Undo (see [AI Agent](#ai-agent))
-- **Admin panel** for users, branding, mail, SSO, sprints, reporting, licensing, and lifecycle
+- **Settings** (Profile → Settings, admins only) for users, branding, mail, SSO, sprints, reporting, licensing, and lifecycle
 - **File uploads** for task attachments and user avatars
 - **Site branding** - custom logo (light/dark), optional hide logo / GitHub link
 - **EN / FR localization**
@@ -74,17 +74,17 @@ When running in **demo mode** (`DEMO_ENABLED=true`), the application seeds an ad
 Passwords for sample users are stored as `DEMO_PASSWORD_<email>` settings (not shown on the login page by default). The login page surfaces the admin credentials when demo mode is enabled.
 
 #### Production Mode
-In production mode, you'll need to create your own user accounts through the admin panel after initial setup.
+In production mode, you'll need to create your own user accounts through Settings after initial setup.
 
 ### Initial Setup
 1. **Demo Mode**: Use the admin credentials displayed on the login page
 2. **Production Mode**: Create your first admin account through the setup process
-3. Create team members in the Admin panel
+3. Create team members in Settings → Users
 4. Set up your boards and columns
 5. Start creating and managing tasks
-6. Configure Google OAuth (optional) in Admin > SSO settings
-7. Configure branding (optional) in Admin > Site Settings (logo, site name)
-8. Configure AI Agent (optional) in Admin > AI Settings — then users add Profile → Dev credentials for coding jobs
+6. Configure Google OAuth (optional) in Settings → System Settings → SSO
+7. Configure branding (optional) in Settings → Site Settings (logo, site name)
+8. Configure AI Agent (optional) in Settings → System Settings → AI — then users add Profile → Dev credentials for coding jobs
 
 ---
 
@@ -95,11 +95,11 @@ In production mode, you'll need to create your own user accounts through the adm
 The sticky header contains branding, sprint context, app navigation, and utilities.
 
 ### Left Side
-- **Site brand**: Logo and/or site name (from Admin → Site Settings). Click to follow the configured site URL.
+- **Site brand**: Logo and/or site name (from Settings → Site Settings). Click to follow the configured site URL.
   - Default logo is `/agila-logo.png` when no custom logo is set
   - Empty site name hides the text (no fallback to a default product name)
   - **Hide Site Logo** (admin setting) removes the logo entirely
-- **Sprint selector** (Boards page): Filter by sprint or backlog. Admins can create a sprint from the dropdown or open Admin → Project Settings → Sprints. Making a sprint Active can move unfinished work from the previous active sprint (dates unchanged); the prompt shows unfinished/total task counts. **Move** transfers unfinished work; **Keep** activates without transferring; **Cancel**, Escape, or click outside abandons the change (no transfer, sprint is not made Active). The board filter switches to the new sprint only if work was moved. Deleting a sprint that is selected in the header returns the filter to All sprints. Deleting the **Active** sprint warns you to activate another first, but still allows deletion.
+- **Sprint selector** (Boards page): Filter by sprint or backlog. Admins can create a sprint from the dropdown or open Settings → Project Settings → Sprints. Making a sprint Active can move unfinished work from the previous active sprint (dates unchanged); the prompt shows unfinished/total task counts. **Move** transfers unfinished work; **Keep** activates without transferring; **Cancel**, Escape, or click outside abandons the change (no transfer, sprint is not made Active). The board filter switches to the new sprint only if work was moved. Deleting a sprint that is selected in the header returns the filter to All sprints. Deleting the **Active** sprint warns you to activate another first, but still allows deletion.
 - **Demo countdown** (when demo mode is enabled)
 
 ### Right Side (left → right)
@@ -139,7 +139,7 @@ The **Tools** card on the Boards page controls board layout and card density.
 - **Edit Board**: Double-click board tab to rename
 - **Delete Board**: Soft-delete to trash (confirms with total task count); peers are notified and switched off the board
 - **Reorder Boards**: Drag board tabs using the handle
-- **Restore Board**: Admin → Lifecycle (or restore board when restoring its tasks)
+- **Restore Board**: Settings → Lifecycle (or restore board when restoring its tasks)
 
 ### Board Settings
 - **Board Title**: Displayed in the tab
@@ -176,7 +176,7 @@ The Kanban view displays tasks as cards in columns, representing different stage
 #### Board tabs & board WIP
 - **Soft board WIP**: Admin double-click a board tab to rename and set a soft WIP limit (dropdown; tab bar height unchanged)
 - **Active-work count**: Board WIP counts exclude Done (finished), archived, and trash; amber chrome matches column WIP meters
-- **Features** (Admin → Project Settings → Features): board/column indicator visibility (counts on, effort off by default), effort unit (hours vs points), and highlight overdue tasks
+- **Features** (Settings → Project Settings → Features): board/column indicator visibility (counts on, effort off by default), effort unit (hours vs points), and highlight overdue tasks
 - **Trash**: Admins still get the board trash control in the actions column
 - **Soft warnings**: Creating a task or dropping onto a board at/over board WIP shows a warning; the action is still allowed
 
@@ -391,7 +391,7 @@ When you click on a task, the Task Details page opens with comprehensive task ma
 #### Task Actions
 - **Jump to task**: Locate and highlight the task in the active Kanban, List, Gantt, or Calendar view. If the task belongs to another board, that board opens first; the active view is preserved
 - **Save Changes**: Save all modifications
-- **Delete Task**: Soft-delete to board trash (restore from trash or Admin → Lifecycle). Admins: **Shift+click** delete on the card/toolbar to permanently purge (skips trash; always confirms)
+- **Delete Task**: Soft-delete to board trash (restore from trash or Settings → Lifecycle). Admins: **Shift+click** delete on the card/toolbar to permanently purge (skips trash; always confirms)
 - **Copy Task**: Duplicate task
 - **Link Tasks**: Create relationships with other tasks
 - **Assign to Agent** (when AI is enabled): Open the assign modal from the card toolbar or assignee control — see [AI Agent](#ai-agent)
@@ -438,11 +438,11 @@ These credentials are used when **you** assign a coding job to the Agent. Assist
 
 ---
 
-## Admin Section (Admin Only)
+## Settings (admins only)
 
-[Screenshot: Admin panel interface]
+[Screenshot: Settings interface]
 
-The Admin section provides comprehensive system management capabilities.
+Open **Settings** from the profile menu (admins only). Settings provides instance management: users, branding, mail, SSO, project options, reporting, licensing, and lifecycle.
 
 ### User Management
 
@@ -810,7 +810,7 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 - **Prevention**: Ensure proper user role assignment
 
 #### Performance Test Overlay (admin troubleshooting)
-- **Enable**: Admin → App Settings → Troubleshooting → **Performance Test Overlay** (type `TROUBLE` first on multi-tenant/demo). Saves to **your** `user_settings.FE_PERF_TESTS` via `PUT /api/user/settings`
+- **Enable**: Settings → App Settings → Troubleshooting → **Performance Test Overlay** (type `TROUBLE` first on multi-tenant/demo). Saves to **your** `user_settings.FE_PERF_TESTS` via `PUT /api/user/settings`
 - **Use**:
   - **Kanban**: floating **PERF TESTS** — Burst create, Move storm, Cleanup, reports
   - **Admin**: floating **PERF TESTS · ADMIN** — seed users (`perf.user…@local`, active, no invite), tags (`perf-tag-…`), sprints (`Perf Sprint …`), Seed all, Cleanup seed
@@ -818,7 +818,7 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 - **Multi-user load**: Each participating admin enables the overlay on their own account; each tab runs its own client-driven scenarios
 
 #### CSP reports (security hardening)
-- **Where**: Admin → App Settings → Troubleshooting → **CSP reports**
+- **Where**: Settings → App Settings → Troubleshooting → **CSP reports**
 - **What**: Browser Content-Security-Policy (Report-Only) violations collected at `POST /api/csp-report` and stored per tenant
 - **Use**: Review the list after normal usage; Clear when done. Keep CSP Report-Only until the list stays quiet, then enforce
 - **Details**: See `DEBUGGING.md` (CSP reports section) and `audit/security-assessment-current-2026-08.md` (S4)
@@ -831,7 +831,7 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 #### AI Agent / runner problems
 - **Symptoms**: Assign to Agent fails, job stays queued, or coding jobs fail immediately
 - **Checks**:
-  - Admin → AI Settings: AI enabled; **Validate** LLM; **Probe** runner (for coding jobs)
+  - Settings → AI Settings: AI enabled; **Validate** LLM; **Probe** runner (for coding jobs)
   - Task has a non-empty description
   - Coding jobs: Profile → Dev has a GitHub PAT and/or SSH key; use **Repo check** for the URL
   - Assist jobs do not need a runner for LLM chat alone in the same way as coding — if coding is intended, confirm runner URL/token and that `AI_CALLBACK_BASE_URL` / networking allows the runner to reach the app (Docker/K8s)

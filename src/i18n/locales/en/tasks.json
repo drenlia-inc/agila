@@ -162,6 +162,7 @@
     "deleteTask": "Delete Task",
     "deleteTaskAdminHint": "Delete Task (Shift+click to delete forever)",
     "changeAssignee": "Change Assignee",
+    "changeAssigneeNamed": "Change assignee ({{name}})",
     "assignTo": "Assign to:",
     "assignToAgentSection": "AI Agent",
     "sourceTaskForLinking": "Source task for linking",

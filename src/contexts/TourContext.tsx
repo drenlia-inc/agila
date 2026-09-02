@@ -11,6 +11,7 @@ import {
   isSystemPanelAvailable as readSystemPanelAvailable,
   TROUBLESHOOTING_VISIBILITY_EVENT,
 } from '../utils/troubleshootingAccess';
+import { scrollKanbanPageToTop } from '../utils/kanbanScroll';
 
 interface TourContextType {
   isRunning: boolean;
@@ -29,6 +30,9 @@ export const useTour = () => {
   }
   return context;
 };
+
+/** Safe when chrome tooltips render outside the tour tree. */
+export const useTourOptional = () => useContext(TourContext);
 
 interface TourProviderProps {
   children: React.ReactNode;
@@ -95,6 +99,73 @@ function prepareAdminTourTarget(
   }
 
   scrollAdminTabIntoStrip(targetSelector);
+}
+
+const JOYRIDE_TOOLTIP_SELECTOR = '.react-joyride__tooltip';
+const JOYRIDE_VIEWPORT_MARGIN = 12;
+
+function resetJoyrideTooltipPin(tooltip: HTMLElement) {
+  tooltip.style.position = '';
+  tooltip.style.top = '';
+  tooltip.style.left = '';
+  tooltip.style.transform = '';
+}
+
+/** Keep the Joyride description inside the viewport (scroll if we can, then pin). */
+function keepJoyrideTooltipInViewport() {
+  const tooltip = document.querySelector(JOYRIDE_TOOLTIP_SELECTOR) as HTMLElement | null;
+  if (!tooltip) return;
+
+  resetJoyrideTooltipPin(tooltip);
+
+  const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  const rect = tooltip.getBoundingClientRect();
+
+  let dy = 0;
+  if (rect.bottom > vh - JOYRIDE_VIEWPORT_MARGIN) {
+    dy = rect.bottom - (vh - JOYRIDE_VIEWPORT_MARGIN);
+  }
+  if (rect.top - dy < JOYRIDE_VIEWPORT_MARGIN) {
+    dy = rect.top - JOYRIDE_VIEWPORT_MARGIN;
+  }
+
+  let dx = 0;
+  if (rect.right > vw - JOYRIDE_VIEWPORT_MARGIN) {
+    dx = rect.right - (vw - JOYRIDE_VIEWPORT_MARGIN);
+  }
+  if (rect.left - dx < JOYRIDE_VIEWPORT_MARGIN) {
+    dx = rect.left - JOYRIDE_VIEWPORT_MARGIN;
+  }
+
+  if (dy !== 0 || dx !== 0) {
+    window.scrollBy({ top: dy, left: dx, behavior: 'auto' });
+  }
+
+  const next = tooltip.getBoundingClientRect();
+  let top = next.top;
+  let left = next.left;
+  if (next.bottom > vh - JOYRIDE_VIEWPORT_MARGIN) {
+    top -= next.bottom - (vh - JOYRIDE_VIEWPORT_MARGIN);
+  }
+  if (top < JOYRIDE_VIEWPORT_MARGIN) top = JOYRIDE_VIEWPORT_MARGIN;
+  if (next.right > vw - JOYRIDE_VIEWPORT_MARGIN) {
+    left -= next.right - (vw - JOYRIDE_VIEWPORT_MARGIN);
+  }
+  if (left < JOYRIDE_VIEWPORT_MARGIN) left = JOYRIDE_VIEWPORT_MARGIN;
+
+  if (top !== next.top || left !== next.left) {
+    tooltip.style.position = 'fixed';
+    tooltip.style.top = `${Math.round(top)}px`;
+    tooltip.style.left = `${Math.round(left)}px`;
+    tooltip.style.transform = 'none';
+  }
+}
+
+function prepareKanbanTourViewport() {
+  scrollKanbanPageToTop('auto');
+  const board = document.querySelector('[data-kanban-scroll="board"]') as HTMLElement | null;
+  if (board) board.scrollLeft = 0;
 }
 
 function ensureSystemUsagePanelVisible(): boolean {
@@ -173,11 +244,13 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
       },
       buttonClose: {
         color: isDark ? '#9ca3af' : '#6b7280',
-        height: 16,
-        width: 16,
+        boxSizing: 'content-box',
+        height: 12,
+        width: 12,
         padding: 8,
-        top: 8,
-        right: 8,
+        position: 'absolute',
+        top: 10,
+        right: 10,
       },
       beacon: {
         inner: '#3b82f6',
@@ -214,6 +287,7 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
   }, [isAdmin, isSystemPanelAvailable, t]);
 
   const beginTourRun = useCallback(() => {
+    prepareKanbanTourViewport();
     previousStepIndexRef.current = -1;
     advancingRef.current = false;
     setStepIndex(0);
@@ -307,6 +381,16 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
     const nextStep = steps[nextIndex];
     const target = typeof nextStep?.target === 'string' ? nextStep.target : '';
     const stepData = nextStep as any;
+
+    if (
+      target.includes('kanban-columns') ||
+      target.includes('add-task-button') ||
+      target.includes('board-tabs') ||
+      target.includes('column-management-menu') ||
+      target.includes('add-board-button')
+    ) {
+      prepareKanbanTourViewport();
+    }
 
     if (stepData?.data?.switchToPage === 'admin' && onPageChange && isAdmin) {
       onPageChange('admin');
@@ -435,6 +519,11 @@ export const TourProvider: React.FC<TourProviderProps> = ({ children, currentUse
       }
       if (step?.target === '[data-tour-id="system-usage-panel"]') {
         ensureSystemUsagePanelVisible();
+      }
+      if (type === EVENTS.TOOLTIP) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(keepJoyrideTooltipInViewport);
+        });
       }
     }
   }, [stopTour, goToStep, steps.length, onPageChange]);

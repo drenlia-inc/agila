@@ -191,6 +191,12 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
   const isMinimizedRef = useRef(isMinimized);
   const positionRef = useRef(position);
   const feedRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const listScrollHintTimerRef = useRef<number | null>(null);
+  const [listScrollThumb, setListScrollThumb] = useState<{ top: number; height: number } | null>(
+    null
+  );
+  const [listScrollHint, setListScrollHint] = useState(false);
   const [showDimensionsTooltip, setShowDimensionsTooltip] = useState(false);
   const [viewportSize, setViewportSize] = useState(() => ({
     w: typeof window !== 'undefined' ? window.innerWidth : 1200,
@@ -575,6 +581,37 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
     };
   }, [isResizing]);
 
+  useEffect(() => {
+    const sync = () => {
+      const el = listScrollRef.current;
+      if (!el) {
+        setListScrollThumb(null);
+        return;
+      }
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      if (scrollHeight <= clientHeight + 2) {
+        setListScrollThumb(null);
+        return;
+      }
+      const height = Math.max(28, (clientHeight / scrollHeight) * clientHeight);
+      const travel = scrollHeight - clientHeight;
+      const top = travel <= 0 ? 0 : (scrollTop / travel) * (clientHeight - height);
+      setListScrollThumb({ top, height });
+    };
+
+    sync();
+    const el = listScrollRef.current;
+    if (!el) return undefined;
+    const resizeObserver = new ResizeObserver(sync);
+    resizeObserver.observe(el);
+    return () => {
+      resizeObserver.disconnect();
+      if (listScrollHintTimerRef.current != null) {
+        window.clearTimeout(listScrollHintTimerRef.current);
+      }
+    };
+  }, [isMinimized, dimensions.height, activities.length]);
+
   const formatTimeAgo = (timestamp: string | undefined, short: boolean = false) => {
     if (!timestamp) {
       return t('activityFeed.unknownTime');
@@ -897,6 +934,35 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
 
   const isNarrowMode = dimensions.width <= 160;
   const isExtraNarrowMode = dimensions.width <= 130;
+
+  const syncListScrollThumb = () => {
+    const el = listScrollRef.current;
+    if (!el) {
+      setListScrollThumb(null);
+      return;
+    }
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    if (scrollHeight <= clientHeight + 2) {
+      setListScrollThumb(null);
+      return;
+    }
+    const height = Math.max(28, (clientHeight / scrollHeight) * clientHeight);
+    const travel = scrollHeight - clientHeight;
+    const top = travel <= 0 ? 0 : (scrollTop / travel) * (clientHeight - height);
+    setListScrollThumb({ top, height });
+  };
+
+  const revealListScroll = () => {
+    syncListScrollThumb();
+    setListScrollHint(true);
+    if (listScrollHintTimerRef.current != null) {
+      window.clearTimeout(listScrollHintTimerRef.current);
+    }
+    listScrollHintTimerRef.current = window.setTimeout(() => {
+      setListScrollHint(false);
+      listScrollHintTimerRef.current = null;
+    }, 800);
+  };
   
   if (isMinimized) {
     const compactLatest =
@@ -1095,8 +1161,14 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
         )}
       </div>
 
-      {/* Content */}
-      <div className={`flex-1 overflow-y-auto ${isNarrowMode ? 'p-1.5' : 'p-2'}`}>
+      {/* Content — native scrollbar hidden; thin overlay only while scrolling/hover (Windows). */}
+      <div className="relative min-h-0 flex-1">
+      <div
+        ref={listScrollRef}
+        className={`absolute inset-0 overflow-y-auto hide-scrollbar ${isNarrowMode ? 'p-1.5' : 'p-2'}`}
+        onScroll={revealListScroll}
+        onMouseEnter={revealListScroll}
+      >
         {loading && activities.length === 0 && (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-5 w-5 border-2 border-sky-600 border-t-transparent" />
@@ -1286,6 +1358,23 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({
             </button>
           </div>
         )}
+      </div>
+      {listScrollThumb && (
+        <div
+          className={`pointer-events-none absolute right-0.5 top-1 bottom-1 w-1.5 transition-opacity duration-200 ${
+            listScrollHint ? 'opacity-100' : 'opacity-0'
+          }`}
+          aria-hidden
+        >
+          <div
+            className="w-full rounded-full bg-slate-400/45 dark:bg-slate-500/50"
+            style={{
+              height: listScrollThumb.height,
+              transform: `translateY(${listScrollThumb.top}px)`,
+            }}
+          />
+        </div>
+      )}
       </div>
 
       {/* Footer */}

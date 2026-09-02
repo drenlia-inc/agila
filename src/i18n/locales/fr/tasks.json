@@ -162,6 +162,7 @@
     "deleteTask": "Supprimer la tâche",
     "deleteTaskAdminHint": "Supprimer la tâche (Maj+clic pour supprimer définitivement)",
     "changeAssignee": "Changer l'assigné",
+    "changeAssigneeNamed": "Changer l'assigné ({{name}})",
     "assignTo": "Assigner à :",
     "assignToAgentSection": "Agent IA",
     "sourceTaskForLinking": "Tâche source pour le lien",

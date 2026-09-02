@@ -88,6 +88,9 @@
 [data-tour-id="admin-tabs"] nav,
 [data-tour-id="reports-tabs"] > div {
   overflow-x: auto !important;
+  /* overflow-x:auto computes overflow-y to auto; a 1px tall overflow then
+     paints a Windows classic vertical scrollbar (▲ — ▼) beside the tabs. */
+  overflow-y: hidden !important;
   max-width: 100%;
 }
 
@@ -134,18 +137,38 @@ body {
   background-color: var(--main-bg) !important;
 }
 
+/*
+ * Joyride close control: Tailwind Preflight uses box-sizing:border-box, so
+ * width/height + padding collapse the glyph into the corner (especially
+ * noticeable on Windows). Keep content-box and inset it from the rounded edge.
+ */
+.react-joyride__tooltip {
+  overflow: visible;
+}
+
+.react-joyride__tooltip .react-joyride__close {
+  box-sizing: content-box !important;
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  width: 12px !important;
+  height: 12px !important;
+  padding: 8px !important;
+  line-height: 0 !important;
+}
+
 /* CSS Variables for Recharts Tooltips */
 :root {
   --tooltip-bg: #111827; /* gray-900 — inverted chrome */
   --tooltip-border: rgba(255, 255, 255, 0.1);
   --tooltip-text: #ffffff;
   --scrollbar-thumb: rgb(203, 213, 225); /* gray-300 */
-  --scrollbar-track: rgb(241, 245, 249); /* gray-100 */
+  --scrollbar-track: rgb(249, 250, 251); /* gray-50 — match page / kanban fill */
   --task-card-bg: rgb(255, 255, 255); /* white */
   --column-bg: rgb(249, 250, 251); /* gray-50 */
   --column-hover-bg: rgb(243, 244, 246); /* gray-100 */
   --page-bg: rgb(249, 250, 251); /* gray-50 */
-  --main-bg: rgb(243, 244, 246); /* gray-100 */
+  --main-bg: rgb(249, 250, 251); /* gray-50 — match kanban so leftover viewport is not a darker band */
 }
 
 .dark {

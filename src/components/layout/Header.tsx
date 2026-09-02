@@ -791,7 +791,7 @@ const Header: React.FC<HeaderProps> = ({
                     <Menu size={16} />
                     <span className="hidden sm:inline max-w-[4.5rem] truncate">
                       {currentPage === 'admin'
-                        ? t('navigation.admin')
+                        ? t('navigation.settings')
                         : currentPage === 'reports'
                           ? t('navigation.reports')
                           : t('navigation.boards')}

@@ -382,7 +382,7 @@ const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
           className="reports-tabs sticky top-14 z-40 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700"
           data-tour-id="reports-tabs"
         >
-          <div className="flex gap-1 px-2 overflow-x-auto">
+          <div className="flex gap-1 px-2 overflow-x-auto overflow-y-hidden">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (

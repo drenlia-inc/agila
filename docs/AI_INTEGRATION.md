@@ -2,7 +2,7 @@
 
 Agila can assign tasks to an **Agent** pseudo-user that runs coding or assist jobs via a push-based **runner** and a configured **LLM provider**. This document covers architecture, settings, data model, APIs, and local setup for developers.
 
-Related user-facing docs: [`Documentation.md`](../Documentation.md) (Admin AI Settings, Profile → Dev, Assign to Agent).
+Related user-facing docs: [`Documentation.md`](../Documentation.md) (Settings → System Settings → AI, Profile → Dev, Assign to Agent).
 
 ---
 
@@ -260,7 +260,7 @@ Automation jobs run `runner/src/automationLoop.js` (discover → `submit_dry_run
 
 ## Frontend surfaces
 
-- **Admin → AI Settings**: enable AI, provider/model, runner URL/token, max concurrent, validate LLM + probe runner.
+- **Settings → System Settings → AI**: enable AI, provider/model, runner URL/token, max concurrent, validate LLM + probe runner.
 - **Profile → Dev** (when AI on): mint API tokens, SSH key, GitHub PAT, repo probe.
 - **Assign to Agent**: Assist | Code | **Automation** (admins); automation scope this board / selected / all boards.
 - **Task cards**: Agent-assigned cards use the bot avatar and a soft teal wash while work is active; activity screen with live log; pause/stop/resume; for automation **Apply** / **Undo**. Agent is pinned last in team/assignee lists.
@@ -273,7 +273,7 @@ Automation jobs run `runner/src/automationLoop.js` (discover → `submit_dry_run
 
 1. Use compose that includes `kanban-runner` (e.g. `docker-compose-example.yml` or `docker-compose-dev.yml`).
 2. Align `RUNNER_TOKEN` on app and runner; set `AI_RUNNER_URL` and `AI_CALLBACK_BASE_URL` for in-network callbacks.
-3. In Admin → AI Settings: enable AI, configure provider/key/model, set runner URL/token (or rely on env defaults), **Validate** LLM and **Probe** runner.
+3. In Settings → AI Settings: enable AI, configure provider/key/model, set runner URL/token (or rely on env defaults), **Validate** LLM and **Probe** runner.
 4. In Profile → Dev: add GitHub PAT (and/or SSH) for private repos / PRs.
 5. Assign a task with a description to Agent; watch `task_work` / Agent activity screen / runner logs.
 6. For Automation: admin assigns with scope → review dry-run → **Apply** → optional **Undo**.
