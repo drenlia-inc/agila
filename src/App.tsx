@@ -74,7 +74,7 @@ import { requestTaskJump } from './utils/taskJumpEvents';
 import { revealNewlyCreatedTask } from './utils/newTaskReveal';
 import { columnsContentFingerprint } from './utils/columnsFingerprint';
 import { applyLocalColumnReorder } from './utils/columnReorderingUtils';
-import { userCanMutate } from './utils/permissions';
+import { rolesForAppRole, sameRoleList, userCanMutate } from './utils/permissions';
 import { isDemoModeClient } from './utils/demoReset';
 import { useLoadingState } from './hooks/useLoadingState';
 import { useDebug } from './hooks/useDebug';
@@ -753,6 +753,14 @@ function AppContent() {
 
   useEffect(() => subscribePerfTestsPreference(setUserPerfTestsEnabled), []);
 
+  useEffect(() => {
+    if (isAdminUser || currentPage !== 'admin') return;
+    setCurrentPage('kanban');
+    if (window.location.hash.replace(/^#/, '').startsWith('admin')) {
+      window.location.hash = 'kanban';
+    }
+  }, [isAdminUser, currentPage]);
+
   const columnIdsKey = useMemo(
     () => Object.keys(columns).sort().join('|'),
     [columns]
@@ -1086,12 +1094,21 @@ function AppContent() {
       return;
     }
     
-    // Handle permission changes (soft updates) - only if we have a previous status to compare
     const prevCanMutate = previousStatus?.canMutate ?? previousStatus?.isAdmin;
     const nextCanMutate = newUserStatus.canMutate ?? !newUserStatus.isViewer;
+    const nextRoles = Array.isArray(newUserStatus.roles) && newUserStatus.roles.length
+      ? newUserStatus.roles
+      : rolesForAppRole(newUserStatus.isAdmin ? 'admin' : newUserStatus.isViewer ? 'viewer' : 'user');
+    let rolesChanged = false;
+    setCurrentUser((prev) => {
+      if (!prev || sameRoleList(prev.roles, nextRoles)) return prev;
+      rolesChanged = true;
+      return { ...prev, roles: nextRoles };
+    });
     if (
-      previousStatus !== null &&
-      (previousStatus.isAdmin !== newUserStatus.isAdmin || prevCanMutate !== nextCanMutate)
+      rolesChanged ||
+      (previousStatus !== null &&
+        (previousStatus.isAdmin !== newUserStatus.isAdmin || prevCanMutate !== nextCanMutate))
     ) {
       handleProfileUpdated().catch((error) => {
         console.error('Failed to refresh user profile after permission change:', error);

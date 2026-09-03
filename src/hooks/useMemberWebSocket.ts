@@ -1,7 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { TeamMember, SavedFilterView } from '../types';
 import { getMembers, getCurrentUser } from '../api';
+import { establishMediaSession } from '../utils/mediaSession';
 import { normalizeTeamMemberFromEvent } from '../utils/memberUtils';
+import { rolesForAppRole, sameRoleList } from '../utils/permissions';
 
 interface UseMemberWebSocketProps {
   // State setters
@@ -34,6 +36,23 @@ export const useMemberWebSocket = ({
   taskFilters,
   currentUser,
 }: UseMemberWebSocketProps) => {
+  const currentUserIdRef = useRef(currentUser?.id);
+  currentUserIdRef.current = currentUser?.id;
+
+  const refreshSelfSession = useCallback(async () => {
+    try {
+      const response = await getCurrentUser();
+      if (response?.user) {
+        setCurrentUser(response.user);
+      }
+      if (response?.token) {
+        localStorage.setItem('authToken', response.token);
+        void establishMediaSession();
+      }
+    } catch (error) {
+      console.error('Failed to refresh current user after role change:', error);
+    }
+  }, [setCurrentUser]);
   
   const handleMemberCreated = useCallback((data: any) => {
     if (!data?.member) return;
@@ -52,8 +71,8 @@ export const useMemberWebSocket = ({
     });
   }, [setMembers]);
 
-  const handleUserRoleUpdated = useCallback((data: { userId?: string; role?: string }) => {
-    const userId = data?.userId;
+  const handleUserRoleUpdated = useCallback((data: { userId?: string; user?: { id?: string }; role?: string }) => {
+    const userId = data?.userId ?? data?.user?.id;
     const role = data?.role;
     if (!userId || !role) return;
     const isViewer = role === 'viewer';
@@ -65,7 +84,15 @@ export const useMemberWebSocket = ({
         return { ...member, isViewer };
       });
     });
-  }, [setMembers]);
+    if (String(currentUserIdRef.current) !== String(userId)) return;
+    const nextRoles = rolesForAppRole(role);
+    setCurrentUser((prev) => {
+      if (!prev || String(prev.id) !== String(userId)) return prev;
+      if (sameRoleList(prev.roles, nextRoles)) return prev;
+      return { ...prev, roles: nextRoles };
+    });
+    void refreshSelfSession();
+  }, [refreshSelfSession, setCurrentUser, setMembers]);
 
   const handleUserUpdated = useCallback((data: any) => {
     const user = data?.user;
@@ -154,10 +181,14 @@ export const useMemberWebSocket = ({
 
   const handleUserProfileUpdated = useCallback(async (data: any) => {
     // If this is the current user's profile update, refresh currentUser
-    if (data.userId === currentUser?.id) {
+    if (String(data.userId) === String(currentUserIdRef.current)) {
       try {
         const response = await getCurrentUser();
         setCurrentUser(response.user);
+        if (response.token) {
+          localStorage.setItem('authToken', response.token);
+          void establishMediaSession();
+        }
       } catch (error) {
         console.error('Failed to refresh current user after profile update:', error);
       }

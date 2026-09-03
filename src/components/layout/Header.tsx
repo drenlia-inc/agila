@@ -830,7 +830,7 @@ const Header: React.FC<HeaderProps> = ({
                         {currentPage === 'reports' && <Check size={14} className="text-blue-600" />}
                       </button>
                     )}
-                    {currentUser.roles?.includes('admin') && onInviteUser && (
+                    {isAdminAccount && onInviteUser && (
                       <>
                         <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
                         <button
@@ -853,7 +853,7 @@ const Header: React.FC<HeaderProps> = ({
               </div>
 
               {/* Invite — desktop button; dropdown host for both breakpoints */}
-              {currentUser.roles?.includes('admin') && onInviteUser && (
+              {isAdminAccount && onInviteUser && (
                 <div className="relative" ref={inviteDropdownRef}>
                   <KanbanChromeTooltip label={t('navigation.inviteUser')} wrapperClassName="relative hidden lg:inline-flex">
                     <button
