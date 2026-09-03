@@ -16,13 +16,20 @@ import { helpers, tasks as taskQueries, files as fileQueries, activity as activi
 import { getBilingualTranslation, getTranslatorForLanguage, getTranslator } from '../utils/i18n.js';
 import { notifyCollaboratorAdded, notifyWatcherAdded } from '../services/taskEmailNotificationService.js';
 import { parseBody, taskAttachmentsBodySchema } from '../utils/requestValidation.js';
+import { assertTaskBoardAccess } from '../middleware/boardAccess.js';
+import { isAgentMemberId } from '../constants/agentIdentity.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const router = express.Router();
 
+async function requireTaskBoardAccess(req, res, next) {
+  if (!(await assertTaskBoardAccess(req, res, req.params.taskId))) return;
+  next();
+}
+
 // Task-Tag association endpoints
-router.get('/:taskId/tags', authenticateToken, async (req, res) => {
+router.get('/:taskId/tags', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId } = req.params;
   const db = getRequestDatabase(req);
   
@@ -37,7 +44,7 @@ router.get('/:taskId/tags', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/:taskId/tags/:tagId', authenticateToken, async (req, res) => {
+router.post('/:taskId/tags/:tagId', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId, tagId } = req.params;
   const userId = req.user?.id || 'system';
   const db = getRequestDatabase(req);
@@ -277,7 +284,7 @@ router.post('/:taskId/tags/:tagId', authenticateToken, async (req, res) => {
   }
 });
 
-router.delete('/:taskId/tags/:tagId', authenticateToken, async (req, res) => {
+router.delete('/:taskId/tags/:tagId', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId, tagId } = req.params;
   const userId = req.user?.id || 'system';
   const db = getRequestDatabase(req);
@@ -472,7 +479,7 @@ router.delete('/:taskId/tags/:tagId', authenticateToken, async (req, res) => {
 });
 
 // Task-Watchers association endpoints
-router.get('/:taskId/watchers', authenticateToken, async (req, res) => {
+router.get('/:taskId/watchers', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId } = req.params;
   const db = getRequestDatabase(req);
   
@@ -487,7 +494,7 @@ router.get('/:taskId/watchers', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) => {
+router.post('/:taskId/watchers/:memberId', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId, memberId } = req.params;
   const userId = req.user?.id || 'system';
   const db = getRequestDatabase(req);
@@ -503,6 +510,10 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
       if (!ownMember || ownMember.id !== memberId) {
         return res.status(403).json({ error: tTranslator('errors.readOnly'), code: 'READ_ONLY' });
       }
+    }
+    if (isAgentMemberId(memberId)) {
+      const tTranslator = await getTranslator(db);
+      return res.status(400).json({ error: tTranslator('errors.cannotAddAgentAsWatcher') });
     }
     // MIGRATED: Check if association already exists using sqlManager
     // Note: addWatcher uses ON CONFLICT DO NOTHING, so we check first
@@ -567,7 +578,7 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
   }
 });
 
-router.delete('/:taskId/watchers/:memberId', authenticateToken, async (req, res) => {
+router.delete('/:taskId/watchers/:memberId', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId, memberId } = req.params;
   const db = getRequestDatabase(req);
   const userId = req.user?.id || 'system';
@@ -595,7 +606,7 @@ router.delete('/:taskId/watchers/:memberId', authenticateToken, async (req, res)
 });
 
 // Task-Collaborators association endpoints
-router.get('/:taskId/collaborators', authenticateToken, async (req, res) => {
+router.get('/:taskId/collaborators', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId } = req.params;
   const db = getRequestDatabase(req);
   
@@ -610,7 +621,7 @@ router.get('/:taskId/collaborators', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/:taskId/collaborators/:memberId', authenticateToken, async (req, res) => {
+router.post('/:taskId/collaborators/:memberId', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId, memberId } = req.params;
   const userId = req.user?.id || 'system';
   const db = getRequestDatabase(req);
@@ -620,6 +631,10 @@ router.post('/:taskId/collaborators/:memberId', authenticateToken, async (req, r
     req.body?.skipEmail === true;
   
   try {
+    if (isAgentMemberId(memberId)) {
+      const tTranslator = await getTranslator(db);
+      return res.status(400).json({ error: tTranslator('errors.cannotAddAgentAsCollaborator') });
+    }
     // MIGRATED: Check if association already exists using sqlManager
     // Note: addCollaborator uses ON CONFLICT DO NOTHING, so we check first
     const existingCollaborators = await helpers.getCollaboratorsForTask(db, taskId);
@@ -682,7 +697,7 @@ router.post('/:taskId/collaborators/:memberId', authenticateToken, async (req, r
   }
 });
 
-router.delete('/:taskId/collaborators/:memberId', authenticateToken, async (req, res) => {
+router.delete('/:taskId/collaborators/:memberId', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId, memberId } = req.params;
   const db = getRequestDatabase(req);
   
@@ -702,7 +717,7 @@ router.delete('/:taskId/collaborators/:memberId', authenticateToken, async (req,
 });
 
 // Task-Attachments association endpoints
-router.get('/:taskId/attachments', authenticateToken, async (req, res) => {
+router.get('/:taskId/attachments', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId } = req.params;
   const db = getRequestDatabase(req);
   
@@ -717,7 +732,7 @@ router.get('/:taskId/attachments', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/:taskId/attachments', authenticateToken, async (req, res) => {
+router.post('/:taskId/attachments', authenticateToken, requireTaskBoardAccess, async (req, res) => {
   const { taskId } = req.params;
   const parsed = parseBody(taskAttachmentsBodySchema, req.body);
   if (!parsed.success) {

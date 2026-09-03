@@ -366,17 +366,17 @@ const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
   const currentTab = tabs.some(tab => tab.id === activeTab) ? activeTab : (tabs[0]?.id || 'burndown');
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2">
       {/* Title card — scrolls away */}
-      <div className="reports-header bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 px-4 py-4">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+      <div className="reports-header bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 px-4 py-1.5">
+        <h1 className="text-lg font-semibold text-gray-900 dark:text-white leading-tight">
           {t('reports.title')}
         </h1>
       </div>
 
       {/* Tabs + content share a tall parent so sticky tabs work while scrolling.
           Negative margin pulls tabs closer to the title card. */}
-      <div className="flex flex-col gap-4 -mt-3">
+      <div className="flex flex-col gap-3 -mt-1">
         <div
           ref={tabsRef}
           className="reports-tabs sticky top-14 z-40 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700"
@@ -390,7 +390,7 @@ const Reports: React.FC<ReportsProps> = ({ currentUser }) => {
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
                   className={`
-                    flex items-center gap-2 px-4 py-3 font-medium text-sm whitespace-nowrap
+                    flex items-center gap-2 px-4 py-2 font-medium text-sm whitespace-nowrap
                     border-b-2 transition-colors
                     ${
                       currentTab === tab.id

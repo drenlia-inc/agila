@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, ChevronDown } from 'lucide-react';
 import { formFieldClass, formLabelClass } from '../../utils/formFieldClasses';
+import SprintInfoBadge from '../sprints/SprintInfoBadge';
 
 /** Width of the start/end date pair; board filter matches this span. */
 export const REPORT_DATE_FILTER_ROW_CLASS = 'max-w-md';
@@ -12,6 +13,12 @@ interface PlanningPeriod {
   start_date: string;
   end_date: string;
   is_active: boolean;
+  goal?: string | null;
+  description?: string | null;
+}
+
+function toYmd(value?: string | null): string {
+  return String(value || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || '';
 }
 
 interface DateRangeSelectorProps {
@@ -118,12 +125,15 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
 
   const hasActiveSprint = sprints.some(s => s.is_active);
   const hasPastSprints = sprints.some(s => s.end_date < new Date().toISOString().split('T')[0]);
+  const matchedSprint = sprints.find(
+    (sprint) => toYmd(sprint.start_date) === toYmd(startDate) && toYmd(sprint.end_date) === toYmd(endDate)
+  );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* Preset Buttons */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
           {t('reports.dateRangeSelector.quickSelect')}
         </label>
         <div className="flex flex-wrap gap-2">
@@ -211,6 +221,19 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             {new Date(sprint.start_date).toLocaleDateString()} - {new Date(sprint.end_date).toLocaleDateString()}
                           </div>
+                          {sprint.goal ? (
+                            <div
+                              className="text-xs text-slate-600 dark:text-gray-300 mt-0.5 break-words whitespace-normal"
+                              style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {sprint.goal}
+                            </div>
+                          ) : null}
                         </button>
                       ))}
                     </div>
@@ -220,6 +243,23 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
             </>
           )}
         </div>
+        {matchedSprint && (
+          <div className="mt-1.5 flex items-start gap-1.5 text-xs text-slate-600 dark:text-gray-300">
+            <span
+              className="min-w-0 flex-1 break-words whitespace-normal"
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              <span className="font-medium text-gray-800 dark:text-gray-200">{matchedSprint.name}</span>
+              {matchedSprint.goal ? ` · ${matchedSprint.goal}` : ''}
+            </span>
+            <SprintInfoBadge sprint={matchedSprint} ns="common" />
+          </div>
+        )}
       </div>
 
       {/* Manual Date Selection — compact side-by-side */}

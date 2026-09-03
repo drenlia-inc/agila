@@ -8,7 +8,12 @@
  * Geometry is visual: the in-flow Drop here hole shifts cards down. The ghost’s
  * leading edge (bottom when moving down, top when moving up) is tested against
  * card midlines. Pointer Y is a fallback when there is no overlay.
+ *
+ * Windowed columns only mount a slice of rows. Past the last *visible* card is
+ * not the end of the column — map Y through registered virtual offsets instead.
  */
+
+import { insertIndexFromColumnLayout } from './columnVirtualLayout';
 
 /** Extra px past a card midline before the hole steps (avoids flicker). */
 const INSERT_HYSTERESIS_PX = 6;
@@ -322,6 +327,48 @@ function rowMidline(row: LayoutRow): number {
   return row.top + row.height / 2;
 }
 
+function lastVisibleIsColumnEnd(
+  lastIndex: number,
+  layoutCount: number | null
+): boolean {
+  if (layoutCount == null) return true;
+  return lastIndex >= layoutCount - 1;
+}
+
+function yInVisibleRowCluster(
+  y: number,
+  rows: LayoutRow[],
+  overlay?: DOMRectReadOnly | null
+): boolean {
+  if (rows.length === 0) return false;
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  const clusterTop = first.top;
+  const clusterBottom = last.top + last.height;
+  if (y >= clusterTop - 4 && y <= clusterBottom + 4) return true;
+  if (
+    overlay &&
+    overlay.bottom >= clusterTop &&
+    overlay.top <= clusterBottom
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function insertFromVirtualOrVisible(
+  columnId: string,
+  y: number,
+  rows: LayoutRow[],
+  layoutCount: number | null
+): number {
+  const virt = insertIndexFromColumnLayout(columnId, y);
+  if (virt != null) return virt;
+  if (rows.length === 0) return layoutCount ?? 0;
+  if (y < rows[0].top) return rows[0].index;
+  return rows[rows.length - 1].index + 1;
+}
+
 type CardBox = { index: number; top: number; bottom: number };
 
 /** Visual task card, not the row (row can include gap / stretch). */
@@ -384,6 +431,8 @@ export function resolveInsertAtColumnStackEnds(
 
   const first = cards[0];
   const last = cards[cards.length - 1];
+  const lastIsColumnEnd = lastVisibleIsColumnEnd(last.index, end);
+  const firstIsColumnStart = first.index === 0;
   const hole = paintedHoleInColumn(root);
   const holeShiftsLast = hole != null && hole.index <= last.index;
   const holeH = holeShiftsLast ? Math.max(0, hole.bottom - hole.top) : 0;
@@ -395,27 +444,32 @@ export function resolveInsertAtColumnStackEnds(
     if (pointerY >= br.top - 2 && pointerY <= br.bottom + 8) return end;
   }
 
-  // Hole is already before the last card — that card is shifted down by the
-  // hole. Crossing the hole’s bottom (onto the last card) is last+1.
-  if (hole && hole.index === last.index) {
-    if (
-      pointerY >= hole.bottom - 6 ||
-      (overlay != null &&
-        (overlay.top >= hole.bottom - 4 || overlay.bottom >= hole.bottom + 12))
-    ) {
-      return end;
+  // Only the real last card (not the last *visible* virtual row) is a stack end.
+  if (lastIsColumnEnd) {
+    // Hole is already before the last card — that card is shifted down by the
+    // hole. Crossing the hole’s bottom (onto the last card) is last+1.
+    if (hole && hole.index === last.index) {
+      if (
+        pointerY >= hole.bottom - 6 ||
+        (overlay != null &&
+          (overlay.top >= hole.bottom - 4 || overlay.bottom >= hole.bottom + 12))
+      ) {
+        return end;
+      }
     }
+    if (pointerY >= lastNaturalBottom - 4) return end;
+    if (overlay && overlay.top >= lastNaturalBottom - 8) return end;
   }
-  if (pointerY >= lastNaturalBottom - 4) return end;
-  if (overlay && overlay.top >= lastNaturalBottom - 8) return end;
 
   const topZone = document.getElementById(`${columnId}-task-top`);
   if (topZone) {
     const tr = topZone.getBoundingClientRect();
     if (pointerY >= tr.top && pointerY <= tr.bottom + 4) return 0;
   }
-  if (pointerY <= first.top + 4) return 0;
-  if (overlay && overlay.bottom <= first.top + 8) return 0;
+  if (firstIsColumnStart) {
+    if (pointerY <= first.top + 4) return 0;
+    if (overlay && overlay.bottom <= first.top + 8) return 0;
+  }
 
   return null;
 }
@@ -433,14 +487,17 @@ function insertIndexFromOverlayEdges(
   const first = rows[0];
   const last = rows[rows.length - 1];
   if (overlay.bottom <= first.top + COLUMN_EDGE_MAGNET_PX) {
-    return first.index === 0 ? 0 : first.index;
+    return first.index;
   }
-  // Past the last card’s midline (or its bottom) → end of column.
+  // Past the last *mounted* card’s midline → end only when that card is last.
   if (
     overlay.top >= rowMidline(last) - 2 ||
     overlay.bottom >= last.top + last.height - 4
   ) {
-    return layoutCount != null ? layoutCount : last.index + 1;
+    if (lastVisibleIsColumnEnd(last.index, layoutCount)) {
+      return layoutCount != null ? layoutCount : last.index + 1;
+    }
+    return last.index + 1;
   }
 
   const edge = movingDown ? overlay.bottom : overlay.top;
@@ -558,14 +615,26 @@ export function resolveInsertIndexFromOverlay(
   const list = columnTaskList(root);
   const layoutCount = list ? layoutCountForList(list) : null;
 
-  if (rows.length === 0) return remember(layoutCount ?? 0);
+  if (rows.length === 0) {
+    return remember(
+      insertFromVirtualOrVisible(columnId, pointerY ?? midY, rows, layoutCount)
+    );
+  }
 
   const lastRow = rows[rows.length - 1];
+  const y = pointerY ?? midY;
+  const lastIsColumnEnd = lastVisibleIsColumnEnd(lastRow.index, layoutCount);
+
   if (
-    (pointerY != null && pointerY >= lastRow.top + lastRow.height - 8) ||
-    overlay.top >= rowMidline(lastRow)
+    lastIsColumnEnd &&
+    ((pointerY != null && pointerY >= lastRow.top + lastRow.height - 8) ||
+      overlay.top >= rowMidline(lastRow))
   ) {
     return remember(layoutCount != null ? layoutCount : lastRow.index + 1);
+  }
+
+  if (!yInVisibleRowCluster(y, rows, overlay)) {
+    return remember(insertFromVirtualOrVisible(columnId, y, rows, layoutCount));
   }
 
   const last = insertHysteresis?.columnId === columnId ? insertHysteresis : null;
@@ -749,16 +818,22 @@ export function resolveInsertIndexUnderPointer(
   const list = columnTaskList(root);
   const layoutCount = list ? layoutCountForList(list) : null;
 
-  if (rows.length === 0) return layoutCount ?? 0;
+  if (rows.length === 0) {
+    return insertFromVirtualOrVisible(columnId, pointerY, rows, layoutCount);
+  }
 
   const first = rows[0];
   const last = rows[rows.length - 1];
 
   if (pointerY < first.top) {
-    return first.index;
+    if (first.index === 0) return first.index;
+    return insertFromVirtualOrVisible(columnId, pointerY, rows, layoutCount);
   }
   if (pointerY >= last.top + last.height) {
-    return layoutCount != null ? layoutCount : last.index + 1;
+    if (lastVisibleIsColumnEnd(last.index, layoutCount)) {
+      return layoutCount != null ? layoutCount : last.index + 1;
+    }
+    return insertFromVirtualOrVisible(columnId, pointerY, rows, layoutCount);
   }
 
   for (const row of rows) {

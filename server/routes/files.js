@@ -6,6 +6,7 @@ import { updateStorageUsage } from '../utils/storageUtils.js';
 import notificationService from '../services/notificationService.js';
 import { getRequestDatabase } from '../middleware/tenantRouting.js';
 import { files as fileQueries, tasks as taskQueries } from '../utils/sqlManager/index.js';
+import { assertTaskBoardAccess } from '../middleware/boardAccess.js';
 import {
   getObject,
   deleteObject,
@@ -154,6 +155,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
     }
+    if (!(await assertTaskBoardAccess(req, res, attachment.taskId || attachment.taskid))) return;
     
     const filename = filenameFromPublicUrl(attachment.url, 'attachments');
     if (filename) {

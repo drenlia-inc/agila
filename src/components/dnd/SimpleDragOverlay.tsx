@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DragOverlay as DndKitDragOverlay } from '@dnd-kit/core';
 import { useTranslation } from 'react-i18next';
@@ -31,11 +31,15 @@ export const SimpleDragOverlay: React.FC<SimpleDragOverlayProps> = ({
   taskViewMode = 'expand',
 }) => {
   const multiCount = draggedTaskIds.length > 1 ? draggedTaskIds.length : 0;
+  const followPointer = usePointerTaskGhost(!!draggedTask && !draggedColumn);
   const overlayModifiers = useMemo(() => {
     if (draggedColumn || !draggedTask) return undefined;
     if (isHoveringBoardTab) return undefined;
     return [snapPointerInsideOverlay];
   }, [draggedColumn, draggedTask, isHoveringBoardTab, multiCount]);
+
+  const showPointerGhost =
+    !!draggedTask && !draggedColumn && !isHoveringBoardTab && followPointer;
 
   const tabChip =
     isHoveringBoardTab && draggedTask
@@ -48,9 +52,23 @@ export const SimpleDragOverlay: React.FC<SimpleDragOverlayProps> = ({
         )
       : null;
 
+  const pointerGhost =
+    showPointerGhost && draggedTask
+      ? createPortal(
+          <PointerFollowTaskGhost
+            task={draggedTask}
+            member={members.find((m) => m.id === draggedTask.memberId)}
+            stackCount={multiCount}
+            compact={taskViewMode === 'compact'}
+          />,
+          document.body
+        )
+      : null;
+
   return (
     <>
       {tabChip}
+      {pointerGhost}
       <DndKitDragOverlay 
         dropAnimation={null}
         adjustScale={false}
@@ -59,7 +77,7 @@ export const SimpleDragOverlay: React.FC<SimpleDragOverlayProps> = ({
       >
         {draggedColumn ? (
           <ColumnDragPreview column={draggedColumn} />
-        ) : draggedTask && !isHoveringBoardTab ? (
+        ) : draggedTask && !isHoveringBoardTab && !followPointer ? (
           <TaskDragPreview
             task={draggedTask}
             member={members.find(m => m.id === draggedTask.memberId)}
@@ -69,6 +87,73 @@ export const SimpleDragOverlay: React.FC<SimpleDragOverlayProps> = ({
         ) : null}
       </DndKitDragOverlay>
     </>
+  );
+};
+
+/** True after the first pointermove of this task drag (keyboard keeps dnd-kit overlay). */
+function usePointerTaskGhost(active: boolean): boolean {
+  const [follow, setFollow] = useState(false);
+  useEffect(() => {
+    if (!active) {
+      setFollow(false);
+      return;
+    }
+    const onMove = () => setFollow(true);
+    document.addEventListener('pointermove', onMove, { passive: true, once: true });
+    return () => document.removeEventListener('pointermove', onMove);
+  }, [active]);
+  return follow;
+}
+
+/** Ghost glued to client coordinates — not dnd-kit’s source-rect + transform. */
+const PointerFollowTaskGhost: React.FC<{
+  task: Task;
+  member?: TeamMember;
+  stackCount: number;
+  compact: boolean;
+}> = ({ task, member, stackCount, compact }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const place = (x: number, y: number) => {
+      const w = el.offsetWidth || 320;
+      const h = el.offsetHeight || 120;
+      const holdX = Math.min(24, w / 2);
+      const holdY = Math.min(28, h / 2);
+      el.style.left = `${x - holdX}px`;
+      el.style.top = `${y - holdY}px`;
+    };
+
+    place(lastKanbanPointer.x, lastKanbanPointer.y);
+    const onMove = (e: PointerEvent) => {
+      setLastKanbanPointer(e.clientX, e.clientY);
+      place(e.clientX, e.clientY);
+    };
+    const onScroll = () => place(lastKanbanPointer.x, lastKanbanPointer.y);
+    document.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    return () => {
+      document.removeEventListener('pointermove', onMove);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [task.id]);
+
+  return (
+    <div
+      ref={ref}
+      className="pointer-events-none fixed z-[9999]"
+      style={{ left: 0, top: 0 }}
+    >
+      <TaskDragPreview
+        task={task}
+        member={member}
+        stackCount={stackCount}
+        compact={compact}
+      />
+    </div>
   );
 };
 

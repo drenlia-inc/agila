@@ -2,6 +2,7 @@ import express from 'express';
 import { wrapQuery } from '../utils/queryLogger.js';
 import notificationService from '../services/notificationService.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { assertBoardAccess } from '../middleware/boardAccess.js';
 import { getTranslator } from '../utils/i18n.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 import { dbTransaction } from '../utils/dbAsync.js';
@@ -26,6 +27,7 @@ router.post('/', authenticateToken, async (req, res) => {
   const { id, title, boardId, position } = parsed.data;
   try {
     const db = getRequestDatabase(req);
+    if (!(await assertBoardAccess(req, res, boardId))) return;
     const t = await getTranslator(db);
     
     // MIGRATED: Check for duplicate column name using sqlManager
@@ -137,6 +139,8 @@ router.put("/:id", authenticateToken, async (req, res) => {
     if (!column) {
       return res.status(404).json({ error: t('errors.columnNotFound') });
     }
+    const updateColumnBoardId = column.boardId || column.boardid || column.board_id;
+    if (updateColumnBoardId && !(await assertBoardAccess(req, res, updateColumnBoardId))) return;
     
     // MIGRATED: Get full column info including boardid and position using sqlManager
     // CRITICAL: Fetch AFTER any potential position changes to get the current position
@@ -261,6 +265,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     if (!column) {
       return res.status(404).json({ error: t('errors.columnNotFound') });
     }
+    const deleteColumnBoardId = column.boardId || column.boardid || column.board_id;
+    if (deleteColumnBoardId && !(await assertBoardAccess(req, res, deleteColumnBoardId))) return;
 
     const liveCount = await taskQueries.countLiveTasksInColumn(db, id);
     if (liveCount > 0) {

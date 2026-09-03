@@ -27,6 +27,8 @@ export const BLOCKED_REASON_MAX_LENGTH = 500;
 export const FILTER_NAME_MAX_LENGTH = 50;
 export const SPRINT_NAME_MAX_LENGTH = 30;
 export const SPRINT_DESCRIPTION_MAX_LENGTH = 5000;
+export const SPRINT_GOAL_MAX_LENGTH = 500;
+export const ACCEPTANCE_CRITERION_MAX_LENGTH = 500;
 export const PRIORITY_NAME_MAX_LENGTH = 30;
 
 /** task_work.status values for agent automation */

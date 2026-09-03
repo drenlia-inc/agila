@@ -1174,6 +1174,7 @@ export const createSprint = async (sprint: {
   end_date: string;
   is_active?: boolean;
   description?: string;
+  goal?: string;
   transfer_active_work?: boolean;
 }) => {
   const { data } = await api.post('/admin/sprints', sprint);
@@ -1188,6 +1189,7 @@ export const updateSprint = async (
     end_date: string;
     is_active?: boolean;
     description?: string | null;
+    goal?: string | null;
     transfer_active_work?: boolean;
   }
 ) => {
@@ -1693,6 +1695,70 @@ export type HelpAssistantTarget = {
   highlights?: string[];
   /** Open closed chrome before highlighting (search panel, dropdowns, trash). */
   reveal?: string[];
+};
+
+export type BoardParticipantUser = {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  displayName?: string | null;
+  memberId?: string | null;
+  color?: string | null;
+  avatarUrl?: string | null;
+  googleAvatarUrl?: string | null;
+  roles?: string[];
+  isViewer?: boolean;
+};
+
+export const getBoardParticipants = async (boardId: string) => {
+  const { data } = await api.get(`/boards/${boardId}/participants`);
+  return data as {
+    participants: BoardParticipantUser[];
+    participantCount: number;
+    candidates?: BoardParticipantUser[];
+  };
+};
+
+export const updateBoardParticipants = async (boardId: string, userIds: string[]) => {
+  const { data } = await api.put(`/boards/${boardId}/participants`, { userIds });
+  return data as { participants: BoardParticipantUser[]; participantCount: number };
+};
+
+export type AcceptanceCriterion = {
+  id: string;
+  taskId: string;
+  text: string;
+  isDone: boolean;
+  position: number;
+};
+
+export const getAcceptanceCriteria = async (taskId: string) => {
+  const { data } = await api.get(`/tasks/${taskId}/acceptance-criteria`);
+  return data as AcceptanceCriterion[];
+};
+
+export const createAcceptanceCriterion = async (taskId: string, text: string) => {
+  const { data } = await api.post(`/tasks/${taskId}/acceptance-criteria`, { text });
+  return data as AcceptanceCriterion;
+};
+
+export const updateAcceptanceCriterion = async (
+  taskId: string,
+  id: string,
+  updates: { text?: string; isDone?: boolean }
+) => {
+  const { data } = await api.put(`/tasks/${taskId}/acceptance-criteria/${id}`, updates);
+  return data as AcceptanceCriterion;
+};
+
+export const deleteAcceptanceCriterion = async (taskId: string, id: string) => {
+  await api.delete(`/tasks/${taskId}/acceptance-criteria/${id}`);
+};
+
+export const reorderAcceptanceCriteria = async (taskId: string, orderedIds: string[]) => {
+  const { data } = await api.put(`/tasks/${taskId}/acceptance-criteria/reorder`, { orderedIds });
+  return data as AcceptanceCriterion[];
 };
 
 export const postHelpAssistantChat = async (payload: {

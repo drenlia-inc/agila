@@ -4,6 +4,10 @@
  */
 export const AGENT_USER_ID = '00000000-0000-0000-0000-000000000010';
 export const AGENT_MEMBER_ID = '00000000-0000-0000-0000-000000000011';
+
+export function isAgentMemberId(id) {
+  return Boolean(id && String(id) === AGENT_MEMBER_ID);
+}
 export const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 export const SYSTEM_MEMBER_ID = '00000000-0000-0000-0000-000000000001';
 

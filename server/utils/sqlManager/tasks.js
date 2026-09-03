@@ -381,7 +381,12 @@ export async function getTasksForColumns(db, columnIds) {
  * @param {Database} db - Database connection
  * @returns {Promise<Array>} Array of all tasks
  */
-export async function getAllTasks(db) {
+export async function getAllTasks(db, access = null) {
+  const accessSql =
+    access && !access.isAdmin && access.userId
+      ? `AND t.boardid IN (SELECT board_id FROM board_participants WHERE user_id = $1)`
+      : '';
+  const params = access && !access.isAdmin && access.userId ? [access.userId] : [];
   const query = `
     SELECT t.*, 
            CASE WHEN COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN a.id END) > 0 
@@ -390,12 +395,13 @@ export async function getAllTasks(db) {
     FROM tasks t
     LEFT JOIN attachments a ON a.taskid = t.id
     WHERE t.deleted_at IS NULL
+    ${accessSql}
     GROUP BY t.id
     ORDER BY t.position ASC
   `;
   
   const stmt = wrapQuery(db.prepare(query), 'SELECT');
-  return await stmt.all();
+  return params.length ? stmt.all(...params) : stmt.all();
 }
 
 /**

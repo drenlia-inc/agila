@@ -1,5 +1,5 @@
 import { useCallback, RefObject } from 'react';
-import { Columns, Board, Task } from '../types';
+import { Columns, Board, Task, CurrentUser } from '../types';
 import { toast } from '../utils/toast';
 import i18n from '../i18n/config';
 import { loadUserPreferences } from '../utils/userPreferences';
@@ -24,6 +24,7 @@ interface UseBoardWebSocketProps {
   >;
   /** Boards created by this client via HTTP — skip delayed force refresh on WS echo. */
   pendingSelfBoardCreatesRef?: RefObject<Set<string>>;
+  currentUser?: CurrentUser | null;
 }
 
 export const useBoardWebSocket = ({
@@ -36,9 +37,19 @@ export const useBoardWebSocket = ({
   selectedBoardRef,
   refreshBoardDataRef,
   pendingSelfBoardCreatesRef,
+  currentUser,
 }: UseBoardWebSocketProps) => {
+  const isAdminUser = Boolean(currentUser?.roles?.includes('admin'));
+
   const handleBoardCreated = useCallback((data: any) => {
     if (!data.board || !data.boardId) return;
+    if (!isAdminUser) {
+      const count = Number(data.board.participantCount ?? data.participantCount ?? 0);
+      const userIds = Array.isArray(data.userIds) ? data.userIds.map(String) : [];
+      if (count === 0 && !userIds.includes(String(currentUser?.id || ''))) {
+        return;
+      }
+    }
 
     const selfCreated = Boolean(pendingSelfBoardCreatesRef?.current?.has(data.boardId));
     if (selfCreated) {
@@ -101,7 +112,7 @@ export const useBoardWebSocket = ({
         }
       }, 500);
     }
-  }, [setBoards, refreshBoardDataRef, pendingSelfBoardCreatesRef]);
+  }, [setBoards, refreshBoardDataRef, pendingSelfBoardCreatesRef, isAdminUser, currentUser?.id]);
 
   const handleBoardUpdated = useCallback((data: any) => {
     const board = data?.board;
@@ -333,11 +344,43 @@ export const useBoardWebSocket = ({
     }
   }, [refreshBoardDataRef]);
 
+  const handleBoardParticipantsUpdated = useCallback((data: any) => {
+    const boardId = data?.boardId;
+    if (!boardId) return;
+    const userIds = Array.isArray(data.userIds) ? data.userIds.map(String) : [];
+    const allowed = isAdminUser || userIds.includes(String(currentUser?.id || ''));
+
+    setBoards((prev) => {
+      if (!allowed) {
+        return prev.filter((board) => board.id !== boardId);
+      }
+      if (prev.some((board) => board.id === boardId)) {
+        return prev.map((board) =>
+          board.id === boardId
+            ? { ...board, participantCount: data.participantCount ?? board.participantCount }
+            : board
+        );
+      }
+      return prev;
+    });
+
+    if (!allowed && selectedBoardRef.current === boardId) {
+      onClearSelectedTask();
+      queueMicrotask(() => {
+        refreshBoardDataRef.current?.({ force: true });
+      });
+      return;
+    }
+
+    refreshBoardDataRef.current?.({ force: true });
+  }, [isAdminUser, currentUser?.id, setBoards, selectedBoardRef, onClearSelectedTask, refreshBoardDataRef]);
+
   return {
     handleBoardCreated,
     handleBoardUpdated,
     handleBoardDeleted,
     handleBoardRestored,
     handleBoardReordered,
+    handleBoardParticipantsUpdated,
   };
 };

@@ -89,7 +89,7 @@ const HELP_HL = {
     '[data-setting-key="EFFORT_UNIT"]',
     '[data-setting-key="HIGHLIGHT_OVERDUE_TASKS"]',
   ],
-  sprints: ['[data-owner-setup="create-sprint"]'],
+  sprints: ['[data-owner-setup="create-sprint"]', '[data-help-target="sprint-goal"]'],
   reporting: ['[data-setting-key="REPORTS_ENABLED"]'],
   lifecycle: [
     '[data-tour-id="admin-lifecycle-content"]',
@@ -1574,7 +1574,7 @@ export default function HelpModal({
       renderSectionWithList(
         'help.kanban.taskDetailsComm',
         [],
-        ['help.kanban.taskInformation', 'help.kanban.comments', 'help.kanban.attachments', 'help.kanban.priorityLevels', 'help.kanban.tags', 'help.kanban.watchers', 'help.kanban.collaborators', 'help.kanban.taskRelationships'],
+        ['help.kanban.taskInformation', 'help.kanban.acceptanceCriteria', 'help.kanban.comments', 'help.kanban.attachments', 'help.kanban.priorityLevels', 'help.kanban.tags', 'help.kanban.watchers', 'help.kanban.collaborators', 'help.kanban.taskRelationships'],
         MessageSquare,
         'text-indigo-600 dark:text-indigo-400',
         'bg-indigo-50 dark:bg-indigo-900/40'
@@ -1586,7 +1586,8 @@ export default function HelpModal({
               [],
               [
                 'help.kanban.createColumns', 'help.kanban.renameColumns', 'help.kanban.reorderColumns',
-                'help.kanban.deleteColumns', 'help.kanban.finishedColumns', 'help.kanban.columnWipPolicy',
+                'help.kanban.deleteColumns', 'help.kanban.finishedColumns', 'help.kanban.finishedColumnToggle',
+                'help.kanban.boardParticipants', 'help.kanban.columnWipPolicy',
                 'help.kanban.boardWipTip',
               ],
               Columns,
@@ -2231,13 +2232,14 @@ export default function HelpModal({
           'help.kanban.flowAidsAging', 'help.kanban.flowAidsBlocked', 'help.kanban.flowAidsPolicy', 'help.kanban.dragDrop',
           'help.kanban.crossColumnMovement', 'help.kanban.crossBoardMovement', 'help.kanban.withinColumnReordering',
           'help.kanban.visualFeedback', 'help.kanban.autoSave', 'help.kanban.taskDetailsComm',
-          'help.kanban.taskInformation', 'help.kanban.comments', 'help.kanban.attachments', 'help.kanban.priorityLevels',
+          'help.kanban.taskInformation', 'help.kanban.acceptanceCriteria', 'help.kanban.comments', 'help.kanban.attachments', 'help.kanban.priorityLevels',
           'help.kanban.tags', 'help.kanban.watchers', 'help.kanban.collaborators', 'help.kanban.taskRelationships');
         tabKeys.push(isAdmin ? 'help.kanban.deleteTasksAdmin' : 'help.kanban.deleteTasks');
         if (isAdmin) {
           tabKeys.push(
             'help.kanban.columnManagement', 'help.kanban.createColumns', 'help.kanban.renameColumns', 'help.kanban.reorderColumns',
-            'help.kanban.deleteColumns', 'help.kanban.finishedColumns', 'help.kanban.columnWipPolicy', 'help.kanban.boardWipTip',
+            'help.kanban.deleteColumns', 'help.kanban.finishedColumns', 'help.kanban.finishedColumnToggle',
+            'help.kanban.boardParticipants', 'help.kanban.columnWipPolicy', 'help.kanban.boardWipTip',
             'help.kanban.createAndEdit', 'help.kanban.moveAndOrganize'
           );
         }
@@ -2581,8 +2583,19 @@ export default function HelpModal({
             onPositionXChange={() => {}}
             onHeightChange={() => {}}
             header={
-              <div className="px-3 pt-3 pb-1 text-sm font-semibold text-slate-800 dark:text-gray-100">
-                <HelpAssistantTitle />
+              <div className="flex items-start justify-between gap-1 px-2 pt-2 pb-1">
+                <div className="min-w-0 px-1 pt-1 text-sm font-semibold text-slate-800 dark:text-gray-100">
+                  <HelpAssistantTitle />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssistantOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-gray-200 dark:hover:bg-gray-700 shrink-0"
+                  aria-label={t('help.assistant.dismiss')}
+                  title={t('help.assistant.dismiss')}
+                >
+                  <X size={16} aria-hidden />
+                </button>
               </div>
             }
           >

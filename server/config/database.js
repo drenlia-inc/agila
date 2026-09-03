@@ -293,6 +293,25 @@ const CREATE_SCHEMA_SQL = `
       FOREIGN KEY (boardid) REFERENCES boards(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS board_participants (
+      board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (board_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_board_participants_user_id ON board_participants(user_id);
+
+    CREATE TABLE IF NOT EXISTS acceptance_criteria (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      is_done BOOLEAN DEFAULT false,
+      position NUMERIC(10,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_acceptance_criteria_task_id ON acceptance_criteria(task_id);
+
     CREATE TABLE IF NOT EXISTS comments (
       id TEXT PRIMARY KEY,
       taskid TEXT NOT NULL,
@@ -682,6 +701,7 @@ const CREATE_SCHEMA_SQL = `
       end_date DATE NOT NULL,
       is_active BOOLEAN DEFAULT false,
       description TEXT,
+      goal TEXT,
       planned_tasks INTEGER DEFAULT 0,
       planned_effort INTEGER DEFAULT 0,
       board_id TEXT,

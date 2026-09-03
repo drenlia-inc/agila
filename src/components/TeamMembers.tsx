@@ -89,6 +89,9 @@ interface TeamMembersProps {
   currentUser?: any; // To check if user is admin
   systemTaskCount?: number;
   onEditOwnProfile?: (opts?: { focus?: 'displayName' | 'bio' }) => void;
+  finishedColumnTitle?: string | null;
+  showFinishedColumns?: boolean;
+  onToggleShowFinished?: (show: boolean) => void;
 }
 
 function truncateDisplayName(name: string, maxLength: number = 12): string {
@@ -712,6 +715,9 @@ export default function TeamMembers({
   currentUser,
   systemTaskCount = 0,
   onEditOwnProfile,
+  finishedColumnTitle,
+  showFinishedColumns = true,
+  onToggleShowFinished,
 }: TeamMembersProps) {
   const { t } = useTranslation('common');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -860,6 +866,43 @@ export default function TeamMembers({
               >
                 {isAllModeActive ? t('teamMembers.assigneesOnly') : t('teamMembers.allRoles')}
               </button>
+            </KanbanChromeTooltip>
+          )}
+
+          {onToggleShowFinished && finishedColumnTitle && (
+            <KanbanChromeTooltip
+              label={
+                showFinishedColumns
+                  ? t('teamMembers.hideFinished', { column: finishedColumnTitle })
+                  : t('teamMembers.showFinished', { column: finishedColumnTitle })
+              }
+            >
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                  {finishedColumnTitle}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showFinishedColumns}
+                  onClick={() => onToggleShowFinished(!showFinishedColumns)}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                    showFinishedColumns ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-200 dark:bg-gray-600'
+                  }`}
+                  aria-label={
+                    showFinishedColumns
+                      ? t('teamMembers.hideFinished', { column: finishedColumnTitle })
+                      : t('teamMembers.showFinished', { column: finishedColumnTitle })
+                  }
+                  data-help-target="hide-finished-column"
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+                      showFinishedColumns ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
             </KanbanChromeTooltip>
           )}
 

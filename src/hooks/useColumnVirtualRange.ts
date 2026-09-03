@@ -170,6 +170,8 @@ export function useColumnVirtualRange(options: {
     start = Math.max(0, start - overscanCount);
     end = Math.min(itemCount, end + overscanCount);
 
+    // Contiguous pin only (selected card). Do not pin a far-away dragged
+    // origin here — that would mount every row between origin and viewport.
     if (pinnedIndex != null && pinnedIndex >= 0 && pinnedIndex < itemCount) {
       start = Math.min(start, Math.max(0, pinnedIndex - 1));
       end = Math.max(end, Math.min(itemCount, pinnedIndex + 2));

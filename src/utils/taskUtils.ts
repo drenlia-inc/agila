@@ -1,3 +1,4 @@
+import i18n from 'i18next';
 import { Task, SearchFilters, Columns, Board, TeamMember, Column } from '../types';
 import { getTaskWatchers, getTaskCollaborators } from '../api';
 import { parseLocalDate } from './dateUtils';
@@ -475,9 +476,10 @@ export const formatEffortDisplay = (value: number, unit: EffortUnit): string => 
 export const formatMembersTooltip = (members: TeamMember[], type: 'watcher' | 'collaborator'): string => {
   if (!members || members.length === 0) return '';
 
-  const typeLabel = type === 'watcher' ? 'Watcher' : 'Collaborator';
-  const typeLabelPlural = type === 'watcher' ? 'Watchers' : 'Collaborators';
-  const header = members.length === 1 ? typeLabel : `${typeLabelPlural} (${members.length})`;
+  const header = i18n.t(
+    type === 'watcher' ? 'taskCard.watchersTooltip' : 'taskCard.collaboratorsTooltip',
+    { ns: 'tasks', count: members.length }
+  );
 
   return [header, ...members.map(m => m.name || m.id)].join('\n');
 };

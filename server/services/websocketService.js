@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import redisService from './redisService.js';
 import postgresNotificationService from './postgresNotificationService.js';
 import { JWT_SECRET, isUserActive, userMayUseSession } from '../middleware/auth.js';
+import { userCanAccessBoard } from '../middleware/boardAccess.js';
 import { extractTenantId, getTenantDatabase } from '../middleware/tenantRouting.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { wsVerboseLog } from '../utils/serverDebug.js';
@@ -225,9 +226,12 @@ class WebSocketService {
       if (socket.tenantId) {
         socket.join(`tenant-${socket.tenantId}`);
       }
+      if (this.socketIsAdmin(socket)) {
+        socket.join(socket.tenantId ? `tenant-${socket.tenantId}-role-admin` : 'role-admin');
+      }
 
       // Join board room (tenant-aware in multi-tenant mode)
-      socket.on('join-board', (boardId) => {
+      socket.on('join-board', async (boardId) => {
         const timestamp = new Date().toISOString();
         // Use tenant-prefixed room in multi-tenant mode
         const room = socket.tenantId 
@@ -235,9 +239,28 @@ class WebSocketService {
           : `board-${boardId}`;
         
         wsVerboseLog(`📋 [${timestamp}] Client ${socket.id} (${socket.userEmail}) joining board room: ${room}`);
-        
-        // For now, allow all authenticated users to join any board
-        // TODO: Add proper board access control based on user permissions
+
+        if (!this.socketIsAdmin(socket)) {
+          try {
+            const dbInfo = await getTenantDatabase(socket.tenantId || null);
+            const db = dbInfo?.db;
+            const allowed = db
+              ? await userCanAccessBoard(
+                  db,
+                  { id: socket.userId, role: socket.userRole, roles: socket.userRoles },
+                  boardId
+                )
+              : false;
+            if (!allowed) {
+              socket.emit('board-access-denied', { boardId, code: 'BOARD_ACCESS_DENIED' });
+              return;
+            }
+          } catch (error) {
+            console.error('Board access check failed for WebSocket join:', error);
+            socket.emit('board-access-denied', { boardId, code: 'BOARD_ACCESS_DENIED' });
+            return;
+          }
+        }
         socket.join(room);
         this.connectedClients.set(socket.id, { 
           socketId: socket.id, 
@@ -303,6 +326,27 @@ class WebSocketService {
     this.setupPostgresSubscriptions();
   }
 
+  socketIsAdmin(socket) {
+    const roles = Array.isArray(socket.userRoles) ? socket.userRoles : [];
+    return socket.userRole === 'admin' || roles.includes('admin');
+  }
+
+  emitBoardScoped(event, data, tenantId) {
+    const boardId = data?.boardId || data?.task?.boardId || data?.task?.boardid;
+    const adminRoom = tenantId ? `tenant-${tenantId}-role-admin` : 'role-admin';
+    if (boardId) {
+      const room = this.getTenantRoom('board', tenantId, boardId);
+      this.io?.to(room).emit(event, data);
+      this.io?.to(adminRoom).emit(event, data);
+      return;
+    }
+    if (tenantId) {
+      this.io?.to(`tenant-${tenantId}`).emit(event, data);
+    } else {
+      this.io?.emit(event, data);
+    }
+  }
+
   // Get tenant-prefixed room name (for multi-tenant isolation)
   getTenantRoom(roomBase, tenantId, boardId) {
     if (tenantId && process.env.MULTI_TENANT === 'true') {
@@ -326,15 +370,8 @@ class WebSocketService {
       const connectedCount = this.io?.sockets?.sockets?.size || 0;
       wsVerboseLog(`📡 [${timestamp}] WebSocket received task-updated (tenant: ${tenantId || 'single'}, connected clients: ${connectedCount})`);
       
-      if (tenantId) {
-        // Multi-tenant: broadcast only to clients of this tenant
-        this.io?.to(`tenant-${tenantId}`).emit('task-updated', data);
-        wsVerboseLog(`   ✅ Broadcasted to tenant-${tenantId} room`);
-      } else {
-        // Single-tenant: broadcast to all clients
-        this.io?.emit('task-updated', data);
-        wsVerboseLog(`   ✅ Broadcasted to all ${connectedCount} connected clients`);
-      }
+      this.emitBoardScoped('task-updated', data, tenantId);
+      wsVerboseLog(`   ✅ Broadcasted task-updated (board-scoped, clients: ${connectedCount})`);
     });
 
     // Task created - broadcast to tenant-specific clients
@@ -342,13 +379,7 @@ class WebSocketService {
       const timestamp = new Date().toISOString();
       wsVerboseLog(`📡 [${timestamp}] WebSocket received task-created (tenant: ${tenantId || 'single'})`);
       
-      if (tenantId) {
-        // Multi-tenant: broadcast only to clients of this tenant
-        this.io?.to(`tenant-${tenantId}`).emit('task-created', data);
-      } else {
-        // Single-tenant: broadcast to all clients
-        this.io?.emit('task-created', data);
-      }
+      this.emitBoardScoped('task-created', data, tenantId);
     });
 
     // Agent task_work updates (status / log / control)
@@ -365,11 +396,7 @@ class WebSocketService {
       const timestamp = new Date().toISOString();
       wsVerboseLog(`📡 [${timestamp}] WebSocket broadcasting task-deleted (tenant: ${tenantId || 'single'})`);
       
-      if (tenantId) {
-        this.io?.to(`tenant-${tenantId}`).emit('task-deleted', data);
-      } else {
-        this.io?.emit('task-deleted', data);
-      }
+      this.emitBoardScoped('task-deleted', data, tenantId);
     });
 
     // Soft-deleted task restored to live board
@@ -526,6 +553,18 @@ class WebSocketService {
       } else {
         this.io?.emit('activity-updated', data);
       }
+    });
+
+    postgresNotificationService.subscribeToAllTenants('board-participants-updated', (data, tenantId) => {
+      if (tenantId) {
+        this.io?.to(`tenant-${tenantId}`).emit('board-participants-updated', data);
+      } else {
+        this.io?.emit('board-participants-updated', data);
+      }
+    });
+
+    postgresNotificationService.subscribeToAllTenants('acceptance-criteria-updated', (data, tenantId) => {
+      this.emitBoardScoped('acceptance-criteria-updated', data, tenantId);
     });
 
     postgresNotificationService.subscribeToAllTenants('notification-queue-updated', (data, tenantId) => {

@@ -70,6 +70,7 @@ import settingsRouter from './routes/settings.js';
 // import adminSystemRouter from './routes/adminSystem.js';
 // import adminNotificationQueueRouter from './routes/adminNotificationQueue.js';
 import taskRelationsRouter from './routes/taskRelations.js';
+import acceptanceCriteriaRouter from './routes/acceptanceCriteria.js';
 import taskWorkRouter from './routes/taskWork.js';
 import agentRouter from './routes/agent.js';
 import userDevRouter from './routes/userDev.js';
@@ -470,6 +471,7 @@ app.use('/api/admin/webhooks', lazyRouteLoader('./routes/adminWebhooks.js'));
 app.use('/api/admin/lifecycle', lazyRouteLoader('./routes/adminLifecycle.js'));
 app.use('/api/tasks', taskWorkRouter); // task_work KV + control (before param-heavy routers where possible)
 app.use('/api/tasks', taskRelationsRouter);
+app.use('/api/tasks', acceptanceCriteriaRouter);
 app.use('/api/agent/runner', lazyRouteLoader('./routes/agentRunnerCallback.js'));
 app.use('/api/agent/automation', lazyRouteLoader('./routes/agentAutomation.js'));
 app.use('/api/agent', agentRouter);

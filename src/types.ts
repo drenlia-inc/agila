@@ -139,6 +139,8 @@ export interface Board {
   taskCount?: number;
   /** Soft-deleted tasks on board (lifecycle deleted-boards list). */
   trashTaskCount?: number;
+  /** Users listed as board participants. Empty = hidden from users/viewers. */
+  participantCount?: number;
 }
 
 export interface QueryLog {

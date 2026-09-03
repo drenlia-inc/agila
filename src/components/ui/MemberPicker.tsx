@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import type { TeamMember } from '../../types';
 import { truncateMemberName } from '../../utils/memberUtils';
 import { layoutMemberDropdownFromElement, type MemberDropdownLayout } from '../../utils/memberDropdownLayout';
@@ -125,6 +125,7 @@ export default function MemberPicker({
             : t('labels.selectMember', { defaultValue: 'Select member' }));
 
   const shellClass = formPickerShellClass(disabled);
+  const showClear = allowClear && mode === 'single' && Boolean(value);
 
   if (disabled) {
     return (
@@ -180,6 +181,30 @@ export default function MemberPicker({
         >
           {triggerLabel}
         </span>
+        {showClear && (
+          <span
+            role="button"
+            tabIndex={0}
+            className="h-4 w-4 ml-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center"
+            aria-label={t('labels.clearMember')}
+            title={t('labels.clearMember')}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onChange(null);
+              close();
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              e.stopPropagation();
+              onChange(null);
+              close();
+            }}
+          >
+            <X size={12} />
+          </span>
+        )}
         <ChevronDown
           className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ${
             open ? 'rotate-180' : ''

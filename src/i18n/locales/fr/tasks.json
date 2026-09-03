@@ -3,6 +3,8 @@
     "description": "Description",
     "assignee": "Assigné à",
     "assignedTo": "Assigné à",
+    "addMe": "Ajoutez-moi",
+    "clearMember": "Effacer",
     "requester": "Demandeur",
     "dueDate": "Date d'échéance",
     "startDate": "Date de début",
@@ -28,6 +30,16 @@
     "addNewTag": "Ajouter une nouvelle étiquette",
     "loadingTags": "Chargement des étiquettes...",
     "noTagsAvailable": "Aucune étiquette disponible"
+  },
+  "acceptanceCriteria": {
+    "label": "Critères d'acceptation",
+    "placeholder": "Ajouter un critère d'acceptation…",
+    "add": "Ajouter",
+    "edit": "Modifier le critère",
+    "delete": "Supprimer le critère",
+    "reorder": "Réordonner le critère",
+    "saveItem": "Enregistrer",
+    "cancelEdit": "Annuler"
   },
   "placeholders": {
     "enterDescription": "Entrer la description de la tâche...",
@@ -185,6 +197,7 @@
     "emptyColumnTitle": "Aucune tâche pour l'instant",
     "emptyColumnHint": "Ajoutez une tâche ou déposez-en une ici.",
     "emptyBoardHint": "Ce tableau n'a pas encore de tâches — utilisez Ajouter une tâche dans une colonne pour commencer.",
+    "emptyParticipantsHint": "Ce tableau n'a pas encore de participants — ajoutez des membres pour commencer :",
     "dropHere": "Déposer ici",
     "returnHere": "Remettre ici",
     "dropTaskHere": "Déposer la tâche ici !",
@@ -461,7 +474,11 @@
     "noAssignee": "Non assignée",
     "removeFromSprint": "Retirer du sprint",
     "noSprintsAvailable": "Aucun sprint disponible. Créez-en un dans les paramètres d'administration.",
-    "active": "Actif"
+    "active": "Actif",
+    "watchersTooltip_one": "Observateur",
+    "watchersTooltip_other": "Observateurs ({{count}})",
+    "collaboratorsTooltip_one": "Collaborateur",
+    "collaboratorsTooltip_other": "Collaborateurs ({{count}})"
   },
   "sprintSelector": {
     "selectSprint": "Sélectionner un sprint",
@@ -476,7 +493,10 @@
     "active": "Actif",
     "current": "Actuel",
     "addSprint": "Nouveau sprint",
-    "goToSprints": "Aller aux sprints"
+    "goToSprints": "Aller aux sprints",
+    "sprintDetails": "Détails du sprint",
+    "goal": "Objectif",
+    "description": "Description"
   },
   "taskPage": {
     "loading": "Chargement de la tâche...",
@@ -485,6 +505,9 @@
     "failedToLoad": "Échec du chargement des données de la tâche : {{status}}",
     "taskNotFoundTitle": "Tâche introuvable",
     "taskNotFoundMessage": "La tâche demandée n'a pas pu être trouvée.",
+    "accessDenied": "Vous n'avez pas accès à cette tâche.",
+    "accessDeniedTitle": "Accès refusé",
+    "accessDeniedMessage": "Vous n'avez pas accès à cette tâche ni à son tableau.",
     "backToBoard": "Retour au tableau",
     "unsavedChanges": "Modifications non enregistrées",
     "save": "Enregistrer",

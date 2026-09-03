@@ -26,6 +26,7 @@ export async function getAllSprints(db) {
       pp.end_date::text AS end_date,
       pp.is_active,
       pp.description,
+      pp.goal,
       pp.created_at,
       pp.updated_at,
       (
@@ -62,6 +63,7 @@ export async function getActiveSprint(db) {
       end_date::text AS end_date,
       is_active,
       description,
+      goal,
       created_at
     FROM planning_periods
     WHERE is_active = true
@@ -89,6 +91,7 @@ export async function getSprintById(db, sprintId) {
       end_date::text AS end_date,
       is_active,
       description,
+      goal,
       planned_tasks,
       planned_effort,
       board_id,
@@ -189,12 +192,12 @@ export async function deactivateAllSprintsExcept(db, sprintId) {
  * @param {string|null} description - Sprint description
  * @returns {Promise<Object>} Created sprint object
  */
-export async function createSprint(db, sprintId, name, startDate, endDate, isActive, description) {
+export async function createSprint(db, sprintId, name, startDate, endDate, isActive, description, goal) {
   const now = new Date().toISOString();
   const query = `
     INSERT INTO planning_periods (
-      id, name, start_date, end_date, is_active, description, created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      id, name, start_date, end_date, is_active, description, goal, created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
   `;
   
   const stmt = wrapQuery(db.prepare(query), 'INSERT');
@@ -205,6 +208,7 @@ export async function createSprint(db, sprintId, name, startDate, endDate, isAct
     endDate,
     Boolean(isActive),
     description?.trim() || null,
+    goal?.trim() || null,
     now,
     now
   );
@@ -225,11 +229,11 @@ export async function createSprint(db, sprintId, name, startDate, endDate, isAct
  * @param {string|null} description - Sprint description
  * @returns {Promise<Object>} Updated sprint object
  */
-export async function updateSprint(db, sprintId, name, startDate, endDate, isActive, description) {
+export async function updateSprint(db, sprintId, name, startDate, endDate, isActive, description, goal) {
   const query = `
     UPDATE planning_periods
-    SET name = $1, start_date = $2, end_date = $3, is_active = $4, description = $5, updated_at = $6
-    WHERE id = $7
+    SET name = $1, start_date = $2, end_date = $3, is_active = $4, description = $5, goal = $6, updated_at = $7
+    WHERE id = $8
   `;
   
   const stmt = wrapQuery(db.prepare(query), 'UPDATE');
@@ -239,6 +243,7 @@ export async function updateSprint(db, sprintId, name, startDate, endDate, isAct
     endDate,
     Boolean(isActive),
     description?.trim() || null,
+    goal?.trim() || null,
     new Date().toISOString(),
     sprintId
   );

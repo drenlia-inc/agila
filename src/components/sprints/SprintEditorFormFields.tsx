@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ModernCheckbox } from '../ModernCheckbox';
 import { formFieldClass } from '../../utils/formFieldClasses';
-import { SPRINT_NAME_MAX_LENGTH, SPRINT_DESCRIPTION_MAX_LENGTH } from '../../constants/appConstants';
+import { SPRINT_NAME_MAX_LENGTH, SPRINT_DESCRIPTION_MAX_LENGTH, SPRINT_GOAL_MAX_LENGTH } from '../../constants/appConstants';
 
 export type SprintEditorFormData = {
   name: string;
@@ -10,6 +10,7 @@ export type SprintEditorFormData = {
   end_date: string;
   is_active: boolean;
   description: string;
+  goal: string;
 };
 
 interface SprintEditorFormFieldsProps {
@@ -66,6 +67,21 @@ const SprintEditorFormFields: React.FC<SprintEditorFormFieldsProps> = ({
           value={formData.end_date}
           onChange={(e) => onChange({ ...formData, end_date: e.target.value })}
           className={inputClass}
+        />
+      </div>
+
+      <div className={compact ? 'col-span-2' : 'md:col-span-2'}>
+        <label className={labelClass}>
+          {t('sprintSettings.goalLabel')}
+        </label>
+        <input
+          type="text"
+          value={formData.goal}
+          onChange={(e) => onChange({ ...formData, goal: e.target.value })}
+          placeholder={t('sprintSettings.goalPlaceholder')}
+          maxLength={SPRINT_GOAL_MAX_LENGTH}
+          className={inputClass}
+          data-help-target="sprint-goal"
         />
       </div>
 

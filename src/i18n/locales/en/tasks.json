@@ -3,6 +3,8 @@
     "description": "Description",
     "assignee": "Assignee",
     "assignedTo": "Assigned To",
+    "addMe": "Add me",
+    "clearMember": "Clear",
     "requester": "Requester",
     "dueDate": "Due Date",
     "startDate": "Start Date",
@@ -28,6 +30,16 @@
     "addNewTag": "Add New Tag",
     "loadingTags": "Loading tags...",
     "noTagsAvailable": "No tags available"
+  },
+  "acceptanceCriteria": {
+    "label": "Acceptance Criterias",
+    "placeholder": "Add an acceptance criterion…",
+    "add": "Add",
+    "edit": "Edit criterion",
+    "delete": "Delete criterion",
+    "reorder": "Reorder criterion",
+    "saveItem": "Save",
+    "cancelEdit": "Cancel"
   },
   "placeholders": {
     "enterDescription": "Enter task description...",
@@ -185,6 +197,7 @@
     "emptyColumnTitle": "No tasks yet",
     "emptyColumnHint": "Add a task or drop one here.",
     "emptyBoardHint": "This board has no tasks yet — use Add task in a column to get started.",
+    "emptyParticipantsHint": "This board has no participants yet — add members to get started:",
     "dropHere": "Drop here",
     "returnHere": "Return here",
     "dropTaskHere": "Drop task here!",
@@ -461,7 +474,11 @@
     "noAssignee": "No assignee",
     "removeFromSprint": "Remove from sprint",
     "noSprintsAvailable": "No sprints available. Create one in Admin settings.",
-    "active": "Active"
+    "active": "Active",
+    "watchersTooltip_one": "Watcher",
+    "watchersTooltip_other": "Watchers ({{count}})",
+    "collaboratorsTooltip_one": "Collaborator",
+    "collaboratorsTooltip_other": "Collaborators ({{count}})"
   },
   "sprintSelector": {
     "selectSprint": "Select Sprint",
@@ -476,7 +493,10 @@
     "active": "Active",
     "current": "Current",
     "addSprint": "New sprint",
-    "goToSprints": "Go to Sprints"
+    "goToSprints": "Go to Sprints",
+    "sprintDetails": "Sprint details",
+    "goal": "Goal",
+    "description": "Description"
   },
   "taskPage": {
     "loading": "Loading task...",
@@ -485,6 +505,9 @@
     "failedToLoad": "Failed to load task data: {{status}}",
     "taskNotFoundTitle": "Task Not Found",
     "taskNotFoundMessage": "The requested task could not be found.",
+    "accessDenied": "You do not have access to this task.",
+    "accessDeniedTitle": "Access denied",
+    "accessDeniedMessage": "You do not have access to this task or its board.",
     "backToBoard": "Back to Board",
     "unsavedChanges": "Unsaved changes",
     "save": "Save",

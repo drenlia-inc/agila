@@ -1305,6 +1305,75 @@ const migrations = [
       await dbExec(db, 'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ NULL');
       console.log('✅ Migration 53: users.last_login_at');
     }
+  },
+  {
+    version: 54,
+    name: 'board_participants_ac_sprint_goal',
+    description: 'Board participants, task acceptance criteria, and sprint goal',
+    up: async (db) => {
+      await dbExec(db, `
+        CREATE TABLE IF NOT EXISTS board_participants (
+          board_id TEXT NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (board_id, user_id)
+        )
+      `);
+      await dbExec(db, 'CREATE INDEX IF NOT EXISTS idx_board_participants_user_id ON board_participants(user_id)');
+      await dbExec(db, `
+        CREATE TABLE IF NOT EXISTS acceptance_criteria (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          text TEXT NOT NULL,
+          is_done BOOLEAN DEFAULT false,
+          position NUMERIC(10,2) NOT NULL DEFAULT 0,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await dbExec(db, 'CREATE INDEX IF NOT EXISTS idx_acceptance_criteria_task_id ON acceptance_criteria(task_id)');
+      await dbExec(db, 'ALTER TABLE planning_periods ADD COLUMN IF NOT EXISTS goal TEXT');
+      await dbExec(db, `
+        INSERT INTO board_participants (board_id, user_id)
+        SELECT b.id, u.id
+        FROM boards b
+        CROSS JOIN users u
+        WHERE b.deleted_at IS NULL
+          AND u.is_active = true
+          AND COALESCE(u.email, '') NOT IN ('agent@local', 'system@local')
+          AND EXISTS (
+            SELECT 1 FROM tasks t
+            WHERE t.boardid = b.id AND t.deleted_at IS NULL
+          )
+        ON CONFLICT DO NOTHING
+      `);
+      console.log('✅ Migration 54: board_participants, acceptance_criteria, planning_periods.goal');
+    }
+  },
+  {
+    version: 55,
+    name: 'backfill_board_participants_existing_work',
+    description: 'Grant existing task-bearing boards to active users if they have no participants yet',
+    up: async (db) => {
+      await dbExec(db, `
+        INSERT INTO board_participants (board_id, user_id)
+        SELECT b.id, u.id
+        FROM boards b
+        CROSS JOIN users u
+        WHERE b.deleted_at IS NULL
+          AND u.is_active = true
+          AND COALESCE(u.email, '') NOT IN ('agent@local', 'system@local')
+          AND EXISTS (
+            SELECT 1 FROM tasks t
+            WHERE t.boardid = b.id AND t.deleted_at IS NULL
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM board_participants bp WHERE bp.board_id = b.id
+          )
+        ON CONFLICT DO NOTHING
+      `);
+      console.log('✅ Migration 55: backfill board_participants for boards that already have work');
+    }
   }
 ];
 

@@ -32,6 +32,7 @@ import {
   resolveInsertIndexFromOverlay,
   type OverlayDropHit,
 } from '../../utils/dndInsertIndex';
+import { resetOverlayGrabOffset } from '../../utils/dndOverlayModifiers';
 import {
   autoScrollBoardTabs,
   boardTabIdUnderPointer,
@@ -678,6 +679,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     overlayStartTopRef.current = null;
     overlayStartLeftRef.current = null;
     resetInsertHysteresis();
+    resetOverlayGrabOffset();
     isDraggingTaskRef.current = false;
     isKeyboardDragRef.current = false;
     keyboardSlotRef.current = null;
@@ -1199,6 +1201,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       // or when the user cancelled; otherwise insertion placeholders stay mounted and shift columns.
       lastPreviewRef.current = null;
       resetInsertHysteresis();
+      resetOverlayGrabOffset();
       dragOriginRef.current = null;
       releaseDropRef.current = null;
       pendingCommitRef.current = null;
@@ -1222,6 +1225,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
     }
     lastPreviewRef.current = null;
     resetInsertHysteresis();
+    resetOverlayGrabOffset();
     isDraggingTaskRef.current = false;
     onDraggedTaskChange?.(null);
     onDraggedColumnChange?.(null);

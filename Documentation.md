@@ -36,9 +36,9 @@ Agila is a comprehensive agile project management platform that combines Kanban 
 - **Multiple views**: Kanban, List, Gantt, and Calendar
 - **Real-time collaboration** - see changes instantly as team members work
 - **User authentication** with local accounts and Google OAuth support
-- **Role-based access control** (Admin/User permissions)
+- **Role-based access control** (Admin/User/Viewer) and **board membership** — users and viewers only see boards they have been added to; admins see all boards and assign members (double-click a board tab)
 - **Team management** with color-coded member assignments
-- **Task management** with priorities, comments, attachments, and relationships
+- **Task management** with priorities, comments, attachments, relationships, and an **acceptance criteria** checklist
 - **Multi-select & bulk actions** - tag, copy, sprint, priority, archive, delete, move board; multi-drag between columns
 - **Soft delete & trash** - restore or permanently purge tasks and boards (board trash + Settings → Lifecycle); admins can Shift+click delete to purge without trash
 - **AI Agent** (optional) — assign tasks to an Agent that can comment (**Assist**), work a linked Git repo (**Code**), or (admins) run board **Automation** with dry-run Apply/Undo (see [AI Agent](#ai-agent))
@@ -49,7 +49,8 @@ Agila is a comprehensive agile project management platform that combines Kanban 
 
 ### User Roles
 - **Admin**: Full access to all features including user management and system configuration
-- **User**: Access to boards, tasks, and collaboration features (no admin privileges)
+- **User**: Access to boards they belong to, tasks, and collaboration features (no admin privileges)
+- **Viewer**: Read-only on boards they belong to (can still comment)
 
 ---
 
@@ -80,11 +81,12 @@ In production mode, you'll need to create your own user accounts through Setting
 1. **Demo Mode**: Use the admin credentials displayed on the login page
 2. **Production Mode**: Create your first admin account through the setup process
 3. Create team members in Settings → Users
-4. Set up your boards and columns
-5. Start creating and managing tasks
-6. Configure Google OAuth (optional) in Settings → System Settings → SSO
-7. Configure branding (optional) in Settings → Site Settings (logo, site name)
-8. Configure AI Agent (optional) in Settings → System Settings → AI — then users add Profile → Dev credentials for coding jobs
+4. Set up your boards and columns, then add **board members** (double-click the tab) so users and viewers can see each board
+5. Start creating and managing tasks; add **acceptance criteria** on the task details panel when a card needs a checklist definition of done
+6. Optional: create sprints with a **sprint goal** (header dropdown or Settings → Project Settings → Sprints)
+7. Configure Google OAuth (optional) in Settings → System Settings → SSO
+8. Configure branding (optional) in Settings → Site Settings (logo, site name)
+9. Configure AI Agent (optional) in Settings → System Settings → AI — then users add Profile → Dev credentials for coding jobs
 
 ---
 
@@ -99,7 +101,7 @@ The sticky header contains branding, sprint context, app navigation, and utiliti
   - Default logo is `/agila-logo.png` when no custom logo is set
   - Empty site name hides the text (no fallback to a default product name)
   - **Hide Site Logo** (admin setting) removes the logo entirely
-- **Sprint selector** (Boards page): Filter by sprint or backlog. Admins can create a sprint from the dropdown or open Settings → Project Settings → Sprints. Making a sprint Active can move unfinished work from the previous active sprint (dates unchanged); the prompt shows unfinished/total task counts. **Move** transfers unfinished work; **Keep** activates without transferring; **Cancel**, Escape, or click outside abandons the change (no transfer, sprint is not made Active). The board filter switches to the new sprint only if work was moved. Deleting a sprint that is selected in the header returns the filter to All sprints. Deleting the **Active** sprint warns you to activate another first, but still allows deletion.
+- **Sprint selector** (Boards page): Filter by sprint or backlog. Each sprint can have an optional **goal** (shown in the dropdown). Admins can create a sprint from the dropdown or open Settings → Project Settings → Sprints. Making a sprint Active can move unfinished work from the previous active sprint (dates unchanged); the prompt shows unfinished/total task counts. **Move** transfers unfinished work; **Keep** activates without transferring; **Cancel**, Escape, or click outside abandons the change (no transfer, sprint is not made Active). The board filter switches to the new sprint only if work was moved. Deleting a sprint that is selected in the header returns the filter to All sprints. Deleting the **Active** sprint warns you to activate another first, but still allows deletion.
 - **Demo countdown** (when demo mode is enabled)
 
 ### Right Side (left → right)
@@ -136,7 +138,8 @@ The **Tools** card on the Boards page controls board layout and card density.
 3. Click "Create Board" to confirm
 
 ### Board Operations (Admin Only)
-- **Edit Board**: Double-click board tab to rename
+- **Edit Board**: Double-click board tab to rename, set board WIP, and **Add/remove members**
+- **Board members**: Users and viewers only see boards they belong to. Admins always see every board. A new board stays hidden from non-admins until at least one member is saved.
 - **Delete Board**: Soft-delete to trash (confirms with total task count); peers are notified and switched off the board
 - **Reorder Boards**: Drag board tabs using the handle
 - **Restore Board**: Settings → Lifecycle (or restore board when restoring its tasks)
@@ -169,7 +172,7 @@ The Kanban view displays tasks as cards in columns, representing different stage
 - **Add Column Button** (Admin Only): `+` button at the end of columns
 - **Column Settings** (Admin Only): click column header for options:
   - Edit column name
-  - Mark as "Finished" (completed tasks)
+  - Mark as "Finished" (completed tasks). A toolbar toggle labeled with that column name (next to All Roles) shows or hides finished columns on every board. It is on by default; the choice is saved in your user preferences.
   - Mark as "Archived" (archived tasks)
   - Delete column
 
@@ -381,6 +384,7 @@ When you click on a task, the Task Details page opens with comprehensive task ma
 - **Dates**: Start date and due date (date pickers)
 - **Effort**: Estimated effort (type freely; commits on blur)
 - **Status**: Column on the task's board (dropdown next to Effort; follows the user's English/French UI language for untouched default names)
+- **Acceptance criteria**: Checklist of what “done” means. Drag to reorder; pencil or double-click to edit; Enter saves, Escape cancels; check items off as they are met.
 
 #### Comments Section
 - **Add Comments**: Rich text editor for comments
