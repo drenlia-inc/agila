@@ -930,7 +930,7 @@ export default function HelpModal({
     };
 
     return (
-      <section ref={sectionRef} className={sectionShellClass(hasMatch)}>
+      <section key={titleKey} ref={sectionRef} className={sectionShellClass(hasMatch)}>
         <h3 className={sectionTitleClass}>
           <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
             {React.createElement(icon, { className: iconColor, size: 18 })}
@@ -940,7 +940,7 @@ export default function HelpModal({
         </h3>
         <div className={`space-y-2.5 ${bodyTextClass}`}>
           {contents.map((content, index) => (
-            <p key={index}>{renderHelpContent(content, debouncedSearchTerm)}</p>
+            <p key={`${titleKey}-${index}`}>{renderHelpContent(content, debouncedSearchTerm)}</p>
           ))}
         </div>
       </section>
@@ -1000,7 +1000,7 @@ export default function HelpModal({
     );
 
     return (
-      <section ref={sectionRef} className={sectionShellClass(hasMatch)}>
+      <section key={titleKey} ref={sectionRef} className={sectionShellClass(hasMatch)}>
         {/* flow-root contains the floated aside so it cannot spill past the card */}
         {extras?.aside ? <div className="flow-root">{body}</div> : body}
       </section>
@@ -1030,7 +1030,7 @@ export default function HelpModal({
     };
 
     return (
-      <section ref={sectionRef} className={sectionShellClass(hasMatch)}>
+      <section key={titleKey} ref={sectionRef} className={sectionShellClass(hasMatch)}>
         <h3 className={sectionTitleClass}>
           <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
             {React.createElement(icon, { className: iconColor, size: 18 })}

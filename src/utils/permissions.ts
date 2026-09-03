@@ -26,6 +26,19 @@ export function userCanExport(user: CurrentUser | null | undefined): boolean {
 
 export type AppRole = 'admin' | 'user' | 'viewer';
 
+export function rolesForAppRole(role: string): string[] {
+  if (role === 'admin') return ['admin'];
+  if (role === 'viewer') return ['viewer'];
+  return ['user'];
+}
+
+export function sameRoleList(a?: string[] | null, b?: string[] | null): boolean {
+  const left = Array.isArray(a) ? a : [];
+  const right = Array.isArray(b) ? b : [];
+  if (left.length !== right.length) return false;
+  return left.every((role, index) => role === right[index]);
+}
+
 export function primaryAppRole(user: CurrentUser | null | undefined): AppRole {
   if (!user?.roles?.length) return 'user';
   if (user.roles.includes('admin')) return 'admin';

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from 'react';
 import { CurrentUser, SiteSettings } from '../types';
 import { DEFAULT_SITE_SETTINGS } from '../constants';
 import * as api from '../api';
@@ -178,7 +178,7 @@ interface UseAuthReturn {
   handleProfileUpdated: () => Promise<void>;
   refreshSiteSettings: () => Promise<void>;
   setSiteSettings: (settings: SiteSettings) => void;
-  setCurrentUser: (user: CurrentUser | null) => void;
+  setCurrentUser: Dispatch<SetStateAction<CurrentUser | null>>;
 }
 
 interface UseAuthCallbacks {
@@ -200,6 +200,8 @@ export const useAuth = (callbacks: UseAuthCallbacks): UseAuthReturn => {
   
   // Intended destination for redirecting after login
   const [intendedDestination, setIntendedDestination] = useState<string | null>(INITIAL_INTENDED_DESTINATION);
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
 
   // Persist deep link for after login. Login UI already renders when logged out;
   // only leave /project|/task so chrome stays on `/` (OAuth callback expects that).
@@ -352,30 +354,22 @@ export const useAuth = (callbacks: UseAuthCallbacks): UseAuthReturn => {
     return () => window.clearTimeout(timer);
   }, [isAuthenticated, currentUser, handleLogout]);
 
-  const handleProfileUpdated = async () => {
+  const handleProfileUpdated = useCallback(async () => {
     try {
-      // Refresh current user data to get updated avatar and roles
       const response = await api.getCurrentUser();
       setCurrentUser(response.user);
-      
-      // If a fresh token is provided (for role updates), save it
       if (response.token) {
         localStorage.setItem('authToken', response.token);
-        console.log('🔑 Updated JWT token with fresh roles');
         void establishMediaSession();
       }
-      
-      // Also refresh members to get updated display names
-      await callbacks.onMembersRefresh();
-      
-      // If current user is admin, also refresh admin data to show updated display names
+      await callbacksRef.current.onMembersRefresh();
       if (response.user.roles?.includes('admin')) {
-        callbacks.onAdminRefresh();
+        callbacksRef.current.onAdminRefresh();
       }
     } catch (error) {
       console.error('Failed to refresh profile data:', error);
     }
-  };
+  }, []);
 
   // refreshSiteSettings removed - use SettingsContext.refreshSettings() instead
   const refreshSiteSettings = async () => {
