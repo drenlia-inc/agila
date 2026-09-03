@@ -50,6 +50,30 @@ export function getBoardTabsScrollElement(): HTMLElement | null {
   return el instanceof HTMLElement ? el : null;
 }
 
+/** Keep the selected board tab in the visible strip (horizontal only). */
+export function scrollBoardTabIntoView(
+  boardId: string,
+  behavior: ScrollBehavior = 'smooth'
+): boolean {
+  const scroller = getBoardTabsScrollElement();
+  if (!scroller || !boardId) return false;
+  const tab = scroller.querySelector(`[data-board-tab-id="${CSS.escape(boardId)}"]`);
+  if (!(tab instanceof HTMLElement)) return false;
+
+  const scrollerRect = scroller.getBoundingClientRect();
+  const tabRect = tab.getBoundingClientRect();
+  const pad = 12;
+  let delta = 0;
+  if (tabRect.left < scrollerRect.left + pad) {
+    delta = tabRect.left - scrollerRect.left - pad;
+  } else if (tabRect.right > scrollerRect.right - pad) {
+    delta = tabRect.right - scrollerRect.right + pad;
+  }
+  if (Math.abs(delta) < 1) return false;
+  scroller.scrollBy({ left: delta, behavior });
+  return true;
+}
+
 /** Scroll hidden tabs into view when the pointer sits on a strip edge. */
 export function autoScrollBoardTabs(x: number, y: number): void {
   const strip = getBoardTabStripRect();

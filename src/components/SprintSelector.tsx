@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calendar, ChevronDown, Plus, Save, Search, Settings, X } from 'lucide-react';
+import SprintInfoBadge from './sprints/SprintInfoBadge';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import SprintAssignmentCurrentPill from './ui/SprintAssignmentCurrentPill';
 import SprintEditorFormFields, { type SprintEditorFormData } from './sprints/SprintEditorFormFields';
@@ -23,6 +24,8 @@ interface Sprint {
   start_date: string;
   end_date: string;
   is_active: boolean;
+  goal?: string | null;
+  description?: string | null;
 }
 
 interface Task {
@@ -75,6 +78,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
     end_date: '',
     is_active: false,
     description: '',
+    goal: '',
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -384,7 +388,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
         'py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700';
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative flex items-center gap-1 ${className}`}>
       <KanbanChromeTooltip
         label={
           !isAssign && selectedSprintId !== null
@@ -429,6 +433,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
           )}
         </button>
       </KanbanChromeTooltip>
+      {selectedSprint && <SprintInfoBadge sprint={selectedSprint} />}
 
       <AnchoredDropdownPortal
         open={isOpen}
@@ -607,6 +612,19 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                             {new Date(sprint.start_date).toLocaleDateString()} - {new Date(sprint.end_date).toLocaleDateString()}
                           </div>
+                          {sprint.goal && (
+                            <div
+                              className="text-xs text-slate-600 dark:text-gray-300 mt-0.5 break-words whitespace-normal"
+                              style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {sprint.goal}
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 shrink-0 ml-2">
                           {taskCount > 0 ? (

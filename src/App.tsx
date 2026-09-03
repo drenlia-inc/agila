@@ -147,7 +147,7 @@ import { moveTaskToBoard } from './api';
 import { customCollisionDetection, calculateGridStyle } from './utils/dragDropUtils';
 import { clearCustomCursor } from './utils/cursorUtils';
 import { generateUniqueBoardName } from './utils/boardUtils';
-import { renumberColumns, isArchivedColumnFlag, reconcileVisibleColumnIds, sameColumnIdSet } from './utils/columnUtils';
+import { renumberColumns, isArchivedColumnFlag, reconcileVisibleColumnIds, sameColumnIdSet, applyFinishedColumnVisibility } from './utils/columnUtils';
 import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveKanbanDropIndex, snapshotColumnTaskOrder, restoreColumnTaskOrders, TaskDropPlacement } from './utils/taskReorderingUtils';
 import { getTaskColumnId, orderedCheckedTasksInColumn, snapshotTaskBoardLocation } from './utils/kanbanMultiSelect';
 import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
@@ -1665,6 +1665,7 @@ function AppContent() {
     selectedBoardRef,
     refreshBoardDataRef,
     pendingSelfBoardCreatesRef,
+    currentUser,
   });
 
   const memberWebSocket = useMemberWebSocket({
@@ -1744,6 +1745,7 @@ function AppContent() {
     websocketClient.onBoardDeleted(boardWebSocket.handleBoardDeleted);
     websocketClient.onBoardRestored(boardWebSocket.handleBoardRestored);
     websocketClient.onBoardReordered(boardWebSocket.handleBoardReordered);
+    websocketClient.onBoardParticipantsUpdated(boardWebSocket.handleBoardParticipantsUpdated);
     websocketClient.onColumnCreated(columnWebSocket.handleColumnCreated);
     websocketClient.onTaskWatcherAdded(taskWebSocket.handleTaskWatcherAdded);
     websocketClient.onTaskWatcherRemoved(taskWebSocket.handleTaskWatcherRemoved);
@@ -1798,6 +1800,7 @@ function AppContent() {
       websocketClient.offBoardDeleted(boardWebSocket.handleBoardDeleted);
       websocketClient.offBoardRestored(boardWebSocket.handleBoardRestored);
       websocketClient.offBoardReordered(boardWebSocket.handleBoardReordered);
+      websocketClient.offBoardParticipantsUpdated(boardWebSocket.handleBoardParticipantsUpdated);
       websocketClient.offColumnCreated(columnWebSocket.handleColumnCreated);
       websocketClient.offTaskWatcherAdded(taskWebSocket.handleTaskWatcherAdded);
       websocketClient.offTaskWatcherRemoved(taskWebSocket.handleTaskWatcherRemoved);
@@ -2450,6 +2453,9 @@ function AppContent() {
         taskFilters.setIncludeSystem(userSpecificPrefs.includeSystem);
         if (typeof userSpecificPrefs.showAgentTasks === 'boolean') {
           taskFilters.setShowAgentTasks(userSpecificPrefs.showAgentTasks);
+        }
+        if (typeof userSpecificPrefs.showFinishedColumns === 'boolean') {
+          taskFilters.setShowFinishedColumns(userSpecificPrefs.showFinishedColumns);
         }
         taskFilters.setTaskViewMode(userSpecificPrefs.taskViewMode);
         taskFilters.setViewMode(userSpecificPrefs.viewMode);
@@ -5558,8 +5564,6 @@ function AppContent() {
    */
   const effectiveBoardColumnVisibility = useMemo(() => {
     const revealBoardIds = Object.keys(temporaryColumnReveals);
-    if (revealBoardIds.length === 0) return boardColumnVisibility;
-
     const merged = { ...boardColumnVisibility };
     revealBoardIds.forEach((boardId) => {
       const revealed = temporaryColumnReveals[boardId];
@@ -5583,8 +5587,41 @@ function AppContent() {
         .map((column) => column.id)
         .filter((id) => allowed.has(id));
     });
+
+    const overlayBoard = (boardId: string, boardColumns: Columns) => {
+      if (!boardColumns || Object.keys(boardColumns).length === 0) return;
+      const base =
+        merged[boardId] ??
+        Object.values(boardColumns)
+          .filter((column) => column && !isArchivedColumnFlag(column))
+          .map((column) => column.id);
+      merged[boardId] = applyFinishedColumnVisibility(
+        base,
+        boardColumns,
+        taskFilters.showFinishedColumns
+      );
+    };
+
+    boards.forEach((board) => {
+      const boardColumns: Columns =
+        board.id === selectedBoard && Object.keys(columns).length > 0
+          ? columns
+          : board.columns || {};
+      overlayBoard(board.id, boardColumns);
+    });
+    if (selectedBoard) {
+      overlayBoard(selectedBoard, columns);
+    }
+
     return merged;
-  }, [boardColumnVisibility, temporaryColumnReveals, boards, columns, selectedBoard]);
+  }, [
+    boardColumnVisibility,
+    temporaryColumnReveals,
+    boards,
+    columns,
+    selectedBoard,
+    taskFilters.showFinishedColumns,
+  ]);
 
   const handleJumpToTask = useCallback(
     async (task: Task) => {
@@ -5892,12 +5929,13 @@ function AppContent() {
     taskFilters.selectedSprintId !== null ||
     (siteSettings?.AI_ENABLED === 'true' && !taskFilters.showAgentTasks);
   const visibleColumnIdsForBoard = (board: Board, boardColumns: Columns) => {
-    const explicitVisibility = boardColumnVisibility[board.id];
-    return explicitVisibility
+    const explicitVisibility = effectiveBoardColumnVisibility[board.id];
+    const base = explicitVisibility
       ? explicitVisibility
       : Object.values(boardColumns)
           .filter((col) => col && !Boolean(col.is_archived))
           .map((col) => col.id);
+    return applyFinishedColumnVisibility(base, boardColumns, taskFilters.showFinishedColumns);
   };
 
   /** Search / member / sprint / agent filters — same set as live board cards. */
@@ -6308,6 +6346,8 @@ function AppContent() {
         onEditOwnProfile={(opts) => modalState.openProfileModal(opts?.focus)}
         showAgentTasks={taskFilters.showAgentTasks}
         onToggleShowAgentTasks={taskFilters.handleToggleShowAgentTasks}
+        showFinishedColumns={taskFilters.showFinishedColumns}
+        onToggleShowFinishedColumns={taskFilters.handleToggleShowFinishedColumns}
         onTaskViewModeChange={handleTaskViewModeChange}
         viewMode={taskFilters.viewMode}
         onViewModeChange={handleViewModeChange}

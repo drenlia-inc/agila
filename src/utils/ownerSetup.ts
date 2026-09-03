@@ -332,6 +332,11 @@ export const OWNER_SETUP_STEPS: OwnerSetupStepDef[] = [
         goKanban: true,
       },
       {
+        fieldKey: 'boardMembers',
+        sectionKey: 'topOfScreen',
+        goKanban: true,
+      },
+      {
         selector: '[data-column-title]',
         fieldKey: 'columnTitle',
         sectionKey: 'tasksBoard',
@@ -364,6 +369,7 @@ export const OWNER_SETUP_STEPS: OwnerSetupStepDef[] = [
     tourTarget: '[data-tour-id="admin-sprint-settings"]',
     guideFields: [
       { selector: '[data-owner-setup="create-sprint"]', fieldKey: 'createSprint' },
+      { fieldKey: 'sprintGoal' },
     ],
   },
   {

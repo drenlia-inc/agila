@@ -19,6 +19,23 @@
       "file": "src/components/ActivityFeed.tsx"
     },
     {
+      "id": "help:board-members",
+      "attr": "help",
+      "value": "board-members",
+      "en": "Add/remove members",
+      "fr": "Ajouter/retirer des membres",
+      "searchEn": "Add/remove members Add/remove members board-members",
+      "searchFr": "Ajouter/retirer des membres Ajouter/retirer des membres board-members",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"board-members\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/BoardTabs.tsx"
+    },
+    {
       "id": "help:calendar-column-filter",
       "attr": "help",
       "value": "calendar-column-filter",
@@ -51,6 +68,23 @@
       "adminOnly": true,
       "audience": "admin",
       "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "help:hide-finished-column",
+      "attr": "help",
+      "value": "hide-finished-column",
+      "en": "Hide {{column}}",
+      "fr": "Masquer {{column}}",
+      "searchEn": "Hide {{column}} Hide {{column}} Show {{column}} Show tasks assigned to the selected team members hide-finished-column",
+      "searchFr": "Masquer {{column}} Masquer {{column}} Afficher {{column}} Afficher les tâches assignées aux membres sélectionnés hide-finished-column",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"hide-finished-column\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/TeamMembers.tsx"
     },
     {
       "id": "help:kanban-column-filter",
@@ -102,6 +136,23 @@
       "adminOnly": false,
       "audience": "user",
       "file": "src/components/Profile.tsx"
+    },
+    {
+      "id": "help:sprint-goal",
+      "attr": "help",
+      "value": "sprint-goal",
+      "en": "sprint goal",
+      "fr": "sprint goal",
+      "searchEn": "sprint goal  sprint-goal",
+      "searchFr": "sprint goal  sprint-goal",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"sprint-goal\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/HelpModal.tsx"
     },
     {
       "id": "help:sso-add-provider",
@@ -2249,10 +2300,10 @@
       "id": "tour:sprint-selector",
       "attr": "tour",
       "value": "sprint-selector",
-      "en": "Use the Sprint Selector to filter tasks by sprint. You can view all sprints, the backlog (unassigned tasks), or a specific sprint. Admins can add a sprint here or open Settings → Project Settings → Sprints.",
-      "fr": "Utilisez le sélecteur de sprint pour filtrer les tâches par sprint. Vous pouvez afficher tous les sprints, le backlog (tâches non assignées) ou un sprint spécifique. Les admins peuvent y ajouter un sprint ou ouvrir Paramètres → Paramètres d",
-      "searchEn": "Use the Sprint Selector to filter tasks by sprint. You can view all sprints, the backlog (unassigned tasks), or a specific sprint. Admins can add a sprint here or open Settings → Project Settings → Sprints. Select Sprint sprint-selector",
-      "searchFr": "Utilisez le sélecteur de sprint pour filtrer les tâches par sprint. Vous pouvez afficher tous les sprints, le backlog (tâches non assignées) ou un sprint spécifique. Les admins peuvent y ajouter un sprint ou ouvrir Paramètres → Paramètres du projet → Sprints. Sélectionner un sprint sprint-selector",
+      "en": "Use the Sprint Selector to filter tasks by sprint. You can view all sprints, the backlog (unassigned tasks), or a specific sprint. Each sprint can include an optional goal. Admins can add a sprint here or open Settings → Project Settings → ",
+      "fr": "Utilisez le sélecteur de sprint pour filtrer les tâches par sprint. Vous pouvez afficher tous les sprints, le backlog (tâches non assignées) ou un sprint spécifique. Chaque sprint peut inclure un objectif optionnel. Les admins peuvent y ajo",
+      "searchEn": "Use the Sprint Selector to filter tasks by sprint. You can view all sprints, the backlog (unassigned tasks), or a specific sprint. Each sprint can include an optional goal. Admins can add a sprint here or open Settings → Project Settings → Sprints. Select Sprint sprint-selector",
+      "searchFr": "Utilisez le sélecteur de sprint pour filtrer les tâches par sprint. Vous pouvez afficher tous les sprints, le backlog (tâches non assignées) ou un sprint spécifique. Chaque sprint peut inclure un objectif optionnel. Les admins peuvent y ajouter un sprint ou ouvrir Paramètres → Paramètres du projet → Sprints. Sélectionner un sprint sprint-selector",
       "kind": "view",
       "mode": "kanban",
       "highlights": [

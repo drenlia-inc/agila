@@ -4,6 +4,7 @@ import { Task, TeamMember, Comment, Attachment, Tag, PriorityOption, CurrentUser
 import { X, Paperclip, ChevronDown, Check, Edit2, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import TextEditor from './TextEditor';
+import AcceptanceCriteriaEditor from './AcceptanceCriteriaEditor';
 import {
   createComment,
   uploadFile,
@@ -1868,11 +1869,30 @@ export default function TaskDetails({
               )}
             </div>
 
+            <AcceptanceCriteriaEditor taskId={task.id} locked={isWritersLocked} />
 
             <div className="grid grid-cols-2 gap-4">
               <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {t('labels.assignedTo')}
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!ownMember || isSubmitting || isWritersLocked || validMemberId === ownMember.id}
+                    onClick={() => {
+                      if (!ownMember) return;
+                      if (validMemberId === ownMember.id) return;
+                      void handleUpdate({ memberId: ownMember.id });
+                    }}
+                    className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/30 disabled:opacity-50 flex items-center justify-center"
+                    aria-label={t('labels.addMe')}
+                    title={t('labels.addMe')}
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
                 <MemberPicker
-                  label={t('labels.assignedTo')}
                   members={members}
                   value={validMemberId}
                   onChange={(memberId) => handleUpdate({ memberId })}
@@ -1884,8 +1904,26 @@ export default function TaskDetails({
               </div>
 
               <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {t('labels.requester')}
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!ownMember || isSubmitting || isWritersLocked || validRequesterId === ownMember.id}
+                    onClick={() => {
+                      if (!ownMember) return;
+                      if (validRequesterId === ownMember.id) return;
+                      void handleUpdate({ requesterId: ownMember.id });
+                    }}
+                    className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/30 disabled:opacity-50 flex items-center justify-center"
+                    aria-label={t('labels.addMe')}
+                    title={t('labels.addMe')}
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
                 <MemberPicker
-                  label={t('labels.requester')}
                   members={members}
                   value={validRequesterId}
                   onChange={(memberId) => handleUpdate({ requesterId: memberId })}
@@ -1901,9 +1939,25 @@ export default function TaskDetails({
             <div className="grid grid-cols-2 gap-4">
               {/* Watchers Section */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                  {t('labels.watchers')}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {t('labels.watchers')}
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!ownMember || isSubmitting || (!viewerWatchOk && isWritersLocked) || taskWatchers.some((w) => w.id === ownMember.id)}
+                    onClick={() => {
+                      if (!ownMember) return;
+                      if (taskWatchers.some((w) => w.id === ownMember.id)) return;
+                      void toggleWatcher(ownMember);
+                    }}
+                    className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/30 disabled:opacity-50 flex items-center justify-center"
+                    aria-label={t('labels.addMe')}
+                    title={t('labels.addMe')}
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-1.5">
                     {taskWatchers.map((watcher) => (
@@ -1962,9 +2016,25 @@ export default function TaskDetails({
 
               {/* Collaborators Section */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                  {t('labels.collaborators')}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {t('labels.collaborators')}
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!ownMember || isSubmitting || isWritersLocked || taskCollaborators.some((c) => c.id === ownMember.id)}
+                    onClick={() => {
+                      if (!ownMember) return;
+                      if (taskCollaborators.some((c) => c.id === ownMember.id)) return;
+                      void toggleCollaborator(ownMember);
+                    }}
+                    className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-200 dark:hover:bg-emerald-900/30 disabled:opacity-50 flex items-center justify-center"
+                    aria-label={t('labels.addMe')}
+                    title={t('labels.addMe')}
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
                 <div className="space-y-2">
                   <div className="flex flex-wrap gap-1.5">
                     {taskCollaborators.map((collaborator) => (
@@ -2203,6 +2273,7 @@ export default function TaskDetails({
                   label={t('labels.priority')}
                   priorities={availablePriorities}
                   value={editedTask.priorityId}
+                  allowClear={false}
                   disabled={isWritersLocked || isSubmitting}
                   onChange={(priorityId, priorityName) =>
                     handleUpdate({

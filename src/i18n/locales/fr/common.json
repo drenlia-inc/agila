@@ -511,7 +511,8 @@
       "suggestCreateSprint": "Créer un sprint ?",
       "suggestFeedDefault": "Fil par défaut (nouveaux) ?",
       "dragHint": "Glisser à gauche ou à droite pour déplacer",
-      "resizeHint": "Glisser pour changer la hauteur"
+      "resizeHint": "Glisser pour changer la hauteur",
+      "dismiss": "Fermer l'assistant"
     },
     "switchToFrench": "Switch to French",
     "switchToEnglish": "Passer en anglais",
@@ -534,18 +535,18 @@
       "introDesc3": "Adaptez le tableau au flux réel ; utilisez le WIP souple et les sprints optionnels quand cela aide. Vous gardez le processus — Agila apporte la visibilité partagée et les aides au flux.",
       "roles": "Rôles",
       "roleAdmin": "Admin : utilisateurs, tableaux/colonnes, WIP et politique, paramètres Projet/Fonctions/Sprints, rapports, cycle de vie/corbeille",
-      "roleUser": "Utilisateur : travailler sur le tableau — créer/déplacer des tâches, commentaires, filtres, vues (pas de Paramètres)",
-      "roleViewer": "Lecteur : tableaux en lecture seule ; peut commenter et enregistrer des vues personnelles (pas de création/édition/glisser-déposer de tâches)",
+      "roleUser": "Utilisateur : travaille sur les tableaux auxquels il appartient — créer/déplacer des tâches, commentaires, filtres, vues (pas de Paramètres). Les admins l'ajoutent comme membre du tableau.",
+      "roleViewer": "Lecteur : lecture seule sur les tableaux auxquels il appartient ; peut commenter et enregistrer des vues personnelles (pas de création/édition/glisser-déposer de tâches)",
       "firstHour": "Checklist de la première heure",
       "firstHourSsoNote": "**SSO Google (configuration initiale) :** Si votre organisation utilise Google OAuth, configurez le SSO dès l'installation — avant d'élargir les invitations. Les utilisateurs pourront se connecter avec Google sans créer un autre mot de passe, ce qui facilite l'intégration. Voir Paramètres → Paramètres système → SSO (ou Aide → Paramètres → SSO).",
       "firstHourIntro": "Suivez cet ordre. Laissez de côté le branding et l'IA tant que l'équipe ne peut pas déplacer des cartes.",
       "firstHour2": "Invitez l'équipe — Inviter dans l'en-tête, ou Paramètres → Utilisateurs (attribuez Utilisateur ou Lecteur selon le besoin).",
-      "firstHour3": "Créez un tableau — + dans les onglets. Préférez un tableau par projet au début (la plupart des gens travaillent sur plusieurs projets).",
+      "firstHour3": "Créez un tableau — + dans les onglets. Préférez un tableau par projet au début (la plupart des gens travaillent sur plusieurs projets). Ajoutez ensuite les membres (double-clic sur l'onglet → Ajouter/retirer des membres). Les utilisateurs et lecteurs ne voient que les tableaux auxquels ils appartiennent ; les admins voient tous les tableaux.",
       "firstHour4": "Formez les colonnes selon le flux réel (ex. : À faire → En cours → Revue → Terminé). Ajoutez/réordonnez depuis le tableau ; cliquez le titre d'une colonne (admin) pour le nom, le WIP souple et de courtes notes de politique.",
-      "firstHour5": "Facultatif : définissez « terminé » — Paramètres → Paramètres du projet → Projet → noms de colonnes terminées (ex. : Terminé). Les tâches de ces colonnes ne sont pas considérées en retard.",
+      "firstHour5": "Facultatif : définissez « terminé » — Paramètres → Paramètres du projet → Projet → noms de colonnes terminées (ex. : Terminé). Les tâches de ces colonnes ne sont pas considérées en retard. Le basculeur à côté de Tous les rôles (libellé du nom de cette colonne) affiche ou masque les colonnes terminées sur tous les tableaux. Il est activé par défaut ; désactivez-le pour vous concentrer sur le travail actif. Votre choix est enregistré dans vos préférences.",
       "firstHour6": "Réglez Fonctions — Paramètres → Paramètres du projet → Fonctions : compteurs de tâches sur onglets/colonnes activés (recommandé) ; totaux d'effort optionnels (désactivés par défaut) ; unité d'effort heures ou points (affichage seulement ; les valeurs ne sont pas converties) ; mise en évidence des retards si vous voulez le badge RETARD.",
       "firstHour7": "Optionnel : WIP souple du tableau — double-cliquez l'onglet du tableau → limite de capacité d'équipe pour le travail actif (voir WIP souple ci-dessous).",
-      "firstHour8": "Optionnel : premier sprint — seulement si vous utilisez des sprints datés. Créez-le depuis le menu sprint de l'en-tête (admins : Nouveau sprint) ou Paramètres → Paramètres du projet → Sprints. Dans le menu sprint de l'en-tête, choisissez ce sprint : les nouvelles tâches y sont placées (les dates suivent la fenêtre du sprint le cas échéant). Avec Tous les sprints, les nouvelles tâches ne sont pas auto-assignées ; utilisez l'icône calendrier sur une carte, ou cochez les cartes à sélectionner puis choisissez Sprint dans la barre d'actions en masse pour les affecter à un sprint.",
+      "firstHour8": "Optionnel : premier sprint — seulement si vous utilisez des sprints datés. Créez-le depuis le menu sprint de l'en-tête (admins : Nouveau sprint) ou Paramètres → Paramètres du projet → Sprints. Ajoutez un objectif de sprint optionnel pour que l'équipe voie ce que « terminé » signifie pour la période. Dans le menu sprint de l'en-tête, choisissez ce sprint : les nouvelles tâches y sont placées (les dates suivent la fenêtre du sprint le cas échéant). Avec Tous les sprints, les nouvelles tâches ne sont pas auto-assignées ; utilisez l'icône calendrier sur une carte, ou cochez les cartes à sélectionner puis choisissez Sprint dans la barre d'actions en masse pour les affecter à un sprint.",
       "firstHour9": "Créez quelques vraies tâches et parcourez le flux une fois avec l'équipe. Proposez la visite guidée courte si les collègues sont nouveaux.",
       "shapeBoard": "Former le tableau",
       "shapeColumns": "Des colonnes qui collent au travail",
@@ -587,7 +588,7 @@
       "planning3": "Liens parent/enfant ou liés si utile — optionnel, pas obligatoire.",
       "planning4": "Multi-sélection et actions en masse pour sprint, tag, priorité, changer de tableau, archiver, supprimer.",
       "sprints": "Si vous utilisez des sprints",
-      "sprints1": "L'admin crée les sprints (nom, début, fin ; en marquer un Actif).",
+      "sprints1": "L'admin crée les sprints (nom, début, fin, objectif optionnel ; en marquer un Actif).",
       "sprints2": "Menu sprint de l'en-tête : un sprint précis sélectionné → les nouvelles tâches y atterrissent. Tous les sprints → nouvelles tâches hors de tout sprint ; utilisez l'icône calendrier sur une carte, ou cochez les cartes à sélectionner puis choisissez Sprint dans la barre d'actions en masse pour les affecter à un sprint. Backlog filtre le travail sans sprint. Les nouvelles tâches vous listent comme demandeur et démarrent sans assigné jusqu'à ce que quelqu'un les prenne.",
       "sprints3": "Activez Rapports pour burndown et vues d'équipe (Paramètres → Paramètres du projet → Rapports).",
       "sprints4": "Créez le sprint suivant avant la fin du courant pour ne jamais bloquer la planification.",
@@ -712,7 +713,7 @@
       "deliveryPlaybook": "Guide de livraison : Voir l'[[tab:delivery]]onglet Livraison[[/tab]] pour un parcours premier jour PO / Scrum Master (mise en place du tableau, WIP souple, sprints et rituels).",
       "sprints": "Sprints",
       "sprintsDesc1": "Les sprints sont des périodes de planification basées sur le temps utilisées pour organiser les tâches et suivre la progression sur des plages de dates spécifiques. Les administrateurs créent et gèrent les sprints dans Paramètres → Paramètres du projet → Sprints.",
-      "sprintsDesc2": "Chaque sprint a un nom, une date de début, une date de fin et une description optionnelle. Un sprint peut être marqué comme \"Actif\" pour servir de sélection par défaut dans les filtres et les rapports.",
+      "sprintsDesc2": "Chaque sprint a un nom, une date de début, une date de fin, un objectif optionnel et une description optionnelle. Un sprint peut être marqué comme \"Actif\" pour servir de sélection par défaut dans les filtres et les rapports. L'objectif apparaît dans le sélecteur de sprint pour que l'équipe voie le but de la période.",
       "sprintFilter": "Filtre sprint : Dans l'en-tête, choisissez Tous les sprints, Backlog ou un sprint précis. Avec un sprint sélectionné, les nouvelles tâches y sont ajoutées ; avec Tous les sprints, utilisez l'icône calendrier sur les cartes pour les assigner.",
       "clearButton": "Bouton Effacer : Cliquez sur le bouton \"Effacer\" pour désélectionner tous les membres de l'équipe. Lorsqu'aucun membre n'est sélectionné, toutes les tâches de tous les membres sont affichées (équivalent à sélectionner tout le monde)."
     },
@@ -727,6 +728,9 @@
       "reorderColumns": "Réorganiser les colonnes : Glissez les en-têtes de colonnes pour les réorganiser selon votre flux de travail (admin uniquement).",
       "deleteColumns": "Supprimer les colonnes : Utilisez le menu à trois points (⋮) dans l'en-tête de colonne et sélectionnez \"Supprimer la colonne\" pour supprimer les colonnes vides (admin uniquement). Déplacez ou supprimez d'abord les tâches.",
       "finishedColumns": "Colonnes terminées : Les colonnes avec des noms comme \"Terminé\", \"Complété\" ou \"Fini\" sont automatiquement marquées comme terminées. Les tâches dans ces colonnes ne seront pas considérées comme en retard.",
+      "finishedColumnToggle": "Afficher ou masquer les colonnes terminées : À côté de Tous les rôles, un interrupteur libellé du nom de la colonne terminée (par exemple Terminé) est activé par défaut pour voir le travail complété. Désactivez-le pour masquer les colonnes terminées sur tous les tableaux. Le choix est enregistré dans vos préférences.",
+      "boardParticipants": "Membres du tableau : Les utilisateurs et lecteurs ne voient que les tableaux auxquels ils ont été ajoutés. Les admins voient tous les tableaux. Après création, double-cliquez l'onglet et choisissez Ajouter/retirer des membres. Une liste vide masque le tableau aux non-admins.",
+      "acceptanceCriteria": "Critères d'acceptation : Dans les détails de la tâche, ajoutez une liste de critères. Glissez pour réordonner, cliquez le crayon ou double-cliquez le texte pour modifier, Entrée pour enregistrer, Échap pour annuler, et cochez les items au fur et à mesure.",
       "taskManagement": "Gestion des tâches",
       "createTasks": "Créer des tâches : Cliquez sur le bouton [[icon:plus]] dans l'en-tête de n'importe quelle colonne pour créer une nouvelle tâche. Vous êtes défini comme demandeur ; l'assigné reste vide jusqu'à ce que quelqu'un prenne le travail.",
       "editTasks": "Modifier les tâches : Cliquez sur l'icône [[icon:pencil]] stylo pour des modifications rapides. Ouvrez le panneau latéral de la tâche pour une édition détaillée avec texte enrichi, ajouter des pièces jointes, l'effort et les commentaires.",
@@ -1110,7 +1114,32 @@
     "boardMovedToTrashMessage": "« {{title}} » a été déplacé vers la corbeille. Passage à un autre tableau.",
     "boardPermanentlyDeletedTitle": "Tableau supprimé",
     "boardPermanentlyDeletedMessage": "« {{title}} » a été définitivement supprimé. Passage à un autre tableau.",
-    "boardRemovedNoReplacement": "« {{title}} » n'est plus disponible."
+    "boardRemovedNoReplacement": "« {{title}} » n'est plus disponible.",
+    "manageMembers": "Ajouter/retirer des membres",
+    "participantsTitle": "Participants du tableau"
+  },
+  "boardParticipants": {
+    "available": "Disponibles",
+    "onBoard": "Sur ce tableau",
+    "add": "Ajouter au tableau",
+    "remove": "Retirer du tableau",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Mis à jour.",
+    "saveFailed": "Impossible d'enregistrer les participants",
+    "loadFailed": "Impossible de charger les participants",
+    "loading": "Chargement des membres…",
+    "noneAvailable": "Aucun autre membre",
+    "noneOnBoard": "Aucun participant pour l'instant",
+    "minOne": "Ajoutez au moins un membre avant d'enregistrer.",
+    "roleAdmin": "Admin",
+    "roleUser": "Utilisateur",
+    "roleViewer": "Lecteur",
+    "groupAdmins": "Admins",
+    "groupUsers": "Utilisateurs",
+    "groupViewers": "Lecteurs",
+    "selectAll": "Tout sélectionner",
+    "clearSelection": "Effacer la sélection"
   },
   "boardLimit": {
     "title": "Limite de tableaux atteinte",
@@ -1332,6 +1361,8 @@
     "showAllRoles": "Afficher tous les rôles (assignés, observateurs, collaborateurs, demandeurs)",
     "assigneesOnly": "Assignées uniquement",
     "allRoles": "Tous les rôles",
+    "hideFinished": "Masquer {{column}}",
+    "showFinished": "Afficher {{column}}",
     "assignees": "Assignées",
     "assigneesTooltip": "Afficher les tâches assignées aux membres sélectionnés",
     "watchers": "Observateurs",
@@ -1617,7 +1648,10 @@
       "chooseSprint": "Choisir un sprint",
       "active": "Actif",
       "startDate": "Date de début",
-      "endDate": "Date de fin"
+      "endDate": "Date de fin",
+      "goal": "Objectif",
+      "description": "Description",
+      "sprintDetails": "Détails du sprint"
     }
   },
   "gantt": {
@@ -1782,7 +1816,7 @@
       "adminProjectSettings": "Gérez les paramètres spécifiques au projet, les flux de travail et les configurations personnalisées dans les Paramètres du projet.",
       "adminLicensing": "Consultez et gérez vos informations de licence, limites d'utilisation et détails d'abonnement.",
       "systemUsagePanel": "Ce panneau d'utilisation du système affiche la surveillance des ressources en temps réel : utilisation de la RAM, utilisation du CPU et espace disque. Il vous aide à surveiller les performances de votre instance et la consommation de ressources.",
-      "sprintSelector": "Utilisez le sélecteur de sprint pour filtrer les tâches par sprint. Vous pouvez afficher tous les sprints, le backlog (tâches non assignées) ou un sprint spécifique. Les admins peuvent y ajouter un sprint ou ouvrir Paramètres → Paramètres du projet → Sprints.",
+      "sprintSelector": "Utilisez le sélecteur de sprint pour filtrer les tâches par sprint. Vous pouvez afficher tous les sprints, le backlog (tâches non assignées) ou un sprint spécifique. Chaque sprint peut inclure un objectif optionnel. Les admins peuvent y ajouter un sprint ou ouvrir Paramètres → Paramètres du projet → Sprints.",
       "themeToggle": "Basculez entre le mode clair et sombre à l'aide du bouton de thème. Choisissez l'apparence qui vous convient le mieux.",
       "inviteUserButton": "En tant qu'administrateur, vous pouvez inviter de nouveaux utilisateurs à rejoindre votre équipe. Cliquez sur le bouton d'invitation et entrez leur adresse e-mail pour envoyer une invitation.",
       "reportsButton": "Accédez à la section Rapports pour consulter les analyses et informations sur les performances de l'équipe, l'achèvement des tâches, les graphiques de burndown et les listes détaillées de tâches. Les rapports sont disponibles lorsqu'ils sont activés dans les paramètres.",
@@ -1886,7 +1920,7 @@
       },
       "boards": {
         "title": "Tableaux et colonnes",
-        "description": "Ajoutez des tableaux et formez les colonnes (WIP souple / notes de politique) selon le travail de votre équipe. Pour renommer un tableau, double-cliquez son nom dans les onglets.",
+        "description": "Ajoutez des tableaux et formez les colonnes (WIP souple / notes de politique) selon le travail de votre équipe. Pour renommer un tableau, double-cliquez son nom dans les onglets. Ajoutez les membres depuis le même dialogue pour que les utilisateurs et lecteurs voient le tableau.",
         "guide": "Formez les tableaux et colonnes ici.",
         "sections": {
           "topOfScreen": "Haut de l'écran",
@@ -1894,6 +1928,7 @@
         },
         "fields": {
           "addBoard": "Utilisez + pour ajouter un tableau pour un projet ou une équipe.",
+          "boardMembers": "Double-cliquez l'onglet et ouvrez Ajouter/retirer des membres pour que l'équipe voie ce tableau.",
           "boardTitle": "Double-cliquez le nom d'un tableau dans les onglets pour le renommer.",
           "columnTitle": "Cliquez sur le titre d'une colonne pour le renommer, et pour définir le WIP souple et les notes de politique.",
           "columnMenu": "Ouvrez le ⋮ d'une colonne pour insérer ou supprimer des colonnes."
@@ -1910,10 +1945,11 @@
       },
       "sprints": {
         "title": "Sprints",
-        "description": "Facultatif : créez des périodes de planification pour les filtres de sprint et le burndown.",
+        "description": "Facultatif : créez des périodes de planification pour les filtres de sprint et le burndown. Vous pouvez ajouter un objectif de sprint pour que l'équipe voie le focus de la période.",
         "guide": "Créez un sprint quand vous êtes prêt.",
         "fields": {
-          "createSprint": "Cliquez sur Créer un sprint pour ajouter une période de planification."
+          "createSprint": "Cliquez sur Créer un sprint pour ajouter une période de planification.",
+          "sprintGoal": "Facultatif : rédigez un objectif de sprint pour que chacun voie le but de cette période."
         }
       },
       "sso": {

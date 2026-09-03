@@ -128,7 +128,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error });
     }
-    const { name, start_date, end_date, is_active, description, transfer_active_work } = parsed.data;
+    const { name, start_date, end_date, is_active, description, goal, transfer_active_work } = parsed.data;
 
     if (new Date(end_date) < new Date(start_date)) {
       return res.status(400).json({ error: 'End date must be after start date' });
@@ -149,7 +149,8 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         start_date,
         end_date,
         is_active,
-        description
+        description,
+        goal
       );
       if (is_active && transfer_active_work && previousActive?.id) {
         transferredTasks = await sprintQueries.transferActiveWorkToSprint(
@@ -191,7 +192,7 @@ router.put("/:id", authenticateToken, requireRole(['admin']), async (req, res) =
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error });
     }
-    const { name, start_date, end_date, is_active, description, transfer_active_work } = parsed.data;
+    const { name, start_date, end_date, is_active, description, goal, transfer_active_work } = parsed.data;
 
     // MIGRATED: Check if sprint exists using sqlManager
     const existing = await sprintQueries.getSprintById(db, id);
@@ -219,7 +220,8 @@ router.put("/:id", authenticateToken, requireRole(['admin']), async (req, res) =
         start_date,
         end_date,
         is_active,
-        description
+        description,
+        goal
       );
       if (
         becomingActive &&

@@ -1025,6 +1025,8 @@
     "endDate": "End Date *",
     "descriptionLabel": "Description",
     "optionalDescription": "Optional description...",
+    "goalLabel": "Goal",
+    "goalPlaceholder": "What this sprint should achieve…",
     "markAsActiveSprint": "Mark as Active Sprint",
     "update": "Update",
     "create": "Create",

@@ -2,6 +2,7 @@
   "errors": {
     "boardNameExists": "A board with this name already exists",
     "boardNotFound": "Board not found",
+    "boardAccessDenied": "You do not have access to this board.",
     "failedToCreateBoard": "Failed to create board",
     "failedToUpdateBoard": "Failed to update board",
     "failedToDeleteBoard": "Failed to delete board",
@@ -70,6 +71,9 @@
     "failedToGetTasks": "Failed to get tasks",
     "failedToAddWatcher": "Failed to add watcher",
     "cannotAssignViewer": "View-only members cannot be assigned to tasks",
+    "cannotUseAgentAsRequester": "The Agent can only be assigned to a task, not set as requester",
+    "cannotAddAgentAsWatcher": "The Agent can only be assigned to a task, not added as a watcher",
+    "cannotAddAgentAsCollaborator": "The Agent can only be assigned to a task, not added as a collaborator",
     "readOnly": "Read-only role cannot modify data",
     "failedToRemoveWatcher": "Failed to remove watcher",
     "failedToAddCollaborator": "Failed to add collaborator",

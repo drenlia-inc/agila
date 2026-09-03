@@ -2,6 +2,7 @@
   "errors": {
     "boardNameExists": "Un tableau avec ce nom existe déjà",
     "boardNotFound": "Tableau introuvable",
+    "boardAccessDenied": "Vous n'avez pas accès à ce tableau.",
     "failedToCreateBoard": "Échec de la création du tableau",
     "failedToUpdateBoard": "Échec de la mise à jour du tableau",
     "failedToDeleteBoard": "Échec de la suppression du tableau",
@@ -70,6 +71,9 @@
     "failedToGetTasks": "Échec de la récupération des tâches",
     "failedToAddWatcher": "Échec de l'ajout de l'observateur",
     "cannotAssignViewer": "Les membres en lecture seule ne peuvent pas être assignés aux tâches",
+    "cannotUseAgentAsRequester": "L'agent ne peut être que l'assigné d'une tâche, pas le demandeur",
+    "cannotAddAgentAsWatcher": "L'agent ne peut être que l'assigné d'une tâche, pas un observateur",
+    "cannotAddAgentAsCollaborator": "L'agent ne peut être que l'assigné d'une tâche, pas un collaborateur",
     "readOnly": "Le rôle en lecture seule ne peut pas modifier les données",
     "failedToRemoveWatcher": "Échec de la suppression de l'observateur",
     "failedToAddCollaborator": "Échec de l'ajout du collaborateur",

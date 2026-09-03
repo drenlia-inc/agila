@@ -2,12 +2,13 @@ import express from 'express';
 import { wrapQuery } from '../utils/queryLogger.js';
 import notificationService from '../services/notificationService.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { assertBoardAccess, userHasAdminRole } from '../middleware/boardAccess.js';
 import { checkBoardLimit } from '../middleware/licenseCheck.js';
 import { getTranslator } from '../utils/i18n.js';
 import { getDefaultBoardColumns } from '../utils/defaultBoardColumns.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 // MIGRATED: Import sqlManager
-import { boards as boardQueries, tasks as taskQueries, helpers } from '../utils/sqlManager/index.js';
+import { boards as boardQueries, tasks as taskQueries, helpers, boardParticipants as participantQueries } from '../utils/sqlManager/index.js';
 import { notifyBoardWebhook } from '../services/taskEmailNotificationService.js';
 import { purgeBoardCompletely } from '../services/taskPurgeService.js';
 import { serverDebug } from '../utils/serverDebug.js';
@@ -15,7 +16,8 @@ import {
   parseBody,
   createBoardBodySchema,
   updateBoardBodySchema,
-  reorderBoardBodySchema
+  reorderBoardBodySchema,
+  updateBoardParticipantsBodySchema
 } from '../utils/requestValidation.js';
 
 const router = express.Router();
@@ -24,8 +26,8 @@ const router = express.Router();
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    // MIGRATED: Use sqlManager
-    const boards = await boardQueries.getAllBoards(db);
+    const isAdmin = userHasAdminRole(req.user);
+    const boards = await boardQueries.getAllBoards(db, { userId: req.user.id, isAdmin });
 
     // OPTIMIZATION: Batch fetch all columns for all boards first
     const allBoardIds = boards.map(b => b.id);
@@ -165,6 +167,7 @@ router.get('/', authenticateToken, async (req, res) => {
       
       return {
         ...board,
+        participantCount: Number(board.participant_count ?? board.participantCount ?? 0),
         columns: columnsObj
       };
     });
@@ -186,7 +189,8 @@ router.get('/:boardId/columns', authenticateToken, async (req, res) => {
     const db = getRequestDatabase(req);
     
     const t = await getTranslator(db);
-    
+    if (!(await assertBoardAccess(req, res, boardId))) return;
+
     // MIGRATED: Verify board exists using sqlManager
     const board = await boardQueries.getBoardById(db, boardId);
     if (!board) {
@@ -202,6 +206,63 @@ router.get('/:boardId/columns', authenticateToken, async (req, res) => {
     const db = getRequestDatabase(req);
     const t = await getTranslator(db);
     res.status(500).json({ error: t('errors.failedToFetchBoardColumns') });
+  }
+});
+
+router.get('/:boardId/participants', authenticateToken, async (req, res) => {
+  const { boardId } = req.params;
+  try {
+    const db = getRequestDatabase(req);
+    const board = await boardQueries.getBoardById(db, boardId);
+    if (!board) {
+      const t = await getTranslator(db);
+      return res.status(404).json({ error: t('errors.boardNotFound') });
+    }
+    if (!(await assertBoardAccess(req, res, boardId))) return;
+    const participants = await participantQueries.listParticipants(db, boardId);
+    const payload = { participants, participantCount: participants.length };
+    if (userHasAdminRole(req.user)) {
+      payload.candidates = await participantQueries.listCandidateUsers(db);
+    }
+    res.json(payload);
+  } catch (error) {
+    console.error('Error fetching board participants:', error);
+    res.status(500).json({ error: 'Failed to fetch board participants' });
+  }
+});
+
+router.put('/:boardId/participants', authenticateToken, requireRole(['admin']), async (req, res) => {
+  const { boardId } = req.params;
+  const parsed = parseBody(updateBoardParticipantsBodySchema, req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error });
+  }
+  try {
+    const db = getRequestDatabase(req);
+    const board = await boardQueries.getBoardById(db, boardId);
+    if (!board) {
+      const t = await getTranslator(db);
+      return res.status(404).json({ error: t('errors.boardNotFound') });
+    }
+    const participants = await participantQueries.replaceParticipants(
+      db,
+      boardId,
+      parsed.data.userIds
+    );
+    await notificationService.publish(
+      'board-participants-updated',
+      {
+        boardId,
+        participantCount: participants.length,
+        userIds: participants.map((p) => p.id),
+        timestamp: new Date().toISOString(),
+      },
+      getTenantId(req)
+    );
+    res.json({ participants, participantCount: participants.length });
+  } catch (error) {
+    console.error('Error updating board participants:', error);
+    res.status(500).json({ error: 'Failed to update board participants' });
   }
 });
 
@@ -360,6 +421,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const t = await getTranslator(db);
+    if (!(await assertBoardAccess(req, res, id))) return;
     
     // MIGRATED: Check for duplicate board name using sqlManager
     const existingBoard = await boardQueries.getBoardByTitle(db, title, id);
@@ -494,6 +556,7 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
 router.get('/:id/trash', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
+    if (!(await assertBoardAccess(req, res, req.params.id))) return;
     const tasks = await taskQueries.getTrashTasksForBoard(db, req.params.id);
     const count = tasks.length;
     res.json({ tasks, count });
@@ -506,6 +569,7 @@ router.get('/:id/trash', authenticateToken, async (req, res) => {
 router.get('/:id/trash/count', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
+    if (!(await assertBoardAccess(req, res, req.params.id))) return;
     const count = await taskQueries.countTrashTasksForBoard(db, req.params.id);
     res.json({ count });
   } catch (error) {
@@ -724,7 +788,8 @@ router.get('/:boardId/relationships', authenticateToken, async (req, res) => {
   const { boardId } = req.params;
   try {
     const db = getRequestDatabase(req);
-    
+    if (!(await assertBoardAccess(req, res, boardId))) return;
+
     // MIGRATED: Get all relationships for tasks in this board using sqlManager
     const relationships = await boardQueries.getBoardTaskRelationships(db, boardId);
 

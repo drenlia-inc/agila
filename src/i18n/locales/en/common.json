@@ -511,7 +511,8 @@
       "suggestCreateSprint": "Create a sprint?",
       "suggestFeedDefault": "Feed default for new users?",
       "dragHint": "Drag left or right to reposition",
-      "resizeHint": "Drag to change height"
+      "resizeHint": "Drag to change height",
+      "dismiss": "Dismiss assistant"
     },
     "switchToFrench": "Switch to French",
     "switchToEnglish": "Passer en anglais",
@@ -534,18 +535,18 @@
       "introDesc3": "Shape the board to how work actually moves; use soft WIP and optional sprints when they help. You keep the process—Agila gives shared visibility and flow aids.",
       "roles": "Roles",
       "roleAdmin": "Admin: Users, boards/columns, WIP & policy, Project/Features/Sprints, Reports config, Lifecycle/trash",
-      "roleUser": "User: Work the board—create/move tasks, comments, filters, views (no Settings)",
-      "roleViewer": "Viewer: Read-only boards; can comment and save personal views (no create/edit/drag of tasks)",
+      "roleUser": "User: Work boards they belong to—create/move tasks, comments, filters, views (no Settings). Admins add them as board members.",
+      "roleViewer": "Viewer: Read-only on boards they belong to; can comment and save personal views (no create/edit/drag of tasks)",
       "firstHour": "First hour checklist",
       "firstHourSsoNote": "**Google SSO (initial setup):** If your organization uses Google OAuth, configure SSO during setup—before invites go wide. Users can sign in with Google instead of creating another password, which speeds onboarding. See Settings → System Settings → SSO (or Help → Settings → SSO).",
       "firstHourIntro": "Do these in order. Skip branding and AI until the team can move cards.",
       "firstHour2": "Invite the team — header Invite, or Settings → Users (assign User or Viewer as needed).",
-      "firstHour3": "Create one board — + on the board tabs. Prefer one board per project at first (most people work across several projects).",
+      "firstHour3": "Create one board — + on the board tabs. Prefer one board per project at first (most people work across several projects). Then add board members (double-click the tab → Add/remove members). Users and viewers only see boards they belong to; admins see every board.",
       "firstHour4": "Shape columns to match how work actually flows (example: To Do → In Progress → Review → Done). Add/reorder from the board; click a column title (admin) for name, soft WIP, and short policy notes.",
-      "firstHour5": "Optional: define finished — Settings → Project Settings → Project → finished column names (e.g. Done). Tasks in those columns are not treated as overdue.",
+      "firstHour5": "Optional: define finished — Settings → Project Settings → Project → finished column names (e.g. Done). Tasks in those columns are not treated as overdue. The toolbar toggle next to All Roles (labeled with that column name) shows or hides finished columns on every board. It is on by default; turn it off if you want to focus on active work. Your choice is saved in your preferences.",
       "firstHour6": "Tune Features — Settings → Project Settings → Features: task counts on board tabs/columns on (recommended); effort totals optional (off by default); effort unit hours or points (display only; values are not converted); highlight overdue if you want LATE badges.",
       "firstHour7": "Optional: soft board WIP — double-click the board tab → set a team-capacity limit for active work (see Soft WIP below).",
-      "firstHour8": "Optional: first sprint — only if you use dated sprints. Create it from the header sprint dropdown (admins: New sprint) or Settings → Project Settings → Sprints. In the header sprint dropdown, pick that sprint: new tasks you add are placed in that sprint (dates follow the sprint window when applicable). With All sprints selected, new tasks are not auto-assigned; use the calendar icon on a card, or select cards with their checkbox and choose Sprint in the bulk action bar to assign a sprint.",
+      "firstHour8": "Optional: first sprint — only if you use dated sprints. Create it from the header sprint dropdown (admins: New sprint) or Settings → Project Settings → Sprints. Add an optional sprint goal so the team can see what “done” means for the timebox. In the header sprint dropdown, pick that sprint: new tasks you add are placed in that sprint (dates follow the sprint window when applicable). With All sprints selected, new tasks are not auto-assigned; use the calendar icon on a card, or select cards with their checkbox and choose Sprint in the bulk action bar to assign a sprint.",
       "firstHour9": "Create a few real tasks and walk the flow once with the team. Offer the short product tour if teammates are new.",
       "shapeBoard": "Shape the board",
       "shapeColumns": "Columns that match the work",
@@ -587,7 +588,7 @@
       "planning3": "Parent/child or related links when useful—optional, not required.",
       "planning4": "Multi-select and bulk actions for sprint, tag, priority, move board, archive, delete.",
       "sprints": "If you run sprints",
-      "sprints1": "Admin creates sprints (name, start, end; mark one Active).",
+      "sprints1": "Admin creates sprints (name, start, end, optional goal; mark one Active).",
       "sprints2": "Header sprint dropdown: a specific sprint selected → new tasks land in that sprint. All sprints → new tasks stay out of any sprint; use the calendar icon on a card, or select cards with their checkbox and choose Sprint in the bulk action bar to assign a sprint. Backlog filters to work with no sprint. New tasks list you as requester and start with no assignee until someone claims them.",
       "sprints3": "Enable Reports when you want burndown and team views (Settings → Project Settings → Reporting).",
       "sprints4": "Create the next sprint before the current one ends so assignment never blocks planning.",
@@ -712,7 +713,7 @@
       "deliveryPlaybook": "Delivery playbook: See the [[tab:delivery]]Delivery[[/tab]] tab for a PO / Scrum Master first-day walkthrough (board setup, soft WIP, sprints, and rituals).",
       "sprints": "Sprints",
       "sprintsDesc1": "Sprints are time-based planning periods used to organize tasks and track progress over specific date ranges. Administrators create and manage sprints in Settings → Project Settings → Sprints.",
-      "sprintsDesc2": "Each sprint has a name, start date, end date, and optional description. One sprint can be marked as \"Active\" to serve as the default selection in filters and reports.",
+      "sprintsDesc2": "Each sprint has a name, start date, end date, optional goal, and optional description. One sprint can be marked as \"Active\" to serve as the default selection in filters and reports. The goal appears in the sprint selector so the team can see what the timebox is aiming for.",
       "sprintFilter": "Sprint filter: In the header, pick All sprints, Backlog, or a specific sprint. With a sprint selected, new tasks are added to that sprint; with All sprints, use the calendar icon on cards to assign them.",
       "clearButton": "Clear Button: Click the \"Clear\" button to deselect all team members. When no members are selected, all tasks from all members are displayed (equivalent to selecting everyone)."
     },
@@ -727,6 +728,9 @@
       "reorderColumns": "Reorder Columns: Drag column headers to reorder them according to your workflow (admin only).",
       "deleteColumns": "Delete Columns: Use the three-dot menu (⋮) in the column header and select \"Delete Column\" to remove empty columns (admin only). Move or delete tasks first.",
       "finishedColumns": "Finished Columns: Columns with names like \"Done\", \"Completed\", or \"Finished\" are automatically marked as finished. Tasks in these columns won't be considered overdue.",
+      "finishedColumnToggle": "Show or hide finished columns: Next to All Roles, a toggle labeled with the finished column name (for example Done) is on by default so you see completed work. Turn it off to hide finished columns on every board. The choice is saved in your user preferences.",
+      "boardParticipants": "Board members: Users and viewers only see boards they have been added to. Admins see all boards. After creating a board, double-click the tab and choose Add/remove members. Empty membership hides the board from non-admins.",
+      "acceptanceCriteria": "Acceptance criteria: In Task Details, add a checklist of criteria. Drag to reorder, click the pencil or double-click text to edit, Enter to save, Escape to cancel, and check items off as they are met.",
       "taskManagement": "Task Management",
       "createTasks": "Create Tasks: Click the [[icon:plus]] button in any column header to create a new task. You are set as the requester; the assignee starts empty until someone claims the work.",
       "editTasks": "Edit Tasks: Click the [[icon:pencil]] pen icon for quick edits. Open the task side panel for detailed editing with rich text, add attachments, effort, and comments.",
@@ -1110,7 +1114,32 @@
     "boardMovedToTrashMessage": "\"{{title}}\" was moved to trash. Switched to another board.",
     "boardPermanentlyDeletedTitle": "Board deleted",
     "boardPermanentlyDeletedMessage": "\"{{title}}\" was permanently deleted. Switched to another board.",
-    "boardRemovedNoReplacement": "\"{{title}}\" is no longer available."
+    "boardRemovedNoReplacement": "\"{{title}}\" is no longer available.",
+    "manageMembers": "Add/remove members",
+    "participantsTitle": "Board participants"
+  },
+  "boardParticipants": {
+    "available": "Available",
+    "onBoard": "On this board",
+    "add": "Add to board",
+    "remove": "Remove from board",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Updated.",
+    "saveFailed": "Could not save participants",
+    "loadFailed": "Could not load participants",
+    "loading": "Loading members…",
+    "noneAvailable": "No other members",
+    "noneOnBoard": "No participants yet",
+    "minOne": "Add at least one member before saving.",
+    "roleAdmin": "Admin",
+    "roleUser": "User",
+    "roleViewer": "Viewer",
+    "groupAdmins": "Admins",
+    "groupUsers": "Users",
+    "groupViewers": "Viewers",
+    "selectAll": "Select all",
+    "clearSelection": "Clear selection"
   },
   "boardLimit": {
     "title": "Board limit reached",
@@ -1332,6 +1361,8 @@
     "showAllRoles": "Show all roles (assignees, watchers, collaborators, requesters)",
     "assigneesOnly": "Assignees Only",
     "allRoles": "All Roles",
+    "hideFinished": "Hide {{column}}",
+    "showFinished": "Show {{column}}",
     "assignees": "Assignees",
     "assigneesTooltip": "Show tasks assigned to the selected team members",
     "watchers": "Watchers",
@@ -1617,7 +1648,10 @@
       "chooseSprint": "Choose Sprint",
       "active": "Active",
       "startDate": "Start Date",
-      "endDate": "End Date"
+      "endDate": "End Date",
+      "goal": "Goal",
+      "description": "Description",
+      "sprintDetails": "Sprint details"
     }
   },
   "gantt": {
@@ -1782,7 +1816,7 @@
       "adminProjectSettings": "Manage project-specific settings, workflows, and custom configurations in Project Settings.",
       "adminLicensing": "View and manage your license information, usage limits, and subscription details.",
       "systemUsagePanel": "This system usage panel shows real-time resource monitoring: RAM usage, CPU usage, and disk space. It helps you monitor your instance performance and resource consumption.",
-      "sprintSelector": "Use the Sprint Selector to filter tasks by sprint. You can view all sprints, the backlog (unassigned tasks), or a specific sprint. Admins can add a sprint here or open Settings → Project Settings → Sprints.",
+      "sprintSelector": "Use the Sprint Selector to filter tasks by sprint. You can view all sprints, the backlog (unassigned tasks), or a specific sprint. Each sprint can include an optional goal. Admins can add a sprint here or open Settings → Project Settings → Sprints.",
       "themeToggle": "Switch between light and dark mode using the theme toggle. Choose the appearance that works best for you.",
       "inviteUserButton": "As an admin, you can invite new users to join your team. Click the invite button and enter their email address to send an invitation.",
       "reportsButton": "Access the Reports section to view analytics and insights about team performance, task completion, burndown charts, and detailed task listings. Reports are available when enabled in settings.",
@@ -1886,7 +1920,7 @@
       },
       "boards": {
         "title": "Boards & columns",
-        "description": "Add boards and shape columns (including soft WIP / policy notes) to match how your team works. Rename a board by double-clicking its name in the board tabs.",
+        "description": "Add boards and shape columns (including soft WIP / policy notes) to match how your team works. Rename a board by double-clicking its name in the board tabs. Add members from the same dialog so users and viewers can see the board.",
         "guide": "Shape boards and columns here.",
         "sections": {
           "topOfScreen": "Top of the screen",
@@ -1894,6 +1928,7 @@
         },
         "fields": {
           "addBoard": "Use + to add a board for a project or team.",
+          "boardMembers": "Double-click the tab and open Add/remove members so the team can see this board.",
           "boardTitle": "Double-click a board name in the tabs to rename it.",
           "columnTitle": "Click a column title to rename it, and to set soft WIP and policy notes.",
           "columnMenu": "Open a column’s ⋮ to insert or delete columns."
@@ -1910,10 +1945,11 @@
       },
       "sprints": {
         "title": "Sprints",
-        "description": "Optional: create planning periods if you want sprint filters and burndown.",
+        "description": "Optional: create planning periods if you want sprint filters and burndown. You can add a sprint goal so the team sees the timebox focus.",
         "guide": "Create a sprint when you are ready.",
         "fields": {
-          "createSprint": "Click Create Sprint to add a planning period."
+          "createSprint": "Click Create Sprint to add a planning period.",
+          "sprintGoal": "Optional: write a sprint goal so everyone can see what this timebox is aiming for."
         }
       },
       "sso": {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useTaskDetails } from '../hooks/useTaskDetails';
 import { Task, TeamMember, CurrentUser, Attachment } from '../types';
-import { ArrowLeft, Save, Clock, User, Calendar, AlertCircle, Tag, Users, Paperclip, Edit2, X, ChevronDown, ChevronUp, GitBranch, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Clock, User, Calendar, AlertCircle, Tag, Users, Paperclip, Edit2, Plus, X, ChevronDown, ChevronUp, GitBranch, Trash2 } from 'lucide-react';
 import { parseTaskRoute } from '../utils/routingUtils';
 import { getTaskById, getMembers, getBoards, addWatcherToTask, removeWatcherFromTask, addCollaboratorToTask, removeCollaboratorFromTask, addTagToTask, removeTagFromTask, deleteComment, updateComment, fetchTaskAttachments, deleteAttachment, fetchCommentAttachments, getTaskRelationships, getAvailableTasksForRelationship, addTaskRelationship, removeTaskRelationship, getAllSprints } from '../api';
 import { useFileUpload } from '../hooks/useFileUpload';
@@ -11,6 +11,7 @@ import { loadUserPreferences, updateUserPreference } from '../utils/userPreferen
 import { truncateMemberName } from '../utils/memberUtils';
 import { formatToYYYYMMDD } from '../utils/dateUtils';
 import TextEditor from './TextEditor';
+import AcceptanceCriteriaEditor from './AcceptanceCriteriaEditor';
 import ModalManager from './layout/ModalManager';
 import Header from './layout/Header';
 import TaskFlowChart from './TaskFlowChart';
@@ -298,7 +299,11 @@ export default function TaskPage({
           url: error.config?.url,
           data: error.response?.data
         });
-        setError(t('taskPage.failedToLoad', { status: error.response?.status || error.message }));
+        if (error.response?.status === 403) {
+          setError(t('taskPage.accessDenied'));
+        } else {
+          setError(t('taskPage.failedToLoad', { status: error.response?.status || error.message }));
+        }
       } finally {
         setIsLoading(false);
       }
@@ -909,7 +914,11 @@ export default function TaskPage({
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">{t('taskPage.taskNotFoundTitle')}</h1>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            {error === t('taskPage.accessDenied')
+              ? t('taskPage.accessDeniedTitle')
+              : t('taskPage.taskNotFoundTitle')}
+          </h1>
           <p className="text-gray-600 mb-4">{error || t('taskPage.taskNotFoundMessage')}</p>
           <button
             onClick={handleBack}
@@ -1139,6 +1148,10 @@ export default function TaskPage({
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 sm:p-4 lg:p-6 min-w-0">
+              <AcceptanceCriteriaEditor taskId={task.id} locked={fieldsLocked} />
             </div>
 
             {/* Attachments */}
@@ -1435,8 +1448,25 @@ export default function TaskPage({
               {!collapsedSections.assignment && (
                 <div className="px-3 sm:px-4 lg:px-6 pb-3 sm:pb-4 lg:pb-6">
               <div className="space-y-4">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">
+                    {t('labels.assignedTo')}
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!ownMember || fieldsLocked || editedTask.memberId === ownMember.id}
+                    onClick={() => {
+                      if (!ownMember) return;
+                      void handleTaskUpdate({ memberId: ownMember.id });
+                    }}
+                    className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/30 disabled:opacity-50 flex items-center justify-center"
+                    aria-label={t('labels.addMe')}
+                    title={t('labels.addMe')}
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
                 <MemberPicker
-                  label={t('labels.assignedTo')}
                   members={members}
                   value={editedTask.memberId}
                   onChange={(memberId) => handleTaskUpdate({ memberId })}
@@ -1446,8 +1476,25 @@ export default function TaskPage({
                   disabled={fieldsLocked}
                 />
 
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">
+                    {t('taskPage.requestedBy')}
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!ownMember || fieldsLocked || editedTask.requesterId === ownMember.id}
+                    onClick={() => {
+                      if (!ownMember) return;
+                      void handleTaskUpdate({ requesterId: ownMember.id });
+                    }}
+                    className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/30 disabled:opacity-50 flex items-center justify-center"
+                    aria-label={t('labels.addMe')}
+                    title={t('labels.addMe')}
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
                 <MemberPicker
-                  label={t('taskPage.requestedBy')}
                   members={members}
                   value={editedTask.requesterId}
                   onChange={(memberId) => handleTaskUpdate({ requesterId: memberId })}
@@ -1459,7 +1506,29 @@ export default function TaskPage({
                 
                 {/* Watchers */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('labels.watchers')}</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {t('labels.watchers')}
+                    </label>
+                    <button
+                      type="button"
+                      disabled={
+                        !ownMember ||
+                        taskWatchers.some((w) => w.id === ownMember.id) ||
+                        (fieldsLocked && !viewerWatchOk)
+                      }
+                      onClick={async () => {
+                        if (!ownMember) return;
+                        if (taskWatchers.some((w) => w.id === ownMember.id)) return;
+                        await handleAddWatcher(ownMember.id);
+                      }}
+                      className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/30 disabled:opacity-50 flex items-center justify-center"
+                      aria-label={t('labels.addMe')}
+                      title={t('labels.addMe')}
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-1.5">
                       {taskWatchers.map((watcher) => (
@@ -1533,7 +1602,29 @@ export default function TaskPage({
 
                 {/* Collaborators */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('labels.collaborators')}</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {t('labels.collaborators')}
+                    </label>
+                    <button
+                      type="button"
+                      disabled={
+                        !ownMember ||
+                        taskCollaborators.some((c) => c.id === ownMember.id) ||
+                        fieldsLocked
+                      }
+                      onClick={async () => {
+                        if (!ownMember) return;
+                        if (taskCollaborators.some((c) => c.id === ownMember.id)) return;
+                        await handleAddCollaborator(ownMember.id);
+                      }}
+                      className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-200 hover:bg-emerald-200 dark:hover:bg-emerald-900/30 disabled:opacity-50 flex items-center justify-center"
+                      aria-label={t('labels.addMe')}
+                      title={t('labels.addMe')}
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-1.5">
                       {taskCollaborators.map((collaborator) => (
@@ -1717,6 +1808,7 @@ export default function TaskPage({
                   label={t('labels.priority')}
                   priorities={availablePriorities}
                   value={editedTask.priorityId}
+                  allowClear={false}
                   disabled={fieldsLocked}
                   onChange={(priorityId, priorityName) =>
                     handleTaskUpdate({

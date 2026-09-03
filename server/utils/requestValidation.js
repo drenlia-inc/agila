@@ -12,6 +12,8 @@ import {
   FILTER_NAME_MAX_LENGTH,
   SPRINT_NAME_MAX_LENGTH,
   SPRINT_DESCRIPTION_MAX_LENGTH,
+  SPRINT_GOAL_MAX_LENGTH,
+  ACCEPTANCE_CRITERION_MAX_LENGTH,
   PRIORITY_NAME_MAX_LENGTH
 } from '../constants/fieldLimits.js';
 
@@ -260,6 +262,24 @@ export const reorderBoardBodySchema = z.object({
   newPosition: z.union([z.number(), z.string().max(32)])
 }).passthrough();
 
+export const updateBoardParticipantsBodySchema = z.object({
+  userIds: z.array(idSchema).min(1).max(500)
+});
+
+export const createAcceptanceCriterionBodySchema = z.object({
+  text: z.string().min(1).max(ACCEPTANCE_CRITERION_MAX_LENGTH)
+});
+
+export const updateAcceptanceCriterionBodySchema = z.object({
+  text: z.string().min(1).max(ACCEPTANCE_CRITERION_MAX_LENGTH).optional(),
+  isDone: booleanish.optional(),
+  position: z.union([z.number(), z.string().max(32)]).optional()
+});
+
+export const reorderAcceptanceCriteriaBodySchema = z.object({
+  orderedIds: z.array(idSchema).min(1).max(200)
+});
+
 export const createColumnBodySchema = z.object({
   id: idSchema,
   title: z.string().min(1, 'Column title is required').max(COLUMN_TITLE_MAX_LENGTH),
@@ -351,6 +371,7 @@ export const createSprintBodySchema = z.object({
   end_date: z.string().min(1, 'End date is required').max(64),
   is_active: booleanish,
   description: z.union([z.string().max(SPRINT_DESCRIPTION_MAX_LENGTH), z.null()]).optional(),
+  goal: z.union([z.string().max(SPRINT_GOAL_MAX_LENGTH), z.null()]).optional(),
   transfer_active_work: booleanish.optional()
 }).passthrough();
 

@@ -453,6 +453,22 @@ class WebSocketClient {
     this.addEventListener('board-reordered', callback);
   }
 
+  onBoardParticipantsUpdated(callback: (data: any) => void) {
+    this.addEventListener('board-participants-updated', callback);
+  }
+
+  offBoardParticipantsUpdated(callback?: (data: any) => void) {
+    this.removeEventListener('board-participants-updated', callback);
+  }
+
+  onAcceptanceCriteriaUpdated(callback: (data: any) => void) {
+    this.addEventListener('acceptance-criteria-updated', callback);
+  }
+
+  offAcceptanceCriteriaUpdated(callback?: (data: any) => void) {
+    this.removeEventListener('acceptance-criteria-updated', callback);
+  }
+
   onTaskWatcherAdded(callback: (data: any) => void) {
     this.addEventListener('task-watcher-added', callback);
   }

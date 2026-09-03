@@ -18,7 +18,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **Multiple view modes**: Kanban (visual board), List (table format), Gantt (timeline), and Calendar (month/week/day) views
 - **Real-time collaboration** - see changes instantly as team members work
 - **User authentication** with local accounts and Google OAuth support
-- **Role-based access control** (Admin/User/Viewer permissions)
+- **Role-based access control** (Admin/User/Viewer) and **board membership** (users/viewers only see boards they belong to)
 - **Theme support** - Light and dark mode
 
 ### AI Agent (optional)
@@ -30,7 +30,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - Configure in **Settings → System Settings → AI** (enable AI, provider, model, runner URL/token). Details: [Documentation.md — AI Agent](/Documentation.md#ai-agent) and [`docs/AI_INTEGRATION.md`](/docs/AI_INTEGRATION.md)
 
 ### Task Management
-- **Task management** with priorities, comments, and file attachments
+- **Task management** with priorities, comments, file attachments, and an **acceptance criteria** checklist
 - **Rich text editing** for task descriptions and comments with formatting, links, and embedded content
 - **Task relationships** - Link tasks as parent-child or related relationships
 - **Task view modes** - Full, Preview, and Minimal card density for optimal screen space
@@ -39,12 +39,13 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **Multi-select & bulk actions** - Select tasks (per card or Select all per column); bulk tag, copy, sprint, priority, archive, delete, and move to another board; drag multi-selected tasks between columns
 - **Task watchers & collaborators** - Add team members to watch or collaborate on tasks
 - **Requesters** - Track who requested each task
-- **Sprint association** - Organize tasks by time-based planning periods
+- **Sprint association** - Organize tasks by time-based planning periods, with an optional **sprint goal**
 - **Soft delete & trash** - Deleted tasks go to board trash; restore or permanently purge
 ### Team & Collaboration
 - **Team management** with color-coded member assignments
 - **Activity feed** - Draggable panel showing real-time changes, comments, and team activity
 - **Member filtering** - Filter tasks by assignees, watchers, collaborators, requesters, and system tasks
+- **Finished-column toggle** - Show or hide Done/Completed columns on every board (on by default; saved in your preferences)
 
 ### Views & Navigation
 - **Kanban View** - Visual board with drag-and-drop between columns (including cross-board drops onto board tabs)
@@ -105,16 +106,18 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
    4. Add sprints in **Project Settings → Sprints**
    5. Review Reports Settings
 3. Create team members in the Users Tab
-4. Go to Kanban View and set up your boards and columns
-5. Start creating and managing tasks
-6. Configure Google OAuth (optional) in Settings → System Settings → SSO
-7. Configure AI Agent (optional) in Settings → System Settings → AI — for coding jobs, users then add Profile → Dev credentials
+4. Go to Kanban View and set up your boards and columns. After creating a board, double-click the tab and add **board members** so users and viewers can see it
+5. Start creating and managing tasks (add **acceptance criteria** on the task details panel when a card needs a definition of done)
+6. Optional: create a sprint with a **sprint goal** from the header dropdown or Settings → Project Settings → Sprints
+7. Configure Google OAuth (optional) in Settings → System Settings → SSO
+8. Configure AI Agent (optional) in Settings → System Settings → AI — for coding jobs, users then add Profile → Dev credentials
 
 ## Permissions
 
 | Action | Admin | User | Viewer |
 |--------|-------|------|--------|
-| View kanban boards | ✓ | ✓ | ✓ |
+| View kanban boards (users/viewers: only boards they belong to) | ✓ | ✓ | ✓ |
+| Manage board members | ✓ | ✗ | ✗ |
 | View List, Gantt, and Calendar views | ✓ | ✓ | ✓ |
 | Create/edit/delete tasks | ✓ | ✓ | ✗ |
 | Add comments and attachments | ✓ | ✓ | ✓ |

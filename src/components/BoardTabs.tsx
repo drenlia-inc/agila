@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, HelpCircle } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, HelpCircle, Users } from 'lucide-react';
 import { Board, Task } from '../types';
 import { useSortable, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -29,7 +29,7 @@ import {
 } from '../utils/kanbanChromeVisibility';
 import { getBoardTrashCount } from '../api';
 import { useIsMobileViewport } from '../hooks/useIsMobileViewport';
-import { boardTabIdUnderPointer } from '../utils/boardTabStrip';
+import { boardTabIdUnderPointer, scrollBoardTabIntoView } from '../utils/boardTabStrip';
 import { lastKanbanPointer } from '../utils/kanbanPointer';
 
 function parseBoardWipLimitValue(raw: string): number | null {
@@ -223,6 +223,7 @@ interface BoardTabsProps {
   trashCount?: number;
   trashOpen?: boolean;
   onToggleTrash?: () => void;
+  onManageParticipants?: (boardId: string) => void;
 }
 
 // Droppable Board Tab Component for cross-board task drops
@@ -332,7 +333,7 @@ const DroppableBoardTab: React.FC<{
             );
           })()}
           {renderBoardEffortPill(effort, siteSettings, effortTooltip)}
-          <span className="truncate max-w-[150px] pointer-events-none">{board.title}</span>
+          <span className="truncate max-w-[18rem] pointer-events-none">{board.title}</span>
         </div>
       </div>
     </KanbanChromeTooltip>
@@ -497,7 +498,7 @@ const SortableBoardTab: React.FC<{
           }
           wrapperClassName="min-w-0"
         >
-          <span className="truncate max-w-[10rem]">{board.title}</span>
+          <span className="truncate max-w-[18rem]">{board.title}</span>
         </KanbanChromeTooltip>
 
         {/* Effort + trash share a tight cluster (column-style density) */}
@@ -599,6 +600,7 @@ const RegularBoardTab: React.FC<{
     <div className="relative group">
       <button
         type="button"
+        data-board-tab-id={board.id}
         onClick={onSelect}
         className={`${isSelected ? tabTrackActive : tabTrackInactive} w-full text-left`}
       >
@@ -622,7 +624,7 @@ const RegularBoardTab: React.FC<{
             label={isSelected ? '' : t('boardTabs.clickToSelectBoard')}
             wrapperClassName="min-w-0"
           >
-            <span className="truncate max-w-[11rem]">{board.title}</span>
+            <span className="truncate max-w-[18rem]">{board.title}</span>
           </KanbanChromeTooltip>
           {renderBoardEffortPill(effort, siteSettings, effortTooltip)}
         </div>
@@ -652,6 +654,7 @@ export default function BoardTabs({
   onTaskDropOnBoard,
   siteSettings,
   trashCount = 0,
+  onManageParticipants,
   trashOpen = false,
   onToggleTrash,
 }: BoardTabsProps) {
@@ -778,6 +781,21 @@ export default function BoardTabs({
     
     return () => clearTimeout(timeoutId);
   }, [boards]);
+
+  const lastScrolledBoardRef = useRef<string | null>(null);
+  const boardIdsKey = boards.map((board) => board.id).join(',');
+  useLayoutEffect(() => {
+    if (!selectedBoard || draggedTask) return;
+    const instant = lastScrolledBoardRef.current === null;
+    lastScrolledBoardRef.current = selectedBoard;
+    const reveal = (behavior: ScrollBehavior) => {
+      scrollBoardTabIntoView(selectedBoard, behavior);
+      checkScrollState();
+    };
+    reveal(instant ? 'auto' : 'smooth');
+    const timeoutId = window.setTimeout(() => reveal(instant ? 'auto' : 'smooth'), 120);
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedBoard, boardIdsKey, draggedTask]);
 
   // Handle drag end for board reordering (Admin only)
   const handleDragEnd = (event: DragEndEvent) => {
@@ -1033,7 +1051,7 @@ export default function BoardTabs({
         role="dialog"
         aria-modal="true"
         aria-label={t('boardTabs.editBoard')}
-        className="fixed z-[9999] w-[13.75rem] space-y-2 rounded-lg border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-600 dark:bg-gray-800"
+        className="fixed z-[9999] w-[15rem] space-y-2 rounded-lg border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-600 dark:bg-gray-800"
         style={{ top: editMenuPosition.top, left: editMenuPosition.left }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
@@ -1112,6 +1130,21 @@ export default function BoardTabs({
             </KanbanChromeTooltip>
           )}
         </div>
+        {onManageParticipants && (
+          <button
+            type="button"
+            onClick={() => {
+              const boardId = editingBoardId;
+              cancelBoardEdit();
+              if (boardId) onManageParticipants(boardId);
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-gray-200 dark:hover:bg-gray-700"
+            data-help-target="board-members"
+          >
+            <Users size={14} />
+            {t('boardTabs.manageMembers')}
+          </button>
+        )}
       </form>,
       document.body
     );

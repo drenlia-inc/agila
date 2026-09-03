@@ -63,6 +63,7 @@ export const useTaskFilters = ({
   const [includeRequesters, setIncludeRequesters] = useState(userPrefs.includeRequesters);
   const [includeSystem, setIncludeSystem] = useState(userPrefs.includeSystem || false);
   const [showAgentTasks, setShowAgentTasks] = useState(userPrefs.showAgentTasks !== false);
+  const [showFinishedColumns, setShowFinishedColumns] = useState(userPrefs.showFinishedColumns !== false);
   
   // Computed: Check if we're in "All Roles" mode (all main role checkboxes checked)
   const isAllModeActive = useMemo(() => {
@@ -554,6 +555,11 @@ export const useTaskFilters = ({
     }
   };
 
+  const handleToggleShowFinishedColumns = (show: boolean) => {
+    setShowFinishedColumns(show);
+    updateCurrentUserPreference('showFinishedColumns', show);
+  };
+
   const handleToggleShowAgentTasks = (show: boolean) => {
     setShowAgentTasks(show);
     updateCurrentUserPreference('showAgentTasks', show);
@@ -577,6 +583,7 @@ export const useTaskFilters = ({
     includeRequesters,
     includeSystem,
     showAgentTasks,
+    showFinishedColumns,
     isAllModeActive,
     taskViewMode,
     viewMode,
@@ -599,6 +606,7 @@ export const useTaskFilters = ({
     setIncludeRequesters,
     setIncludeSystem,
     setShowAgentTasks,
+    setShowFinishedColumns,
     setTaskViewMode,
     setViewMode,
     setIsSearchActive,
@@ -628,6 +636,7 @@ export const useTaskFilters = ({
     handleToggleRequesters,
     handleToggleSystem,
     handleToggleShowAgentTasks,
+    handleToggleShowFinishedColumns,
     clearVisibilityObstructingFilters,
   };
 };

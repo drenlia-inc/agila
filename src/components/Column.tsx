@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { Plus, MoreVertical, X, GripVertical, Archive, AlertTriangle, ScrollText, Trash2, HelpCircle } from 'lucide-react';
@@ -27,11 +27,16 @@ import type { TaskRelationshipSummary } from '../utils/taskRelationshipSummary';
 import { getTaskRelationshipSummary } from '../utils/taskRelationshipSummary';
 import {
   estimateTaskContentHeight,
+  estimateTaskRowHeight,
   DRAG_OVERSCAN,
   INSERTION_PREVIEW_HEIGHT_PX,
   TASK_ROW_GAP_PX,
   useColumnVirtualRange,
 } from '../hooks/useColumnVirtualRange';
+import {
+  clearColumnDragLayout,
+  setColumnDragLayout,
+} from '../utils/columnVirtualLayout';
 import {
   KANBAN_COLUMN_HEADER_PORTAL_STYLE,
   useStickyKanbanColumnHeader,
@@ -942,6 +947,10 @@ function KanbanColumn({
     }
 
     const { startIndex, endIndex, totalHeight, offsetForIndex, windowed } = virtualRange;
+    // Same parent as the window rows (virtual-list-root). A sibling host would
+    // remount useSortable. After drag start these stay at the end of the list
+    // so a fast scroll cannot move them in/out of the window.
+    const pinDraggedAtListEnd = windowed && collapseOrigin && draggedLayoutIndices.size > 0;
 
     const pushTaskRow = (index: number, top: number | null) => {
       const task = tasksForLayout[index];
@@ -1100,7 +1109,15 @@ function KanbanColumn({
     };
 
     for (let index = startIndex; index < endIndex; index++) {
+      if (pinDraggedAtListEnd && draggedLayoutIndices.has(index)) continue;
       pushTaskRow(index, windowed ? offsetForIndex(index) : null);
+    }
+
+    if (pinDraggedAtListEnd) {
+      const pinned = [...draggedLayoutIndices].sort((a, b) => a - b);
+      for (const index of pinned) {
+        if (index >= 0) pushTaskRow(index, null);
+      }
     }
 
     if (insertIndex >= withoutDraggedCount) {
@@ -1136,6 +1153,7 @@ function KanbanColumn({
       return [
         <div
           key="virtual-list-root"
+          data-kanban-virtual-list
           style={{ position: 'relative', height: totalHeight, width: '100%' }}
         >
           {taskElements}
@@ -1145,6 +1163,58 @@ function KanbanColumn({
 
     return taskElements;
     }, [filteredTasks, members, onRemoveTask, onEditTask, onCopyTask, onTaskDragStart, onTaskDragEnd, onSelectTask, draggedTask, dragPreview, column.id, displayTitle, isDragging, t, taskViewMode, currentUser, siteSettings, column.is_finished, column.is_archived, draggedColumn, availablePriorities, selectedTask, availableTags, onTagAdd, onTagRemove, boards, columns, selectedSprintId, availableSprints, isLinkingMode, linkingSourceTask, onStartLinking, onFinishLinking, hoveredLinkTask, onLinkToolHover, onLinkToolHoverEnd, getTaskRelationshipType, onUnlinkRelatedTask, relationSummaryByTaskId, checkedTaskIds, onToggleTaskChecked, isMultiSelectDragLocked, draggedTaskIds, tasksForLayout, insertIndex, isOriginPlaceholder, originIndex, draggedLayoutIndices, collapseOrigin, remapLayoutIndex, withoutDraggedCount, virtualRange, canMutate, reportRowHeight, orderedVisibleTaskIds]);
+
+  useLayoutEffect(() => {
+    if (!virtualRange.windowed) {
+      clearColumnDragLayout(column.id);
+      return;
+    }
+    const list = taskListRef.current;
+    if (!list) {
+      clearColumnDragLayout(column.id);
+      return;
+    }
+    const virtRoot = list.querySelector('[data-kanban-virtual-list]');
+    const listEl = virtRoot instanceof HTMLElement ? virtRoot : list;
+
+    const origForLayout = (layoutIndex: number): number => {
+      for (let i = 0; i < tasksForLayout.length; i++) {
+        if (remapLayoutIndex(i) === layoutIndex) return i;
+      }
+      return -1;
+    };
+
+    setColumnDragLayout(column.id, {
+      layoutCount: withoutDraggedCount,
+      windowed: true,
+      listEl,
+      offsetOfLayoutIndex: (layoutIndex) => {
+        const orig = origForLayout(layoutIndex);
+        if (orig < 0) return virtualRange.offsetForIndex(tasksForLayout.length);
+        let top = virtualRange.offsetForIndex(orig);
+        if (insertIndex === layoutIndex) top += INSERTION_PREVIEW_HEIGHT_PX;
+        return top;
+      },
+      heightOfLayoutIndex: (layoutIndex) => {
+        const orig = origForLayout(layoutIndex);
+        if (orig < 0) return estimateTaskRowHeight(taskViewMode);
+        const task = tasksForLayout[orig];
+        const cached = task?.id ? heightCacheRef.current.get(task.id) : undefined;
+        return (cached ?? estimateTaskContentHeight(taskViewMode)) + TASK_ROW_GAP_PX;
+      },
+    });
+  }, [
+    column.id,
+    withoutDraggedCount,
+    tasksForLayout,
+    remapLayoutIndex,
+    virtualRange,
+    insertIndex,
+    taskViewMode,
+    heightVersion,
+  ]);
+
+  useEffect(() => () => clearColumnDragLayout(column.id), [column.id]);
 
   const setColumnRef = (node: HTMLElement | null) => {
     columnElRef.current = node;
@@ -1986,6 +2056,7 @@ function KanbanColumn({
                 ref={taskListRef}
                 data-kanban-task-list
                 data-layout-count={withoutDraggedCount}
+                data-kanban-windowed={virtualRange.windowed ? 'true' : undefined}
               >
                 {renderTaskList()}
               </div>

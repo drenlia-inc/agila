@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { DndContext, DragOverlay, useDroppable } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useKanbanModifierKeys } from '../../hooks/useKanbanModifierKeys';
 import { useAppHeaderStickyTop } from '../../hooks/useAppHeaderStickyTop';
@@ -57,9 +57,11 @@ import {
   writeBoardTrashOpenPreference,
 } from '../../utils/boardTrashEvents';
 import { getTaskSprintId, taskMatchesSelectedSprint } from '../../utils/columnFilters';
-import { isArchivedColumnFlag } from '../../utils/columnUtils';
+import { isArchivedColumnFlag, applyFinishedColumnVisibility, isFinishedColumnFlag } from '../../utils/columnUtils';
 import { isKanbanPageScrolledDown, scrollKanbanPageToTopFastSmooth } from '../../utils/kanbanScroll';
 import { onHelpReveal, takeHelpReveal } from '../../utils/helpGoThere';
+import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
+import BoardParticipantsEditor from '../BoardParticipantsEditor';
 
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
@@ -124,6 +126,8 @@ interface KanbanPageProps {
   onEditOwnProfile?: (opts?: { focus?: 'displayName' | 'bio' }) => void;
   showAgentTasks?: boolean;
   onToggleShowAgentTasks?: (show: boolean) => void;
+  showFinishedColumns?: boolean;
+  onToggleShowFinishedColumns?: (show: boolean) => void;
   onTaskViewModeChange: (mode: TaskViewMode) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onToggleSearch: () => void;
@@ -297,6 +301,8 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   onEditOwnProfile,
   showAgentTasks = true,
   onToggleShowAgentTasks,
+  showFinishedColumns = true,
+  onToggleShowFinishedColumns,
   onTaskViewModeChange,
   viewMode,
   onViewModeChange,
@@ -422,6 +428,9 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   const [trashTasks, setTrashTasks] = useState<Task[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const isAdmin = !!currentUser?.roles?.includes('admin');
+  const [participantsBoardId, setParticipantsBoardId] = useState<string | null>(null);
+  const [participantCountByBoard, setParticipantCountByBoard] = useState<Record<string, number>>({});
+  useEscapeDismiss(() => setParticipantsBoardId(null), { enabled: participantsBoardId != null });
 
   const setTrashOpenPersisted = useCallback(
     (open: boolean | ((prev: boolean) => boolean)) => {
@@ -895,17 +904,27 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   // Column filtering logic - memoized to prevent unnecessary re-renders
   const visibleColumnsForCurrentBoard = useMemo(() => {
     if (!selectedBoard) return [];
-    // If there's saved visibility preference, use it
-    if (boardColumnVisibility[selectedBoard]) {
-      return boardColumnVisibility[selectedBoard];
-    }
-    // Otherwise, default to all columns EXCEPT archived ones
-    return Object.keys(columns).filter(columnId => {
-      const column = columns[columnId];
-      // Hide archived columns by default (is_archived can be boolean true or number 1)
-      return !(column.is_archived === true || column.is_archived === 1);
-    });
-  }, [selectedBoard, columns, boardColumnVisibility]);
+    const base = boardColumnVisibility[selectedBoard]
+      ? boardColumnVisibility[selectedBoard]
+      : Object.keys(columns).filter((columnId) => {
+          const column = columns[columnId];
+          return !(column.is_archived === true || column.is_archived === 1);
+        });
+    return applyFinishedColumnVisibility(base, columns, showFinishedColumns);
+  }, [selectedBoard, columns, boardColumnVisibility, showFinishedColumns]);
+
+  const finishedColumns = useMemo(
+    () =>
+      Object.values(columns).filter(
+        (column) => column.is_finished === true || column.is_finished === 1
+      ),
+    [columns]
+  );
+  const finishedColumnTitle = finishedColumns[0]?.title || null;
+
+  const handleToggleShowFinished = (show: boolean) => {
+    onToggleShowFinishedColumns?.(show);
+  };
 
   const activeFilterTooltip = useMemo(() => {
     const hasSearchCriteria = hasNonLinkSearchFilters(searchFilters);
@@ -992,6 +1011,15 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
   const columnsContainerRef = useRef<HTMLDivElement>(null);
 
   const handleColumnVisibilityChange = (boardId: string, visibleColumns: string[]) => {
+    const finishedOnBoard = Object.values(columns).filter(
+      (column) => isFinishedColumnFlag(column) && !isArchivedColumnFlag(column)
+    );
+    if (finishedOnBoard.length > 0 && onToggleShowFinishedColumns) {
+      const showingFinished = finishedOnBoard.every((column) => visibleColumns.includes(column.id));
+      if (showingFinished !== showFinishedColumns) {
+        onToggleShowFinishedColumns(showingFinished);
+      }
+    }
     if (viewMode === 'kanban') {
       const prev = visibleColumnsForCurrentBoard;
       const addedArchive = visibleColumns.filter(
@@ -1043,7 +1071,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     
     
     return fullyFiltered;
-  }, [filteredColumns, selectedBoard, boardColumnVisibility]);
+  }, [filteredColumns, selectedBoard, boardColumnVisibility, visibleColumnsForCurrentBoard]);
 
   // Count tasks assigned to system user across ALL boards
   const getSystemTaskCount = useMemo(() => {
@@ -1487,6 +1515,9 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               currentUser={currentUser}
               systemTaskCount={getSystemTaskCount}
               onEditOwnProfile={onEditOwnProfile}
+              finishedColumnTitle={finishedColumnTitle}
+              showFinishedColumns={showFinishedColumns}
+              onToggleShowFinished={handleToggleShowFinished}
             />
           </div>
           <div className="hidden md:flex w-[168px] shrink-0">
@@ -1567,6 +1598,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           trashCount={trashCount}
           trashOpen={trashOpen}
           onToggleTrash={handleToggleTrash}
+          onManageParticipants={isAdmin ? setParticipantsBoardId : undefined}
         />
       </div>
 
@@ -1812,10 +1844,34 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               {Object.values(getFilteredColumnsForDisplay).length > 0 &&
                 Object.values(getFilteredColumnsForDisplay).every(
                   (col) => !(col.tasks && col.tasks.length > 0)
+                ) &&
+                !(
+                  isAdmin &&
+                  selectedBoard &&
+                  (participantCountByBoard[selectedBoard] ??
+                    boards.find((board) => board.id === selectedBoard)?.participantCount ??
+                    0) === 0
                 ) && (
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-2 px-1">
                   {t('column.emptyBoardHint')}
                 </p>
+              )}
+              {isAdmin &&
+                selectedBoard &&
+                (participantCountByBoard[selectedBoard] ??
+                  boards.find((board) => board.id === selectedBoard)?.participantCount ??
+                  0) === 0 && (
+                <div className="mb-4 max-w-4xl rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                  <p className="mb-3 text-sm text-slate-600 dark:text-gray-300">
+                    {t('column.emptyParticipantsHint')}
+                  </p>
+                  <BoardParticipantsEditor
+                    boardId={selectedBoard}
+                    onSaved={(count) =>
+                      setParticipantCountByBoard((prev) => ({ ...prev, [selectedBoard]: count }))
+                    }
+                  />
+                </div>
               )}
               {/* Columns Navigation Container */}
           <div className="relative kanban-columns-container">
@@ -2140,6 +2196,43 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
         </div>
       )}
 
+      {participantsBoardId && (
+        <div
+          className="fixed inset-0 z-[10050] flex items-center justify-center bg-slate-900/45 p-4"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setParticipantsBoardId(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('boardTabs.participantsTitle', { ns: 'common' })}
+            className="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-gray-100">
+                {t('boardTabs.participantsTitle', { ns: 'common' })}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setParticipantsBoardId(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-gray-700"
+                aria-label={t('buttons.close', { ns: 'common' })}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <BoardParticipantsEditor
+              boardId={participantsBoardId}
+              onSaved={(count) => {
+                setParticipantCountByBoard((prev) => ({ ...prev, [participantsBoardId]: count }));
+                setParticipantsBoardId(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
 
     </>
   );

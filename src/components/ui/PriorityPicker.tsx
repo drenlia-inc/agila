@@ -25,7 +25,7 @@ export default function PriorityPicker({
   onChange,
   label,
   className = '',
-  allowClear = true,
+  allowClear = false,
   disabled = false,
 }: PriorityPickerProps) {
   const { t } = useTranslation('tasks');

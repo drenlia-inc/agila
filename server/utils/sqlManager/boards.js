@@ -6,15 +6,30 @@ import { wrapQuery } from '../queryLogger.js';
  * @param {Database} db - Database connection
  * @returns {Promise<Array>} Array of board objects
  */
-export async function getAllBoards(db) {
+export async function getAllBoards(db, access = null) {
+  const participantCountSql = `(
+    SELECT COUNT(*)::int FROM board_participants bp WHERE bp.board_id = boards.id
+  ) AS participant_count`;
+  if (access && !access.isAdmin && access.userId) {
+    const query = `
+      SELECT boards.*, ${participantCountSql}
+      FROM boards
+      WHERE boards.deleted_at IS NULL
+        AND EXISTS (
+          SELECT 1 FROM board_participants bp
+          WHERE bp.board_id = boards.id AND bp.user_id = $1
+        )
+      ORDER BY boards.position ASC
+    `;
+    return wrapQuery(db.prepare(query), 'SELECT').all(access.userId);
+  }
   const query = `
-    SELECT * FROM boards 
-    WHERE deleted_at IS NULL
-    ORDER BY position ASC
+    SELECT boards.*, ${participantCountSql}
+    FROM boards
+    WHERE boards.deleted_at IS NULL
+    ORDER BY boards.position ASC
   `;
-  
-  const stmt = wrapQuery(db.prepare(query), 'SELECT');
-  return await stmt.all();
+  return wrapQuery(db.prepare(query), 'SELECT').all();
 }
 
 /**

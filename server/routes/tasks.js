@@ -5,9 +5,11 @@ import { logTaskActivity, generateTaskUpdateDetails, logBulkTaskFieldActivity } 
 import * as reportingLogger from '../services/reportingLogger.js';
 import { TASK_ACTIONS } from '../constants/activityActions.js';
 import { authenticateToken, requireRole, userCanMutate } from '../middleware/auth.js';
+import { assertBoardAccess, assertTaskBoardAccess, userHasAdminRole } from '../middleware/boardAccess.js';
 import { checkTaskLimit } from '../middleware/licenseCheck.js';
 import notificationService from '../services/notificationService.js';
 import { getTranslator, t } from '../utils/i18n.js';
+import { isAgentMemberId } from '../constants/agentIdentity.js';
 import { getRequestDatabase } from '../middleware/tenantRouting.js';
 import { serverDebug } from '../utils/serverDebug.js';
 import { dbTransaction } from '../utils/dbAsync.js';
@@ -409,7 +411,10 @@ const logReportingActivity = async (db, eventType, userId, taskId, metadata = {}
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    const tasks = await taskQueries.getAllTasks(db);
+    const tasks = await taskQueries.getAllTasks(db, {
+      userId: req.user.id,
+      isAdmin: userHasAdminRole(req.user),
+    });
     
     // Convert snake_case to camelCase for frontend
     const tasksWithCamelCase = tasks.map(task => ({
@@ -479,6 +484,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
       const tTranslator = await getTranslator(db);
       return res.status(404).json({ error: tTranslator('errors.taskNotFound') });
     }
+
+    const taskBoardId = task.boardId || task.boardid;
+    if (taskBoardId && !(await assertBoardAccess(req, res, taskBoardId))) return;
     
     taskHttpLog(dbgHttp, '✅ [TASK API] Found task:', { 
       id: task.id, 
@@ -603,6 +611,7 @@ router.post('/', authenticateToken, checkTaskLimit, async (req, res) => {
   
   try {
     const db = getRequestDatabase(req);
+    if (task.boardId && !(await assertBoardAccess(req, res, task.boardId))) return;
     const dbgHttp = await serverDebug(db, 'SERVER_DEBUG_HTTP');
     const now = new Date().toISOString();
     
@@ -644,6 +653,9 @@ router.post('/', authenticateToken, checkTaskLimit, async (req, res) => {
     const tTranslator = await getTranslator(db);
     if (task.memberId && (await memberQueries.isReadOnlyViewerMember(db, task.memberId))) {
       return res.status(400).json({ error: tTranslator('errors.cannotAssignViewer') });
+    }
+    if (isAgentMemberId(task.requesterId)) {
+      return res.status(400).json({ error: tTranslator('errors.cannotUseAgentAsRequester') });
     }
     
     // MIGRATED: Create the task using sqlManager
@@ -752,6 +764,7 @@ router.post('/add-at-top', authenticateToken, checkTaskLimit, async (req, res) =
   
   try {
     const db = getRequestDatabase(req);
+    if (task.boardId && !(await assertBoardAccess(req, res, task.boardId))) return;
     const dbgHttp = await serverDebug(db, 'SERVER_DEBUG_HTTP');
     const now = new Date().toISOString();
     
@@ -793,6 +806,9 @@ router.post('/add-at-top', authenticateToken, checkTaskLimit, async (req, res) =
     const tTranslator = await getTranslator(db);
     if (task.memberId && (await memberQueries.isReadOnlyViewerMember(db, task.memberId))) {
       return res.status(400).json({ error: tTranslator('errors.cannotAssignViewer') });
+    }
+    if (isAgentMemberId(task.requesterId)) {
+      return res.status(400).json({ error: tTranslator('errors.cannotUseAgentAsRequester') });
     }
 
     await dbTransaction(db, async () => {
@@ -931,6 +947,8 @@ router.post('/copy', authenticateToken, checkTaskLimit, async (req, res) => {
     if (!originalTask) {
       return res.status(404).json({ error: tTranslator('errors.taskNotFound') });
     }
+    const originalBoardId = originalTask.boardid || originalTask.boardId;
+    if (originalBoardId && !(await assertBoardAccess(req, res, originalBoardId))) return;
     
     // Generate new task ID and ticket number
     const newTaskId = crypto.randomUUID();
@@ -976,7 +994,10 @@ router.post('/copy', authenticateToken, checkTaskLimit, async (req, res) => {
       description: originalTask.description || '',
       ticket: newTicket,
       memberId: originalTask.memberid || originalTask.memberId || null,
-      requesterId: originalTask.requesterid || originalTask.requesterId || null,
+      requesterId: (() => {
+        const copiedRequester = originalTask.requesterid || originalTask.requesterId || null;
+        return isAgentMemberId(copiedRequester) ? null : copiedRequester;
+      })(),
       startDate: originalStartDate || defaultStartDate,
       dueDate: originalTask.duedate || originalTask.dueDate || originalStartDate || defaultStartDate,
       effort: originalTask.effort != null ? originalTask.effort : 0,
@@ -1011,7 +1032,7 @@ router.post('/copy', authenticateToken, checkTaskLimit, async (req, res) => {
       
       // Copy watchers
       for (const watcher of originalWatchers) {
-        if (watcher && watcher.id) {
+        if (watcher && watcher.id && !isAgentMemberId(watcher.id)) {
           const memberId = watcher.id;
           await helpers.addWatcher(db, newTaskId, memberId);
         }
@@ -1019,7 +1040,7 @@ router.post('/copy', authenticateToken, checkTaskLimit, async (req, res) => {
       
       // Copy collaborators
       for (const collaborator of originalCollaborators) {
-        if (collaborator && collaborator.id) {
+        if (collaborator && collaborator.id && !isAgentMemberId(collaborator.id)) {
           const memberId = collaborator.id;
           await helpers.addCollaborator(db, newTaskId, memberId);
         }
@@ -1148,11 +1169,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
         code: 'task_in_trash',
       });
     }
-    const id = currentTask.id;
-    const validationStartTime = Date.now();
-    
     const previousColumnId = currentTask.columnid || currentTask.columnId;
     const previousBoardId = currentTask.boardid || currentTask.boardId;
+    if (previousBoardId && !(await assertBoardAccess(req, res, previousBoardId))) return;
+    if (task.boardId && task.boardId !== previousBoardId && !(await assertBoardAccess(req, res, task.boardId))) return;
+    const id = currentTask.id;
+    const validationStartTime = Date.now();
     
     // Handle priority: prefer priority_id, but support priority name for backward compatibility
     let priorityId = task.priorityId || null;
@@ -1492,6 +1514,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       (await memberQueries.isReadOnlyViewerMember(db, nextMemberId))
     ) {
       return res.status(400).json({ error: tTranslator('errors.cannotAssignViewer') });
+    }
+    if (isAgentMemberId(nextRequesterId)) {
+      return res.status(400).json({ error: tTranslator('errors.cannotUseAgentAsRequester') });
     }
     await taskQueries.updateTask(db, id, {
       title: task.title !== undefined ? task.title : currentTask.title,
@@ -1851,6 +1876,9 @@ router.post('/batch-update', authenticateToken, async (req, res) => {
     }
 
     for (const task of tasks) {
+      if (isAgentMemberId(task.requesterId)) {
+        return res.status(400).json({ error: tTranslator('errors.cannotUseAgentAsRequester') });
+      }
       if (!task.memberId) continue;
       const current = existingTaskMap.get(task.id);
       const currentMemberId = current?.memberId || current?.memberid || null;
@@ -1990,6 +2018,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     if (!task || task.deleted_at || task.deletedAt) {
       return res.status(404).json({ error: tTranslator('errors.taskNotFound') });
     }
+    const deleteBoardId = task.boardid || task.boardId;
+    if (deleteBoardId && !(await assertBoardAccess(req, res, deleteBoardId))) return;
     
     const board = await helpers.getBoardById(db, task.boardid || task.boardId);
     const boardTitle = board ? board.title : 'Unknown Board';
@@ -2796,6 +2826,9 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
     if (!task) {
       return res.status(404).json({ error: tTranslator('errors.taskNotFound') });
     }
+    const sourceBoardId = task.boardid || task.boardId;
+    if (sourceBoardId && !(await assertBoardAccess(req, res, sourceBoardId))) return;
+    if (!(await assertBoardAccess(req, res, targetBoardId))) return;
     
     // MIGRATED: Get source column title for intelligent placement
     const sourceColumn = await helpers.getColumnById(db, task.columnid || task.columnId);
@@ -2978,6 +3011,7 @@ router.get('/by-board/:boardId', authenticateToken, async (req, res) => {
   const { boardId } = req.params;
   try {
     const db = getRequestDatabase(req);
+    if (!(await assertBoardAccess(req, res, boardId))) return;
     const tasks = await taskQueries.getTasksByBoard(db, boardId);
     res.json(tasks);
   } catch (error) {
@@ -2993,6 +3027,7 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
   try {
     const db = getRequestDatabase(req);
     const { taskId, memberId } = req.params;
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     const userId = req.user?.id || 'system';
     const skipEmail =
       req.query.skipEmail === 'true' ||
@@ -3005,6 +3040,9 @@ router.post('/:taskId/watchers/:memberId', authenticateToken, async (req, res) =
       if (!ownMember || ownMember.id !== memberId) {
         return res.status(403).json({ error: tTranslator('errors.readOnly'), code: 'READ_ONLY' });
       }
+    }
+    if (isAgentMemberId(memberId)) {
+      return res.status(400).json({ error: tTranslator('errors.cannotAddAgentAsWatcher') });
     }
     // MIGRATED: Get task's board ID for Redis publishing
     const boardId = await taskQueries.getTaskBoardId(db, taskId);
@@ -3061,6 +3099,7 @@ router.delete('/:taskId/watchers/:memberId', authenticateToken, async (req, res)
     const db = getRequestDatabase(req);
     const tTranslator = await getTranslator(db);
     const { taskId, memberId } = req.params;
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     const userId = req.user?.id || 'system';
     if (!userCanMutate(req.user)) {
       const ownMember = await memberQueries.getMemberByUserId(db, userId);
@@ -3109,11 +3148,15 @@ router.post('/:taskId/collaborators/:memberId', authenticateToken, async (req, r
     const db = getRequestDatabase(req);
     const tTranslator = await getTranslator(db);
     const { taskId, memberId } = req.params;
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     const userId = req.user?.id || 'system';
     const skipEmail =
       req.query.skipEmail === 'true' ||
       req.query.skipEmail === '1' ||
       req.body?.skipEmail === true;
+    if (isAgentMemberId(memberId)) {
+      return res.status(400).json({ error: tTranslator('errors.cannotAddAgentAsCollaborator') });
+    }
     
     // MIGRATED: Get task's board ID for Redis publishing
     const boardId = await taskQueries.getTaskBoardId(db, taskId);
@@ -3170,6 +3213,7 @@ router.delete('/:taskId/collaborators/:memberId', async (req, res) => {
     const db = getRequestDatabase(req);
     const tTranslator = await getTranslator(db);
     const { taskId, memberId } = req.params;
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     
     // MIGRATED: Get task's board ID for Redis publishing
     const boardId = await taskQueries.getTaskBoardId(db, taskId);
@@ -3212,6 +3256,7 @@ router.get('/:taskId/relationships', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const { taskId } = req.params;
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     
     // MIGRATED: Get all relationships where this task is involved
     const relationships = await taskQueries.getTaskRelationships(db, taskId);
@@ -3232,6 +3277,7 @@ router.post('/:taskId/relationships', authenticateToken, async (req, res) => {
     const dbgHttp = await serverDebug(db, 'SERVER_DEBUG_HTTP');
     const tTranslator = await getTranslator(db);
     const { taskId } = req.params;
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     const parsed = parseBody(createTaskRelationshipBodySchema, req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error });
@@ -3363,6 +3409,7 @@ router.delete('/:taskId/relationships/:relationshipId', authenticateToken, async
     const db = getRequestDatabase(req);
     const tTranslator = await getTranslator(db);
     const { taskId, relationshipId } = req.params;
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     
     // MIGRATED: Get the relationship details before deleting
     // MIGRATED: Get relationship by ID using sqlManager
@@ -3434,6 +3481,7 @@ router.get('/:taskId/available-for-relationship', authenticateToken, async (req,
     const db = getRequestDatabase(req);
     const tTranslator = await getTranslator(db);
     const { taskId } = req.params;
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     
     // MIGRATED: Get all tasks except the current one and already related ones
     const availableTasks = await taskQueries.getAvailableTasksForRelationship(db, taskId);
@@ -3452,6 +3500,7 @@ router.get('/:taskId/flow-chart', authenticateToken, async (req, res) => {
   try {
     const { taskId } = req.params;
     const db = getRequestDatabase(req);
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     const dbgHttp = await serverDebug(db, 'SERVER_DEBUG_HTTP');
     const tTranslator = await getTranslator(db);
     

@@ -35,9 +35,9 @@ Shape the board to how work actually moves; use soft WIP and optional sprints wh
 Do these in order. Skip branding and AI until the team can move cards.
 
 1. **Invite the team** — header **Invite**, or Settings → Users (assign **User** or **Viewer** as needed).
-2. **Create one board** — `+` on the board tabs. Prefer **one board per project** at first (most people work across several projects).
+2. **Create one board** — `+` on the board tabs. Prefer **one board per project** at first (most people work across several projects). Then **add members** (double-click the tab → Add/remove members). Users and viewers only see boards they belong to; admins see every board.
 3. **Shape columns** to match how work actually flows (example: To Do → In Progress → Review → Done). Add/reorder from the board; click a column title (admin) for name, soft WIP, and short policy notes.
-4. **Optional: define “finished”** — Settings → **Project Settings → Project** → finished column names (e.g. `Done`). Tasks in those columns are not treated as overdue.
+4. **Optional: define “finished”** — Settings → **Project Settings → Project** → finished column names (e.g. `Done`). Tasks in those columns are not treated as overdue. The toolbar toggle next to All Roles (labeled with that column name) shows or hides finished columns on every board; it is on by default and saved in your preferences.
 5. **Tune Features** — Settings → **Project Settings → Features**:
   - Task counts on board tabs / columns: **on** (recommended)
   - Effort totals: optional (off by default)
@@ -45,10 +45,10 @@ Do these in order. Skip branding and AI until the team can move cards.
   - Highlight overdue: on if you want LATE badges
 6. **Optional: soft board WIP** — double-click the board tab → set a team-capacity limit for **active** work (see [WIP](#soft-wip-column-and-board)).
 7. **Optional: first sprint** — only if you use dated sprints:
-  - Create the sprint from the header sprint dropdown (**New sprint**) or Settings → **Project Settings → Sprints** (do this before you need to assign work to it).
+  - Create the sprint from the header sprint dropdown (**New sprint**) or Settings → **Project Settings → Sprints** (do this before you need to assign work to it). Add an optional **sprint goal** so the team can see the timebox focus.
   - In the header sprint dropdown, pick that sprint: **new tasks you add are placed in that sprint** (and dates follow the sprint window when applicable).
   - With **All sprints** selected, new tasks are not auto-assigned; use the **calendar icon on a card**, or **select cards with their checkbox and choose Sprint in the bulk action bar** to assign a sprint.
-8. **Create a few real tasks** and walk the flow once with the team.
+8. **Create a few real tasks** and walk the flow once with the team. Use **acceptance criteria** on the task details panel when a card needs a checklist definition of done.
 
 Press **F1** anytime for the in-app guide; offer the short product tour if teammates are new.
 

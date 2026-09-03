@@ -92,6 +92,8 @@ interface MainLayoutProps {
   onEditOwnProfile?: () => void;
   showAgentTasks?: boolean;
   onToggleShowAgentTasks?: (show: boolean) => void;
+  showFinishedColumns?: boolean;
+  onToggleShowFinishedColumns?: (show: boolean) => void;
   onTaskViewModeChange: (mode: TaskViewMode) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onToggleSearch: () => void;

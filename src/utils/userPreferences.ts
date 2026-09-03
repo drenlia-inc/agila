@@ -70,6 +70,8 @@ export interface UserPreferences {
   currentFilterViewId: number | null;
   showSharedFilters: boolean;
   includeAssignees: boolean;
+  /** When false, hide finished (Done/Completed) columns on every board. Default true. */
+  showFinishedColumns: boolean;
   includeWatchers: boolean;
   includeCollaborators: boolean;
   includeRequesters: boolean;
@@ -348,6 +350,7 @@ const BASE_DEFAULT_PREFERENCES: UserPreferences = {
   currentFilterViewId: null, // Default to no saved filter selected
   showSharedFilters: true, // Default to show shared filters from other users
   includeAssignees: true, // Default to include assignees (maintains current behavior)
+  showFinishedColumns: true,
   includeWatchers: false, // Default to not include watchers
   includeCollaborators: false, // Default to not include collaborators
   includeRequesters: false, // Default to not include requesters
@@ -730,6 +733,7 @@ export const saveUserPreferences = async (preferences: UserPreferences, userId: 
           
           // Member Filter Preferences
           saveIfDefined('includeAssignees', preferences.includeAssignees),
+          saveIfDefined('showFinishedColumns', preferences.showFinishedColumns),
           saveIfDefined('includeWatchers', preferences.includeWatchers),
           saveIfDefined('includeCollaborators', preferences.includeCollaborators),
           saveIfDefined('includeRequesters', preferences.includeRequesters),
@@ -1018,6 +1022,7 @@ export const loadUserPreferencesAsync = async (userId: string | null = null): Pr
         
         // Member Filter Preferences  
         includeAssignees: smartMerge(preferences.includeAssignees, dbSettings.includeAssignees, defaults.includeAssignees),
+        showFinishedColumns: smartMerge(preferences.showFinishedColumns, dbSettings.showFinishedColumns, defaults.showFinishedColumns),
         includeWatchers: smartMerge(preferences.includeWatchers, dbSettings.includeWatchers, defaults.includeWatchers),
         includeCollaborators: smartMerge(preferences.includeCollaborators, dbSettings.includeCollaborators, defaults.includeCollaborators),
         includeRequesters: smartMerge(preferences.includeRequesters, dbSettings.includeRequesters, defaults.includeRequesters),
@@ -1439,6 +1444,7 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
         'currentFilterViewId': 'currentFilterViewId',
         'lastReportTab': 'lastReportTab',
         'includeAssignees': 'includeAssignees',
+        'showFinishedColumns': 'showFinishedColumns',
         'includeWatchers': 'includeWatchers',
         'includeCollaborators': 'includeCollaborators',
         'includeRequesters': 'includeRequesters',

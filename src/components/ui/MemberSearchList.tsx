@@ -94,7 +94,7 @@ export default function MemberSearchList({
   );
 
   const people = filtered.filter((m) => !isAgentMemberId(m.id));
-  const agent = filtered.find((m) => isAgentMemberId(m.id));
+  const agent = showAgentSection ? filtered.find((m) => isAgentMemberId(m.id)) : undefined;
   const hasAnyResults = people.length > 0 || Boolean(agent);
 
   useEffect(() => {
@@ -235,9 +235,6 @@ export default function MemberSearchList({
             }
           >
             {people.map(renderRow)}
-            {!showAgentSection && agent && (
-              <div className={columns === 2 ? 'col-span-2' : undefined}>{renderRow(agent)}</div>
-            )}
           </div>
         )}
       </div>

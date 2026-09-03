@@ -22,6 +22,7 @@ interface PlanningPeriod {
   end_date: string | null;
   is_active: boolean;
   description: string | null;
+  goal?: string | null;
   created_at: string;
   task_count?: number;
 }
@@ -47,7 +48,8 @@ const AdminSprintSettingsTab: React.FC = () => {
     start_date: '',
     end_date: '',
     is_active: false,
-    description: ''
+    description: '',
+    goal: ''
   });
   const [transferOffer, setTransferOffer] = useState<SprintTransferOffer | null>(null);
   const [transferToName, setTransferToName] = useState('');
@@ -61,6 +63,7 @@ const AdminSprintSettingsTab: React.FC = () => {
       end_date: string;
       is_active: boolean;
       description: string;
+      goal: string;
     };
   } | null>(null);
 
@@ -130,7 +133,8 @@ const AdminSprintSettingsTab: React.FC = () => {
       start_date,
       end_date,
       is_active: false,
-      description: ''
+      description: '',
+      goal: ''
     });
   };
 
@@ -141,7 +145,8 @@ const AdminSprintSettingsTab: React.FC = () => {
       start_date: toDateInputValue(sprint.start_date),
       end_date: toDateInputValue(sprint.end_date),
       is_active: Boolean(sprint.is_active),
-      description: sprint.description || ''
+      description: sprint.description || '',
+      goal: sprint.goal || ''
     });
   };
 
@@ -153,7 +158,8 @@ const AdminSprintSettingsTab: React.FC = () => {
       start_date: '',
       end_date: '',
       is_active: false,
-      description: ''
+      description: '',
+      goal: ''
     });
     setTransferOffer(null);
     pendingActivateRef.current = null;
@@ -166,6 +172,7 @@ const AdminSprintSettingsTab: React.FC = () => {
       end_date: string;
       is_active: boolean;
       description: string;
+      goal: string;
     },
     options: { sprintId?: string; transfer: boolean; selectAfter: boolean }
   ) => {
@@ -372,6 +379,7 @@ const AdminSprintSettingsTab: React.FC = () => {
       end_date: toDateInputValue(sprint.end_date),
       is_active: !sprint.is_active,
       description: sprint.description || '',
+      goal: sprint.goal || '',
     };
 
     try {
@@ -493,6 +501,9 @@ const AdminSprintSettingsTab: React.FC = () => {
                     {t('sprintSettings.sprintName')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    {t('sprintSettings.goalLabel')}
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {t('sprintSettings.startDate')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -600,10 +611,30 @@ const AdminSprintSettingsTab: React.FC = () => {
                           {sprint.name}
                         </div>
                         {sprint.description && (
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                          <div
+                            className="text-sm text-gray-500 dark:text-gray-400 break-words whitespace-normal"
+                            style={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2 as any,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
                             {sprint.description}
                           </div>
                         )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 max-w-xs break-words whitespace-normal">
+                      <div
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2 as any,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {sprint.goal || '—'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">

@@ -12,6 +12,39 @@ export function isArchivedColumnFlag(
   return column?.is_archived === true || column?.is_archived === 1;
 }
 
+export function isFinishedColumnFlag(
+  column?: { is_finished?: boolean | number } | null
+): boolean {
+  return column?.is_finished === true || column?.is_finished === 1;
+}
+
+/** Apply the global show/hide preference for finished (Done/Completed) columns. */
+export function applyFinishedColumnVisibility(
+  visibleIds: string[],
+  columns: Columns,
+  showFinished: boolean
+): string[] {
+  const finishedIds = new Set(
+    Object.values(columns)
+      .filter((column) => column && isFinishedColumnFlag(column) && !isArchivedColumnFlag(column))
+      .map((column) => column.id)
+  );
+  if (finishedIds.size === 0) return visibleIds;
+
+  const allowed = new Set(visibleIds);
+  if (showFinished) {
+    for (const id of finishedIds) allowed.add(id);
+  } else {
+    for (const id of finishedIds) allowed.delete(id);
+  }
+
+  const next = Object.values(columns)
+    .sort((a, b) => (a.position || 0) - (b.position || 0))
+    .map((column) => column.id)
+    .filter((id) => allowed.has(id));
+  return next.length > 0 ? next : visibleIds;
+}
+
 export function sameColumnIdSet(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
   const left = [...a].sort();

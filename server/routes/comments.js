@@ -14,6 +14,7 @@ import {
   createCommentBodySchema,
   updateCommentBodySchema
 } from '../utils/requestValidation.js';
+import { assertTaskBoardAccess } from '../middleware/boardAccess.js';
 
 const router = express.Router();
 
@@ -49,6 +50,7 @@ router.post('/', authenticateToken, async (req, res) => {
   const db = getRequestDatabase(req);
   
   try {
+    if (!(await assertTaskBoardAccess(req, res, comment.taskId))) return;
     const callerMemberId = await resolveCallerMemberId(db, userId);
     if (!callerMemberId) {
       return res.status(400).json({ error: 'No member profile linked to this user' });
@@ -211,6 +213,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (!originalComment) {
       return res.status(404).json({ error: 'Comment not found' });
     }
+    if (!(await assertTaskBoardAccess(req, res, originalComment.taskid || originalComment.taskId))) return;
 
     const callerMemberId = await resolveCallerMemberId(db, userId);
     if (!canModifyComment(req.user, originalComment, callerMemberId)) {
@@ -283,6 +286,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     if (!commentToDelete) {
       return res.status(404).json({ error: 'Comment not found' });
     }
+    if (!(await assertTaskBoardAccess(req, res, commentToDelete.taskid || commentToDelete.taskId))) return;
 
     const callerMemberId = await resolveCallerMemberId(db, userId);
     if (!canModifyComment(req.user, commentToDelete, callerMemberId)) {
@@ -351,6 +355,11 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 router.get('/:commentId/attachments', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
+    const comment = await commentQueries.getCommentSimple(db, req.params.commentId);
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    if (!(await assertTaskBoardAccess(req, res, comment.taskid || comment.taskId))) return;
     // MIGRATED: Get attachments using sqlManager
     const attachments = await helpers.getAttachmentsForComment(db, req.params.commentId);
 
