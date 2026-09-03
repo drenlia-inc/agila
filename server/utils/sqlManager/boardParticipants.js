@@ -111,6 +111,22 @@ export async function replaceParticipants(db, boardId, userIds) {
   return listParticipants(db, boardId);
 }
 
+/** Add every active human user to a board without dropping existing members. */
+export async function addActiveUsersAsParticipants(db, boardId) {
+  const rows = await wrapQuery(
+    db.prepare(`
+      SELECT id FROM users
+      WHERE is_active = true
+        AND COALESCE(email, '') NOT IN ('agent@local', 'system@local')
+    `),
+    'SELECT'
+  ).all();
+  const userIds = (rows || []).map((row) => row.id).filter(Boolean);
+  if (userIds.length === 0) return [];
+  const existing = await listParticipantUserIds(db, boardId);
+  return replaceParticipants(db, boardId, [...existing, ...userIds]);
+}
+
 export async function getAccessibleBoardIds(db, userId) {
   const rows = await wrapQuery(
     db.prepare('SELECT board_id FROM board_participants WHERE user_id = $1'),

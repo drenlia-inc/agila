@@ -15,8 +15,14 @@ import {
   AGENT_DEFAULT_COLOR
 } from '../constants/agentIdentity.js';
 import { initializeDemoData, installDemoSeedAvatar, ensureDemoMemberDisplayFirstNames } from './demoData.js';
-import { ensureDemoBacklogTasksUnassigned } from './demoDataSeed.js';
+import {
+  ensureDemoAcceptanceCriteria,
+  ensureDemoBacklogTasksUnassigned,
+  ensureDemoBoardParticipants,
+  ensureDemoSprintGoals,
+} from './demoDataSeed.js';
 import { seedWelcomeTasks } from './welcomeTasks.js';
+import { boardParticipants } from '../utils/sqlManager/index.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { dbExec, dbGet, dbAll, dbRun } from '../utils/dbAsync.js';
 import * as settingsQueries from '../utils/sqlManager/settings.js';
@@ -1420,6 +1426,11 @@ const initializeDefaultData = async (db, tenantId = null) => {
       } catch (error) {
         console.error('❌ Welcome task seed failed (continuing startup):', error);
       }
+      try {
+        await boardParticipants.addActiveUsersAsParticipants(db, boardId);
+      } catch (error) {
+        console.error('❌ Default board participants seed failed (continuing startup):', error);
+      }
     }
   } else if (process.env.DEMO_ENABLED === 'true') {
     // Existing demo volume: keep claimable backlog tasks unassigned after code deploys
@@ -1432,6 +1443,21 @@ const initializeDefaultData = async (db, tenantId = null) => {
       await ensureDemoMemberDisplayFirstNames(db);
     } catch (error) {
       console.error('❌ Demo member display-name ensure failed (continuing startup):', error);
+    }
+    try {
+      await ensureDemoBoardParticipants(db);
+    } catch (error) {
+      console.error('❌ Demo board participants ensure failed (continuing startup):', error);
+    }
+    try {
+      await ensureDemoSprintGoals(db);
+    } catch (error) {
+      console.error('❌ Demo sprint goal ensure failed (continuing startup):', error);
+    }
+    try {
+      await ensureDemoAcceptanceCriteria(db);
+    } catch (error) {
+      console.error('❌ Demo acceptance criteria ensure failed (continuing startup):', error);
     }
   }
 

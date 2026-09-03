@@ -3,9 +3,10 @@
  */
 import crypto from 'crypto';
 import { wrapQuery } from '../utils/queryLogger.js';
-import { boards as boardQueries } from '../utils/sqlManager/index.js';
+import { boards as boardQueries, boardParticipants } from '../utils/sqlManager/index.js';
 import { getDefaultBoardColumns } from '../utils/defaultBoardColumns.js';
 import {
+  DEMO_ACCEPTANCE_CRITERIA,
   DEMO_ACTIVITY,
   DEMO_ADMIN_BIO,
   DEMO_BOARD_SETTING,
@@ -100,11 +101,13 @@ async function seedOneBoard(db, { lang, members, tagIds, position, writeLeaderbo
     'INSERT'
   ).run(DEMO_BOARD_SETTING[lang], boardId);
 
+  await boardParticipants.addActiveUsersAsParticipants(db, boardId);
+
   const sprintId = crypto.randomUUID();
   await wrapQuery(
     db.prepare(`
-      INSERT INTO planning_periods (id, name, start_date, end_date, description, is_active, board_id, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO planning_periods (id, name, start_date, end_date, description, goal, is_active, board_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `),
     'INSERT'
   ).run(
@@ -113,6 +116,7 @@ async function seedOneBoard(db, { lang, members, tagIds, position, writeLeaderbo
     sprintStartDate,
     sprintEndDate,
     DEMO_SPRINT.description[lang],
+    DEMO_SPRINT.goal[lang],
     1,
     boardId,
     now,
@@ -192,6 +196,28 @@ async function seedOneBoard(db, { lang, members, tagIds, position, writeLeaderbo
       priority: meta.priority,
       description: copy.description,
     };
+  }
+
+  const acStmt = db.prepare(`
+    INSERT INTO acceptance_criteria (id, task_id, text, is_done, position, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $6)
+  `);
+  for (const [key, byLang] of Object.entries(DEMO_ACCEPTANCE_CRITERIA)) {
+    const task = createdByKey[key];
+    const items = byLang?.[lang];
+    if (!task || !Array.isArray(items)) continue;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item?.text) continue;
+      await wrapQuery(acStmt, 'INSERT').run(
+        crypto.randomUUID(),
+        task.id,
+        item.text,
+        item.done === true,
+        i + 1,
+        now
+      );
+    }
   }
 
   const taskTagStmt = db.prepare('INSERT INTO task_tags (taskid, tagid) VALUES ($1, $2)');
@@ -456,6 +482,98 @@ export async function ensureDemoBacklogTasksUnassigned(db) {
   const cleared = Number(result?.rowCount ?? result?.changes ?? 0);
   if (cleared > 0) {
     console.log(`✅ Demo backlog: cleared assignee on ${cleared} task(s) (EN+FR claimable work)`);
+  }
+}
+
+async function demoBoardIds(db) {
+  const ids = [];
+  for (const key of Object.values(DEMO_BOARD_SETTING)) {
+    const row = await wrapQuery(
+      db.prepare('SELECT value FROM settings WHERE key = $1'),
+      'SELECT'
+    ).get(key);
+    if (row?.value) ids.push(row.value);
+  }
+  return ids;
+}
+
+/** Existing demo volumes: add all active users if a demo board has no (or incomplete) members. */
+export async function ensureDemoBoardParticipants(db) {
+  if (process.env.DEMO_ENABLED !== 'true') return;
+  const boardIds = await demoBoardIds(db);
+  for (const boardId of boardIds) {
+    await boardParticipants.addActiveUsersAsParticipants(db, boardId);
+  }
+  if (boardIds.length > 0) {
+    console.log(`✅ Demo boards: ensured participants on ${boardIds.length} board(s)`);
+  }
+}
+
+/** Existing demo volumes: fill sprint goal when the seeded sprint has none. */
+export async function ensureDemoSprintGoals(db) {
+  if (process.env.DEMO_ENABLED !== 'true') return;
+  for (const lang of ['en', 'fr']) {
+    const result = await wrapQuery(
+      db.prepare(`
+        UPDATE planning_periods
+        SET goal = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE name = $2
+          AND (goal IS NULL OR TRIM(goal) = '')
+      `),
+      'UPDATE'
+    ).run(DEMO_SPRINT.goal[lang], DEMO_SPRINT.name[lang]);
+    const n = Number(result?.rowCount ?? result?.changes ?? 0);
+    if (n > 0) {
+      console.log(`✅ Demo sprint: set goal on ${n} ${lang} sprint(s)`);
+    }
+  }
+}
+
+/** Existing demo volumes: add sample acceptance criteria when a showcase task has none. */
+export async function ensureDemoAcceptanceCriteria(db) {
+  if (process.env.DEMO_ENABLED !== 'true') return;
+  const now = new Date().toISOString();
+  const acStmt = db.prepare(`
+    INSERT INTO acceptance_criteria (id, task_id, text, is_done, position, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $6)
+  `);
+  let added = 0;
+  for (const [key, byLang] of Object.entries(DEMO_ACCEPTANCE_CRITERIA)) {
+    for (const lang of ['en', 'fr']) {
+      const title = DEMO_TASK_COPY[key]?.[lang]?.title;
+      const items = byLang?.[lang];
+      if (!title || !Array.isArray(items) || items.length === 0) continue;
+      const tasks = await wrapQuery(
+        db.prepare(`
+          SELECT id FROM tasks
+          WHERE deleted_at IS NULL AND title = $1
+        `),
+        'SELECT'
+      ).all(title);
+      for (const task of tasks || []) {
+        const existing = await wrapQuery(
+          db.prepare('SELECT COUNT(*)::int AS count FROM acceptance_criteria WHERE task_id = $1'),
+          'SELECT'
+        ).get(task.id);
+        if (Number(existing?.count || 0) > 0) continue;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (!item?.text) continue;
+          await wrapQuery(acStmt, 'INSERT').run(
+            crypto.randomUUID(),
+            task.id,
+            item.text,
+            item.done === true,
+            i + 1,
+            now
+          );
+          added += 1;
+        }
+      }
+    }
+  }
+  if (added > 0) {
+    console.log(`✅ Demo tasks: added ${added} acceptance criterion row(s)`);
   }
 }
 

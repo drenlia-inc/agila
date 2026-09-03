@@ -16,6 +16,10 @@ export const DEMO_SPRINT = {
     en: 'Complete initial project setup and core features',
     fr: 'Terminer la mise en place du projet et les fonctionnalités de base',
   },
+  goal: {
+    en: 'Ship a secure login path and a documented API so we can demo the board to stakeholders.',
+    fr: 'Livrer une connexion sécurisée et une API documentée pour présenter le tableau aux parties prenantes.',
+  },
 };
 
 export const DEMO_ADMIN_BIO = {
@@ -140,6 +144,74 @@ export const DEMO_TASK_COPY = {
   old_docs_cleanup: {
     en: { title: 'Old documentation cleanup', description: 'Archived outdated documentation and updated references to current versions.' },
     fr: { title: 'Nettoyage de l’ancienne documentation', description: 'Archiver la doc périmée et mettre à jour les références.' },
+  },
+};
+
+/** Checklist items for a few showcase tasks (seeded on both locale boards). */
+export const DEMO_ACCEPTANCE_CRITERIA = {
+  user_auth: {
+    en: [
+      { text: 'Users can sign in with email and password', done: true },
+      { text: 'Invalid credentials show a clear error', done: true },
+      { text: 'Sessions expire and can be refreshed without losing work', done: false },
+    ],
+    fr: [
+      { text: 'Les utilisateurs peuvent se connecter avec e-mail et mot de passe', done: true },
+      { text: 'Des identifiants invalides affichent une erreur claire', done: true },
+      { text: 'Les sessions expirent et peuvent être renouvelées sans perdre le travail', done: false },
+    ],
+  },
+  project_docs: {
+    en: [
+      { text: 'README covers local setup and first login', done: false },
+      { text: 'API reference lists auth and task endpoints', done: false },
+      { text: 'A short user guide explains boards, sprints, and filters', done: false },
+    ],
+    fr: [
+      { text: 'Le README décrit l’installation locale et la première connexion', done: false },
+      { text: 'La référence API liste les endpoints d’auth et de tâches', done: false },
+      { text: 'Un court guide explique les tableaux, sprints et filtres', done: false },
+    ],
+  },
+  ui_mockups: {
+    en: [
+      { text: 'Dashboard wireframes cover list, kanban, and empty states', done: true },
+      { text: 'High-fidelity mockups match the current color tokens', done: false },
+    ],
+    fr: [
+      { text: 'Les wireframes couvrent liste, kanban et états vides', done: true },
+      { text: 'Les maquettes haute fidélité suivent les jetons de couleur actuels', done: false },
+    ],
+  },
+  db_schema: {
+    en: [
+      { text: 'Users, members, boards, and tasks have foreign keys', done: true },
+      { text: 'Indexes exist for board id and sprint id on tasks', done: false },
+    ],
+    fr: [
+      { text: 'Users, members, boards et tasks ont des clés étrangères', done: true },
+      { text: 'Des index existent sur board id et sprint id des tâches', done: false },
+    ],
+  },
+  security_audit: {
+    en: [
+      { text: 'Parameterized queries are used on all write paths', done: true },
+      { text: 'Known SQL injection findings are fixed or ticketed', done: false },
+    ],
+    fr: [
+      { text: 'Les écritures passent par des requêtes paramétrées', done: true },
+      { text: 'Les injections SQL connues sont corrigées ou ticketées', done: false },
+    ],
+  },
+  cicd: {
+    en: [
+      { text: 'Pull requests run lint and unit tests', done: false },
+      { text: 'Main deploys only after checks are green', done: false },
+    ],
+    fr: [
+      { text: 'Les pull requests lancent lint et tests unitaires', done: false },
+      { text: 'Main n’est déployé que si les contrôles sont verts', done: false },
+    ],
   },
 };
 

@@ -72,6 +72,8 @@ When running in **demo mode** (`DEMO_ENABLED=true`), the application seeds an ad
 - `sarah.johnson@demo.local`
 - `mike.davis@demo.local`
 
+English and French demo boards include those people as **board members**, a sprint with a **goal**, and sample **acceptance criteria** on a few tasks.
+
 Passwords for sample users are stored as `DEMO_PASSWORD_<email>` settings (not shown on the login page by default). The login page surfaces the admin credentials when demo mode is enabled.
 
 #### Production Mode
