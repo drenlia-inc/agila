@@ -6,6 +6,7 @@
  */
 
 import { join, dirname } from 'path';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { initializeDatabase } from '../config/database.js';
 import notificationService from '../services/notificationService.js';
@@ -192,6 +193,63 @@ const getTenantDatabase = async (tenantId) => {
 
 const PROBE_PATHS = new Set(['/health', '/ready', '/api/health', '/api/ready']);
 
+const WORKSPACE_UNAVAILABLE_DIR = join(__dirname, '../public/workspace-unavailable');
+
+function allowsTenantProvision(req) {
+  // Deploy / admin portal create the schema on purpose (INSTANCE_TOKEN).
+  // Browser hits and public APIs must not CREATE SCHEMA.
+  return req.path.startsWith('/api/admin-portal');
+}
+
+async function tenantSchemaExists(tenantId) {
+  if (!tenantId || !isMultiTenant()) return true;
+  const bootstrap = await getTenantDatabase(null);
+  const { wrapQuery } = await import('../utils/queryLogger.js');
+  const schema = `tenant_${tenantId}`;
+  const row = await wrapQuery(
+    bootstrap.db.prepare(`
+      SELECT 1 AS ok
+      FROM information_schema.tables
+      WHERE table_schema = $1 AND table_name = 'settings'
+      LIMIT 1
+    `),
+    'SELECT'
+  ).get(schema);
+  return Boolean(row);
+}
+
+function sendWorkspaceUnavailable(req, res) {
+  const logoPath = join(WORKSPACE_UNAVAILABLE_DIR, 'agila-logo.png');
+  const htmlPath = join(WORKSPACE_UNAVAILABLE_DIR, 'index.html');
+  if (
+    req.path === '/workspace-unavailable/agila-logo.png' ||
+    req.path === '/agila-logo.png'
+  ) {
+    if (existsSync(logoPath)) {
+      return res.sendFile(logoPath);
+    }
+    return res.status(404).end();
+  }
+  if (
+    req.path.startsWith('/api/') ||
+    req.path.startsWith('/socket.io') ||
+    req.path.startsWith('/attachments/') ||
+    req.path.startsWith('/avatars/')
+  ) {
+    return res.status(404).json({
+      success: false,
+      error: 'Workspace unavailable',
+      code: 'WORKSPACE_UNAVAILABLE'
+    });
+  }
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  res.setHeader('Cache-Control', 'no-store');
+  if (existsSync(htmlPath)) {
+    return res.status(404).type('html').sendFile(htmlPath);
+  }
+  return res.status(404).type('text/plain').send('This workspace isn\'t available');
+}
+
 // Tenant routing middleware
 export const tenantRouting = async (req, res, next) => {
   try {
@@ -261,6 +319,15 @@ export const tenantRouting = async (req, res, next) => {
     
     // Store tenant ID in request for use in routes
     req.tenantId = tenantId;
+
+    if (isMultiTenant() && tenantId && !(await tenantSchemaExists(tenantId))) {
+      if (allowsTenantProvision(req)) {
+        console.log(`📦 Provisioning missing schema tenant_${tenantId} via admin-portal`);
+      } else {
+        console.log(`🚫 Unknown tenant ${tenantId} — serving workspace-unavailable (no schema create)`);
+        return sendWorkspaceUnavailable(req, res);
+      }
+    }
     
     // Get or create tenant database
     const dbInfo = await getTenantDatabase(tenantId);
