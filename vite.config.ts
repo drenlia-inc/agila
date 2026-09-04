@@ -1,4 +1,6 @@
+import fs from 'fs';
 import http from 'http';
+import path from 'path';
 import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -56,14 +58,54 @@ function withForwardedHostProxyConfigure(
 }
 
 const HTML_GATE_SKIP =
-  /^\/(api|health|ready|assets|attachments|avatars|socket\.io|src|node_modules|@vite|@react-refresh|@fs)\b/;
+  /^\/(api|health|ready|assets|attachments|avatars|socket\.io|workspace-unavailable|src|node_modules|@vite|@react-refresh|@fs)\b/;
 
 /**
- * Multi-tenant: Vite preview owns port 3010 (K8s/EKS NodePort). Document
- * requests must hit Express tenantRouting so unknown Hosts get the parked page
- * instead of the SPA login.
+ * Multi-tenant preview (port 3010): keep Vite serving the SPA for real
+ * tenants. Only swap in the parked page when Express says the Host has no schema.
+ * Do not proxy all HTML to Express — GET / is not a Vite-preview Express route.
  */
-function agilaHtmlWorkspaceGate(): Plugin {
+function agilaUnknownWorkspacePage(): Plugin {
+  const parkedHtmlPath = () =>
+    path.join(process.cwd(), 'server/public/workspace-unavailable/index.html');
+
+  const incomingHost = (req: { headers: http.IncomingHttpHeaders }) => {
+    const forwarded = req.headers['x-forwarded-host'];
+    const raw = (Array.isArray(forwarded) ? forwarded[0] : forwarded) || req.headers.host || '';
+    return String(raw).split(',')[0].trim();
+  };
+
+  const workspaceMissing = (host: string): Promise<boolean> =>
+    new Promise((resolve) => {
+      if (!host) {
+        resolve(false);
+        return;
+      }
+      const check = http.request(
+        {
+          hostname: '127.0.0.1',
+          port: 3222,
+          path: '/api/settings',
+          method: 'GET',
+          headers: {
+            host,
+            'x-forwarded-host': host,
+            accept: 'application/json'
+          }
+        },
+        (pres) => {
+          const chunks: Buffer[] = [];
+          pres.on('data', (c) => chunks.push(c));
+          pres.on('end', () => {
+            const body = Buffer.concat(chunks).toString('utf8');
+            resolve(pres.statusCode === 404 && body.includes('WORKSPACE_UNAVAILABLE'));
+          });
+        }
+      );
+      check.on('error', () => resolve(false));
+      check.end();
+    });
+
   const attach = (middlewares: ViteDevServer['middlewares']) => {
     middlewares.use((req, res, next) => {
       if (process.env.MULTI_TENANT !== 'true') {
@@ -79,28 +121,30 @@ function agilaHtmlWorkspaceGate(): Plugin {
         next();
         return;
       }
-      const headers = { ...req.headers };
-      delete headers.connection;
-      const upstream = http.request(
-        {
-          hostname: '127.0.0.1',
-          port: 3222,
-          path: req.url,
-          method: req.method,
-          headers
-        },
-        (pres) => {
-          res.writeHead(pres.statusCode || 502, pres.headers);
-          pres.pipe(res);
-        }
-      );
-      upstream.on('error', () => next());
-      req.pipe(upstream);
+      const host = incomingHost(req);
+      workspaceMissing(host)
+        .then((missing) => {
+          if (!missing) {
+            next();
+            return;
+          }
+          const htmlPath = parkedHtmlPath();
+          if (!fs.existsSync(htmlPath)) {
+            next();
+            return;
+          }
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+          fs.createReadStream(htmlPath).pipe(res);
+        })
+        .catch(() => next());
     });
   };
 
   return {
-    name: 'agila-html-workspace-gate',
+    name: 'agila-unknown-workspace-page',
     configureServer(server: ViteDevServer) {
       attach(server.middlewares);
     },
@@ -134,7 +178,7 @@ function agilaDevFavicon(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [agilaHtmlWorkspaceGate(), react(), agilaDevFavicon(), ignoreBenignSocketErrors()],
+  plugins: [agilaUnknownWorkspacePage(), react(), agilaDevFavicon(), ignoreBenignSocketErrors()],
   envPrefix: ['VITE_', 'DEMO_', 'MULTI_'] as string[],
   // A second React copy makes every hook call fail ("dispatcher is null")
   resolve: {
@@ -245,6 +289,11 @@ export default defineConfig({
         changeOrigin: false,
         configure: withForwardedHostProxyConfigure,
       },
+      '/workspace-unavailable': {
+        target: 'http://localhost:3222',
+        changeOrigin: false,
+        configure: withForwardedHostProxyConfigure,
+      },
       '/attachments': {
         target: 'http://localhost:3222',
         changeOrigin: false,
@@ -298,6 +347,11 @@ export default defineConfig({
         configure: withForwardedHostProxyConfigure,
       },
       '/health': {
+        target: 'http://localhost:3222',
+        changeOrigin: false,
+        configure: withForwardedHostProxyConfigure,
+      },
+      '/workspace-unavailable': {
         target: 'http://localhost:3222',
         changeOrigin: false,
         configure: withForwardedHostProxyConfigure,

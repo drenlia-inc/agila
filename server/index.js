@@ -306,6 +306,14 @@ app.use(express.urlencoded({ limit: '100mb', extended: true }));
 // Note: In production, Vite preview serves static files from dist and proxies API requests
 // Express no longer needs to serve static files when Vite preview is running
 // This code is kept for backward compatibility but won't be used when vite preview is active
+const workspaceUnavailablePath = path.join(__dirname, 'public/workspace-unavailable');
+if (fs.existsSync(workspaceUnavailablePath)) {
+  app.use(
+    '/workspace-unavailable',
+    express.static(workspaceUnavailablePath, { index: false, maxAge: 0 })
+  );
+}
+
 if (process.env.NODE_ENV === 'production' && !process.env.VITE_PREVIEW_RUNNING) {
   const distPath = path.join(__dirname, '../dist');
   const assetsPath = path.join(distPath, 'assets');
@@ -543,9 +551,7 @@ app.get('/api/version', async (req, res) => {
 // SPA FALLBACK FOR CLIENT-SIDE ROUTING
 // ================================
 
-// Serve the React app for all non-API routes
-// Express 5: catch-all route requires named wildcard parameter
-app.get('/*splat', (req, res) => {
+const sendSpaIndex = (req, res) => {
   // Skip API routes, file serving routes, and source file requests
   // NOTE: /assets/ should NOT be blocked - it's served by express.static middleware above
   // Missing hashed chunks must 404 — never fall through to index.html (breaks debugging and confuses import()).
@@ -564,7 +570,11 @@ app.get('/*splat', (req, res) => {
   const htmlPath = path.join(__dirname, '../dist/index.html');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.sendFile(htmlPath);
-});
+};
+
+// Express 5: /*splat does not match GET /
+app.get('/', sendSpaIndex);
+app.get('/*splat', sendSpaIndex);
 
 // ================================
 // START SERVER
