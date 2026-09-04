@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
+  ArrowLeft,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronUp,
   Circle,
   GripHorizontal,
@@ -12,6 +14,7 @@ import {
   SkipForward,
   X,
 } from 'lucide-react';
+import { KanbanChromeTooltip } from '../KanbanChromeTooltip';
 import { useOwnerSetup } from '../../contexts/OwnerSetupContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import {
@@ -21,6 +24,12 @@ import {
   constrainOwnerSetupPositionX,
   defaultOwnerSetupPositionX,
   filterOwnerSetupGuideFields,
+  isOwnerSetupAtDefaultPosition,
+  isStepResolved,
+  ownerSetupAdjacentStepId,
+  ownerSetupLeftBesideElement,
+  ownerSetupTaskStepNumber,
+  waitForOwnerSetupNudgeAnchor,
   getEffectiveDisplayStatus,
   getOwnerSetupStepKind,
   isMultiTenantDeploy,
@@ -31,6 +40,10 @@ import {
 const EXPANDED_WIDTH = 384; // ~24rem
 const MINIMIZED_WIDTH = 320; // ~max-w-sm
 const MARGIN = 16;
+const GET_STARTED_NUDGE_MS = 1600;
+const GET_STARTED_HINT_MS = 5000;
+const GET_STARTED_NUDGE_GAP = 16;
+const SITE_SETTINGS_CANCEL_SELECTOR = '[data-owner-setup-nudge="site-settings-cancel"]';
 
 /** Same chip look as Admin → Mail Server “Switch to Custom SMTP” (non-interactive in the guide). */
 const SwitchToCustomSmtpChip: React.FC<{ className?: string }> = ({ className = '' }) => {
@@ -44,6 +57,28 @@ const SwitchToCustomSmtpChip: React.FC<{ className?: string }> = ({ className = 
     </span>
   );
 };
+
+function PreviousStepIconButton({
+  onClick,
+  variant = 'default',
+}: {
+  onClick: () => void;
+  variant?: 'default' | 'guide';
+}) {
+  const { t } = useTranslation('common');
+  const label = t('ownerSetup.previousStep');
+  const className =
+    variant === 'guide'
+      ? 'inline-flex items-center justify-center h-[30px] w-[30px] rounded-md text-blue-800 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-800/50'
+      : 'inline-flex items-center justify-center h-[30px] w-[30px] rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700';
+  return (
+    <KanbanChromeTooltip label={label} placement="top">
+      <button type="button" onClick={onClick} aria-label={label} className={className}>
+        <ChevronLeft size={16} aria-hidden />
+      </button>
+    </KanbanChromeTooltip>
+  );
+}
 
 const MailMultiTenantDescription: React.FC<{ textClassName: string }> = ({ textClassName }) => (
   <p className={textClassName}>
@@ -121,8 +156,15 @@ const OwnerSetupChecklist: React.FC = () => {
     moved: boolean;
   } | null>(null);
   const suppressClickRef = useRef(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragLeft, setDragLeft] = useState<number | null>(null);
+  const [animatePosition, setAnimatePosition] = useState(false);
+  const [showMoveHint, setShowMoveHint] = useState(false);
+  const moveHintTimersRef = useRef<number[]>([]);
+  const moveHintGenerationRef = useRef(0);
+  const activeStepIdRef = useRef(progress.activeStepId);
+  activeStepIdRef.current = progress.activeStepId;
   /** When true, only the active step is shown (entered via Go there / Guide me). */
   const [stepFocused, setStepFocused] = useState(false);
   /** Prefer the full step list even on intro/outro bookends. */
@@ -234,6 +276,81 @@ const OwnerSetupChecklist: React.FC = () => {
     endDrag();
   }, [endDrag, onDragMove]);
 
+  const clearMoveHintTimers = useCallback(() => {
+    for (const id of moveHintTimersRef.current) {
+      window.clearTimeout(id);
+    }
+    moveHintTimersRef.current = [];
+  }, []);
+
+  const playGetStartedMoveHint = useCallback(() => {
+    clearMoveHintTimers();
+    // Only auto-park beside Cancel on step 1 (Site name & URL) — not later steps.
+    if (isStepResolved(progress, 'siteIdentity')) {
+      return;
+    }
+    const reduceMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const startHint = () => {
+      setShowMoveHint(true);
+      if (!reduceMotion) {
+        moveHintTimersRef.current.push(
+          window.setTimeout(() => setAnimatePosition(false), GET_STARTED_NUDGE_MS)
+        );
+      }
+      moveHintTimersRef.current.push(
+        window.setTimeout(() => setShowMoveHint(false), GET_STARTED_HINT_MS)
+      );
+    };
+
+    const parkedAtDefault = isOwnerSetupAtDefaultPosition(
+      progress.positionX,
+      resolvedLeft,
+      panelWidth,
+      MARGIN
+    );
+    if (!parkedAtDefault) {
+      return;
+    }
+
+    const generation = ++moveHintGenerationRef.current;
+    void (async () => {
+      const cancelBtn = await waitForOwnerSetupNudgeAnchor(
+        SITE_SETTINGS_CANCEL_SELECTOR,
+        4000
+      );
+      if (generation !== moveHintGenerationRef.current) return;
+      if (activeStepIdRef.current !== 'siteIdentity') return;
+      const liveLeft = panelRef.current?.getBoundingClientRect().left ?? resolvedLeft;
+      if (!isOwnerSetupAtDefaultPosition(progress.positionX, liveLeft, panelWidth, MARGIN)) {
+        return;
+      }
+      if (cancelBtn) {
+        const target = ownerSetupLeftBesideElement(
+          cancelBtn,
+          panelWidth,
+          GET_STARTED_NUDGE_GAP,
+          MARGIN
+        );
+        if (target != null && target < liveLeft - 4) {
+          if (!reduceMotion) setAnimatePosition(true);
+          setPositionX(target);
+        }
+      }
+      if (activeStepIdRef.current === 'siteIdentity') {
+        startHint();
+      }
+    })();
+  }, [
+    clearMoveHintTimers,
+    panelWidth,
+    progress,
+    resolvedLeft,
+    setPositionX,
+  ]);
+
   const startDrag = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
@@ -241,6 +358,9 @@ const OwnerSetupChecklist: React.FC = () => {
       if (target.closest('button, a, input, textarea, select')) return;
 
       e.preventDefault();
+      setAnimatePosition(false);
+      setShowMoveHint(false);
+      clearMoveHintTimers();
       dragRef.current = {
         startClientX: e.clientX,
         startLeft: resolvedLeft,
@@ -252,7 +372,7 @@ const OwnerSetupChecklist: React.FC = () => {
       window.addEventListener('mousemove', onDragMove);
       window.addEventListener('mouseup', onDragEnd);
     },
-    [onDragEnd, onDragMove, resolvedLeft]
+    [clearMoveHintTimers, onDragEnd, onDragMove, resolvedLeft]
   );
 
   useEffect(() => {
@@ -261,6 +381,8 @@ const OwnerSetupChecklist: React.FC = () => {
       window.removeEventListener('mouseup', onDragEnd);
     };
   }, [onDragEnd, onDragMove]);
+
+  useEffect(() => () => clearMoveHintTimers(), [clearMoveHintTimers]);
 
   const progressStats = useMemo(() => ownerSetupProgressStats(progress), [progress.steps]);
 
@@ -276,6 +398,8 @@ const OwnerSetupChecklist: React.FC = () => {
       panelWidth,
       typeof window !== 'undefined' ? window.innerWidth - MARGIN * 2 : panelWidth
     ),
+    transition:
+      animatePosition && !isDragging ? `left ${GET_STARTED_NUDGE_MS}ms ease-in-out` : undefined,
   };
 
   if (progress.minimized) {
@@ -398,6 +522,7 @@ const OwnerSetupChecklist: React.FC = () => {
     setPreferStepList(false);
     setStepFocused(true);
     beginGuide();
+    playGetStartedMoveHint();
   };
 
   const handleDoItLater = () => {
@@ -438,6 +563,22 @@ const OwnerSetupChecklist: React.FC = () => {
     goToStep(stepId);
   };
 
+  const previousStepId = ownerSetupAdjacentStepId(activeId, -1);
+
+  const handlePreviousStep = () => {
+    if (!previousStepId) return;
+    setPreferStepList(false);
+    setStepFocused(true);
+    closeGuide();
+    goToStep(previousStepId);
+  };
+
+  const formatStepTitle = (stepId: OwnerSetupStepId) => {
+    const title = t(`ownerSetup.steps.${stepId}.title`);
+    const number = ownerSetupTaskStepNumber(stepId);
+    return number ? t('ownerSetup.stepNumbered', { number, title }) : title;
+  };
+
   const isGuiding = guidingStepId === activeId;
   const guideFields = filterOwnerSetupGuideFields(
     activeStep.guideFields,
@@ -453,6 +594,7 @@ const OwnerSetupChecklist: React.FC = () => {
 
   return (
     <div
+      ref={panelRef}
       className={`fixed z-[9000] rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-800 shadow-xl flex flex-col max-h-[min(90vh,44rem)] overflow-hidden ${
         isDragging ? 'select-none' : ''
       }`}
@@ -469,16 +611,33 @@ const OwnerSetupChecklist: React.FC = () => {
       >
         <GripHorizontal
           size={16}
-          className="text-gray-400 mt-0.5 flex-shrink-0 pointer-events-none"
+          className={`mt-0.5 flex-shrink-0 pointer-events-none ${
+            showMoveHint
+              ? 'text-amber-500 dark:text-amber-400 owner-setup-handle-throb'
+              : 'text-gray-400'
+          }`}
           aria-hidden
         />
+        {showMoveHint ? (
+          <ArrowLeft
+            size={18}
+            strokeWidth={2.5}
+            className="mt-0.5 flex-shrink-0 text-amber-500 dark:text-amber-400 owner-setup-nudge-arrow pointer-events-none"
+            aria-hidden
+          />
+        ) : null}
+        {showMoveHint ? (
+          <span className="sr-only" role="status">
+            {t('ownerSetup.moveHintLive')}
+          </span>
+        ) : null}
         <div className="flex-1 min-w-0 pointer-events-none">
           <h2
             id="owner-setup-title"
             className="text-sm font-semibold text-gray-900 dark:text-gray-100"
           >
             {stepFocused || isBookend
-              ? t(`ownerSetup.steps.${activeId}.title`)
+              ? formatStepTitle(activeId)
               : t('ownerSetup.title')}
           </h2>
           {showStepList && (
@@ -598,6 +757,9 @@ const OwnerSetupChecklist: React.FC = () => {
                       >
                         {t('ownerSetup.guideDone')}
                       </button>
+                      {previousStepId && (
+                        <PreviousStepIconButton onClick={handlePreviousStep} variant="guide" />
+                      )}
                       {activeId !== 'finish' && (
                         <button
                           type="button"
@@ -650,7 +812,7 @@ const OwnerSetupChecklist: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                          {t(`ownerSetup.steps.${step.id}.title`)}
+                          {formatStepTitle(step.id)}
                         </span>
                         {stepKind === 'intro' && (
                           <span className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 flex-shrink-0">
@@ -719,6 +881,7 @@ const OwnerSetupChecklist: React.FC = () => {
             onDone={handleMarkDone}
             onSkip={handleSkip}
             onReset={handleReset}
+            onPrevious={previousStepId ? handlePreviousStep : undefined}
             onGetStarted={handleGetStarted}
             onDoItLater={handleDoItLater}
             onCloseGuide={handleCloseGuide}
@@ -791,6 +954,7 @@ function ActiveStepActions({
   onDone,
   onSkip,
   onReset,
+  onPrevious,
   onGetStarted,
   onDoItLater,
   onCloseGuide,
@@ -807,6 +971,7 @@ function ActiveStepActions({
   onDone: () => void;
   onSkip: () => void;
   onReset: () => void;
+  onPrevious?: () => void;
   onGetStarted: () => void;
   onDoItLater: () => void;
   onCloseGuide: () => void;
@@ -912,6 +1077,7 @@ function ActiveStepActions({
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
+            {onPrevious && <PreviousStepIconButton onClick={onPrevious} />}
             <button
               type="button"
               onClick={onCloseGuide}
@@ -946,6 +1112,7 @@ function ActiveStepActions({
         <p className="text-xs text-blue-600 dark:text-blue-400">{t('ownerSetup.suggestedHint')}</p>
       )}
       <div className="flex flex-wrap gap-2">
+        {onPrevious && <PreviousStepIconButton onClick={onPrevious} />}
         {canNavigate && !stepFocused && (
           <button
             type="button"

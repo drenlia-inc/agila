@@ -1527,7 +1527,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
 };
 
 // Initialize database connection (PostgreSQL-only; single-tenant or multi-tenant)
-export const initializeDatabase = async (tenantId = null) => {
+export const initializeDatabase = async (tenantId = null, options = {}) => {
   if (!process.env.POSTGRES_HOST) {
     throw new Error('POSTGRES_HOST is required. Agila is PostgreSQL-only.');
   }
@@ -1535,7 +1535,7 @@ export const initializeDatabase = async (tenantId = null) => {
   console.log(`🐘 Using PostgreSQL for tenant: ${tenantId || 'default'}`);
   const db = new PostgresDatabase(tenantId);
 
-  await db.ensureSchema();
+  await db.ensureSchema({ provision: options.provision === true });
   await createTables(db);
   await initializeDefaultPriorities(db);
 

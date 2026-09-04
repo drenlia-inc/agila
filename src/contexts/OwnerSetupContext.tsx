@@ -28,6 +28,7 @@ import {
   loadOwnerSetupProgress,
   ownerSetupGuideSelectors,
   persistOwnerSetupProgress,
+  scrollOwnerSetupPageToTop,
 } from '../utils/ownerSetup';
 import { adminHashForTabId, requestAdminNavigation } from '../utils/adminNavigation';
 
@@ -259,11 +260,7 @@ export const OwnerSetupProvider: React.FC<OwnerSetupProviderProps> = ({
       const def = getStepDef(stepId);
       if (def.goKanban && onPageChange) {
         onPageChange('kanban');
-        if (def.scrollToTop) {
-          window.setTimeout(() => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }, 50);
-        }
+        scrollOwnerSetupPageToTop();
         return;
       }
       if (!def.adminTab || !onPageChange) return;
@@ -272,6 +269,7 @@ export const OwnerSetupProvider: React.FC<OwnerSetupProviderProps> = ({
       // Switch page + notify Admin tab state directly (avoids Guide me / hash races)
       onPageChange('admin', { hash });
       requestAdminNavigation(hash);
+      scrollOwnerSetupPageToTop();
     },
     [onPageChange]
   );

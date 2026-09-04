@@ -1849,6 +1849,7 @@
     "expand": "Expand configuration guide",
     "dismiss": "Dismiss guide",
     "dragHint": "Drag left or right to reposition",
+    "moveHintLive": "This window can be dragged left or right from the handle at the top.",
     "focusModeHint": "Working on this step",
     "showAllSteps": "Show all steps",
     "goThere": "Go there",
@@ -1858,6 +1859,8 @@
     "markDone": "Mark done",
     "skip": "Skip",
     "getStarted": "Get started",
+    "previousStep": "Previous step",
+    "stepNumbered": "{{number}}. {{title}}",
     "doItLater": "I'll do it later",
     "closeGuide": "Close guide",
     "reviewSteps": "Review steps",
@@ -1895,7 +1898,7 @@
       },
       "mail": {
         "title": "Mail server",
-        "description": "Configure SMTP and send a test email so invitations and password resets work. Skip this step if you don't need outbound email.",
+        "description": "Configure SMTP and send a test email so invitations and password resets work. Skip this step if you don't need to configure your own outbound email server.",
         "descriptionMultiTenant": "Email is managed <platform>by the platform</platform>. Click <smtpButton/> if you want to use your own mail server. Skip this step if you don't need to use your own mail server.",
         "guide": "Fill SMTP settings, test, then enable mail.",
         "fields": {
@@ -1953,22 +1956,23 @@
         }
       },
       "sso": {
-        "title": "Google SSO",
-        "description": "Optional: enable Google OAuth so the team can sign in with Google.",
-        "guide": "Enter Google OAuth credentials.",
+        "title": "SSO / sign-in",
+        "description": "Optional: enable Google, GitHub, or Microsoft sign-in so the team can use OAuth instead of a local password.",
+        "guide": "Configure the OAuth providers you want.",
         "fields": {
-          "GOOGLE_CLIENT_ID": "Paste your Google OAuth Client ID.",
-          "GOOGLE_CLIENT_SECRET": "Paste your Google OAuth Client Secret.",
-          "GOOGLE_CALLBACK_URL": "Confirm the callback URL matches your Google Cloud console."
+          "providersOverview": "Turn on Google, GitHub, and/or Microsoft on this screen, then enter that provider’s credentials.",
+          "GOOGLE_CLIENT_ID": "For Google: paste your OAuth Client ID (and secret/callback in the same section).",
+          "GITHUB_CLIENT_ID": "For GitHub: paste your OAuth App Client ID (and secret/callback in the same section).",
+          "M365_CLIENT_ID": "For Microsoft: paste your app Client ID (tenant ID, secret, and callback are in the same section)."
         }
       },
       "storage": {
         "title": "File storage (S3)",
         "description": "Optional: use Disk or configure your own S3-compatible bucket for uploads and attachments. Test the connection before activating S3.",
-        "descriptionMultiTenant": "File storage is managed by the platform. Choose Use your own S3 bucket first if you want your own bucket, then enter credentials, test the connection, and finish the migration. Skip if platform storage is fine.",
+        "descriptionMultiTenant": "File storage is managed by the platform. Choose Use your own S3 bucket if you want your own bucket, then enter credentials, test the connection, and finish the migration. Skip if platform storage is fine.",
         "guide": "Configure storage or move to your own S3 bucket.",
         "fields": {
-          "switchToCustomStorage": "First click Use your own S3 bucket (confirm) so you can enter your own bucket settings.",
+          "switchToCustomStorage": "Click Use your own S3 bucket (confirm) so you can enter your own bucket settings.",
           "STORAGE_BACKEND": "Choose Disk or S3 for where files are stored.",
           "S3_BUCKET": "Enter your S3 bucket name.",
           "S3_REGION": "Enter the bucket region (e.g. ca-central-1).",
@@ -1987,10 +1991,10 @@
       },
       "reporting": {
         "title": "Reports",
-        "description": "Optional: enable reports and gamification if you want analytics for the team.",
-        "guide": "Enable reporting if you want it.",
+        "description": "Reports and gamification are on by default. Review the settings, or turn them off if you do not want analytics.",
+        "guide": "Review reporting — it is already on unless you turn it off.",
         "fields": {
-          "REPORTS_ENABLED": "Toggle Reports on to give the team analytics and burndown."
+          "REPORTS_ENABLED": "Reports is on by default. Leave it on for analytics and burndown, or turn it off."
         }
       },
       "finish": {

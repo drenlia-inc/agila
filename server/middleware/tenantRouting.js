@@ -102,16 +102,17 @@ const getTenantStoragePaths = (tenantId) => {
 // - Creating tables
 // - Running migrations
 // - Initializing default data
-const initializeDatabaseForTenant = async (tenantId) => {
-  // Use the refactored initializeDatabase from database.js
-  return await initializeDatabase(tenantId);
+const initializeDatabaseForTenant = async (tenantId, options = {}) => {
+  return await initializeDatabase(tenantId, options);
 };
 
 // Get or create database connection for tenant
 // In-flight map prevents concurrent first-hit requests from double-running migrations/init
 const dbInitInFlight = new Map();
 
-const getTenantDatabase = async (tenantId) => {
+const getTenantDatabase = async (tenantId, options = {}) => {
+  // Multi-tenant: never CREATE SCHEMA unless admin-portal / deploy asked to provision.
+  const provision = options.provision === true;
   // Normalize tenantId for cache key (null for single-tenant)
   const cacheKey = tenantId || 'default';
   
@@ -143,8 +144,9 @@ const getTenantDatabase = async (tenantId) => {
         );
         return cached;
       }
-      // Database closed / broken / schema dropped — remove from cache and re-init
-      console.warn(`⚠️ Database cache verification failed for tenant ${tenantId}, reinitializing:`, msg);
+      // Database closed / broken / schema dropped — drop the stale cache entry.
+      // Do not re-init (that would CREATE SCHEMA again) unless provision is set.
+      console.warn(`⚠️ Database cache verification failed for tenant ${tenantId}:`, msg);
       try {
         if (cached.db && typeof cached.db.close === 'function') {
           await cached.db.close();
@@ -153,6 +155,9 @@ const getTenantDatabase = async (tenantId) => {
         /* ignore */
       }
       dbCache.delete(cacheKey);
+      if (isMultiTenant() && tenantId && !provision) {
+        throw error;
+      }
     }
   }
 
@@ -162,7 +167,7 @@ const getTenantDatabase = async (tenantId) => {
 
   const initPromise = (async () => {
     // Initialize database (creates tables, runs migrations, etc.)
-    const dbInfo = await initializeDatabaseForTenant(tenantId);
+    const dbInfo = await initializeDatabaseForTenant(tenantId, { provision });
 
     // If version changed, broadcast to this tenant
     if (dbInfo.versionChanged && dbInfo.appVersion) {
@@ -329,8 +334,9 @@ export const tenantRouting = async (req, res, next) => {
       }
     }
     
-    // Get or create tenant database
-    const dbInfo = await getTenantDatabase(tenantId);
+    const dbInfo = await getTenantDatabase(tenantId, {
+      provision: Boolean(tenantId && allowsTenantProvision(req))
+    });
     
     // Log schema for debugging
     if (isMultiTenant() && tenantId) {
@@ -440,12 +446,7 @@ export const getAllTenantDatabases = async () => {
     tenantIds = [...dbCache.keys()].filter((k) => k !== 'default');
   }
 
-  // Ensure cached tenants are included even if schema listing missed one
-  for (const key of dbCache.keys()) {
-    if (key !== 'default' && !tenantIds.includes(key)) {
-      tenantIds.push(key);
-    }
-  }
+  // Do not reopen tenants that only remain in this pod's memory after DROP SCHEMA.
 
   for (const tenantId of tenantIds) {
     try {

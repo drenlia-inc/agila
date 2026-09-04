@@ -378,9 +378,10 @@ export const OWNER_SETUP_STEPS: OwnerSetupStepDef[] = [
     adminTab: 'sso',
     tourTarget: '[data-tour-id="admin-sso"]',
     guideFields: [
+      { fieldKey: 'providersOverview' },
       { selector: '[data-setting-key="GOOGLE_CLIENT_ID"]', fieldKey: 'GOOGLE_CLIENT_ID' },
-      { selector: '[data-setting-key="GOOGLE_CLIENT_SECRET"]', fieldKey: 'GOOGLE_CLIENT_SECRET' },
-      { selector: '[data-setting-key="GOOGLE_CALLBACK_URL"]', fieldKey: 'GOOGLE_CALLBACK_URL' },
+      { selector: '[data-setting-key="GITHUB_CLIENT_ID"]', fieldKey: 'GITHUB_CLIENT_ID' },
+      { selector: '[data-setting-key="M365_CLIENT_ID"]', fieldKey: 'M365_CLIENT_ID' },
     ],
   },
   {
@@ -394,7 +395,7 @@ export const OWNER_SETUP_STEPS: OwnerSetupStepDef[] = [
         fieldKey: 'switchToCustomStorage',
         when: 'multiTenantManagedStorage',
       },
-      { selector: '[data-setting-key="STORAGE_BACKEND"]', fieldKey: 'STORAGE_BACKEND' },
+      { selector: '[data-setting-key="STORAGE_BACKEND"]', fieldKey: 'STORAGE_BACKEND', when: 'singleTenant' },
       { selector: '[data-setting-key="S3_BUCKET"]', fieldKey: 'S3_BUCKET' },
       { selector: '[data-setting-key="S3_REGION"]', fieldKey: 'S3_REGION' },
       { selector: '[data-setting-key="S3_ACCESS_KEY_ID"]', fieldKey: 'S3_ACCESS_KEY_ID' },
@@ -665,6 +666,38 @@ export function firstIncompleteStepId(progress: OwnerSetupProgress): OwnerSetupS
   return 'finish';
 }
 
+/** 1-based number among task steps (welcome / finish return null). */
+export function ownerSetupTaskStepNumber(stepId: OwnerSetupStepId): number | null {
+  const tasks = OWNER_SETUP_STEPS.filter(isOwnerSetupProgressStep);
+  const idx = tasks.findIndex((s) => s.id === stepId);
+  return idx >= 0 ? idx + 1 : null;
+}
+
+export function ownerSetupAdjacentStepId(
+  stepId: OwnerSetupStepId,
+  direction: -1 | 1
+): OwnerSetupStepId | null {
+  const idx = OWNER_SETUP_STEPS.findIndex((s) => s.id === stepId);
+  if (idx < 0) return null;
+  return OWNER_SETUP_STEPS[idx + direction]?.id ?? null;
+}
+
+/** Reset window / admin scroll so the next settings screen starts at the top. */
+export function scrollOwnerSetupPageToTop(): void {
+  if (typeof window === 'undefined') return;
+  const run = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    document.querySelectorAll<HTMLElement>('main, [data-admin-scroll]').forEach((el) => {
+      if (el.scrollTop > 0) el.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  };
+  run();
+  window.setTimeout(run, 80);
+  window.setTimeout(run, 250);
+}
+
 export function coreStepsComplete(progress: OwnerSetupProgress): boolean {
   return OWNER_SETUP_STEPS.filter((s) => !s.optional && isOwnerSetupProgressStep(s)).every((s) =>
     isStepResolved(progress, s.id)
@@ -678,16 +711,19 @@ export function getStepDef(stepId: OwnerSetupStepId): OwnerSetupStepDef {
 /** Wait until a selector exists in the DOM (after admin tab navigation). */
 export async function waitForOwnerSetupTarget(
   selector: string,
-  timeoutMs = 4000
+  timeoutMs = 4000,
+  options?: { scroll?: boolean }
 ): Promise<Element | null> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const el = document.querySelector(selector);
     if (el) {
-      try {
-        (el as HTMLElement).scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' as ScrollBehavior });
-      } catch {
-        (el as HTMLElement).scrollIntoView({ block: 'center', inline: 'nearest' });
+      if (options?.scroll !== false) {
+        try {
+          (el as HTMLElement).scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' as ScrollBehavior });
+        } catch {
+          (el as HTMLElement).scrollIntoView({ block: 'center', inline: 'nearest' });
+        }
       }
       return el;
     }
@@ -710,4 +746,68 @@ export function constrainOwnerSetupPositionX(
   if (typeof window === 'undefined') return x;
   const maxX = Math.max(margin, window.innerWidth - panelWidth - margin);
   return Math.min(maxX, Math.max(margin, x));
+}
+
+const DEFAULT_POSITION_SLOP_PX = 8;
+
+/** True when the guide is still docked bottom-right (not user-dragged). */
+export function isOwnerSetupAtDefaultPosition(
+  positionX: number | null | undefined,
+  currentLeft: number,
+  panelWidth: number,
+  margin = 16
+): boolean {
+  const docked = defaultOwnerSetupPositionX(panelWidth, margin);
+  if (typeof positionX === 'number' && Number.isFinite(positionX)) {
+    return Math.abs(positionX - docked) <= DEFAULT_POSITION_SLOP_PX;
+  }
+  return Math.abs(currentLeft - docked) <= DEFAULT_POSITION_SLOP_PX;
+}
+
+/** CSS `left` so the panel sits just left of `element` without overlapping it. */
+export function ownerSetupLeftBesideElement(
+  element: Element,
+  panelWidth: number,
+  gap = 16,
+  margin = 16
+): number | null {
+  const leftEdge = ownerSetupNudgeAnchorLeft(element);
+  if (leftEdge == null) return null;
+  return constrainOwnerSetupPositionX(leftEdge - gap - panelWidth, panelWidth, margin);
+}
+
+/**
+ * Viewport X of a nudge anchor. Valid when the control is laid out — including
+ * below the fold — but not when a hidden Admin tab reports a zero box.
+ */
+export function ownerSetupNudgeAnchorLeft(element: Element): number | null {
+  const el = element as HTMLElement;
+  const rect = el.getBoundingClientRect();
+  if (rect.width >= 8 && rect.height >= 8 && rect.right > 8) {
+    return rect.left;
+  }
+  if (el.offsetWidth < 8) return null;
+  let x = 0;
+  let node: HTMLElement | null = el;
+  while (node) {
+    x += node.offsetLeft;
+    node = node.offsetParent as HTMLElement | null;
+  }
+  const viewportLeft = x - window.scrollX;
+  if (viewportLeft + el.offsetWidth <= 8) return null;
+  return viewportLeft;
+}
+
+/** Wait until the Site Settings Cancel control is laid out (may be below the fold). */
+export async function waitForOwnerSetupNudgeAnchor(
+  selector: string,
+  timeoutMs = 4000
+): Promise<Element | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const el = document.querySelector(selector);
+    if (el && ownerSetupNudgeAnchorLeft(el) != null) return el;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  return null;
 }
