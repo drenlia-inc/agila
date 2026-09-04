@@ -534,6 +534,7 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
         <div className="flex gap-2 ml-auto">
           <button
             type="button"
+            data-owner-setup-nudge="site-settings-cancel"
             onClick={onCancel}
             disabled={!hasChanges}
             className="px-4 py-1.5 text-sm bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"

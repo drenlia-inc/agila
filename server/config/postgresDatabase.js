@@ -340,13 +340,24 @@ class PostgresDatabase {
     throw new Error('Custom functions not supported in PostgreSQL adapter');
   }
 
-  async ensureSchema() {
+  async ensureSchema(options = {}) {
     if (this.schema === 'public') {
       return;
     }
 
+    const provision = options.provision === true;
     const adminClient = await this.pool.connect();
     try {
+      const exists = await adminClient.query(
+        `SELECT 1 FROM information_schema.schemata WHERE schema_name = $1`,
+        [this.schema]
+      );
+      if (exists.rows.length) {
+        return;
+      }
+      if (!provision) {
+        throw new Error(`Tenant schema "${this.schema}" does not exist`);
+      }
       const quotedSchema = `"${this.schema}"`;
       await adminClient.query(`CREATE SCHEMA IF NOT EXISTS ${quotedSchema}`);
       const check = await adminClient.query(

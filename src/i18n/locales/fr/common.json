@@ -1849,6 +1849,7 @@
     "expand": "Agrandir le guide de configuration",
     "dismiss": "Fermer le guide",
     "dragHint": "Glisser horizontalement pour repositionner",
+    "moveHintLive": "Cette fenêtre peut être déplacée vers la gauche ou la droite depuis la poignée en haut.",
     "focusModeHint": "Étape en cours",
     "showAllSteps": "Afficher toutes les étapes",
     "goThere": "Y aller",
@@ -1858,6 +1859,8 @@
     "markDone": "Marquer terminé",
     "skip": "Passer",
     "getStarted": "Commencer",
+    "previousStep": "Étape précédente",
+    "stepNumbered": "{{number}}. {{title}}",
     "doItLater": "Plus tard",
     "closeGuide": "Fermer le guide",
     "reviewSteps": "Revoir les étapes",
@@ -1895,7 +1898,7 @@
       },
       "mail": {
         "title": "Serveur de messagerie",
-        "description": "Configurez SMTP et envoyez un e-mail de test pour les invitations et réinitialisations. Passez cette étape si vous n'avez pas besoin d'e-mails sortants.",
+        "description": "Configurez SMTP et envoyez un e-mail de test pour les invitations et réinitialisations. Passez cette étape si vous n'avez pas besoin de configurer votre propre serveur de messagerie sortant.",
         "descriptionMultiTenant": "L'e-mail est géré <platform>par la plateforme</platform>. Cliquez sur <smtpButton/> si vous voulez utiliser votre propre serveur de messagerie. Passez cette étape si vous n'avez pas besoin de votre propre serveur.",
         "guide": "Remplissez SMTP, testez, puis activez le courrier.",
         "fields": {
@@ -1953,22 +1956,23 @@
         }
       },
       "sso": {
-        "title": "SSO Google",
-        "description": "Facultatif : activez Google OAuth pour que l'équipe se connecte avec Google.",
-        "guide": "Saisissez les identifiants Google OAuth.",
+        "title": "SSO / connexion",
+        "description": "Facultatif : activez la connexion Google, GitHub ou Microsoft pour que l'équipe utilise OAuth plutôt qu'un mot de passe local.",
+        "guide": "Configurez les fournisseurs OAuth souhaités.",
         "fields": {
-          "GOOGLE_CLIENT_ID": "Collez votre Client ID Google OAuth.",
-          "GOOGLE_CLIENT_SECRET": "Collez votre Client Secret Google OAuth.",
-          "GOOGLE_CALLBACK_URL": "Vérifiez que l'URL de callback correspond à la console Google Cloud."
+          "providersOverview": "Activez Google, GitHub et/ou Microsoft sur cet écran, puis saisissez les identifiants du fournisseur.",
+          "GOOGLE_CLIENT_ID": "Pour Google : collez l’ID client OAuth (secret et callback dans la même section).",
+          "GITHUB_CLIENT_ID": "Pour GitHub : collez l’ID client de l’application OAuth (secret et callback dans la même section).",
+          "M365_CLIENT_ID": "Pour Microsoft : collez l’ID client de l’application (locataire, secret et callback dans la même section)."
         }
       },
       "storage": {
         "title": "Stockage des fichiers (S3)",
         "description": "Facultatif : utilisez le disque ou configurez votre propre bucket S3 compatible pour les téléversements. Testez la connexion avant d'activer S3.",
-        "descriptionMultiTenant": "Le stockage des fichiers est géré par la plateforme. Choisissez Utiliser votre propre bucket S3 d'abord si vous voulez votre propre bucket, puis saisissez les identifiants, testez la connexion et terminez la migration. Passez si le stockage de la plateforme convient.",
+        "descriptionMultiTenant": "Le stockage des fichiers est géré par la plateforme. Choisissez Utiliser votre propre bucket S3 si vous voulez votre propre bucket, puis saisissez les identifiants, testez la connexion et terminez la migration. Passez si le stockage de la plateforme convient.",
         "guide": "Configurez le stockage ou passez à votre propre bucket S3.",
         "fields": {
-          "switchToCustomStorage": "Cliquez d'abord sur Utiliser votre propre bucket S3 (confirmer) pour saisir les paramètres de votre bucket.",
+          "switchToCustomStorage": "Cliquez sur Utiliser votre propre bucket S3 (confirmer) pour saisir les paramètres de votre bucket.",
           "STORAGE_BACKEND": "Choisissez Disque ou S3 pour l'emplacement des fichiers.",
           "S3_BUCKET": "Saisissez le nom de votre bucket S3.",
           "S3_REGION": "Saisissez la région du bucket (ex. ca-central-1).",
@@ -1987,10 +1991,10 @@
       },
       "reporting": {
         "title": "Rapports",
-        "description": "Facultatif : activez les rapports et la gamification si vous voulez des analyses d'équipe.",
-        "guide": "Activez les rapports si vous le souhaitez.",
+        "description": "Les rapports et la gamification sont activés par défaut. Vérifiez les réglages, ou désactivez-les si vous ne voulez pas d’analyses.",
+        "guide": "Vérifiez les rapports — ils sont déjà activés sauf si vous les désactivez.",
         "fields": {
-          "REPORTS_ENABLED": "Activez Rapports pour offrir analyses et burndown à l'équipe."
+          "REPORTS_ENABLED": "Rapports est activé par défaut. Laissez-le pour les analyses et le burndown, ou désactivez-le."
         }
       },
       "finish": {

@@ -820,7 +820,9 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
             <div
               role="radiogroup"
               aria-label={t('storage.backend')}
-              className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-2"
+              className={`mt-1.5 grid grid-cols-1 gap-2 ${
+                multiTenant ? '' : 'sm:grid-cols-2'
+              }`}
             >
               {(
                 [
@@ -842,17 +844,13 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
                       'border-indigo-400 dark:border-indigo-500 bg-indigo-50 dark:bg-indigo-950/50 ring-2 ring-indigo-300 dark:ring-indigo-700',
                     iconWrap: 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300',
                   },
-                ]
-              ).map(({ value, label, hint, Icon, selectedClass, iconWrap }) => {
+                ] as const
+              )
+                .filter((choice) => !(multiTenant && choice.value === 'disk'))
+                .map(({ value, label, hint, Icon, selectedClass, iconWrap }) => {
                 const selected = backend === value;
                 const isSaved = savedBackend === value;
-                // Multi-tenant: disk is never available across pods, but custom S3 must stay selectable
-                // (e.g. tenants that still have STORAGE_BACKEND=disk when platform S3 was not provisioned).
-                // Managed S3 locks both cards — use "Use your own S3 bucket" instead.
-                const disabled =
-                  configuringDest ||
-                  isManaged ||
-                  (value === 'disk' && multiTenant);
+                const disabled = configuringDest || isManaged;
                 return (
                   <button
                     key={value}
@@ -909,11 +907,9 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
                 );
               })}
             </div>
-            {multiTenant && (
+            {multiTenant && !isManaged && backend === 'disk' && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                {!isManaged && backend === 'disk'
-                  ? t('storage.multiTenantDiskStuckHint')
-                  : t('storage.multiTenantHint')}
+                {t('storage.multiTenantDiskStuckHint')}
               </p>
             )}
             {s3ActivationBlocked && (

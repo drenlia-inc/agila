@@ -40,6 +40,111 @@ import path from 'path';
 
 const router = express.Router();
 
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+/** Shape expected by admin Inspect Plan tab (not raw LicenseManager output). */
+async function buildAdminPlanView(db) {
+  const licenseManager = getLicenseManager(db);
+  const licenseInfo = await licenseManager.getLicenseInfo();
+
+  if (!licenseInfo.enabled) {
+    const isDemoMode = process.env.DEMO_ENABLED === 'true';
+    return {
+      success: true,
+      data: {
+        plan: 'unlimited',
+        message: isDemoMode
+          ? 'Licensing disabled (demo mode - resets hourly)'
+          : 'Licensing disabled (self-hosted mode)',
+        features: []
+      }
+    };
+  }
+
+  if (!licenseInfo.limits) {
+    return {
+      success: true,
+      data: {
+        plan: 'unlimited',
+        message: 'No limits configured',
+        features: []
+      }
+    };
+  }
+
+  const isMultiTenant = process.env.MULTI_TENANT === 'true';
+  const dbSettings = {};
+  try {
+    const licenseSettings = await licenseSettingsQueries.getAllLicenseSettings(db);
+    licenseSettings.forEach((setting) => {
+      let key = setting.settingKey;
+      if (key === 'SUPPORT_TYPE') key = 'SUPPORT_LEVEL';
+      if (['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'].includes(key)) {
+        if (key === 'SUPPORT_LEVEL' || key === 'AI_TIER') {
+          dbSettings[key] = setting.settingValue;
+        } else {
+          dbSettings[key] = parseInt(setting.settingValue, 10);
+        }
+      }
+    });
+  } catch (error) {
+    console.warn('License settings table not found or accessible:', error.message);
+  }
+
+  const getDisplayValue = (key) => {
+    if (isMultiTenant) {
+      return dbSettings[key] !== undefined ? dbSettings[key] : licenseInfo.limits[key];
+    }
+    return licenseInfo.limits[key];
+  };
+
+  const feature = (key, currentUsage, limitReached, extra = {}) => ({
+    key,
+    value: getDisplayValue(key),
+    inMemory: isMultiTenant ? null : licenseInfo.limits[key],
+    database: dbSettings[key] !== undefined ? dbSettings[key] : null,
+    currentUsage,
+    limitReached,
+    ...extra
+  });
+
+  return {
+    success: true,
+    data: {
+      plan: getDisplayValue('SUPPORT_LEVEL') || 'basic',
+      usage: licenseInfo.usage,
+      limitsReached: licenseInfo.limitsReached,
+      limits: {
+        USER_LIMIT: getDisplayValue('USER_LIMIT'),
+        TASK_LIMIT: getDisplayValue('TASK_LIMIT'),
+        BOARD_LIMIT: getDisplayValue('BOARD_LIMIT'),
+        STORAGE_LIMIT: getDisplayValue('STORAGE_LIMIT'),
+        WEBHOOK_LIMIT: getDisplayValue('WEBHOOK_LIMIT'),
+        SUPPORT_LEVEL: getDisplayValue('SUPPORT_LEVEL'),
+        AI_TIER: getDisplayValue('AI_TIER')
+      },
+      features: [
+        feature('USER_LIMIT', licenseInfo.usage.users, licenseInfo.limitsReached.users),
+        feature('TASK_LIMIT', licenseInfo.usage.totalTasks, false),
+        feature('BOARD_LIMIT', licenseInfo.usage.boards, licenseInfo.limitsReached.boards),
+        feature('STORAGE_LIMIT', licenseInfo.usage.storage, licenseInfo.limitsReached.storage, {
+          currentUsageFormatted: formatBytes(licenseInfo.usage.storage)
+        }),
+        feature('WEBHOOK_LIMIT', licenseInfo.usage.webhooks, licenseInfo.limitsReached.webhooks),
+        feature('SUPPORT_LEVEL', undefined, undefined),
+        feature('AI_TIER', undefined, undefined)
+      ],
+      boardTaskCounts: licenseInfo.boardTaskCounts
+    }
+  };
+}
+
 function isInspectSupportRead(req) {
   if (req.method !== 'GET') return false;
   const path = String(req.path || '').replace(/\/+$/, '') || '/';
@@ -201,24 +306,7 @@ router.get('/inspect-snapshot', authenticateAdminPortal, async (req, res) => {
       });
       return { success: true, data: formattedUsers };
     }),
-    pack('plan', async () => {
-      const licenseManager = getLicenseManager(db);
-      const licenseInfo = await licenseManager.getLicenseInfo();
-      if (!licenseInfo.enabled) {
-        const isDemoMode = process.env.DEMO_ENABLED === 'true';
-        return {
-          success: true,
-          data: {
-            plan: 'unlimited',
-            message: isDemoMode
-              ? 'Licensing disabled (demo mode - resets hourly)'
-              : 'Licensing disabled (self-hosted mode)',
-            features: []
-          }
-        };
-      }
-      return { success: true, data: licenseInfo };
-    }),
+    pack('plan', async () => buildAdminPlanView(db)),
     pack('owner', async () => {
       const ownerEmail = (await helpers.getSetting(db, 'OWNER')) || null;
       return { success: true, data: { owner: ownerEmail, timestamp: new Date().toISOString() } };
@@ -1222,161 +1310,7 @@ router.get('/health', authenticateAdminPortal, async (req, res) => {
 router.get('/plan', authenticateAdminPortal, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    // Get LicenseManager instance
-    const licenseManager = getLicenseManager(db);
-    
-    console.log('🔍 LicenseManager created, checking license info...');
-    
-    // Get actual license information with current usage
-    const licenseInfo = await licenseManager.getLicenseInfo();
-    console.log('🔍 License info:', JSON.stringify(licenseInfo, null, 2));
-    
-    if (!licenseInfo.enabled) {
-      const isDemoMode = process.env.DEMO_ENABLED === 'true';
-      return res.json({
-        success: true,
-        data: {
-          plan: 'unlimited',
-          message: isDemoMode 
-            ? 'Licensing disabled (demo mode - resets hourly)'
-            : 'Licensing disabled (self-hosted mode)',
-          features: []
-        }
-      });
-    }
-
-    if (!licenseInfo.limits) {
-      return res.json({
-        success: true,
-        data: {
-          plan: 'unlimited',
-          message: 'No limits configured',
-          features: []
-        }
-      });
-    }
-
-    const isMultiTenant = process.env.MULTI_TENANT === 'true';
-    
-    // Get database values from license_settings table
-    const dbSettings = {};
-    try {
-      // MIGRATED: Get all license settings using sqlManager
-      const licenseSettings = await licenseSettingsQueries.getAllLicenseSettings(db);
-      licenseSettings.forEach(setting => {
-        let key = setting.settingKey;
-        if (key === 'SUPPORT_TYPE') key = 'SUPPORT_LEVEL';
-        if (['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'].includes(key)) {
-          // Parse numeric values, keep string values as-is
-          if (key === 'SUPPORT_LEVEL' || key === 'AI_TIER') {
-            dbSettings[key] = setting.settingValue;
-          } else {
-            dbSettings[key] = parseInt(setting.settingValue, 10);
-          }
-        }
-      });
-    } catch (error) {
-      console.warn('License settings table not found or accessible:', error.message);
-    }
-
-    // Format storage size for display
-    const formatBytes = (bytes) => {
-      if (bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    };
-
-    // In multi-tenant mode, database values are the source of truth
-    // In single-tenant mode, licenseInfo.limits already merges db with env vars
-    // For display purposes, prioritize database values when available
-    const getDisplayValue = (key) => {
-      if (isMultiTenant) {
-        // In multi-tenant mode, always use database value if available
-        return dbSettings[key] !== undefined ? dbSettings[key] : licenseInfo.limits[key];
-      } else {
-        // In single-tenant mode, licenseInfo.limits already has the merged value
-        return licenseInfo.limits[key];
-      }
-    };
-
-    const planInfo = {
-      plan: getDisplayValue('SUPPORT_LEVEL') || 'basic',
-      usage: licenseInfo.usage,
-      limitsReached: licenseInfo.limitsReached,
-      // For backward compatibility, also include the limits object with display values
-      limits: {
-        USER_LIMIT: getDisplayValue('USER_LIMIT'),
-        TASK_LIMIT: getDisplayValue('TASK_LIMIT'),
-        BOARD_LIMIT: getDisplayValue('BOARD_LIMIT'),
-        STORAGE_LIMIT: getDisplayValue('STORAGE_LIMIT'),
-        WEBHOOK_LIMIT: getDisplayValue('WEBHOOK_LIMIT'),
-        SUPPORT_LEVEL: getDisplayValue('SUPPORT_LEVEL'),
-        AI_TIER: getDisplayValue('AI_TIER')
-      },
-      features: [
-        {
-          key: 'USER_LIMIT',
-          value: getDisplayValue('USER_LIMIT'),
-          inMemory: isMultiTenant ? null : licenseInfo.limits.USER_LIMIT, // Only show in-memory in single-tenant
-          database: dbSettings.USER_LIMIT !== undefined ? dbSettings.USER_LIMIT : null,
-          currentUsage: licenseInfo.usage.users,
-          limitReached: licenseInfo.limitsReached.users
-        },
-        {
-          key: 'TASK_LIMIT',
-          value: getDisplayValue('TASK_LIMIT'),
-          inMemory: isMultiTenant ? null : licenseInfo.limits.TASK_LIMIT,
-          database: dbSettings.TASK_LIMIT !== undefined ? dbSettings.TASK_LIMIT : null,
-          currentUsage: licenseInfo.usage.totalTasks,
-          limitReached: false // Task limit is per board, not global
-        },
-        {
-          key: 'BOARD_LIMIT',
-          value: getDisplayValue('BOARD_LIMIT'),
-          inMemory: isMultiTenant ? null : licenseInfo.limits.BOARD_LIMIT,
-          database: dbSettings.BOARD_LIMIT !== undefined ? dbSettings.BOARD_LIMIT : null,
-          currentUsage: licenseInfo.usage.boards,
-          limitReached: licenseInfo.limitsReached.boards
-        },
-        {
-          key: 'STORAGE_LIMIT',
-          value: getDisplayValue('STORAGE_LIMIT'),
-          inMemory: isMultiTenant ? null : licenseInfo.limits.STORAGE_LIMIT,
-          database: dbSettings.STORAGE_LIMIT !== undefined ? dbSettings.STORAGE_LIMIT : null,
-          currentUsage: licenseInfo.usage.storage,
-          currentUsageFormatted: formatBytes(licenseInfo.usage.storage),
-          limitReached: licenseInfo.limitsReached.storage
-        },
-        {
-          key: 'WEBHOOK_LIMIT',
-          value: getDisplayValue('WEBHOOK_LIMIT'),
-          inMemory: isMultiTenant ? null : licenseInfo.limits.WEBHOOK_LIMIT,
-          database: dbSettings.WEBHOOK_LIMIT !== undefined ? dbSettings.WEBHOOK_LIMIT : null,
-          currentUsage: licenseInfo.usage.webhooks,
-          limitReached: licenseInfo.limitsReached.webhooks
-        },
-        {
-          key: 'SUPPORT_LEVEL',
-          value: getDisplayValue('SUPPORT_LEVEL'),
-          inMemory: isMultiTenant ? null : licenseInfo.limits.SUPPORT_LEVEL,
-          database: dbSettings.SUPPORT_LEVEL !== undefined ? dbSettings.SUPPORT_LEVEL : null
-        },
-        {
-          key: 'AI_TIER',
-          value: getDisplayValue('AI_TIER'),
-          inMemory: isMultiTenant ? null : licenseInfo.limits?.AI_TIER,
-          database: dbSettings.AI_TIER !== undefined ? dbSettings.AI_TIER : null
-        }
-      ],
-      boardTaskCounts: licenseInfo.boardTaskCounts
-    };
-
-    res.json({
-      success: true,
-      data: planInfo
-    });
+    res.json(await buildAdminPlanView(db));
   } catch (error) {
     console.error('Error fetching plan info:', error);
     
