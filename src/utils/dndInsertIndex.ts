@@ -19,6 +19,8 @@ import { insertIndexFromColumnLayout } from './columnVirtualLayout';
 const INSERT_HYSTERESIS_PX = 6;
 /** Ghost past the task-list edge by this much snaps to top/bottom. */
 const COLUMN_EDGE_MAGNET_PX = 12;
+/** Ignore midY jitter smaller than this when deciding up vs down. */
+const DIRECTION_DEADZONE_PX = 2;
 /** Overlay width in a second column that counts as “straddling”. */
 const STRADDLE_COLUMN_MIN_WIDTH = 24;
 
@@ -26,7 +28,16 @@ type InsertHysteresis = {
   columnId: string;
   insertIndex: number;
   midY: number;
+  movingDown: boolean;
 };
+
+/** Ghost top edge at the first card’s top — slot 0, independent of drag speed. */
+function overlayAtFirstCardTop(
+  overlay: DOMRectReadOnly,
+  first: { index: number; top: number }
+): boolean {
+  return first.index === 0 && overlay.top <= first.top + COLUMN_EDGE_MAGNET_PX;
+}
 
 let insertHysteresis: InsertHysteresis | null = null;
 
@@ -466,7 +477,16 @@ export function resolveInsertAtColumnStackEnds(
     const tr = topZone.getBoundingClientRect();
     if (pointerY >= tr.top && pointerY <= tr.bottom + 4) return 0;
   }
+  const header = root.querySelector('[data-column-header]');
+  if (header instanceof HTMLElement) {
+    const hr = header.getBoundingClientRect();
+    if (pointerY >= hr.top - 4 && pointerY <= hr.bottom + 8) return 0;
+    if (overlay && overlay.top <= hr.bottom + 8 && overlay.top + 24 >= hr.top) {
+      return 0;
+    }
+  }
   if (firstIsColumnStart) {
+    if (overlay && overlayAtFirstCardTop(overlay, first)) return 0;
     if (pointerY <= first.top + 4) return 0;
     if (overlay && overlay.bottom <= first.top + 8) return 0;
   }
@@ -477,6 +497,10 @@ export function resolveInsertAtColumnStackEnds(
 /**
  * Leading-edge vs card midlines. Down: ghost bottom crosses next midline →
  * increment. Up: ghost top crosses previous midline → decrement.
+ *
+ * A title-only stack can be shorter than the ghost. overlay.bottom past the
+ * last card is then true even when the ghost still sits on the first card —
+ * that must not snap to the end (the hole would vanish at the top).
  */
 function insertIndexFromOverlayEdges(
   rows: LayoutRow[],
@@ -489,10 +513,22 @@ function insertIndexFromOverlayEdges(
   if (overlay.bottom <= first.top + COLUMN_EDGE_MAGNET_PX) {
     return first.index;
   }
-  // Past the last *mounted* card’s midline → end only when that card is last.
+
+  // Top of column: ghost top vs first card top. Do not require “moving up”
+  // — slow drags otherwise sit on the first card with midY ticking down and
+  // never open slot 0.
+  if (overlayAtFirstCardTop(overlay, first)) {
+    return 0;
+  }
+
+  const topOnFirstCard = overlay.top < rowMidline(first);
+
+  // Past the last *mounted* card only when the ghost has actually moved down
+  // off the first card (not merely because the ghost is taller than the stack).
   if (
-    overlay.top >= rowMidline(last) - 2 ||
-    overlay.bottom >= last.top + last.height - 4
+    !topOnFirstCard &&
+    (overlay.top >= rowMidline(last) - 2 ||
+      overlay.bottom >= last.top + last.height - 4)
   ) {
     if (lastVisibleIsColumnEnd(last.index, layoutCount)) {
       return layoutCount != null ? layoutCount : last.index + 1;
@@ -516,33 +552,45 @@ function applyInsertHysteresis(
   columnId: string,
   rows: LayoutRow[],
   overlay: DOMRectReadOnly,
-  raw: number
+  raw: number,
+  movingDown: boolean
 ): number {
   const midY = overlay.top + overlay.height / 2;
+  const remember = (insertIndex: number) => {
+    insertHysteresis = { columnId, insertIndex, midY, movingDown };
+    return insertIndex;
+  };
+  const first = rows[0];
+  if (first && overlayAtFirstCardTop(overlay, first)) {
+    return remember(0);
+  }
+  if (
+    first &&
+    insertHysteresis?.columnId === columnId &&
+    insertHysteresis.insertIndex === 0 &&
+    overlay.top <= first.top + COLUMN_EDGE_MAGNET_PX + INSERT_HYSTERESIS_PX
+  ) {
+    return remember(0);
+  }
   const last = insertHysteresis?.columnId === columnId ? insertHysteresis : null;
   if (!last) {
-    insertHysteresis = { columnId, insertIndex: raw, midY };
-    return raw;
+    return remember(raw);
   }
   if (raw === last.insertIndex) {
-    insertHysteresis = { columnId, insertIndex: raw, midY };
-    return raw;
+    return remember(raw);
   }
   if (raw > last.insertIndex) {
     const crossed = rows.find((r) => r.index === last.insertIndex);
     if (crossed && overlay.bottom < rowMidline(crossed) + INSERT_HYSTERESIS_PX) {
-      insertHysteresis = { columnId, insertIndex: last.insertIndex, midY };
-      return last.insertIndex;
+      return remember(last.insertIndex);
     }
   } else {
     const prev = rows.find((r) => r.index === last.insertIndex - 1);
     if (prev && overlay.top > rowMidline(prev) - INSERT_HYSTERESIS_PX) {
-      insertHysteresis = { columnId, insertIndex: last.insertIndex, midY };
-      return last.insertIndex;
+      return remember(last.insertIndex);
     }
   }
-  insertHysteresis = { columnId, insertIndex: raw, midY };
-  return raw;
+  return remember(raw);
 }
 
 /**
@@ -593,8 +641,8 @@ export function resolveInsertIndexFromOverlay(
   if (!root) return null;
 
   const midY = overlay.top + overlay.height / 2;
-  const remember = (insertIndex: number) => {
-    insertHysteresis = { columnId, insertIndex, midY };
+  const remember = (insertIndex: number, movingDown = false) => {
+    insertHysteresis = { columnId, insertIndex, midY, movingDown };
     return insertIndex;
   };
 
@@ -606,10 +654,14 @@ export function resolveInsertIndexFromOverlay(
     .filter((row) => !rowIsExcluded(row, exclude))
     .map((row) => {
       const index = Number(row.dataset.layoutIndex);
-      const rect = row.getBoundingClientRect();
+      const card =
+        row.firstElementChild instanceof HTMLElement
+          ? row.firstElementChild
+          : row;
+      const rect = card.getBoundingClientRect();
       return { index, top: rect.top, height: rect.height };
     })
-    .filter((r) => Number.isFinite(r.index) && r.index >= 0 && r.height > 0)
+    .filter((r) => Number.isFinite(r.index) && r.index >= 0 && r.height > 8)
     .sort((a, b) => a.index - b.index);
 
   const list = columnTaskList(root);
@@ -624,9 +676,11 @@ export function resolveInsertIndexFromOverlay(
   const lastRow = rows[rows.length - 1];
   const y = pointerY ?? midY;
   const lastIsColumnEnd = lastVisibleIsColumnEnd(lastRow.index, layoutCount);
+  const topOnFirstCard = overlay.top < rowMidline(rows[0]);
 
   if (
     lastIsColumnEnd &&
+    !topOnFirstCard &&
     ((pointerY != null && pointerY >= lastRow.top + lastRow.height - 8) ||
       overlay.top >= rowMidline(lastRow))
   ) {
@@ -638,9 +692,18 @@ export function resolveInsertIndexFromOverlay(
   }
 
   const last = insertHysteresis?.columnId === columnId ? insertHysteresis : null;
-  const movingDown = last == null || midY >= last.midY;
-  const raw = insertIndexFromOverlayEdges(rows, overlay, movingDown, layoutCount);
-  return applyInsertHysteresis(columnId, rows, overlay, raw);
+  let movingDown = last?.movingDown ?? !topOnFirstCard;
+  if (last) {
+    if (midY > last.midY + DIRECTION_DEADZONE_PX) movingDown = true;
+    else if (midY < last.midY - DIRECTION_DEADZONE_PX) movingDown = false;
+  }
+  const raw = insertIndexFromOverlayEdges(
+    rows,
+    overlay,
+    movingDown,
+    layoutCount
+  );
+  return applyInsertHysteresis(columnId, rows, overlay, raw, movingDown);
 }
 
 /**

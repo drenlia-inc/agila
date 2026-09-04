@@ -276,7 +276,7 @@ const TaskDragPreview: React.FC<{
         })}
       <div
         data-kanban-drag-overlay
-        className="relative z-10 bg-white rounded-lg shadow-2xl border border-gray-200 p-4 w-80 transform rotate-3 scale-105 opacity-90 ring-2 ring-blue-400"
+        className="relative z-10 bg-white rounded-lg shadow-2xl border border-gray-200 p-4 w-80 opacity-90 ring-2 ring-blue-400"
       >
         {isMultiDrag && (
           <div className="absolute -top-2 -right-2 z-20 flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-bold text-white shadow">

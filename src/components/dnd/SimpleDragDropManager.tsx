@@ -382,8 +382,6 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const liveCheckedIds = (): Set<string> | undefined =>
     checkedTaskIdsRef?.current ?? liveCheckedRef.current;
   const rafHandleRef = useRef<number | null>(null);
-  const lastProcessTimeRef = useRef<number>(0);
-  const THROTTLE_MS = 16; // ~60fps max
 
   const publishKeyboardSlot = () => {
     const slot = keyboardSlotRef.current;
@@ -461,6 +459,157 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const capturePendingCommitRef = useRef(capturePendingCommit);
   capturePendingCommitRef.current = capturePendingCommit;
 
+  const applyTaskDragPreviewFromPointer = () => {
+    if (!isDraggingTaskRef.current || isKeyboardDragRef.current) return;
+    const taskId = draggedTaskIdRef.current;
+    if (!taskId) return;
+
+    const bounds = tabAreaBoundsRef.current;
+    const isInTabArea =
+      pointerInBoardTabStrip(mouseXRef.current, mouseYRef.current) ||
+      (mouseXRef.current >= bounds.left &&
+        mouseXRef.current <= bounds.right &&
+        mouseYRef.current >= bounds.top &&
+        mouseYRef.current <= bounds.bottom);
+
+    if (isInTabArea && !isHoveringBoardTabRef.current) {
+      isHoveringBoardTabRef.current = true;
+      onBoardTabHover?.(true);
+      lastPreviewRef.current = null;
+      onDragPreviewChange?.(null);
+    } else if (!isInTabArea && isHoveringBoardTabRef.current) {
+      isHoveringBoardTabRef.current = false;
+      onBoardTabHover?.(false);
+    }
+    if (isHoveringBoardTabRef.current) return;
+
+    const origin = dragOriginRef.current;
+    const excludeIds = excludeIdsForDrag(taskId, activeBulkTaskIdsRef.current);
+    const overlay = getTaskDragOverlayRect() || overlayRectRef.current;
+    if (overlay) {
+      overlayRectRef.current = overlay;
+      if (overlayStartTopRef.current == null) {
+        overlayStartTopRef.current = overlay.top;
+        overlayStartLeftRef.current = overlay.left;
+      }
+    }
+    const hit = resolveKanbanDropTarget({
+      pointerX: mouseXRef.current,
+      pointerY: mouseYRef.current,
+      overlay,
+      origin,
+      excludeTaskIds: excludeIds,
+      overlayStartLeft: overlayStartLeftRef.current,
+    });
+    const columnId = hit?.columnId || null;
+    if (!columnId || !columnsRef.current[columnId] || hit == null) return;
+    const insertIndex = hit.insertIndex;
+    if (insertIndex == null) return;
+    const originColumnId = origin?.columnId || '';
+    let nextColumnId = columnId;
+    let nextInsert = insertIndex;
+    if (nextColumnId !== originColumnId) {
+      lastDestPreviewRef.current = { columnId: nextColumnId, insertIndex: nextInsert };
+      setTaskDropLock(taskId, originColumnId, lastDestPreviewRef.current);
+    } else if (lastDestPreviewRef.current) {
+      const last = lastDestPreviewRef.current;
+      const pointerCol = resolveColumnIdUnderPointer(
+        mouseXRef.current,
+        mouseYRef.current
+      );
+      const overlayCol = overlay
+        ? resolveColumnIdUnderRect(
+            overlay,
+            originColumnId,
+            overlayStartLeftRef.current
+          )
+        : null;
+      const sideways =
+        overlay != null &&
+        overlayStartLeftRef.current != null &&
+        Math.abs(overlay.left - overlayStartLeftRef.current) >= OVERLAY_SIDEWAYS_PX;
+      const pointerInOrigin = pointerCol === originColumnId;
+      const pointerDest =
+        pointerCol && pointerCol !== originColumnId ? pointerCol : null;
+      const overlayDest =
+        overlayCol && overlayCol !== originColumnId ? overlayCol : null;
+      const destInsertFor = (destColumnId: string, fallback: number) =>
+        (overlay
+          ? resolveInsertIndexFromOverlay(
+              destColumnId,
+              overlay,
+              excludeIds,
+              origin
+            )
+          : resolveInsertIndexUnderPointer(
+              destColumnId,
+              mouseYRef.current,
+              excludeIds,
+              mouseXRef.current,
+              null,
+              origin
+            )) ?? fallback;
+      if (pointerInOrigin) {
+        lastDestPreviewRef.current = null;
+      } else if (pointerDest && pointerDest !== last.columnId) {
+        const destInsert = destInsertFor(pointerDest, nextInsert);
+        lastDestPreviewRef.current = {
+          columnId: pointerDest,
+          insertIndex: destInsert,
+        };
+        nextColumnId = pointerDest;
+        nextInsert = destInsert;
+        setTaskDropLock(taskId, originColumnId, lastDestPreviewRef.current);
+      } else if (overlayDest && overlayDest !== last.columnId && sideways) {
+        const destInsert = destInsertFor(overlayDest, nextInsert);
+        lastDestPreviewRef.current = {
+          columnId: overlayDest,
+          insertIndex: destInsert,
+        };
+        nextColumnId = overlayDest;
+        nextInsert = destInsert;
+        setTaskDropLock(taskId, originColumnId, lastDestPreviewRef.current);
+      } else if (pointerDest) {
+        const destInsert = destInsertFor(pointerDest, last.insertIndex);
+        nextColumnId = pointerDest;
+        nextInsert = destInsert;
+        lastDestPreviewRef.current = {
+          columnId: pointerDest,
+          insertIndex: destInsert,
+        };
+        setTaskDropLock(taskId, originColumnId, lastDestPreviewRef.current);
+      } else {
+        lastDestPreviewRef.current = null;
+      }
+    }
+    const newPreview = {
+      targetColumnId: nextColumnId,
+      insertIndex: nextInsert,
+      isCrossColumn: originColumnId !== nextColumnId,
+    };
+    if (
+      !lastPreviewRef.current ||
+      lastPreviewRef.current.targetColumnId !== newPreview.targetColumnId ||
+      lastPreviewRef.current.insertIndex !== newPreview.insertIndex ||
+      lastPreviewRef.current.isCrossColumn !== newPreview.isCrossColumn
+    ) {
+      lastPreviewRef.current = newPreview;
+      onDragPreviewChange?.(newPreview);
+    }
+  };
+  const applyTaskDragPreviewFromPointerRef = useRef(applyTaskDragPreviewFromPointer);
+  applyTaskDragPreviewFromPointerRef.current = applyTaskDragPreviewFromPointer;
+
+  const scheduleTaskPreviewFromPointer = () => {
+    if (rafHandleRef.current !== null) return;
+    rafHandleRef.current = requestAnimationFrame(() => {
+      rafHandleRef.current = null;
+      applyTaskDragPreviewFromPointerRef.current();
+    });
+  };
+  const scheduleTaskPreviewFromPointerRef = useRef(scheduleTaskPreviewFromPointer);
+  scheduleTaskPreviewFromPointerRef.current = scheduleTaskPreviewFromPointer;
+
   /** Pointer is in the tab strip — in-board insert must not commit. */
   const pointerOnBoardTabStrip = () =>
     !isKeyboardDragRef.current &&
@@ -519,7 +668,8 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
   const dragOverSkippedCountRef = useRef<number>(0);
   const dragOverProcessedCountRef = useRef<number>(0);
 
-  // Track pointer for board-tab / column-top drop recovery without React re-renders
+  // Preview must follow the pointer even over the column header — dnd-kit
+  // dragOver often does not fire there, so the hole would stay between cards.
   useEffect(() => {
     const handleMove = (e: MouseEvent | PointerEvent) => {
       mouseYRef.current = e.clientY;
@@ -528,6 +678,7 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
       if (!isDraggingTaskRef.current) return;
       const overlay = getTaskDragOverlayRect();
       if (overlay) overlayRectRef.current = overlay;
+      scheduleTaskPreviewFromPointerRef.current();
     };
 
     document.addEventListener('pointermove', handleMove, { passive: true });
@@ -817,207 +968,21 @@ export const SimpleDragDropManager: React.FC<SimpleDragDropManagerProps> = React
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active } = event;
-    
     dragOverCallCountRef.current++;
-    
-    // PERFORMANCE: Throttle to max 60fps (16ms between updates)
-    const now = performance.now();
-    if (now - lastProcessTimeRef.current < THROTTLE_MS) {
-      // Skip this update - too soon since last one
-      dragOverSkippedCountRef.current++;
-      return;
-    }
-    
-    dragOverProcessedCountRef.current++;
-    
-    // PERFORMANCE: Cancel any pending RAF to avoid queuing multiple updates
-    if (rafHandleRef.current !== null) {
-      cancelAnimationFrame(rafHandleRef.current);
-    }
-    
-    // PERFORMANCE: Defer expensive operations to next animation frame
-    rafHandleRef.current = requestAnimationFrame(() => {
-      rafHandleRef.current = null;
-      lastProcessTimeRef.current = performance.now();
-      if (!isDraggingTaskRef.current && active.data?.current?.type === 'task') {
-        return;
-      }
-      
-      // FIRST: Check for mouse-based tab area detection (before any other logic)
-      const isTaskDrag = active.data?.current?.type === 'task';
-
-      if (isTaskDrag && isKeyboardDragRef.current) {
+    const isTaskDrag = active.data?.current?.type === 'task';
+    if (isTaskDrag) {
+      if (isKeyboardDragRef.current) {
         publishKeyboardSlotRef.current();
         return;
       }
-      
-      if (isTaskDrag) {
-        // Pure Y-coordinate based detection using dynamic tab bounds
-        const bounds = tabAreaBoundsRef.current;
-        const isInTabArea =
-          pointerInBoardTabStrip(mouseXRef.current, mouseYRef.current) ||
-          (mouseXRef.current >= bounds.left &&
-            mouseXRef.current <= bounds.right &&
-            mouseYRef.current >= bounds.top &&
-            mouseYRef.current <= bounds.bottom);
-        
-        if (isInTabArea && !isHoveringBoardTabRef.current) {
-          isHoveringBoardTabRef.current = true;
-          onBoardTabHover?.(true);
-          lastPreviewRef.current = null;
-          onDragPreviewChange?.(null);
-        } else if (!isInTabArea && isHoveringBoardTabRef.current) {
-          isHoveringBoardTabRef.current = false;
-          onBoardTabHover?.(false);
-        }
-      }
-      
-      if (isTaskDrag && isHoveringBoardTabRef.current) {
-        return;
-      }
-
-      const draggedTask = active.data?.current?.task as Task | undefined;
-      if (isTaskDrag && draggedTask) {
-        const origin = dragOriginRef.current;
-        const excludeIds = excludeIdsForDrag(
-          draggedTask.id,
-          activeBulkTaskIdsRef.current
-        );
-        const overlay = getTaskDragOverlayRect();
-        if (overlay) {
-          overlayRectRef.current = overlay;
-          if (overlayStartTopRef.current == null) {
-            overlayStartTopRef.current = overlay.top;
-            overlayStartLeftRef.current = overlay.left;
-          }
-        }
-        const hit = resolveKanbanDropTarget({
-          pointerX: mouseXRef.current,
-          pointerY: mouseYRef.current,
-          overlay,
-          origin,
-          excludeTaskIds: excludeIds,
-          overlayStartLeft: overlayStartLeftRef.current,
-        });
-        const columnId = hit?.columnId || null;
-        if (!columnId || !columnsRef.current[columnId] || hit == null) {
-          return;
-        }
-        const insertIndex = hit.insertIndex;
-        if (insertIndex == null) return;
-        const originColumnId = origin?.columnId || draggedTask.columnId;
-        let nextColumnId = columnId;
-        let nextInsert = insertIndex;
-        if (nextColumnId !== originColumnId) {
-          lastDestPreviewRef.current = { columnId: nextColumnId, insertIndex: nextInsert };
-          setTaskDropLock(draggedTask.id, originColumnId, lastDestPreviewRef.current);
-        } else if (lastDestPreviewRef.current) {
-          const last = lastDestPreviewRef.current;
-          const pointerCol = resolveColumnIdUnderPointer(
-            mouseXRef.current,
-            mouseYRef.current
-          );
-          const overlayCol = overlay
-            ? resolveColumnIdUnderRect(
-                overlay,
-                originColumnId,
-                overlayStartLeftRef.current
-              )
-            : null;
-          const sideways =
-            overlay != null &&
-            overlayStartLeftRef.current != null &&
-            Math.abs(overlay.left - overlayStartLeftRef.current) >= OVERLAY_SIDEWAYS_PX;
-          const pointerInOrigin = pointerCol === originColumnId;
-          const pointerDest =
-            pointerCol && pointerCol !== originColumnId ? pointerCol : null;
-          const overlayDest =
-            overlayCol && overlayCol !== originColumnId ? overlayCol : null;
-          const destInsertFor = (columnId: string, fallback: number) =>
-            (overlay
-              ? resolveInsertIndexFromOverlay(
-                  columnId,
-                  overlay,
-                  excludeIds,
-                  origin
-                )
-              : resolveInsertIndexUnderPointer(
-                  columnId,
-                  mouseYRef.current,
-                  excludeIds,
-                  mouseXRef.current,
-                  null,
-                  origin
-                )) ?? fallback;
-          // Pointer still in the source column: stay there. Overlay sliver
-          // used to keep dest locked and freeze insert index.
-          if (pointerInOrigin) {
-            lastDestPreviewRef.current = null;
-          } else if (pointerDest && pointerDest !== last.columnId) {
-            const destInsert = destInsertFor(pointerDest, nextInsert);
-            lastDestPreviewRef.current = {
-              columnId: pointerDest,
-              insertIndex: destInsert,
-            };
-            nextColumnId = pointerDest;
-            nextInsert = destInsert;
-            setTaskDropLock(
-              draggedTask.id,
-              originColumnId,
-              lastDestPreviewRef.current
-            );
-          } else if (overlayDest && overlayDest !== last.columnId && sideways) {
-            const destInsert = destInsertFor(overlayDest, nextInsert);
-            lastDestPreviewRef.current = {
-              columnId: overlayDest,
-              insertIndex: destInsert,
-            };
-            nextColumnId = overlayDest;
-            nextInsert = destInsert;
-            setTaskDropLock(
-              draggedTask.id,
-              originColumnId,
-              lastDestPreviewRef.current
-            );
-          } else if (pointerDest) {
-            const destInsert = destInsertFor(pointerDest, last.insertIndex);
-            nextColumnId = pointerDest;
-            nextInsert = destInsert;
-            lastDestPreviewRef.current = {
-              columnId: pointerDest,
-              insertIndex: destInsert,
-            };
-            setTaskDropLock(
-              draggedTask.id,
-              originColumnId,
-              lastDestPreviewRef.current
-            );
-          } else {
-            lastDestPreviewRef.current = null;
-          }
-        }
-        const newPreview = {
-          targetColumnId: nextColumnId,
-          insertIndex: nextInsert,
-          isCrossColumn: originColumnId !== nextColumnId,
-        };
-        if (
-          !lastPreviewRef.current ||
-          lastPreviewRef.current.targetColumnId !== newPreview.targetColumnId ||
-          lastPreviewRef.current.insertIndex !== newPreview.insertIndex ||
-          lastPreviewRef.current.isCrossColumn !== newPreview.isCrossColumn
-        ) {
-          lastPreviewRef.current = newPreview;
-          onDragPreviewChange?.(newPreview);
-        }
-        return;
-      }
-
-      if (!isTaskDrag && lastPreviewRef.current !== null) {
-        lastPreviewRef.current = null;
-        onDragPreviewChange?.(null);
-      }
-    });
+      dragOverProcessedCountRef.current++;
+      scheduleTaskPreviewFromPointer();
+      return;
+    }
+    if (lastPreviewRef.current !== null) {
+      lastPreviewRef.current = null;
+      onDragPreviewChange?.(null);
+    }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
