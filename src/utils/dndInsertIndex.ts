@@ -71,6 +71,40 @@ function unshiftRowsByHole<T extends { index: number; top: number }>(
   });
 }
 
+/**
+ * Pointer/overlay Y is live; card midlines after unshiftRowsByHole are not.
+ * A hole above the only card drops that card by ~76px, so the visual middle
+ * sits below the unshifted midline and insert 0↔1 oscillates every frame.
+ */
+function unshiftY(
+  y: number,
+  hole: { index: number; top: number; bottom: number } | null
+): number {
+  if (!hole) return y;
+  const holeH = Math.max(0, hole.bottom - hole.top);
+  if (holeH < 8) return y;
+  if (y >= hole.bottom - 0.5) return y - holeH;
+  return y;
+}
+
+/**
+ * One remaining card: top band = before, bottom band = after, middle keeps
+ * the current slot so a tall card does not flip while the pointer wanders.
+ */
+function insertIndexForLoneCard(
+  card: { index: number; top: number; height: number },
+  y: number,
+  stickyInsert: number | null
+): number {
+  const frac = (y - card.top) / Math.max(1, card.height);
+  if (frac <= 0.28) return card.index;
+  if (frac >= 0.72) return card.index + 1;
+  if (stickyInsert === card.index || stickyInsert === card.index + 1) {
+    return stickyInsert;
+  }
+  return frac < 0.5 ? card.index : card.index + 1;
+}
+
 function overlayProbeY(overlay: DOMRectReadOnly, pointerY?: number): number {
   if (pointerY != null && Number.isFinite(pointerY)) return pointerY;
   return overlay.top + Math.min(28, overlay.height / 2);
@@ -484,6 +518,8 @@ export function resolveInsertAtColumnStackEnds(
   const lastIsColumnEnd = lastVisibleIsColumnEnd(last.index, end);
   const firstIsColumnStart = first.index === 0;
   const lastNaturalBottom = last.bottom;
+  const y = unshiftY(pointerY, hole);
+  const overlayTop = overlay ? unshiftY(overlay.top, hole) : null;
 
   const bottomZone = root.querySelector('[data-kanban-column-bottom]');
   if (bottomZone instanceof HTMLElement) {
@@ -492,19 +528,11 @@ export function resolveInsertAtColumnStackEnds(
   }
 
   // Only the real last card (not the last *visible* virtual row) is a stack end.
+  // Do not treat “below the hole” as past the last card: with one tall card the
+  // hole sits above it, so the whole card would snap to last+1 and oscillate.
   if (lastIsColumnEnd) {
-    // Hole is already before the last card — that card is shifted down by the
-    // hole. Crossing the hole’s bottom (onto the last card) is last+1.
-    if (hole && hole.index === last.index) {
-      if (
-        pointerY >= hole.bottom - 6 ||
-        (overlay != null && overlay.top >= hole.bottom - 4)
-      ) {
-        return end;
-      }
-    }
-    if (pointerY >= lastNaturalBottom - 4) return end;
-    if (overlay && overlay.top >= lastNaturalBottom - 8) return end;
+    if (y >= lastNaturalBottom - 4) return end;
+    if (overlayTop != null && overlayTop >= lastNaturalBottom - 8) return end;
   }
 
   const topZone = document.getElementById(`${columnId}-task-top`);
@@ -521,9 +549,9 @@ export function resolveInsertAtColumnStackEnds(
     }
   }
   if (firstIsColumnStart) {
-    if (overlay && overlayAtFirstCardTop(overlay, first, pointerY)) return 0;
-    if (pointerY <= first.top + 4) return 0;
-    if (overlay && overlay.bottom <= first.top + 8) return 0;
+    if (overlay && overlayAtFirstCardTop(overlay, first, y)) return 0;
+    if (y <= first.top + 4) return 0;
+    if (overlay && unshiftY(overlay.bottom, hole) <= first.top + 8) return 0;
   }
 
   return null;
@@ -704,12 +732,18 @@ export function resolveInsertIndexFromOverlay(
 
   const list = columnTaskList(root);
   const layoutCount = list ? layoutCountForList(list) : null;
-  const probeY = overlayProbeY(overlay, pointerY);
+  const probeY = unshiftY(overlayProbeY(overlay, pointerY), hole);
 
   if (rows.length === 0) {
     return remember(
       insertFromVirtualOrVisible(columnId, probeY, rows, layoutCount)
     );
+  }
+
+  if (rows.length === 1) {
+    const sticky =
+      insertHysteresis?.columnId === columnId ? insertHysteresis.insertIndex : null;
+    return remember(insertIndexForLoneCard(rows[0], probeY, sticky));
   }
 
   const lastRow = rows[rows.length - 1];
@@ -930,35 +964,42 @@ export function resolveInsertIndexUnderPointer(
 
   const list = columnTaskList(root);
   const layoutCount = list ? layoutCountForList(list) : null;
+  const y = unshiftY(pointerY, hole);
 
   if (rows.length === 0) {
-    return insertFromVirtualOrVisible(columnId, pointerY, rows, layoutCount);
+    return insertFromVirtualOrVisible(columnId, y, rows, layoutCount);
+  }
+
+  if (rows.length === 1) {
+    const sticky =
+      insertHysteresis?.columnId === columnId ? insertHysteresis.insertIndex : null;
+    return insertIndexForLoneCard(rows[0], y, sticky);
   }
 
   const first = rows[0];
   const last = rows[rows.length - 1];
 
-  if (pointerY < first.top) {
+  if (y < first.top) {
     if (first.index === 0) return first.index;
-    return insertFromVirtualOrVisible(columnId, pointerY, rows, layoutCount);
+    return insertFromVirtualOrVisible(columnId, y, rows, layoutCount);
   }
-  if (pointerY >= last.top + last.height) {
+  if (y >= last.top + last.height) {
     if (lastVisibleIsColumnEnd(last.index, layoutCount)) {
       return layoutCount != null ? layoutCount : last.index + 1;
     }
-    return insertFromVirtualOrVisible(columnId, pointerY, rows, layoutCount);
+    return insertFromVirtualOrVisible(columnId, y, rows, layoutCount);
   }
 
   for (const row of rows) {
     const rowBottom = row.top + row.height;
-    if (pointerY >= row.top && pointerY < rowBottom) {
-      return insertIndexOnCard(row, pointerY, columnId, origin);
+    if (y >= row.top && y < rowBottom) {
+      return insertIndexOnCard(row, y, columnId, origin);
     }
   }
 
   let insert = last.index + 1;
   for (const row of rows) {
-    if (pointerY < row.top) {
+    if (y < row.top) {
       insert = row.index;
       break;
     }
