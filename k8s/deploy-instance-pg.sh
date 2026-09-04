@@ -28,8 +28,8 @@ usage() {
     exit 1
 }
 
-# Check parameters
-if [ $# -ne 2 ]; then
+# Check parameters (optional unused 3rd arg from admin APP_VERSION / "latest")
+if [ $# -lt 2 ]; then
     echo "❌ Error: Missing required parameters"
     usage
 fi
