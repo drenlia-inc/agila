@@ -1,5 +1,4 @@
 import express from 'express';
-import { wrapQuery } from '../utils/queryLogger.js';
 import notificationService from '../services/notificationService.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { assertBoardAccess, userHasAdminRole } from '../middleware/boardAccess.js';
@@ -12,6 +11,7 @@ import { boards as boardQueries, tasks as taskQueries, helpers, boardParticipant
 import { notifyBoardWebhook } from '../services/taskEmailNotificationService.js';
 import { purgeBoardCompletely } from '../services/taskPurgeService.js';
 import { serverDebug } from '../utils/serverDebug.js';
+import { assembleBoardsPayload } from '../utils/assembleBoardsPayload.js';
 import {
   parseBody,
   createBoardBodySchema,
@@ -22,160 +22,44 @@ import {
 
 const router = express.Router();
 
-// Get all boards with columns and tasks (including tags)
+// Get all boards with columns. Default includes full task payloads (login / reports).
+// ?tasks=summary returns empty task arrays + taskCount for cheap background reconcile.
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const isAdmin = userHasAdminRole(req.user);
     const boards = await boardQueries.getAllBoards(db, { userId: req.user.id, isAdmin });
-
-    // OPTIMIZATION: Batch fetch all columns for all boards first
-    const allBoardIds = boards.map(b => b.id);
-    const allColumns = allBoardIds.length > 0 
-      ? await helpers.getColumnsForAllBoards(db, allBoardIds)
-      : [];
-    
-    // Group columns by boardid
-    const columnsByBoardId = {};
-    allColumns.forEach(column => {
-      if (!columnsByBoardId[column.boardId]) {
-        columnsByBoardId[column.boardId] = [];
-      }
-      columnsByBoardId[column.boardId].push(column);
-    });
-    
-    // OPTIMIZATION: Batch fetch all tasks for all columns
-    const allColumnIds = allColumns.map(c => c.id);
-    const allTasks = allColumnIds.length > 0
-      ? await taskQueries.getTasksForColumns(db, allColumnIds)
-      : [];
-    
-    // Group tasks by columnid
-    const tasksByColumnId = {};
-    allTasks.forEach(task => {
-      if (!tasksByColumnId[task.columnId]) {
-        tasksByColumnId[task.columnId] = [];
-      }
-      tasksByColumnId[task.columnId].push(task);
-    });
-    
-    // Collect all comment IDs for batch attachment fetch
-    const allCommentIds = allTasks.flatMap(task => {
-      const parseJsonField = (field) => {
-        if (!field || field === '[]' || field === '[null]') return [];
-        if (Array.isArray(field)) return field.filter(Boolean);
-        if (typeof field === 'string') {
-          try {
-            const parsed = JSON.parse(field);
-            return Array.isArray(parsed) ? parsed.filter(Boolean) : (parsed ? [parsed] : []);
-          } catch {
-            return [];
-          }
-        }
-        return [];
-      };
-      const comments = parseJsonField(task.comments);
-      return comments.map(c => c.id).filter(Boolean);
-    });
-    
-    // OPTIMIZATION: Batch fetch all attachments for all comments in one query
-    const allAttachments = allCommentIds.length > 0
-      ? await helpers.getAttachmentsForComments(db, allCommentIds)
-      : [];
-    
-    // Group attachments by commentid
-    const attachmentsByCommentId = {};
-    allAttachments.forEach(att => {
-      const commentId = att.commentId || att.commentid;
-      if (!attachmentsByCommentId[commentId]) {
-        attachmentsByCommentId[commentId] = [];
-      }
-      attachmentsByCommentId[commentId].push(att);
-    });
-    
-    // Helper functions for processing
-    const parseJsonField = (field) => {
-      if (field === null || field === undefined || field === '' || field === '[null]' || field === 'null') {
-        return [];
-      }
-      if (Array.isArray(field)) {
-        return field.filter(Boolean);
-      }
-      if (typeof field === 'object') {
-        return Array.isArray(field) ? field.filter(Boolean) : [field].filter(Boolean);
-      }
-      if (typeof field === 'string') {
-        const trimmed = field.trim();
-        if (!trimmed || trimmed === '[]' || trimmed === '[null]' || trimmed === 'null') {
-          return [];
-        }
-        try {
-          const parsed = JSON.parse(trimmed);
-          return Array.isArray(parsed) ? parsed.filter(Boolean) : (parsed ? [parsed] : []);
-        } catch (e) {
-          console.warn('Failed to parse JSON field:', e.message, 'Value:', field);
-          return [];
-        }
-      }
-      return [];
-    };
-    
-    const deduplicateById = (arr) => {
-      const seen = new Set();
-      return arr.filter(item => {
-        if (!item || !item.id) return false;
-        if (seen.has(item.id)) return false;
-        seen.add(item.id);
-        return true;
-      });
-    };
-    
-    // Process boards with pre-fetched data
-    const boardsWithData = boards.map(board => {
-      const columns = columnsByBoardId[board.id] || [];
-      const columnsObj = {};
-      
-      columns.forEach(column => {
-        const tasksRaw = tasksByColumnId[column.id] || [];
-        
-        const tasks = tasksRaw.map(task => ({
-          ...task,
-          priority: task.priorityName || null,
-          priorityId: task.priorityId || null,
-          priorityName: task.priorityName || null,
-          priorityColor: task.priorityColor || null,
-          sprintId: task.sprint_id || null,
-          createdAt: task.created_at,
-          updatedAt: task.updated_at,
-          columnEnteredAt: task.columnEnteredAt || task.column_entered_at || null,
-          isBlocked: Boolean(task.isBlocked ?? task.is_blocked),
-          blockedReason: task.blockedReason || task.blocked_reason || null,
-          comments: deduplicateById(parseJsonField(task.comments)).map(comment => ({
-            ...comment,
-            attachments: attachmentsByCommentId[comment.id] || []
-          })),
-          tags: deduplicateById(parseJsonField(task.tags)),
-          watchers: deduplicateById(parseJsonField(task.watchers)),
-          collaborators: deduplicateById(parseJsonField(task.collaborators))
-        }));
-        
-        columnsObj[column.id] = {
-          ...column,
-          tasks: tasks
-        };
-      });
-      
-      return {
-        ...board,
-        participantCount: Number(board.participant_count ?? board.participantCount ?? 0),
-        columns: columnsObj
-      };
-    });
-
-
+    const tasksMode = String(req.query.tasks || 'full').toLowerCase();
+    const includeTasks = tasksMode !== 'summary' && tasksMode !== 'lite';
+    const boardsWithData = await assembleBoardsPayload(db, boards, { includeTasks });
     res.json(boardsWithData);
   } catch (error) {
     console.error('Error fetching boards:', error);
+    const db = getRequestDatabase(req);
+    const t = await getTranslator(db);
+    res.status(500).json({ error: t('errors.failedToFetch', { resource: 'boards' }) });
+  }
+});
+
+// One board with full task payloads (visible board hydrate after a summary list fetch).
+router.get('/:boardId/full', authenticateToken, async (req, res) => {
+  const { boardId } = req.params;
+  try {
+    const db = getRequestDatabase(req);
+    const t = await getTranslator(db);
+    if (!(await assertBoardAccess(req, res, boardId))) return;
+
+    const isAdmin = userHasAdminRole(req.user);
+    const boards = await boardQueries.getAllBoards(db, { userId: req.user.id, isAdmin });
+    const board = boards.find((b) => b.id === boardId);
+    if (!board) {
+      return res.status(404).json({ error: t('errors.boardNotFound') });
+    }
+
+    const [assembled] = await assembleBoardsPayload(db, [board], { includeTasks: true });
+    res.json(assembled);
+  } catch (error) {
+    console.error('Error fetching board:', error);
     const db = getRequestDatabase(req);
     const t = await getTranslator(db);
     res.status(500).json({ error: t('errors.failedToFetch', { resource: 'boards' }) });
@@ -380,7 +264,15 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
       }, tenantId);
     }
     
-    const newBoard = { id, title, project: projectIdentifier, position, columns: columnsObj };
+    const newBoard = {
+      id,
+      title,
+      project: projectIdentifier,
+      position,
+      columns: columnsObj,
+      tasksHydrated: true,
+      taskCount: 0,
+    };
     
     // Publish to Redis for real-time updates
     notificationService.publish('board-created', {

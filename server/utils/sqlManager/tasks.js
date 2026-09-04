@@ -376,6 +376,25 @@ export async function getTasksForColumns(db, columnIds) {
 }
 
 /**
+ * Live (non-deleted) task counts grouped by column. Used for tab pills without
+ * loading every task payload.
+ */
+export async function countLiveTasksByColumnIds(db, columnIds) {
+  if (!columnIds || columnIds.length === 0) {
+    return [];
+  }
+  const placeholders = columnIds.map((_, index) => `$${index + 1}`).join(', ');
+  const query = `
+    SELECT columnid AS "columnId", COUNT(*)::int AS count
+    FROM tasks
+    WHERE columnid IN (${placeholders}) AND deleted_at IS NULL
+    GROUP BY columnid
+  `;
+  const stmt = wrapQuery(db.prepare(query), 'SELECT');
+  return await stmt.all(...columnIds);
+}
+
+/**
  * Get all tasks (simple list)
  * 
  * @param {Database} db - Database connection
