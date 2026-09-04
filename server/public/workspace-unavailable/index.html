@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Workspace unavailable — Agila</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --teal: #14b8a6;
+      --violet: #7c3aed;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      min-height: 100%;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background:
+        radial-gradient(900px 420px at 10% -10%, rgba(20, 184, 166, 0.12), transparent 55%),
+        radial-gradient(800px 380px at 100% 0%, rgba(124, 58, 237, 0.10), transparent 50%),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.25rem;
+    }
+    main {
+      width: min(32rem, 100%);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2.25rem 2rem 2rem;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+      text-align: center;
+    }
+    .logo {
+      display: block;
+      margin: 0 auto 1.5rem;
+      width: min(11.5rem, 70%);
+      height: auto;
+    }
+    h1 {
+      margin: 0 0 0.65rem;
+      font-size: 1.35rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    p {
+      margin: 0 0 1.35rem;
+      color: var(--muted);
+      font-size: 0.98rem;
+      line-height: 1.55;
+    }
+    a {
+      display: inline-block;
+      color: #0f766e;
+      font-weight: 600;
+      text-decoration: none;
+      border-bottom: 2px solid transparent;
+      background-image: linear-gradient(90deg, var(--teal), var(--violet));
+      background-size: 100% 2px;
+      background-position: 0 100%;
+      background-repeat: no-repeat;
+    }
+    a:hover { color: #5b21b6; }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="/workspace-unavailable/agila-logo.png" width="368" height="112" alt="Agila">
+    <h1>This workspace isn't available</h1>
+    <p>The address you opened is not an active Agila workspace. It may have been removed, renamed, or never created.</p>
+    <p><a href="https://agila.dev">Go to agila.dev</a></p>
+  </main>
+</body>
+</html>

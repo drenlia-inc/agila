@@ -1,3 +1,4 @@
+import http from 'http';
 import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -54,6 +55,61 @@ function withForwardedHostProxyConfigure(
   });
 }
 
+const HTML_GATE_SKIP =
+  /^\/(api|health|ready|assets|attachments|avatars|socket\.io|src|node_modules|@vite|@react-refresh|@fs)\b/;
+
+/**
+ * Multi-tenant: Vite preview owns port 3010 (K8s/EKS NodePort). Document
+ * requests must hit Express tenantRouting so unknown Hosts get the parked page
+ * instead of the SPA login.
+ */
+function agilaHtmlWorkspaceGate(): Plugin {
+  const attach = (middlewares: ViteDevServer['middlewares']) => {
+    middlewares.use((req, res, next) => {
+      if (process.env.MULTI_TENANT !== 'true') {
+        next();
+        return;
+      }
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        next();
+        return;
+      }
+      const pathOnly = String(req.url || '/').split('?')[0];
+      if (HTML_GATE_SKIP.test(pathOnly)) {
+        next();
+        return;
+      }
+      const headers = { ...req.headers };
+      delete headers.connection;
+      const upstream = http.request(
+        {
+          hostname: '127.0.0.1',
+          port: 3222,
+          path: req.url,
+          method: req.method,
+          headers
+        },
+        (pres) => {
+          res.writeHead(pres.statusCode || 502, pres.headers);
+          pres.pipe(res);
+        }
+      );
+      upstream.on('error', () => next());
+      req.pipe(upstream);
+    });
+  };
+
+  return {
+    name: 'agila-html-workspace-gate',
+    configureServer(server: ViteDevServer) {
+      attach(server.middlewares);
+    },
+    configurePreviewServer(server: PreviewServer) {
+      attach(server.middlewares);
+    }
+  };
+}
+
 function ignoreBenignSocketErrors(): Plugin {
   return {
     name: 'agila-ignore-benign-socket-errors',
@@ -78,7 +134,7 @@ function agilaDevFavicon(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), agilaDevFavicon(), ignoreBenignSocketErrors()],
+  plugins: [agilaHtmlWorkspaceGate(), react(), agilaDevFavicon(), ignoreBenignSocketErrors()],
   envPrefix: ['VITE_', 'DEMO_', 'MULTI_'] as string[],
   // A second React copy makes every hook call fail ("dispatcher is null")
   resolve: {
