@@ -665,13 +665,64 @@
       "file": "src/components/admin/AdminFeaturesSettingsTab.tsx"
     },
     {
+      "id": "setting:GITHUB_CALLBACK_URL",
+      "attr": "setting",
+      "value": "GITHUB_CALLBACK_URL",
+      "en": "GitHub Callback URL",
+      "fr": "URL de rappel GitHub",
+      "searchEn": "GitHub Callback URL GITHUB_CALLBACK_URL",
+      "searchFr": "URL de rappel GitHub GITHUB_CALLBACK_URL",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"GITHUB_CALLBACK_URL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "setting:GITHUB_CLIENT_ID",
+      "attr": "setting",
+      "value": "GITHUB_CLIENT_ID",
+      "en": "GitHub Client ID",
+      "fr": "ID client GitHub",
+      "searchEn": "GitHub Client ID GITHUB_CLIENT_ID",
+      "searchFr": "ID client GitHub GITHUB_CLIENT_ID",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"GITHUB_CLIENT_ID\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "setting:GITHUB_CLIENT_SECRET",
+      "attr": "setting",
+      "value": "GITHUB_CLIENT_SECRET",
+      "en": "GitHub Client Secret",
+      "fr": "Secret client GitHub",
+      "searchEn": "GitHub Client Secret GITHUB_CLIENT_SECRET",
+      "searchFr": "Secret client GitHub GITHUB_CLIENT_SECRET",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"GITHUB_CLIENT_SECRET\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
       "id": "setting:GOOGLE_CALLBACK_URL",
       "attr": "setting",
       "value": "GOOGLE_CALLBACK_URL",
       "en": "Google Callback URL",
       "fr": "URL de rappel Google",
-      "searchEn": "Google Callback URL  GOOGLE_CALLBACK_URL",
-      "searchFr": "URL de rappel Google  GOOGLE_CALLBACK_URL",
+      "searchEn": "Google Callback URL GOOGLE_CALLBACK_URL",
+      "searchFr": "URL de rappel Google GOOGLE_CALLBACK_URL",
       "kind": "admin",
       "hash": "#admin#system-settings#sso",
       "highlights": [
@@ -679,7 +730,7 @@
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/utils/ownerSetup.ts"
+      "file": "src/components/admin/AdminSSOTab.tsx"
     },
     {
       "id": "setting:GOOGLE_CLIENT_ID",
@@ -687,8 +738,8 @@
       "value": "GOOGLE_CLIENT_ID",
       "en": "Google Client ID",
       "fr": "ID client Google",
-      "searchEn": "Google Client ID  GOOGLE_CLIENT_ID",
-      "searchFr": "ID client Google  GOOGLE_CLIENT_ID",
+      "searchEn": "Google Client ID GOOGLE_CLIENT_ID",
+      "searchFr": "ID client Google GOOGLE_CLIENT_ID",
       "kind": "admin",
       "hash": "#admin#system-settings#sso",
       "highlights": [
@@ -696,7 +747,7 @@
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/utils/ownerSetup.ts"
+      "file": "src/components/admin/AdminSSOTab.tsx"
     },
     {
       "id": "setting:GOOGLE_CLIENT_SECRET",
@@ -704,8 +755,8 @@
       "value": "GOOGLE_CLIENT_SECRET",
       "en": "Google Client Secret",
       "fr": "Secret client Google",
-      "searchEn": "Google Client Secret  GOOGLE_CLIENT_SECRET",
-      "searchFr": "Secret client Google  GOOGLE_CLIENT_SECRET",
+      "searchEn": "Google Client Secret GOOGLE_CLIENT_SECRET",
+      "searchFr": "Secret client Google GOOGLE_CLIENT_SECRET",
       "kind": "admin",
       "hash": "#admin#system-settings#sso",
       "highlights": [
@@ -713,7 +764,7 @@
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/utils/ownerSetup.ts"
+      "file": "src/components/admin/AdminSSOTab.tsx"
     },
     {
       "id": "setting:GOOGLE_SSO_MANAGED",
@@ -799,6 +850,74 @@
       "adminOnly": true,
       "audience": "admin",
       "file": "src/components/admin/AdminLifecycleTab.tsx"
+    },
+    {
+      "id": "setting:M365_CALLBACK_URL",
+      "attr": "setting",
+      "value": "M365_CALLBACK_URL",
+      "en": "Redirect URI",
+      "fr": "URI de redirection",
+      "searchEn": "Redirect URI M365_CALLBACK_URL",
+      "searchFr": "URI de redirection M365_CALLBACK_URL",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"M365_CALLBACK_URL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "setting:M365_CLIENT_ID",
+      "attr": "setting",
+      "value": "M365_CLIENT_ID",
+      "en": "Application (client) ID",
+      "fr": "ID d’application (client)",
+      "searchEn": "Application (client) ID M365_CLIENT_ID",
+      "searchFr": "ID d’application (client) M365_CLIENT_ID",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"M365_CLIENT_ID\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "setting:M365_CLIENT_SECRET",
+      "attr": "setting",
+      "value": "M365_CLIENT_SECRET",
+      "en": "Client secret",
+      "fr": "Secret client",
+      "searchEn": "Client secret M365_CLIENT_SECRET",
+      "searchFr": "Secret client M365_CLIENT_SECRET",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"M365_CLIENT_SECRET\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
+    },
+    {
+      "id": "setting:M365_TENANT_ID",
+      "attr": "setting",
+      "value": "M365_TENANT_ID",
+      "en": "Directory (tenant) ID",
+      "fr": "ID d’annuaire (locataire)",
+      "searchEn": "Directory (tenant) ID M365_TENANT_ID",
+      "searchFr": "ID d’annuaire (locataire) M365_TENANT_ID",
+      "kind": "admin",
+      "hash": "#admin#system-settings#sso",
+      "highlights": [
+        "[data-setting-key=\"M365_TENANT_ID\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSSOTab.tsx"
     },
     {
       "id": "setting:MAIL_ENABLED",

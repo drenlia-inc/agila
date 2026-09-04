@@ -332,6 +332,33 @@ function buildEntries() {
         });
       }
     }
+    // SSO fields use data-setting-key={opts.keyName}; harvest the string literals.
+    if (/AdminSSOTab/.test(fileRel)) {
+      for (const km of source.matchAll(/keyName:\s*'([A-Z][A-Z0-9_]*)'/g)) {
+        const value = km[1];
+        if (!isHarvestableValue('setting', value) || seen.has(`setting:${value}`)) continue;
+        const nav = inferNav('setting', value, fileRel, adminByKey);
+        const meta = adminByKey.get(value);
+        const lab = lookupLocale(locales, meta?.labelKey);
+        const en = lab.en || value.replace(/_/g, ' ');
+        const fr = lab.fr || en;
+        seen.set(`setting:${value}`, {
+          id: `setting:${value}`,
+          attr: 'setting',
+          value,
+          en: String(en).slice(0, 240),
+          fr: String(fr).slice(0, 240),
+          searchEn: `${en} ${value}`.slice(0, 800),
+          searchFr: `${fr} ${value}`.slice(0, 800),
+          kind: nav.navKind,
+          hash: nav.hash || undefined,
+          highlights: nav.highlights,
+          adminOnly: true,
+          audience: 'admin',
+          file: fileRel
+        });
+      }
+    }
     if (source.includes('TOUR_ID_BY_TAB')) {
       const tourIds = source.matchAll(/'(admin-[a-z0-9-]+)'/g);
       for (const tm of tourIds) {
