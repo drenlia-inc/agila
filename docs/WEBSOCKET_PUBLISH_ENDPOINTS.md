@@ -78,10 +78,10 @@ This document lists endpoints that publish for real-time WebSocket updates, orga
    - **Optimization**: ⚠️ Send only position change
 
 8. **POST `/tasks/move-to-board`** - Move task to different board
-   - Channel: `task-updated` (2 publishes - source and target boards)
-   - Lines: 1989, 1998
-   - Payload: `{ boardId, task: fullTaskWithRelationships, timestamp }`
-   - **Size**: ~5-30KB × 2
+   - Channels: `task-updated` (source + dest board rooms), then `task-deleted` (source) + `task-created` (dest) tenant-wide for tab counters
+   - Payload (updated): `{ boardId, task: fullTaskWithRelationships, timestamp }`
+   - Payload (deleted): `{ boardId: sourceBoardId, taskId, movedToBoardId, timestamp }`
+   - **Size**: ~5-30KB × 2 updates + compact membership events
    - **Optimization**: ⚠️ Send only boardId, columnId, position changes
 
 ### Task Collaboration Operations

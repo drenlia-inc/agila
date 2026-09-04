@@ -2986,6 +2986,23 @@ router.post('/move-to-board', authenticateToken, async (req, res) => {
       },
       timestamp: new Date().toISOString()
     }, tenantId);
+
+    // Tenant-wide membership so tab counters update for sessions that only
+    // joined the board they are viewing (task-updated stays board-scoped).
+    await notificationService.publish('task-deleted', {
+      boardId: originalBoardId,
+      taskId,
+      movedToBoardId: targetBoardId,
+      timestamp: new Date().toISOString()
+    }, tenantId);
+    await notificationService.publish('task-created', {
+      boardId: targetBoardId,
+      task: {
+        ...taskResponse,
+        updatedBy: userId
+      },
+      timestamp: new Date().toISOString()
+    }, tenantId);
     
     res.json({ 
       success: true, 

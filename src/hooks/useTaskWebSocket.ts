@@ -655,19 +655,20 @@ export const useTaskWebSocket = ({
       pendingTaskRefreshesRef.current.delete(data.task.id);
     }
     
-    // Always update boards state for task count updates (for all boards)
+    // Tab pills count tasks in every cached board. Tenant-wide create (and
+    // cross-board move) must strip the id everywhere, then add only on boards
+    // this session already has — never invent a board the user cannot access.
+    const createdTaskId = data.task.id;
+    const createdColumnId = data.task.columnId;
     setBoards(prevBoards => {
-      const targetColumnId = data.task.columnId;
-      const boardExists = prevBoards.some(b => b.id === data.boardId);
+      const destKnown = prevBoards.some((b) => b.id === data.boardId);
 
-      // Lifecycle "restore board then tasks" can deliver task-restored before board-restored
-      // is applied. Dropping the task here left peers with an empty restored board until refresh.
       const ensureColumn = (columns: Columns): Columns => {
         const next = { ...columns };
-        if (!targetColumnId) return next;
-        if (!next[targetColumnId]) {
-          next[targetColumnId] = {
-            id: targetColumnId,
+        if (!createdColumnId) return next;
+        if (!next[createdColumnId]) {
+          next[createdColumnId] = {
+            id: createdColumnId,
             boardId: data.boardId,
             title: 'Unknown Column',
             tasks: [],
@@ -676,12 +677,12 @@ export const useTaskWebSocket = ({
             is_archived: false,
           };
         }
-        const existingTasks = next[targetColumnId].tasks || [];
-        const taskExists = existingTasks.some((t) => t.id === data.task.id);
-        next[targetColumnId] = {
-          ...next[targetColumnId],
+        const existingTasks = next[createdColumnId].tasks || [];
+        const taskExists = existingTasks.some((t) => t.id === createdTaskId);
+        next[createdColumnId] = {
+          ...next[createdColumnId],
           tasks: taskExists
-            ? existingTasks.map((t) => (t.id === data.task.id ? data.task : t))
+            ? existingTasks.map((t) => (t.id === createdTaskId ? { ...t, ...data.task } : t))
             : [...existingTasks, data.task].sort(
                 (a, b) => (a.position || 0) - (b.position || 0)
               ),
@@ -689,34 +690,33 @@ export const useTaskWebSocket = ({
         return next;
       };
 
-      if (!boardExists) {
-        return [
-          ...prevBoards,
-          {
-            id: data.boardId,
-            title: data.boardTitle || data.task?.boardTitle || 'Board',
-            columns: ensureColumn({}),
-            deletedAt: null,
-          } as Board,
-        ];
-      }
-
       return prevBoards.map((board) => {
-        if (board.id !== data.boardId) return board;
-        return {
-          ...board,
-          deletedAt: null,
-          columns: ensureColumn(board.columns || {}),
-        };
+        const stripped = stripTaskFromAllColumns(board.columns || {}, createdTaskId, {
+          renumber: false,
+        });
+        if (destKnown && board.id === data.boardId) {
+          return {
+            ...board,
+            deletedAt: null,
+            columns: ensureColumn(stripped),
+          };
+        }
+        if (stripped === board.columns) return board;
+        return { ...board, columns: stripped };
       });
     });
     
-    // Only update columns/filteredColumns if the task is for the currently selected board
-    if (data.boardId === selectedBoardRef.current) {
-      // Optimized: Add the specific task instead of full refresh
-      setColumns(prevColumns => {
-        const updatedColumns = { ...prevColumns };
-        const targetColumnId = data.task.columnId;
+    // Visible board: always drop a stale copy (move-from-here), then insert if dest.
+    setColumns((prevColumns) => {
+      const stripped = stripTaskFromAllColumns(prevColumns, createdTaskId, {
+        exceptColumnId: data.boardId === selectedBoardRef.current ? createdColumnId : undefined,
+        renumber: false,
+      });
+      if (data.boardId !== selectedBoardRef.current) {
+        return stripped;
+      }
+      const updatedColumns = { ...stripped };
+      const targetColumnId = createdColumnId;
         
         if (!updatedColumns[targetColumnId] && targetColumnId) {
           // Column doesn't exist yet - create it (similar to boards handler)
@@ -781,7 +781,7 @@ export const useTaskWebSocket = ({
           }
         }
         // Ensure created task isn't also lingering in another column
-        return stripTaskFromAllColumns(updatedColumns, data.task.id, {
+        return stripTaskFromAllColumns(updatedColumns, createdTaskId, {
           exceptColumnId: targetColumnId,
           renumber: false,
         });
@@ -789,7 +789,6 @@ export const useTaskWebSocket = ({
       
       // DON'T update filteredColumns here - let the filtering useEffect handle it
       // This prevents duplicate tasks when the effect runs after columns change
-    }
   }, [setBoards, setColumns, selectedBoardRef, pendingTaskRefreshesRef, recentlyDeletedTasksRef]);
 
   const handleTaskUpdated = useCallback((data: any) => {
@@ -824,32 +823,16 @@ export const useTaskWebSocket = ({
   const handleTaskDeleted = useCallback((data: any) => {
     if (!data.taskId || !data.boardId) return;
     
-    // Always update boards state for task count updates (for all boards)
+    // Only the named board (source on a cross-board move). Do not strip every
+    // board — a later task-created may already have placed the card on dest.
     setBoards(prevBoards => {
       return prevBoards.map(board => {
-        if (board.id === data.boardId) {
-          const updatedBoard = { ...board };
-          const updatedColumns = { ...updatedBoard.columns };
-          
-          // Find and remove the task from the appropriate column
-          Object.keys(updatedColumns).forEach(columnId => {
-            const column = updatedColumns[columnId];
-            const taskIndex = column.tasks.findIndex(t => t.id === data.taskId);
-            if (taskIndex !== -1) {
-              // Keep position gaps (matches server soft-delete) so restore can reclaim its slot
-              const remainingTasks = column.tasks.filter(task => task.id !== data.taskId);
-              
-              updatedColumns[columnId] = {
-                ...column,
-                tasks: remainingTasks
-              };
-            }
-          });
-          
-          updatedBoard.columns = updatedColumns;
-          return updatedBoard;
-        }
-        return board;
+        if (board.id !== data.boardId) return board;
+        const updatedColumns = stripTaskFromAllColumns(board.columns || {}, data.taskId, {
+          renumber: false,
+        });
+        if (updatedColumns === board.columns) return board;
+        return { ...board, columns: updatedColumns };
       });
     });
     

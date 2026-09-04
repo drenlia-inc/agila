@@ -550,9 +550,9 @@ const SortableBoardTab: React.FC<{
               {board.title}
             </div>
             {(() => {
-              const deletedTaskCount = deleteConfirmTaskCount ?? totalTaskCount ?? taskCount ?? 0;
-              return deletedTaskCount > 0
-                ? t('boardTabs.moveBoardToTrashAndTasks', { count: deletedTaskCount })
+              const liveTaskCount = deleteConfirmTaskCount ?? totalTaskCount ?? 0;
+              return liveTaskCount > 0
+                ? t('boardTabs.moveBoardToTrashAndTasks', { count: liveTaskCount })
                 : t('boardTabs.moveBoardToTrash');
             })()}
           </div>
@@ -968,12 +968,14 @@ export default function BoardTabs({
       } catch {
         trashCountForBoard = 0;
       }
-      const total = liveCount + trashCountForBoard;
-      if (total === 0) {
+      // Trash tasks are already in trash — do not add them to the "move N
+      // tasks to trash" copy. Still confirm (do not auto-purge) when only
+      // trash remains, because deleteBoard keeps that trash with the board.
+      if (liveCount === 0 && trashCountForBoard === 0) {
         confirmDeleteBoard(boardId);
         return;
       }
-      setDeleteConfirmTaskCount(total);
+      setDeleteConfirmTaskCount(liveCount);
       setShowDeleteConfirm(boardId);
     })();
   };
