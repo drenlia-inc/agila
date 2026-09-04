@@ -13,11 +13,12 @@
 #   - Its own PostgreSQL schema (tenant_${INSTANCE_NAME})
 #   - Its own tenant data in NFS subdirectories (attachments, avatars)
 #
-# Managed S3 objects (STORAGE_MANAGED=true, prefix tenants/{name}/) are purged by the
-# admin portal BEFORE this script runs (POST /api/admin-portal/storage/purge-managed).
-# This script does not talk to S3.
+# Managed S3 objects (STORAGE_MODE=managed, prefix tenants/{name}/) are removed with
+# the host AWS CLI (same as ingress/schema). Unmanaged / BYO buckets are left alone.
+# Fallback when the schema is already gone: platform bucket tenants/{name}/ only.
 
 set -e
+export AWS_PAGER=""
 
 # Check if instance name is provided
 if [ $# -eq 0 ]; then
@@ -31,12 +32,116 @@ if [ $# -eq 0 ]; then
 fi
 
 INSTANCE_NAME="$1"
+if [[ ! "${INSTANCE_NAME}" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*$ ]]; then
+    echo "❌ Error: Invalid instance name '${INSTANCE_NAME}'"
+    exit 1
+fi
 # Shared namespace for all PostgreSQL tenants
 NAMESPACE="easy-kanban-pg"
 INGRESS_NAME="easy-kanban-ingress-${INSTANCE_NAME}"
 # PostgreSQL schema name (quoted to handle hyphens)
 SCHEMA_NAME="tenant_${INSTANCE_NAME}"
 QUOTED_SCHEMA_NAME="\"${SCHEMA_NAME}\""
+# Platform bucket used only when tenant settings are gone (or prefix unset).
+PLATFORM_S3_BUCKET="${MANAGED_S3_BUCKET:-}"
+if [ -z "${PLATFORM_S3_BUCKET}" ]; then
+    PLATFORM_S3_BUCKET=$(kubectl get configmap easy-kanban-config-pg -n "${NAMESPACE}" -o jsonpath='{.data.MANAGED_S3_BUCKET}' 2>/dev/null || true)
+fi
+PLATFORM_S3_BUCKET="${PLATFORM_S3_BUCKET:-storage-agila}"
+
+prefix_belongs_to_tenant() {
+    local prefix="$1"
+    local id="$2"
+    prefix="${prefix#/}"
+    case "$prefix" in
+        */) ;;
+        *) prefix="${prefix}/" ;;
+    esac
+    [ "$prefix" = "tenants/${id}/" ] || [ "$prefix" = "${id}/" ] || [[ "$prefix" == *"/${id}/"* ]]
+}
+
+tenant_setting() {
+    local key="$1"
+    if [ -z "$POSTGRES_POD" ]; then
+        return 0
+    fi
+    kubectl exec -n "${NAMESPACE}" "$POSTGRES_POD" -- \
+        env PGPASSWORD="${POSTGRES_PASSWORD}" \
+        psql -U kanban -d easykanban -tAc \
+        "SELECT value FROM ${QUOTED_SCHEMA_NAME}.settings WHERE key = '${key}';" 2>/dev/null | tr -d '\r' | sed 's/[[:space:]]*$//'
+}
+
+purge_managed_s3() {
+    local mode="" managed_flag="" bucket="" prefix=""
+    local schema_exists="${SCHEMA_EXISTS:-false}"
+
+    echo ""
+    echo "🗑️  Managed S3 prefix (host AWS CLI)..."
+
+    if ! command -v aws >/dev/null 2>&1; then
+        echo "   ❌ aws CLI not found — cannot purge managed S3"
+        return 1
+    fi
+
+    if [ "$schema_exists" = "t" ]; then
+        mode=$(tenant_setting STORAGE_MODE | tr '[:upper:]' '[:lower:]')
+        managed_flag=$(tenant_setting STORAGE_MANAGED | tr '[:upper:]' '[:lower:]')
+        bucket=$(tenant_setting S3_BUCKET)
+        prefix=$(tenant_setting S3_KEY_PREFIX)
+        if [ "$mode" != "managed" ] && [ "$managed_flag" != "true" ]; then
+            echo "   ℹ️  STORAGE_MODE=${mode:-unset} — unmanaged/BYO S3 left intact"
+            return 0
+        fi
+    else
+        echo "   ℹ️  Schema gone — will only remove s3://${PLATFORM_S3_BUCKET}/tenants/${INSTANCE_NAME}/ if present"
+        bucket="${PLATFORM_S3_BUCKET}"
+        prefix="tenants/${INSTANCE_NAME}/"
+    fi
+
+    if [ -z "$bucket" ]; then
+        bucket="${PLATFORM_S3_BUCKET}"
+    fi
+    prefix="${prefix#/}"
+    if [ -z "$prefix" ]; then
+        prefix="tenants/${INSTANCE_NAME}/"
+    fi
+    case "$prefix" in
+        */) ;;
+        *) prefix="${prefix}/" ;;
+    esac
+
+    if ! prefix_belongs_to_tenant "$prefix" "$INSTANCE_NAME"; then
+        echo "   ❌ Refusing S3 purge: prefix '${prefix}' is not scoped to '${INSTANCE_NAME}'"
+        return 1
+    fi
+
+    local uri="s3://${bucket}/${prefix}"
+    echo "   Target: ${uri}"
+    if ! aws sts get-caller-identity >/dev/null 2>&1; then
+        echo "   ❌ Host AWS credentials are missing or invalid"
+        return 1
+    fi
+
+    local list_err
+    list_err=$(aws s3 ls "$uri" --recursive 2>&1) || true
+    if echo "$list_err" | grep -qiE 'Unable to locate credentials|AccessDenied|InvalidAccessKey|NoSuchBucket|Forbidden'; then
+        echo "   ❌ Cannot list ${uri}:"
+        echo "$list_err" | sed 's/^/      /'
+        return 1
+    fi
+    if [ -z "$list_err" ]; then
+        echo "   ℹ️  No objects at ${uri}"
+        return 0
+    fi
+
+    if aws s3 rm "$uri" --recursive; then
+        echo "   ✅ Deleted objects under ${uri}"
+        S3_DELETED=true
+        return 0
+    fi
+    echo "   ❌ aws s3 rm failed for ${uri}"
+    return 1
+}
 
 echo "💥 Destroying Easy Kanban PostgreSQL instance: ${INSTANCE_NAME}"
 echo "📍 Namespace: ${NAMESPACE} (shared)"
@@ -97,6 +202,7 @@ echo "⚠️  WARNING: Permanently deleting ALL data for instance '${INSTANCE_NA
 echo "   - Ingress rule for this tenant"
 echo "   - PostgreSQL schema (tenant_${INSTANCE_NAME}) and all its data"
 echo "   - All tenant data (attachments, avatars)"
+echo "   - Managed S3 objects under this tenant prefix (BYO/unmanaged left alone)"
 echo "   - This action CANNOT be undone!"
 echo ""
 echo "ℹ️  Note: Shared resources (namespace, deployment, PostgreSQL database, NFS volumes) will NOT be deleted"
@@ -109,6 +215,7 @@ INGRESS_DELETED=false
 SCHEMA_DELETED=false
 ATTACHMENTS_DELETED=false
 AVATARS_DELETED=false
+S3_DELETED=false
 
 # Step 1: Delete ingress rule for this tenant
 if kubectl get ingress "${INGRESS_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
@@ -120,7 +227,10 @@ else
     echo "⚠️  Ingress '${INGRESS_NAME}' does not exist, skipping..."
 fi
 
-# Step 2: Drop PostgreSQL schema
+# Step 2: Purge managed S3 while tenant settings are still readable
+purge_managed_s3
+
+# Step 3: Drop PostgreSQL schema
 echo ""
 echo "🗄️  Dropping PostgreSQL schema '${SCHEMA_NAME}'..."
 
@@ -146,7 +256,7 @@ else
     fi
 fi
 
-# Step 3: Remove tenant data directories from NFS (attachments and avatars)
+# Step 4: Remove tenant data directories from NFS (attachments and avatars)
 echo ""
 echo "🗑️  Removing tenant data directories from NFS..."
 
@@ -246,7 +356,7 @@ fi
 echo ""
 
 # Check if anything was actually deleted
-if [ "$INGRESS_DELETED" = false ] && [ "$SCHEMA_DELETED" = false ] && [ "$ATTACHMENTS_DELETED" = false ] && [ "$AVATARS_DELETED" = false ]; then
+if [ "$INGRESS_DELETED" = false ] && [ "$SCHEMA_DELETED" = false ] && [ "$ATTACHMENTS_DELETED" = false ] && [ "$AVATARS_DELETED" = false ] && [ "$S3_DELETED" = false ]; then
     echo "ℹ️  Nothing to do - instance '${INSTANCE_NAME}' does not exist or was already destroyed."
     echo "   - Ingress rule does not exist"
     echo "   - PostgreSQL schema does not exist"
@@ -276,6 +386,9 @@ if [ "$AVATARS_DELETED" = true ]; then
     else
         echo "  - Tenant avatars: ${AVATARS_DIR}"
     fi
+fi
+if [ "$S3_DELETED" = true ]; then
+    echo "  - Managed S3 prefix for ${INSTANCE_NAME}"
 fi
 echo ""
 echo "🎯 The instance and all its data have been permanently deleted."
