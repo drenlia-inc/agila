@@ -135,8 +135,13 @@ export interface Board {
   /** Soft-delete timestamp (ISO). Soft-deleted boards are hidden from tabs. */
   deletedAt?: string | null;
   deletedBy?: string | null;
-  /** Total tasks on board (lifecycle deleted-boards list). */
+  /** Total live tasks on non-archived columns (list / pills). */
   taskCount?: number;
+  /**
+   * True when `columns[].tasks` is a full snapshot (login hydrate or GET /boards/:id/full).
+   * False on `GET /boards?tasks=summary` (empty task arrays; keep client cache).
+   */
+  tasksHydrated?: boolean;
   /** Soft-deleted tasks on board (lifecycle deleted-boards list). */
   trashTaskCount?: number;
   /** Users listed as board participants. Empty = hidden from users/viewers. */

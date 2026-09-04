@@ -61,7 +61,7 @@ import TaskLinkingOverlay from './components/TaskLinkingOverlay';
 import NetworkStatusIndicator from './components/NetworkStatusIndicator';
 import VersionUpdateBanner from './components/VersionUpdateBanner';
 import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
-import api, { getMembers, getBoards, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, ACTIVITY_FEED_DEFAULT_LIMIT, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById, hashHasOAuthToken } from './api';
+import api, { getMembers, getBoards, getBoardFull, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, ACTIVITY_FEED_DEFAULT_LIMIT, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById, hashHasOAuthToken } from './api';
 import { toast, ToastContainer } from './utils/toast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { applyActiveColumnFilters } from './utils/columnFilters';
@@ -73,6 +73,13 @@ import {
 import { requestTaskJump } from './utils/taskJumpEvents';
 import { revealNewlyCreatedTask } from './utils/newTaskReveal';
 import { columnsContentFingerprint } from './utils/columnsFingerprint';
+import {
+  mergeBoardFetchWithLocalMoves,
+  overlayBoardListKeepingTaskCache,
+  stripMovedOffTasksFromColumns,
+  boardsCacheFingerprint,
+  boardTasksAreHydrated,
+} from './utils/mergeBoardFetch';
 import { applyLocalColumnReorder } from './utils/columnReorderingUtils';
 import { rolesForAppRole, sameRoleList, userCanMutate } from './utils/permissions';
 import { isDemoModeClient } from './utils/demoReset';
@@ -184,6 +191,7 @@ function AppContent() {
   const { t: tCommon } = useTranslation('common');
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [boards, setBoards] = useState<Board[]>([]);
+  const boardsRef = useRef<Board[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<string | null>(null);
   const selectedBoardRef = useRef<string | null>(null); // Initialize as null, will be set after auth
   const columnsRef = useRef<Columns>({});
@@ -196,6 +204,9 @@ function AppContent() {
   useEffect(() => {
     columnsRef.current = columns;
   }, [columns]);
+  useEffect(() => {
+    boardsRef.current = boards;
+  }, [boards]);
   // Use SettingsContext instead of local state
   const { systemSettings, siteSettings, isLoading: settingsLoading, refreshSettings: refreshContextSettings } = useSettings();
   const [kanbanColumnWidth, setKanbanColumnWidth] = useState<number>(300); // Default 300px
@@ -1595,6 +1606,8 @@ function AppContent() {
   const recentlyDeletedTasksRef = useRef<Set<string>>(new Set());
   /** taskId → source board; hide on that board only so dest refresh can still show it. */
   const recentlyMovedOffBoardRef = useRef<Map<string, string>>(new Map());
+  /** Ignore getBoards() that started before a newer refresh or a local board move. */
+  const refreshBoardDataGenRef = useRef(0);
   const crossBoardMoveSnapshotRef = useRef<{
     task: Task;
     sourceBoardId: string;
@@ -2900,6 +2913,7 @@ function AppContent() {
           
           const [loadedMembers, loadedBoards, loadedPriorities, loadedTags, loadedSprints, loadedActivities] = await Promise.all([
             loadMembersWithRetry(),
+          // Full task payloads once so every tab can paint instantly from boards[] cache.
           getBoards(),
           getAllPriorities(),
           getAllTags(),
@@ -3100,17 +3114,27 @@ function AppContent() {
       const boardIdBeingOpened = selectedBoard;
       const boardInState = boards.find((b) => b.id === selectedBoard);
 
-      if (boardInState && boardInState.columns && Object.keys(boardInState.columns).length > 0) {
-        const newColumns: Columns = {};
-        Object.keys(boardInState.columns || {}).forEach((columnId) => {
-          const column = boardInState.columns[columnId];
-          if (column) {
-            newColumns[columnId] = {
-              ...column,
-              tasks: [...(column.tasks || [])],
-            };
-          }
-        });
+      if (
+        boardInState &&
+        boardTasksAreHydrated(boardInState) &&
+        boardInState.columns &&
+        Object.keys(boardInState.columns).length > 0
+      ) {
+        const newColumns: Columns = stripMovedOffTasksFromColumns(
+          Object.keys(boardInState.columns || {}).reduce((acc, columnId) => {
+            const column = boardInState.columns[columnId];
+            if (column) {
+              acc[columnId] = {
+                ...column,
+                tasks: [...(column.tasks || [])],
+              };
+            }
+            return acc;
+          }, {} as Columns),
+          boardIdBeingOpened,
+          recentlyMovedOffBoardRef.current,
+          recentlyDeletedTasksRef.current
+        );
         setColumns(newColumns);
         // Seed with active filters applied (sprint/search/etc.) so board switch does not
         // briefly paint every card before useTaskFilters re-runs.
@@ -3182,6 +3206,7 @@ function AppContent() {
   // TODO: Implement simpler real-time solution (polling or SSE)
 
   const refreshBoardData = useCallback(async (options?: { force?: boolean; forBoardId?: string }) => {
+    const gen = ++refreshBoardDataGenRef.current;
     // CRITICAL: Skip refresh if we just updated from WebSocket to prevent overwriting real-time updates
     // This is especially important for batch position updates (259 tasks) where WebSocket updates
     // are processed together and should not be overwritten by a refresh
@@ -3191,12 +3216,45 @@ function AppContent() {
     }
     
     try {
-      const loadedBoards = await getBoards();
-      setBoards(loadedBoards);
-      
       // Hydrate columns for a specific board (e.g. newly created) before selectedBoard state updates,
       // or for the current selectedBoard when forBoardId is omitted.
       const boardIdToHydrate = options?.forBoardId !== undefined ? options.forBoardId : selectedBoard;
+
+      const summaryPromise = getBoards({ tasks: 'summary' });
+      const fullPromise = boardIdToHydrate
+        ? getBoardFull(boardIdToHydrate)
+        : Promise.resolve(null);
+      const [summaryResult, fullResult] = await Promise.allSettled([summaryPromise, fullPromise]);
+      if (gen !== refreshBoardDataGenRef.current) return;
+
+      if (summaryResult.status === 'rejected') {
+        throw summaryResult.reason;
+      }
+      const summaryBoards = summaryResult.value;
+      const hydratedBoard =
+        fullResult.status === 'fulfilled' ? fullResult.value : null;
+      if (fullResult.status === 'rejected') {
+        const status = (fullResult.reason as { response?: { status?: number } })?.response?.status;
+        if (status !== 404) {
+          console.error('Failed to hydrate board:', fullResult.reason);
+        }
+      }
+
+      let nextBoards = overlayBoardListKeepingTaskCache(summaryBoards, boardsRef.current);
+      if (hydratedBoard) {
+        nextBoards = nextBoards.map((board) =>
+          board.id === hydratedBoard.id ? hydratedBoard : board
+        );
+      }
+      const mergedBoards = mergeBoardFetchWithLocalMoves(
+        nextBoards,
+        boardsRef.current,
+        recentlyMovedOffBoardRef.current,
+        recentlyDeletedTasksRef.current
+      );
+      if (boardsCacheFingerprint(mergedBoards) !== boardsCacheFingerprint(boardsRef.current)) {
+        setBoards(mergedBoards);
+      }
 
       // If this refresh was for a specific board and the user has already switched away, still
       // update boards[] (above) but do not clobber the currently visible columns.
@@ -3208,9 +3266,9 @@ function AppContent() {
         return;
       }
       
-      if (loadedBoards.length > 0) {
+      if (mergedBoards.length > 0) {
         if (boardIdToHydrate) {
-          const board = loadedBoards.find(b => b.id === boardIdToHydrate);
+          const board = mergedBoards.find(b => b.id === boardIdToHydrate);
           if (board) {
             // Force a deep clone to ensure React detects the change at all levels
             // OPTIMIZED: Use shallow copy instead of expensive JSON.parse(JSON.stringify())
@@ -4679,6 +4737,7 @@ function AppContent() {
     if (movedTask && sourceBoardId && !existingSnap) {
       recentlyMovedOffBoardRef.current.set(taskId, sourceBoardId);
       recentlyDeletedTasksRef.current.add(taskId);
+      refreshBoardDataGenRef.current += 1;
       setTimeout(() => {
         recentlyDeletedTasksRef.current.delete(taskId);
         recentlyMovedOffBoardRef.current.delete(taskId);
@@ -4787,6 +4846,7 @@ function AppContent() {
           return board;
         })
       );
+      refreshBoardDataGenRef.current += 1;
 
       if (selectedTask?.id === taskId && selectedBoardRef.current === targetBoardId) {
         handleSelectTask(patched);
@@ -5985,6 +6045,14 @@ function AppContent() {
       return lastTaskCountsRef.current[board.id];
     }
 
+    if (!boardTasksAreHydrated(board) && !activeFilters) {
+      const fromServer = board.taskCount;
+      if (typeof fromServer === 'number') {
+        lastTaskCountsRef.current[board.id] = fromServer;
+        return fromServer;
+      }
+    }
+
     const boardColumnsRaw: Columns =
       board.id === selectedBoard ? columns : (board.columns || {});
     const boardColumns = dedupeTasksInColumns(boardColumnsRaw);
@@ -6004,6 +6072,9 @@ function AppContent() {
   // Every live task on the board, ignoring search/member/sprint filters. Deleting a board
   // removes tasks that the current filters hide, so confirmations must count all of them.
   const getTotalTaskCountForBoard = (board: Board) => {
+    if (!boardTasksAreHydrated(board) && typeof board.taskCount === 'number') {
+      return board.taskCount;
+    }
     const boardColumnsRaw: Columns =
       board.id === selectedBoard ? columns : (board.columns || {});
     const boardColumns = dedupeTasksInColumns(boardColumnsRaw);

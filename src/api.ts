@@ -314,8 +314,14 @@ export const deleteMember = async (id: string) => {
 };
 
 // Boards
-export const getBoards = async () => {
-  const { data } = await api.get<Board[]>('/boards');
+export const getBoards = async (options?: { tasks?: 'full' | 'summary' }) => {
+  const params = options?.tasks === 'summary' ? { tasks: 'summary' } : undefined;
+  const { data } = await api.get<Board[]>('/boards', { params });
+  return data;
+};
+
+export const getBoardFull = async (boardId: string) => {
+  const { data } = await api.get<Board>(`/boards/${boardId}/full`);
   return data;
 };
 
