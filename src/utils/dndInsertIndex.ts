@@ -31,12 +31,49 @@ type InsertHysteresis = {
   movingDown: boolean;
 };
 
-/** Ghost top edge at the first card’s top — slot 0, independent of drag speed. */
+/**
+ * Ghost top edge at the first card’s top — slot 0.
+ * Pointer below the first-card magnet must not force slot 0: a tall ghost on a
+ * short card used to flip 0↔1 every frame as the 76px hole shoved the stack.
+ */
 function overlayAtFirstCardTop(
   overlay: DOMRectReadOnly,
-  first: { index: number; top: number }
+  first: { index: number; top: number },
+  pointerY?: number
 ): boolean {
-  return first.index === 0 && overlay.top <= first.top + COLUMN_EDGE_MAGNET_PX;
+  if (first.index !== 0) return false;
+  if (
+    pointerY != null &&
+    Number.isFinite(pointerY) &&
+    pointerY > first.top + COLUMN_EDGE_MAGNET_PX + 8
+  ) {
+    return false;
+  }
+  return overlay.top <= first.top + COLUMN_EDGE_MAGNET_PX;
+}
+
+/** Live card boxes include the Drop here hole; targeting must not. */
+function unshiftRowsByHole<T extends { index: number; top: number }>(
+  rows: T[],
+  hole: { index: number; top: number; bottom: number } | null
+): T[] {
+  if (!hole || rows.length === 0) return rows;
+  const holeH = Math.max(0, hole.bottom - hole.top);
+  if (holeH < 8) return rows;
+  return rows.map((row) => {
+    if (row.index < hole.index) return row;
+    const next = { ...row, top: row.top - holeH };
+    if ('bottom' in row && typeof (row as { bottom?: number }).bottom === 'number') {
+      (next as T & { bottom: number }).bottom =
+        (row as T & { bottom: number }).bottom - holeH;
+    }
+    return next;
+  });
+}
+
+function overlayProbeY(overlay: DOMRectReadOnly, pointerY?: number): number {
+  if (pointerY != null && Number.isFinite(pointerY)) return pointerY;
+  return overlay.top + Math.min(28, overlay.height / 2);
 }
 
 let insertHysteresis: InsertHysteresis | null = null;
@@ -436,18 +473,17 @@ export function resolveInsertAtColumnStackEnds(
 ): number | null {
   const root = columnRootById(columnId);
   if (!root) return null;
-  const cards = visibleCardBoxes(root, excludeTaskIds);
-  const end = stackEndIndex(root, cards);
-  if (cards.length === 0) return end;
+  const rawCards = visibleCardBoxes(root, excludeTaskIds);
+  const end = stackEndIndex(root, rawCards);
+  if (rawCards.length === 0) return end;
 
+  const hole = paintedHoleInColumn(root);
+  const cards = unshiftRowsByHole(rawCards, hole);
   const first = cards[0];
   const last = cards[cards.length - 1];
   const lastIsColumnEnd = lastVisibleIsColumnEnd(last.index, end);
   const firstIsColumnStart = first.index === 0;
-  const hole = paintedHoleInColumn(root);
-  const holeShiftsLast = hole != null && hole.index <= last.index;
-  const holeH = holeShiftsLast ? Math.max(0, hole.bottom - hole.top) : 0;
-  const lastNaturalBottom = last.bottom - holeH;
+  const lastNaturalBottom = last.bottom;
 
   const bottomZone = root.querySelector('[data-kanban-column-bottom]');
   if (bottomZone instanceof HTMLElement) {
@@ -462,8 +498,7 @@ export function resolveInsertAtColumnStackEnds(
     if (hole && hole.index === last.index) {
       if (
         pointerY >= hole.bottom - 6 ||
-        (overlay != null &&
-          (overlay.top >= hole.bottom - 4 || overlay.bottom >= hole.bottom + 12))
+        (overlay != null && overlay.top >= hole.bottom - 4)
       ) {
         return end;
       }
@@ -486,7 +521,7 @@ export function resolveInsertAtColumnStackEnds(
     }
   }
   if (firstIsColumnStart) {
-    if (overlay && overlayAtFirstCardTop(overlay, first)) return 0;
+    if (overlay && overlayAtFirstCardTop(overlay, first, pointerY)) return 0;
     if (pointerY <= first.top + 4) return 0;
     if (overlay && overlay.bottom <= first.top + 8) return 0;
   }
@@ -505,8 +540,9 @@ export function resolveInsertAtColumnStackEnds(
 function insertIndexFromOverlayEdges(
   rows: LayoutRow[],
   overlay: DOMRectReadOnly,
-  movingDown: boolean,
-  layoutCount: number | null
+  probeY: number,
+  layoutCount: number | null,
+  pointerY?: number
 ): number {
   const first = rows[0];
   const last = rows[rows.length - 1];
@@ -517,29 +553,24 @@ function insertIndexFromOverlayEdges(
   // Top of column: ghost top vs first card top. Do not require “moving up”
   // — slow drags otherwise sit on the first card with midY ticking down and
   // never open slot 0.
-  if (overlayAtFirstCardTop(overlay, first)) {
+  if (overlayAtFirstCardTop(overlay, first, pointerY)) {
     return 0;
   }
 
   const topOnFirstCard = overlay.top < rowMidline(first);
 
-  // Past the last *mounted* card only when the ghost has actually moved down
+  // Past the last *mounted* card only when the probe has actually moved down
   // off the first card (not merely because the ghost is taller than the stack).
-  if (
-    !topOnFirstCard &&
-    (overlay.top >= rowMidline(last) - 2 ||
-      overlay.bottom >= last.top + last.height - 4)
-  ) {
+  if (!topOnFirstCard && probeY >= last.top + last.height - 4) {
     if (lastVisibleIsColumnEnd(last.index, layoutCount)) {
       return layoutCount != null ? layoutCount : last.index + 1;
     }
     return last.index + 1;
   }
 
-  const edge = movingDown ? overlay.bottom : overlay.top;
   let insert = last.index + 1;
   for (const row of rows) {
-    if (edge < rowMidline(row)) {
+    if (probeY < rowMidline(row)) {
       insert = row.index;
       break;
     }
@@ -553,7 +584,9 @@ function applyInsertHysteresis(
   rows: LayoutRow[],
   overlay: DOMRectReadOnly,
   raw: number,
-  movingDown: boolean
+  movingDown: boolean,
+  probeY: number,
+  pointerY?: number
 ): number {
   const midY = overlay.top + overlay.height / 2;
   const remember = (insertIndex: number) => {
@@ -561,14 +594,15 @@ function applyInsertHysteresis(
     return insertIndex;
   };
   const first = rows[0];
-  if (first && overlayAtFirstCardTop(overlay, first)) {
+  if (first && overlayAtFirstCardTop(overlay, first, pointerY)) {
     return remember(0);
   }
   if (
     first &&
     insertHysteresis?.columnId === columnId &&
     insertHysteresis.insertIndex === 0 &&
-    overlay.top <= first.top + COLUMN_EDGE_MAGNET_PX + INSERT_HYSTERESIS_PX
+    overlay.top <= first.top + COLUMN_EDGE_MAGNET_PX + INSERT_HYSTERESIS_PX &&
+    (pointerY == null || pointerY <= first.top + COLUMN_EDGE_MAGNET_PX + INSERT_HYSTERESIS_PX + 8)
   ) {
     return remember(0);
   }
@@ -581,12 +615,12 @@ function applyInsertHysteresis(
   }
   if (raw > last.insertIndex) {
     const crossed = rows.find((r) => r.index === last.insertIndex);
-    if (crossed && overlay.bottom < rowMidline(crossed) + INSERT_HYSTERESIS_PX) {
+    if (crossed && probeY < rowMidline(crossed) + INSERT_HYSTERESIS_PX) {
       return remember(last.insertIndex);
     }
   } else {
     const prev = rows.find((r) => r.index === last.insertIndex - 1);
-    if (prev && overlay.top > rowMidline(prev) - INSERT_HYSTERESIS_PX) {
+    if (prev && probeY > rowMidline(prev) - INSERT_HYSTERESIS_PX) {
       return remember(last.insertIndex);
     }
   }
@@ -650,45 +684,48 @@ export function resolveInsertIndexFromOverlay(
   if (outside != null) return remember(outside);
 
   const exclude = toExcludeSet(excludeTaskIds);
-  const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-kanban-task-row]'))
-    .filter((row) => !rowIsExcluded(row, exclude))
-    .map((row) => {
-      const index = Number(row.dataset.layoutIndex);
-      const card =
-        row.firstElementChild instanceof HTMLElement
-          ? row.firstElementChild
-          : row;
-      const rect = card.getBoundingClientRect();
-      return { index, top: rect.top, height: rect.height };
-    })
-    .filter((r) => Number.isFinite(r.index) && r.index >= 0 && r.height > 8)
-    .sort((a, b) => a.index - b.index);
+  const hole = paintedHoleInColumn(root);
+  const rows = unshiftRowsByHole(
+    Array.from(root.querySelectorAll<HTMLElement>('[data-kanban-task-row]'))
+      .filter((row) => !rowIsExcluded(row, exclude))
+      .map((row) => {
+        const index = Number(row.dataset.layoutIndex);
+        const card =
+          row.firstElementChild instanceof HTMLElement
+            ? row.firstElementChild
+            : row;
+        const rect = card.getBoundingClientRect();
+        return { index, top: rect.top, height: rect.height };
+      })
+      .filter((r) => Number.isFinite(r.index) && r.index >= 0 && r.height > 8)
+      .sort((a, b) => a.index - b.index),
+    hole
+  );
 
   const list = columnTaskList(root);
   const layoutCount = list ? layoutCountForList(list) : null;
+  const probeY = overlayProbeY(overlay, pointerY);
 
   if (rows.length === 0) {
     return remember(
-      insertFromVirtualOrVisible(columnId, pointerY ?? midY, rows, layoutCount)
+      insertFromVirtualOrVisible(columnId, probeY, rows, layoutCount)
     );
   }
 
   const lastRow = rows[rows.length - 1];
-  const y = pointerY ?? midY;
   const lastIsColumnEnd = lastVisibleIsColumnEnd(lastRow.index, layoutCount);
   const topOnFirstCard = overlay.top < rowMidline(rows[0]);
 
   if (
     lastIsColumnEnd &&
     !topOnFirstCard &&
-    ((pointerY != null && pointerY >= lastRow.top + lastRow.height - 8) ||
-      overlay.top >= rowMidline(lastRow))
+    probeY >= lastRow.top + lastRow.height - 8
   ) {
     return remember(layoutCount != null ? layoutCount : lastRow.index + 1);
   }
 
-  if (!yInVisibleRowCluster(y, rows, overlay)) {
-    return remember(insertFromVirtualOrVisible(columnId, y, rows, layoutCount));
+  if (!yInVisibleRowCluster(probeY, rows, overlay)) {
+    return remember(insertFromVirtualOrVisible(columnId, probeY, rows, layoutCount));
   }
 
   const last = insertHysteresis?.columnId === columnId ? insertHysteresis : null;
@@ -700,10 +737,19 @@ export function resolveInsertIndexFromOverlay(
   const raw = insertIndexFromOverlayEdges(
     rows,
     overlay,
-    movingDown,
-    layoutCount
+    probeY,
+    layoutCount,
+    pointerY
   );
-  return applyInsertHysteresis(columnId, rows, overlay, raw, movingDown);
+  return applyInsertHysteresis(
+    columnId,
+    rows,
+    overlay,
+    raw,
+    movingDown,
+    probeY,
+    pointerY
+  );
 }
 
 /**
@@ -864,19 +910,23 @@ export function resolveInsertIndexUnderPointer(
   if (outside != null) return outside;
 
   const exclude = toExcludeSet(excludeTaskIds);
-  const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-kanban-task-row]'))
-    .filter((row) => !rowIsExcluded(row, exclude))
-    .map((row) => {
-      const index = Number(row.dataset.layoutIndex);
-      const rect = row.getBoundingClientRect();
-      return {
-        index,
-        top: rect.top,
-        height: rect.height,
-      };
-    })
-    .filter((r) => Number.isFinite(r.index) && r.index >= 0 && r.height > 0)
-    .sort((a, b) => a.index - b.index);
+  const hole = paintedHoleInColumn(root);
+  const rows = unshiftRowsByHole(
+    Array.from(root.querySelectorAll<HTMLElement>('[data-kanban-task-row]'))
+      .filter((row) => !rowIsExcluded(row, exclude))
+      .map((row) => {
+        const index = Number(row.dataset.layoutIndex);
+        const rect = row.getBoundingClientRect();
+        return {
+          index,
+          top: rect.top,
+          height: rect.height,
+        };
+      })
+      .filter((r) => Number.isFinite(r.index) && r.index >= 0 && r.height > 0)
+      .sort((a, b) => a.index - b.index),
+    hole
+  );
 
   const list = columnTaskList(root);
   const layoutCount = list ? layoutCountForList(list) : null;

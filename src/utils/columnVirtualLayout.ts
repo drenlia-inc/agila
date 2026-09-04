@@ -52,10 +52,11 @@ export function insertIndexFromColumnLayout(
   const listTop = layout.listEl.getBoundingClientRect().top;
   const yIn = viewportY - listTop;
   if (yIn < 0) return 0;
+  let acc = 0;
   for (let i = 0; i < layout.layoutCount; i++) {
-    const top = layout.offsetOfLayoutIndex(i);
     const h = Math.max(1, layout.heightOfLayoutIndex(i));
-    if (yIn < top + h / 2) return i;
+    if (yIn < acc + h / 2) return i;
+    acc += h;
   }
   return layout.layoutCount;
 }

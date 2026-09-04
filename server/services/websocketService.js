@@ -340,11 +340,20 @@ class WebSocketService {
       this.io?.to(adminRoom).emit(event, data);
       return;
     }
+    this.emitTenantWide(event, data, tenantId);
+  }
+
+  /**
+   * Every connected session joins `tenant-${tenantId}` (or the default io
+   * namespace in single-tenant). Use for tab-count membership — not for
+   * high-volume task-updated / position streams.
+   */
+  emitTenantWide(event, data, tenantId) {
     if (tenantId) {
       this.io?.to(`tenant-${tenantId}`).emit(event, data);
-    } else {
-      this.io?.emit(event, data);
+      return;
     }
+    this.io?.emit(event, data);
   }
 
   // Get tenant-prefixed room name (for multi-tenant isolation)
@@ -379,7 +388,7 @@ class WebSocketService {
       const timestamp = new Date().toISOString();
       wsVerboseLog(`📡 [${timestamp}] WebSocket received task-created (tenant: ${tenantId || 'single'})`);
       
-      this.emitBoardScoped('task-created', data, tenantId);
+      this.emitTenantWide('task-created', data, tenantId);
     });
 
     // Agent task_work updates (status / log / control)
@@ -396,7 +405,7 @@ class WebSocketService {
       const timestamp = new Date().toISOString();
       wsVerboseLog(`📡 [${timestamp}] WebSocket broadcasting task-deleted (tenant: ${tenantId || 'single'})`);
       
-      this.emitBoardScoped('task-deleted', data, tenantId);
+      this.emitTenantWide('task-deleted', data, tenantId);
     });
 
     // Soft-deleted task restored to live board
