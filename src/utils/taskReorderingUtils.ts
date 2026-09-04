@@ -16,6 +16,8 @@ import { DRAG_COOLDOWN_DURATION } from '../constants';
 import { dndLog } from './dndDebug';
 import type { Dispatch, SetStateAction } from 'react';
 
+export type OnColumnsApplied = (next: Columns) => void;
+
 // Helper to parse position as number
 const parsePos = (pos: any): number => typeof pos === 'number' ? pos : parseFloat(String(pos)) || 0;
 
@@ -707,7 +709,8 @@ export const restoreColumnTaskOrders = async (
   setColumns: Dispatch<SetStateAction<Columns>>,
   setDragCooldown: (value: boolean) => void,
   refreshBoardData: () => Promise<void>,
-  setFilteredColumns?: Dispatch<SetStateAction<Columns>>
+  setFilteredColumns?: Dispatch<SetStateAction<Columns>>,
+  onColumnsApplied?: OnColumnsApplied
 ): Promise<void> => {
   const preview = applyColumnOrderSnapshots(columns, orders);
   if (!preview) return;
@@ -729,6 +732,8 @@ export const restoreColumnTaskOrders = async (
     (window as any).reorderingInProgress = false;
     return;
   }
+
+  onColumnsApplied?.(applied.next);
 
   if (setFilteredColumns) {
     setFilteredColumns((prev) => {
@@ -812,7 +817,8 @@ export const moveTaskToIndex = async (
   setColumns: Dispatch<SetStateAction<Columns>>,
   setDragCooldown: (value: boolean) => void,
   refreshBoardData: () => Promise<void>,
-  setFilteredColumns?: Dispatch<SetStateAction<Columns>>
+  setFilteredColumns?: Dispatch<SetStateAction<Columns>>,
+  onColumnsApplied?: OnColumnsApplied
 ): Promise<void> => {
   // Pre-check against current snapshot (fast fail); authoritative apply uses prev
   const preview = applySameColumnMove(columns, task.id, columnId, targetIndex, task);
@@ -848,6 +854,8 @@ export const moveTaskToIndex = async (
     (window as any).reorderingInProgress = false;
     return;
   }
+
+  onColumnsApplied?.(applied.next);
 
   syncFilteredAfterSameColumnMove(setFilteredColumns, task.id, columnId, targetIndex, task);
 
@@ -899,7 +907,8 @@ export const handleCrossColumnMove = async (
   setColumns: Dispatch<SetStateAction<Columns>>,
   setDragCooldown: (value: boolean) => void,
   refreshBoardData: () => Promise<void>,
-  setFilteredColumns?: Dispatch<SetStateAction<Columns>>
+  setFilteredColumns?: Dispatch<SetStateAction<Columns>>,
+  onColumnsApplied?: OnColumnsApplied
 ): Promise<void> => {
   const preview = applyCrossColumnMove(columns, task.id, targetColumnId, targetIndex, task);
   if (!preview) {
@@ -931,6 +940,8 @@ export const handleCrossColumnMove = async (
     (window as any).reorderingInProgress = false;
     return;
   }
+
+  onColumnsApplied?.(applied.next);
 
   syncFilteredAfterCrossMove(setFilteredColumns, task.id, targetColumnId, targetIndex, task);
 
@@ -972,7 +983,8 @@ export const handleBulkMoveTasks = async (
   setColumns: Dispatch<SetStateAction<Columns>>,
   setDragCooldown: (value: boolean) => void,
   refreshBoardData: () => Promise<void>,
-  setFilteredColumns?: Dispatch<SetStateAction<Columns>>
+  setFilteredColumns?: Dispatch<SetStateAction<Columns>>,
+  onColumnsApplied?: OnColumnsApplied
 ): Promise<void> => {
   if (taskIds.length === 0) return;
   const preview = applyBulkMove(columns, taskIds, targetColumnId, targetIndex);
@@ -995,6 +1007,8 @@ export const handleBulkMoveTasks = async (
     (window as any).reorderingInProgress = false;
     return;
   }
+
+  onColumnsApplied?.(applied.next);
 
   if (setFilteredColumns) {
     setFilteredColumns((prev) => {

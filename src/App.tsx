@@ -79,6 +79,7 @@ import {
   stripMovedOffTasksFromColumns,
   boardsCacheFingerprint,
   boardTasksAreHydrated,
+  preferLocalColumnsForRecentlyTouchedBoards,
 } from './utils/mergeBoardFetch';
 import { applyLocalColumnReorder } from './utils/columnReorderingUtils';
 import { rolesForAppRole, sameRoleList, userCanMutate } from './utils/permissions';
@@ -1606,6 +1607,8 @@ function AppContent() {
   const recentlyDeletedTasksRef = useRef<Set<string>>(new Set());
   /** taskId → source board; hide on that board only so dest refresh can still show it. */
   const recentlyMovedOffBoardRef = useRef<Map<string, string>>(new Map());
+  /** boardId → Date.now(); keep optimistic column layout over a stale GET /full. */
+  const recentlyColumnMovedBoardRef = useRef<Map<string, number>>(new Map());
   /** Ignore getBoards() that started before a newer refresh or a local board move. */
   const refreshBoardDataGenRef = useRef(0);
   const crossBoardMoveSnapshotRef = useRef<{
@@ -1624,6 +1627,18 @@ function AppContent() {
   const onBulkMoveToBoardRef = useRef<
     ((taskIds: string[], boardId: string) => Promise<void>) | null
   >(null);
+  const syncKanbanColumnsToBoardCache = (next: Columns) => {
+    const boardId = selectedBoardRef.current;
+    if (!boardId) return;
+    columnsRef.current = next;
+    recentlyColumnMovedBoardRef.current.set(boardId, Date.now());
+    refreshBoardDataGenRef.current += 1;
+    const nextBoards = boardsRef.current.map((board) =>
+      board.id === boardId ? { ...board, columns: next, tasksHydrated: true } : board
+    );
+    boardsRef.current = nextBoards;
+    setBoards(nextBoards);
+  };
   const taskWebSocketRef = useRef<{
     handleTaskRestored?: (
       data: any,
@@ -3210,7 +3225,7 @@ function AppContent() {
     // CRITICAL: Skip refresh if we just updated from WebSocket to prevent overwriting real-time updates
     // This is especially important for batch position updates (259 tasks) where WebSocket updates
     // are processed together and should not be overwritten by a refresh
-    if (!options?.force && window.justUpdatedFromWebSocket) {
+    if (!options?.force && window.justUpdatedFromWebSocket && options?.forBoardId === undefined) {
       if (feDebug('FE_DEBUG_APP_CORE')) console.log('⏭️ [refreshBoardData] Skipping refresh - WebSocket update in progress');
       return;
     }
@@ -3246,6 +3261,11 @@ function AppContent() {
           board.id === hydratedBoard.id ? hydratedBoard : board
         );
       }
+      nextBoards = preferLocalColumnsForRecentlyTouchedBoards(
+        nextBoards,
+        boardsRef.current,
+        recentlyColumnMovedBoardRef.current
+      );
       const mergedBoards = mergeBoardFetchWithLocalMoves(
         nextBoards,
         boardsRef.current,
@@ -4410,7 +4430,8 @@ function AppContent() {
         setColumns,
         setDragCooldown,
         refreshBoardData,
-        taskFilters.setFilteredColumns
+        taskFilters.setFilteredColumns,
+        syncKanbanColumnsToBoardCache
       );
     } catch {
       toast.error(t('errors.moveTaskTitle'), t('errors.moveTaskMessage'));
@@ -4437,7 +4458,8 @@ function AppContent() {
         setColumns,
         setDragCooldown,
         refreshBoardData,
-        taskFilters.setFilteredColumns
+        taskFilters.setFilteredColumns,
+        syncKanbanColumnsToBoardCache
       );
     } catch {
       toast.error(t('errors.moveTaskTitle'), t('errors.moveTaskMessage'));
@@ -4456,7 +4478,8 @@ function AppContent() {
         setColumns,
         setDragCooldown,
         refreshBoardData,
-        taskFilters.setFilteredColumns
+        taskFilters.setFilteredColumns,
+        syncKanbanColumnsToBoardCache
       );
     } catch {
       toast.error(t('errors.moveTaskTitle'), t('errors.moveTaskMessage'));
@@ -4549,7 +4572,8 @@ function AppContent() {
           setColumns,
           setDragCooldown,
           refresh,
-          taskFilters.setFilteredColumns
+          taskFilters.setFilteredColumns,
+          syncKanbanColumnsToBoardCache
         );
       } else {
         await handleCrossColumnMove(
@@ -4561,7 +4585,8 @@ function AppContent() {
           setColumns,
           setDragCooldown,
           refresh,
-          taskFilters.setFilteredColumns
+          taskFilters.setFilteredColumns,
+          syncKanbanColumnsToBoardCache
         );
       }
       return true;
@@ -5029,7 +5054,8 @@ function AppContent() {
         setColumns,
         setDragCooldown,
         refresh,
-        taskFilters.setFilteredColumns
+        taskFilters.setFilteredColumns,
+        syncKanbanColumnsToBoardCache
       );
     },
     getArchiveColumnId: () => {
@@ -5168,7 +5194,8 @@ function AppContent() {
         setColumns,
         setDragCooldown,
         refreshBoardData,
-        taskFilters.setFilteredColumns
+        taskFilters.setFilteredColumns,
+        syncKanbanColumnsToBoardCache
       );
       const sourceSorted = sourceColumnId
         ? [...(liveColumns[sourceColumnId]?.tasks || [])].sort(

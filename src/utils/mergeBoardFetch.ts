@@ -112,6 +112,32 @@ export function stripMovedOffTasksFromColumns(
   return changed ? next : columns;
 }
 
+const LOCAL_COLUMN_MOVE_TTL_MS = 10000;
+
+/**
+ * Same-board DnD updates `columns` immediately, but a GET /full that started
+ * before COMMIT (or hit a lagging replica) can put the card back. Prefer the
+ * actor's cached columns for boards touched in the last few seconds.
+ */
+export function preferLocalColumnsForRecentlyTouchedBoards(
+  server: Board[],
+  local: Board[],
+  touchedAtByBoardId: Map<string, number>,
+  now = Date.now()
+): Board[] {
+  if (touchedAtByBoardId.size === 0) return server;
+  const localById = new Map(local.map((board) => [board.id, board]));
+  return server.map((board) => {
+    const touchedAt = touchedAtByBoardId.get(board.id);
+    if (touchedAt == null || now - touchedAt > LOCAL_COLUMN_MOVE_TTL_MS) {
+      return board;
+    }
+    const loc = localById.get(board.id);
+    if (!loc?.columns || !boardTasksAreHydrated(loc)) return board;
+    return { ...board, columns: loc.columns, tasksHydrated: true };
+  });
+}
+
 export function boardTasksAreHydrated(board?: Board | null): boolean {
   if (!board) return false;
   if (board.tasksHydrated === false) return false;
