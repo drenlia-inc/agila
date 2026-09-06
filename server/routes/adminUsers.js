@@ -13,7 +13,7 @@ import { getTranslator } from '../utils/i18n.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 import { getTenantDomain } from '../utils/tenantDomain.js';
 // MIGRATED: Import sqlManager modules
-import { users as userQueries, tasks as taskQueries, adminUsers as adminUserQueries, auth as authQueries, helpers, settings as settingsQueries, members as memberQueries } from '../utils/sqlManager/index.js';
+import { users as userQueries, tasks as taskQueries, adminUsers as adminUserQueries, auth as authQueries, helpers, settings as settingsQueries, members as memberQueries, boards as boardQueries, boardParticipants as participantQueries } from '../utils/sqlManager/index.js';
 import { commitUploadedFile, getRequestStoragePaths } from '../services/storage/index.js';
 import { validateUploadedFileMagic } from '../utils/fileMagicBytes.js';
 import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
@@ -389,7 +389,17 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
   // Demo mode cannot send invite emails — always create users as active locally
   const isActive = process.env.DEMO_ENABLED === 'true' ? true : !!parsed.data.isActive;
   const db = getRequestDatabase(req);
-  const t = getTranslator(db);
+  const t = await getTranslator(db);
+  const requestedBoardIds = [...new Set((parsed.data.boardIds || []).map((id) => String(id)).filter(Boolean))];
+  const liveBoards = await boardQueries.getAllBoards(db);
+  const liveBoardIds = new Set((liveBoards || []).map((board) => board.id));
+  const validBoardIds = requestedBoardIds.filter((id) => liveBoardIds.has(id));
+  if (validBoardIds.length !== requestedBoardIds.length) {
+    return res.status(400).json({ error: t('errors.inviteBoardsInvalid') });
+  }
+  if (role !== 'admin' && validBoardIds.length === 0) {
+    return res.status(400).json({ error: t('errors.inviteBoardsRequired') });
+  }
 
   if (String(email || '').toLowerCase().endsWith('@local')) {
     return res.status(400).json({ error: 'Cannot create users with @local email addresses' });
@@ -496,6 +506,19 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
     if (avatarPath) {
       // MIGRATED: Update user with default avatar path using sqlManager
       await userQueries.updateUserAvatar(db, userId, avatarPath);
+    }
+
+    if (validBoardIds.length > 0) {
+      await participantQueries.addUserToBoards(db, userId, validBoardIds);
+      for (const boardId of validBoardIds) {
+        const participantCount = await participantQueries.countParticipants(db, boardId);
+        const userIds = await participantQueries.listParticipantUserIds(db, boardId);
+        await notificationService.publish(
+          'board-participants-updated',
+          { boardId, participantCount, userIds },
+          tenantId
+        );
+      }
     }
     
     // Only generate invitation token and send email if user is not active

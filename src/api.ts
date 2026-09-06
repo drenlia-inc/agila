@@ -760,6 +760,7 @@ export const createUser = async (userData: {
   displayName?: string;
   role: string;
   isActive?: boolean;
+  boardIds?: string[];
 }) => {
   const { data } = await api.post('/admin/users', {
     ...userData,

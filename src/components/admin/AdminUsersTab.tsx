@@ -25,6 +25,8 @@ import {
 import { AdminToggle } from './AdminToggle';
 import MemberColorPickerDialog from './MemberColorPickerDialog';
 import { DEFAULT_MEMBER_COLOR } from '../../constants/memberColorPalette';
+import InviteBoardPicker from '../InviteBoardPicker';
+import { defaultInviteBoardIds, roleNeedsInviteBoards } from '../../utils/inviteBoardIds';
 
 interface User {
   id: string;
@@ -61,6 +63,7 @@ interface AdminUsersTabProps {
   onColorChange: (userId: string, color: string) => Promise<void>;
   onRemoveAvatar: (userId: string) => Promise<void>;
   onResendInvitation: (userId: string) => Promise<{ email?: string } | void>;
+  boards?: Array<{ id: string; title?: string }>;
 }
 
 type RoleValue = 'admin' | 'user' | 'viewer';
@@ -568,8 +571,10 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   onColorChange,
   onRemoveAvatar,
   onResendInvitation,
+  boards = [],
 }) => {
   const { t } = useTranslation('admin');
+  const { t: tCommon } = useTranslation('common');
   const { systemSettings } = useSettings();
   // Email invites are disabled when DEMO_ENABLED=true (see emailService)
   const isDemoMode = process.env.DEMO_ENABLED === 'true';
@@ -800,9 +805,11 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     lastName: '',
     displayName: '',
     role: 'user',
+    boardIds: [] as string[],
     // Demo mode cannot send invites — always create locally as active
     isActive: isDemoMode ? true : false
   });
+
   
   // Helper function to check if a user is the instance owner
   const isOwner = (userEmail: string) => {
@@ -970,6 +977,14 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   );
   
   const [newUser, setNewUser] = useState(getEmptyNewUser);
+  const newUserEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    String(newUser.email || '').trim()
+  );
+  const newUserReadyToSubmit =
+    newUserEmailValid &&
+    String(newUser.firstName || '').trim().length > 0 &&
+    String(newUser.lastName || '').trim().length > 0 &&
+    (!roleNeedsInviteBoards(newUser.role) || (newUser.boardIds || []).length > 0);
 
   const openColorPicker = (userId: string, currentColor: string) => {
     setEditingColor(currentColor || DEFAULT_MEMBER_COLOR);
@@ -1036,6 +1051,10 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     }
     if (users.some((u) => String(u.email || '').trim().toLowerCase() === emailNorm)) {
       toast.error(t('users.emailAlreadyExists', { email: emailNorm }), '');
+      return;
+    }
+    if (roleNeedsInviteBoards(userPayload.role) && !(userPayload.boardIds || []).length) {
+      toast.error(tCommon('navigation.inviteBoardsRequired'), '');
       return;
     }
     const creatingLocally = Boolean(userPayload.isActive);
@@ -1286,6 +1305,10 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       }
 
       // Limit check passed, open the modal
+      setNewUser({
+        ...getEmptyNewUser(),
+        boardIds: defaultInviteBoardIds(boards),
+      });
       setShowAddUserForm(true);
     } catch (error) {
       console.error('Error checking user limit:', error);
@@ -1926,8 +1949,35 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   labels={roleLabels}
                   descriptions={roleDescriptions}
                   title={t('users.changeRole')}
-                  onChange={(role) => setNewUser((prev) => ({ ...prev, role }))}
+                  onChange={(role) =>
+                    setNewUser((prev) => ({
+                      ...prev,
+                      role,
+                      boardIds:
+                        prev.boardIds && prev.boardIds.length > 0
+                          ? prev.boardIds
+                          : defaultInviteBoardIds(boards),
+                    }))
+                  }
                 />
+              </div>
+              <div>
+                <InviteBoardPicker
+                  id="admin-add-user-boards"
+                  boards={boards}
+                  selectedIds={newUser.boardIds || []}
+                  onChange={(ids) => setNewUser((prev) => ({ ...prev, boardIds: ids }))}
+                  disabled={isAddingUser}
+                  surface="slate"
+                  invalid={
+                    roleNeedsInviteBoards(newUser.role) && !(newUser.boardIds || []).length
+                  }
+                />
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {roleNeedsInviteBoards(newUser.role)
+                    ? tCommon('navigation.inviteBoardsHelp')
+                    : tCommon('navigation.inviteBoardsOptionalAdmin')}
+                </p>
               </div>
               <div className="flex items-start gap-2 pt-0.5">
                 <ModernCheckbox
@@ -1970,7 +2020,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
               <button
                 type="button"
                 onClick={handleAddUser}
-                disabled={isAddingUser}
+                disabled={isAddingUser || !newUserReadyToSubmit}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAddingUser && (
