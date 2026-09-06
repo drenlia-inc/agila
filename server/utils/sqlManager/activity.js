@@ -78,10 +78,13 @@ export async function getActivityFeed(db, options = {}) {
   return activities.map(activity => {
     if (activity.details) {
       try {
-        const parsed = JSON.parse(activity.details);
-        if (parsed.en && parsed.fr) {
-          // Bilingual JSON - return user's language
-          activity.details = parsed[normalizedLang] || parsed.en;
+        const parsed =
+          typeof activity.details === 'string'
+            ? JSON.parse(activity.details)
+            : activity.details;
+        if (parsed && (typeof parsed.en === 'string' || typeof parsed.fr === 'string')) {
+          // Bilingual JSON - return user's language (allow empty string for one locale)
+          activity.details = parsed[normalizedLang] || parsed.en || parsed.fr || '';
           activity.viaApi = Boolean(parsed.viaApi);
         }
         // If not valid bilingual JSON, keep as-is (backward compatibility)
