@@ -50,7 +50,8 @@ export const generateNameFromEmail = (email: string): { firstName: string; lastN
  */
 export const handleInviteUser = async (
   email: string,
-  handleRefreshData: () => Promise<void>
+  handleRefreshData: () => Promise<void>,
+  boardIds: string[] = []
 ): Promise<void> => {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   try {
@@ -95,7 +96,8 @@ export const handleInviteUser = async (
       password: tempPassword,
       firstName,
       lastName,
-      role: 'user'
+      role: 'user',
+      boardIds,
     });
     
     // Check if email was actually sent

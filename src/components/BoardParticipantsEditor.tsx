@@ -137,7 +137,7 @@ export default function BoardParticipantsEditor({
   const [loading, setLoading] = useState(true);
   const [loadedBoardId, setLoadedBoardId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [minOneError, setMinOneError] = useState(false);
   const [candidates, setCandidates] = useState<BoardParticipantUser[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [availableHighlight, setAvailableHighlight] = useState<string[]>([]);
@@ -153,6 +153,7 @@ export default function BoardParticipantsEditor({
     initializedRef.current = false;
     let cancelled = false;
     setLoading(true);
+    setMinOneError(false);
     getBoardParticipants(boardId)
       .then((data) => {
         if (cancelled) return;
@@ -178,7 +179,7 @@ export default function BoardParticipantsEditor({
   }, [boardId, t]);
 
   useEffect(() => {
-    if (selectedIds.length > 0) setSaveError(null);
+    if (selectedIds.length > 0) setMinOneError(false);
   }, [selectedIds.length]);
 
   const byId = useMemo(() => {
@@ -348,12 +349,12 @@ export default function BoardParticipantsEditor({
 
   const handleSave = async () => {
     if (selectedIds.length === 0) {
-      setSaveError(t('boardParticipants.minOne'));
+      setMinOneError(true);
       setActivePane('onBoard');
       onBoardListRef.current?.focus();
       return;
     }
-    setSaveError(null);
+    setMinOneError(false);
     setSaving(true);
     try {
       const data = await updateBoardParticipants(boardId, selectedIds);
@@ -377,7 +378,7 @@ export default function BoardParticipantsEditor({
 
   const listClass = (pane: 'available' | 'onBoard') =>
     `h-64 w-full overflow-y-auto rounded-lg border bg-white text-sm outline-none dark:bg-gray-800 ${
-      pane === 'onBoard' && saveError
+      pane === 'onBoard' && minOneError
         ? 'border-red-400 ring-2 ring-red-200 dark:border-red-500 dark:ring-red-900/40'
         : activePane === pane
           ? 'border-blue-400 ring-2 ring-blue-200 dark:border-blue-500 dark:ring-blue-900/50'
@@ -561,19 +562,19 @@ export default function BoardParticipantsEditor({
             {onBoardGroups.length === 0 && (
               <div
                 className={`px-3 py-6 text-center text-xs ${
-                  saveError ? 'text-red-600 dark:text-red-400' : 'text-slate-400'
+                  minOneError ? 'text-red-600 dark:text-red-400' : 'text-slate-400'
                 }`}
               >
-                {saveError || t('boardParticipants.noneOnBoard')}
+                {minOneError ? t('boardParticipants.minOne') : t('boardParticipants.noneOnBoard')}
               </div>
             )}
           </div>
         </div>
       </div>
       <div className="flex items-center justify-between gap-3">
-        {saveError ? (
+        {minOneError ? (
           <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
-            {saveError}
+            {t('boardParticipants.minOne')}
           </p>
         ) : (
           <span />

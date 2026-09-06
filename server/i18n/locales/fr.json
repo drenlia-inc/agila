@@ -3,6 +3,8 @@
     "boardNameExists": "Un tableau avec ce nom existe déjà",
     "boardNotFound": "Tableau introuvable",
     "boardAccessDenied": "Vous n'avez pas accès à ce tableau.",
+    "inviteBoardsRequired": "Sélectionnez au moins un tableau pour cet utilisateur.",
+    "inviteBoardsInvalid": "Un ou plusieurs tableaux sélectionnés sont invalides.",
     "failedToCreateBoard": "Échec de la création du tableau",
     "failedToUpdateBoard": "Échec de la mise à jour du tableau",
     "failedToDeleteBoard": "Échec de la suppression du tableau",

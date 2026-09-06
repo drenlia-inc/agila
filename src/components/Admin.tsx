@@ -60,6 +60,7 @@ interface AdminProps {
   onDraftGateChange?: (gate: AdminDraftGate | null) => void;
   /** False while Admin is mounted-but-hidden (user on Kanban/Reports). */
   isPageActive?: boolean;
+  boards?: Array<{ id: string; title?: string }>;
 }
 
 interface User {
@@ -157,6 +158,7 @@ const Admin: React.FC<AdminProps> = ({
   onSettingsChanged,
   onDraftGateChange,
   isPageActive = true,
+  boards = [],
 }) => {
   const { t } = useTranslation('admin');
   const { systemSettings, refreshSettings, updateSiteSetting, updateSiteSettings } = useSettings(); // Use SettingsContext for admin settings
@@ -1801,6 +1803,7 @@ const Admin: React.FC<AdminProps> = ({
                 onColorChange={handleUserColorChange}
                 onRemoveAvatar={handleUserRemoveAvatar}
                 onResendInvitation={handleResendInvitation}
+                boards={boards}
               />
             </AdminTabPanel>
           )}
