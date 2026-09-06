@@ -105,8 +105,13 @@ export const parseUrlHash = (hash: string): ParsedRoute => {
   const subRoute = routeParts[1] || null;
   
   // Split main part by ? for query parameters
-  const [mainRoute, queryString] = mainPart.split('?');
+  const [rawMain, queryString] = mainPart.split('?');
   const queryParams = new URLSearchParams(queryString || '');
+  const lowered = (rawMain || '').toLowerCase();
+  const mainRoute =
+    PAGE_IDENTIFIERS.includes(lowered) || AUTH_HASH_ROUTES.includes(lowered)
+      ? lowered
+      : rawMain;
   
   // Check for project and task routes
   const projectRoute = parseProjectRoute();

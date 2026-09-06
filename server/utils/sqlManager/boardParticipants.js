@@ -111,6 +111,26 @@ export async function replaceParticipants(db, boardId, userIds) {
   return listParticipants(db, boardId);
 }
 
+/** Append a user to boards without removing existing participants. */
+export async function addUserToBoards(db, userId, boardIds) {
+  const unique = [...new Set((boardIds || []).map((id) => String(id)).filter(Boolean))];
+  const added = [];
+  for (const boardId of unique) {
+    await wrapQuery(
+      db.prepare(`
+        INSERT INTO board_participants (board_id, user_id)
+        SELECT $1, $2
+        FROM boards
+        WHERE boards.id = $1 AND boards.deleted_at IS NULL
+        ON CONFLICT DO NOTHING
+      `),
+      'INSERT'
+    ).run(boardId, userId);
+    added.push(boardId);
+  }
+  return added;
+}
+
 /** Add every active human user to a board without dropping existing members. */
 export async function addActiveUsersAsParticipants(db, boardId) {
   const rows = await wrapQuery(

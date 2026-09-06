@@ -766,12 +766,13 @@ function AppContent() {
   useEffect(() => subscribePerfTestsPreference(setUserPerfTestsEnabled), []);
 
   useEffect(() => {
+    if (!currentUser?.id) return;
     if (isAdminUser || currentPage !== 'admin') return;
     setCurrentPage('kanban');
-    if (window.location.hash.replace(/^#/, '').startsWith('admin')) {
+    if (window.location.hash.replace(/^#/, '').toLowerCase().startsWith('admin')) {
       window.location.hash = 'kanban';
     }
-  }, [isAdminUser, currentPage]);
+  }, [isAdminUser, currentPage, currentUser?.id]);
 
   const columnIdsKey = useMemo(
     () => Object.keys(columns).sort().join('|'),
@@ -1946,8 +1947,8 @@ function AppContent() {
   }, [columns]); // Remove selectedTask from deps to avoid infinite loops
 
   // Invite user handler
-  const handleInviteUser = async (email: string) => {
-    return handleInviteUserUtil(email, handleRefreshData);
+  const handleInviteUser = async (email: string, boardIds: string[] = []) => {
+    return handleInviteUserUtil(email, handleRefreshData, boardIds);
   };
 
 
@@ -6372,6 +6373,7 @@ function AppContent() {
         }
         onJumpToTask={handleJumpToTask}
         boards={boards}
+        selectedBoard={selectedBoard}
         sprints={availableSprints}
         sprintsReady={sprintsReady}
       />

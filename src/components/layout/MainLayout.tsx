@@ -244,6 +244,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 onSettingsChanged={onSettingsChanged}
                 onDraftGateChange={onAdminDraftGateChange}
                 isPageActive={adminVisible}
+                boards={kanbanProps.boards}
               />
             </div>
           )}

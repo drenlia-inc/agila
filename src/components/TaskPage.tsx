@@ -83,7 +83,7 @@ interface TaskPageProps {
   onLogout: () => void;
   onPageChange: (page: 'kanban' | 'admin' | 'reports' | 'test', options?: { hash?: string }) => void;
   onRefresh: () => Promise<void>;
-  onInviteUser?: (email: string) => Promise<void>;
+  onInviteUser?: (email: string, boardIds: string[]) => Promise<void>;
   // Auto-refresh toggle
   // isAutoRefreshEnabled: boolean; // Disabled - using real-time updates
   // onToggleAutoRefresh: () => void; // Disabled - using real-time updates
@@ -987,6 +987,8 @@ export default function TaskPage({
         }}
         onInviteUser={onInviteUser}
         hideSprintSelector={true} // Hide sprint selector on TaskPage
+        boards={boards}
+        selectedBoard={task?.boardId || null}
         // isAutoRefreshEnabled={isAutoRefreshEnabled} // Disabled - using real-time updates
         // onToggleAutoRefresh={onToggleAutoRefresh} // Disabled - using real-time updates
       />

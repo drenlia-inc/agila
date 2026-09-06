@@ -3,6 +3,8 @@
     "boardNameExists": "A board with this name already exists",
     "boardNotFound": "Board not found",
     "boardAccessDenied": "You do not have access to this board.",
+    "inviteBoardsRequired": "Select at least one board for this user.",
+    "inviteBoardsInvalid": "One or more selected boards are invalid.",
     "failedToCreateBoard": "Failed to create board",
     "failedToUpdateBoard": "Failed to update board",
     "failedToDeleteBoard": "Failed to delete board",

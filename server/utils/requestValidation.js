@@ -227,7 +227,8 @@ export const adminCreateUserBodySchema = z.object({
   role: z.enum(['admin', 'user', 'viewer'], { message: 'User role is required' }),
   displayName: z.string().max(100).optional(),
   isActive: booleanish,
-  baseUrl: z.string().max(2048).optional()
+  baseUrl: z.string().max(2048).optional(),
+  boardIds: z.array(idSchema).max(500).optional().default([])
 }).passthrough();
 
 export const adminUpdateUserBodySchema = z.object({

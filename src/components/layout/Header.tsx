@@ -15,7 +15,8 @@ import { feDebug } from '../../utils/clientDebug';
 import ResetCountdown from '../ResetCountdown';
 import { KanbanChromeTooltip } from '../KanbanChromeTooltip';
 import { TOOLS_HEADER_SLOT_ID } from '../Tools';
-import { toast } from '../../utils/toast';
+import InviteBoardPicker from '../InviteBoardPicker';
+import { defaultInviteBoardIds, liveInviteBoards } from '../../utils/inviteBoardIds';
 import { getAuthenticatedAvatarUrl } from '../../utils/authImageUrl';
 import {
   AGILA_GITHUB_URL,
@@ -101,7 +102,7 @@ interface HeaderProps {
   /** Kept for callers; manual refresh control removed from the header UI. */
   onRefresh?: () => Promise<void>;
   onHelpClick: () => void;
-  onInviteUser?: (email: string) => Promise<void>;
+  onInviteUser?: (email: string, boardIds: string[]) => Promise<void>;
   // Auto-refresh toggle - DISABLED (using real-time updates)
   // isAutoRefreshEnabled: boolean;
   // onToggleAutoRefresh: () => void;
@@ -128,6 +129,7 @@ interface HeaderProps {
   sprints?: Array<{ id: string; name: string; start_date: string; end_date: string }>; // Optional: sprints passed from parent (avoids duplicate API calls)
   /** False until GET sprints has finished so the selector does not flash "All Sprints". */
   sprintsReady?: boolean;
+  selectedBoard?: string | null;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -153,6 +155,7 @@ const Header: React.FC<HeaderProps> = ({
   boards = [],
   sprints: propSprints,
   sprintsReady = true,
+  selectedBoard = null,
 }) => {
   const isDemoMode = process.env.DEMO_ENABLED === 'true';
   const { theme } = useTheme();
@@ -280,6 +283,7 @@ const Header: React.FC<HeaderProps> = ({
   );
   const [showInviteDropdown, setShowInviteDropdown] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteBoardIds, setInviteBoardIds] = useState<string[]>([]);
   const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
@@ -450,6 +454,9 @@ const Header: React.FC<HeaderProps> = ({
       const target = event.target as Node;
       if (inviteDropdownRef.current && !inviteDropdownRef.current.contains(target)) {
         if (isInviting) return;
+        const inBoardMenu =
+          target instanceof Element && target.closest('[data-invite-board-menu="true"]');
+        if (inBoardMenu) return;
         setShowInviteDropdown(false);
         setInviteEmail('');
         setInviteError('');
@@ -537,15 +544,20 @@ const Header: React.FC<HeaderProps> = ({
   }, [isSystemPanelAvailable]);
 
   const handleInviteClick = () => {
-    setShowInviteDropdown(!showInviteDropdown);
+    const opening = !showInviteDropdown;
+    setShowInviteDropdown(opening);
     setInviteEmail('');
     setInviteError('');
     setInviteSuccess('');
+    if (opening) {
+      setInviteBoardIds(defaultInviteBoardIds(boards, selectedBoard));
+    }
   };
 
   const handleInviteCancel = () => {
     setShowInviteDropdown(false);
     setInviteEmail('');
+    setInviteBoardIds([]);
     setInviteError('');
     setInviteSuccess('');
   };
@@ -568,6 +580,16 @@ const Header: React.FC<HeaderProps> = ({
       return;
     }
 
+    if (liveInviteBoards(boards).length === 0) {
+      setInviteError(t('navigation.inviteNoBoards'));
+      return;
+    }
+
+    if (inviteBoardIds.length === 0) {
+      setInviteError(t('navigation.inviteBoardsRequired'));
+      return;
+    }
+
     if (!onInviteUser) {
       setInviteError(t('navigation.inviteNotAvailable'));
       return;
@@ -578,11 +600,12 @@ const Header: React.FC<HeaderProps> = ({
     setInviteSuccess('');
 
     try {
-      await onInviteUser(inviteEmail.trim());
+      await onInviteUser(inviteEmail.trim(), inviteBoardIds);
       const sentTo = inviteEmail.trim();
       setInviteSuccess(t('navigation.invitationSent'));
       toast.success(t('navigation.invitationSentTo', { email: sentTo }), '');
       setInviteEmail('');
+      setInviteBoardIds(defaultInviteBoardIds(boards, selectedBoard));
       setTimeout(() => {
         setShowInviteDropdown(false);
         setInviteSuccess('');
@@ -867,7 +890,7 @@ const Header: React.FC<HeaderProps> = ({
                   </KanbanChromeTooltip>
 
                   {showInviteDropdown && (
-                    <div className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-1.5rem))] bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-[70]">
+                    <div className="absolute right-0 top-full mt-2 w-[min(22rem,calc(100vw-1.5rem))] bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-[70]">
                       <div className="p-4">
                         <div className="flex items-center gap-2 mb-3">
                           <Mail className="h-4 w-4 text-blue-600" />
@@ -892,6 +915,22 @@ const Header: React.FC<HeaderProps> = ({
                               autoFocus={!isDemoMode}
                             />
                           </div>
+                          <div>
+                            <InviteBoardPicker
+                              id="header-invite-boards"
+                              boards={boards}
+                              selectedIds={inviteBoardIds}
+                              onChange={(ids) => {
+                                setInviteBoardIds(ids);
+                                if (ids.length > 0) setInviteError('');
+                              }}
+                              disabled={isInviting || isDemoMode}
+                              invalid={Boolean(inviteError) && inviteBoardIds.length === 0}
+                            />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              {t('navigation.inviteBoardsHelp')}
+                            </p>
+                          </div>
                           
                           {inviteError && (
                             <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900 px-2 py-1 rounded">
@@ -908,7 +947,7 @@ const Header: React.FC<HeaderProps> = ({
                           <div className="flex items-center gap-2 pt-2">
                             <button
                               onClick={handleInviteSend}
-                              disabled={isInviting || isDemoMode || !inviteEmail.trim()}
+                              disabled={isInviting || isDemoMode || !inviteEmail.trim() || inviteBoardIds.length === 0}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                               {isInviting ? (
