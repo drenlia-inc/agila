@@ -1,0 +1,92 @@
+# Single-tenant production / self-hosted stack.
+# Copy to docker-compose.yml on the server (gitignored).
+#
+#   cp docker-compose-prod.yml docker-compose.yml
+#   cp .env.example .env   # set JWT_SECRET, POSTGRES_PASSWORD, etc.
+#
+# Builds with Dockerfile.prod (NODE_ENV=production, no source bind-mount).
+# For local development, use docker-compose-example.yml instead.
+# For the public demo site, use docker-compose-demo.yml.
+
+services:
+  agila-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        DEMO_ENABLED: "false"
+        MULTI_TENANT: "false"
+        GIT_COMMIT: "${GIT_COMMIT:-unknown}"
+        GIT_BRANCH: "${GIT_BRANCH:-unknown}"
+        BUILD_TIME: "${BUILD_TIME:-}"
+    container_name: agila
+    ports:
+      # nginx (or local browser) talks to the Vite preview front door only
+      - "3010:3010"
+    environment:
+      - NODE_ENV=production
+      - DOCKER_ENV=true
+      - PORT=3222
+      - REDIS_URL=redis://redis:6379
+      - DB_TYPE=postgresql
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=kanban
+      - POSTGRES_USER=kanban_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kanban_password}
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-}
+      # Set to your public hostname (e.g. kanban.example.com)
+      - ALLOWED_ORIGINS=mydomainname.tld
+      - DEMO_ENABLED=false
+      - LICENSE_ENABLED=false
+      - MULTI_TENANT=false
+      # Required when reverse-proxied (nginx). Set to false only if you hit :3010 directly.
+      - TRUST_PROXY=1
+    volumes:
+      - kanban-data:/app/server/data
+      - kanban-attachments:/app/server/attachments
+      - kanban-avatars:/app/server/avatars
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: agila-postgres
+    environment:
+      - POSTGRES_DB=kanban
+      - POSTGRES_USER=kanban_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kanban_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kanban_user -d kanban"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: agila-redis
+    # Not published on the host — Docker network only
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+volumes:
+  kanban-data:
+    driver: local
+  kanban-attachments:
+    driver: local
+  kanban-avatars:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

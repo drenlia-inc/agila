@@ -1251,8 +1251,8 @@ router.get('/debug/oauth', authenticateToken, requireRole(['admin']), async (req
   }
 });
 
-// Check instance status for logged-in users
-router.get('/instance-status', authenticateToken, async (req, res) => {
+// Check instance status (public so login and the SPA shell can show a banner)
+router.get('/instance-status', async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const t = await getTranslator(db);

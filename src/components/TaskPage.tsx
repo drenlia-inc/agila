@@ -84,6 +84,7 @@ interface TaskPageProps {
   onPageChange: (page: 'kanban' | 'admin' | 'reports' | 'test', options?: { hash?: string }) => void;
   onRefresh: () => Promise<void>;
   onInviteUser?: (email: string, boardIds: string[]) => Promise<void>;
+  statusBanner?: React.ReactNode;
   // Auto-refresh toggle
   // isAutoRefreshEnabled: boolean; // Disabled - using real-time updates
   // onToggleAutoRefresh: () => void; // Disabled - using real-time updates
@@ -99,8 +100,7 @@ export default function TaskPage({
   onPageChange, 
   onRefresh, 
   onInviteUser,
-  // isAutoRefreshEnabled, // Disabled - using real-time updates
-  // onToggleAutoRefresh // Disabled - using real-time updates
+  statusBanner = null,
 }: TaskPageProps) {
   const { t } = useTranslation('tasks');
   const columnDisplayTitle = useColumnDisplayTitle();
@@ -973,9 +973,7 @@ export default function TaskPage({
       <Header
         currentUser={currentUser}
         siteSettings={siteSettings || {}}
-        currentPage={'kanban'} // Task page is part of kanban flow
-        // isPolling={isPolling} // Removed - using real-time WebSocket updates
-        // lastPollTime={lastPollTime} // Removed - using real-time WebSocket updates
+        currentPage={'kanban'}
         members={members}
         onProfileClick={() => setShowProfileModal(true)}
         onLogout={onLogout}
@@ -986,11 +984,10 @@ export default function TaskPage({
           setHelpExpandToken((n) => n + 1);
         }}
         onInviteUser={onInviteUser}
-        hideSprintSelector={true} // Hide sprint selector on TaskPage
+        hideSprintSelector={true}
         boards={boards}
         selectedBoard={task?.boardId || null}
-        // isAutoRefreshEnabled={isAutoRefreshEnabled} // Disabled - using real-time updates
-        // onToggleAutoRefresh={onToggleAutoRefresh} // Disabled - using real-time updates
+        statusBanner={statusBanner}
       />
       
       {/* Task Navigation Bar - Sticky */}

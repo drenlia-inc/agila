@@ -130,6 +130,7 @@ interface HeaderProps {
   /** False until GET sprints has finished so the selector does not flash "All Sprints". */
   sprintsReady?: boolean;
   selectedBoard?: string | null;
+  statusBanner?: React.ReactNode;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -156,6 +157,7 @@ const Header: React.FC<HeaderProps> = ({
   sprints: propSprints,
   sprintsReady = true,
   selectedBoard = null,
+  statusBanner = null,
 }) => {
   const isDemoMode = process.env.DEMO_ENABLED === 'true';
   const { theme } = useTheme();
@@ -644,7 +646,8 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-[60] bg-white dark:bg-gray-800 shadow-sm border-b border-gray-100 dark:border-gray-700" data-tour-id="navigation">
+    <header className="sticky top-0 z-[80] bg-white dark:bg-gray-800 shadow-sm border-b border-gray-100 dark:border-gray-700" data-tour-id="navigation">
+      {statusBanner}
       {/* Gutter outside shell — same nesting as MainLayout so brand aligns with page content */}
       <div className="app-page-inline-gutter">
       <div className="app-page-shell relative py-2.5 flex justify-between items-center gap-2 min-w-0 max-w-full">
