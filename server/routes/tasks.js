@@ -451,7 +451,10 @@ router.get('/trash/search', authenticateToken, async (req, res) => {
       ? Math.min(Math.max(requestedLimit, 1), 50)
       : 20;
 
-    const tasks = await taskQueries.searchTrashedTasks(db, query, limit);
+    const tasks = await taskQueries.searchTrashedTasks(db, query, limit, {
+      userId: req.user.id,
+      isAdmin: userHasAdminRole(req.user),
+    });
     res.json({ tasks });
   } catch (error) {
     console.error('Error searching trashed tasks:', error);
@@ -1852,6 +1855,15 @@ router.post('/bulk-field-activity', authenticateToken, async (req, res) => {
       reason = null,
     } = parsed.data;
 
+    if (boardId && !(await assertBoardAccess(req, res, boardId))) return;
+    if (Array.isArray(taskIds) && taskIds.length) {
+      const existing = await taskQueries.getTasksByIdsBasic(db, taskIds);
+      for (const t of existing) {
+        const tidBoard = t.boardId || t.boardid;
+        if (tidBoard && !(await assertBoardAccess(req, res, tidBoard))) return;
+      }
+    }
+
     await logBulkTaskFieldActivity(
       userId,
       field,
@@ -1903,6 +1915,24 @@ router.post('/batch-update', authenticateToken, async (req, res) => {
     
     if (missingTasks.length > 0) {
       return res.status(404).json({ error: tTranslator('errors.taskNotFound') + `: ${missingTasks.join(', ')}` });
+    }
+
+    // AuthZ: caller must access each task's current board; boardId is immutable here.
+    for (const task of tasks) {
+      const current = existingTaskMap.get(task.id);
+      const currentBoardId = current?.boardId || current?.boardid;
+      if (currentBoardId && !(await assertBoardAccess(req, res, currentBoardId))) return;
+      const requestedBoardId = task.boardId || task.boardid;
+      if (
+        requestedBoardId &&
+        currentBoardId &&
+        String(requestedBoardId) !== String(currentBoardId)
+      ) {
+        return res.status(400).json({
+          error: 'boardId cannot be changed via batch-update; use move-to-board',
+          code: 'BOARD_ID_IMMUTABLE',
+        });
+      }
     }
 
     for (const task of tasks) {
@@ -1969,12 +1999,14 @@ router.post('/batch-update', authenticateToken, async (req, res) => {
       }
 
       const columnChanged = task.columnId && task.columnId !== previousColumnId;
+      // boardId is immutable on this route — always persist the existing board.
+      const boardIdToWrite = previousBoardId;
       if (columnChanged) {
         batchQueries.push({
           query: updateQueryCrossColumn,
           params: [
             task.title, task.description, task.memberId, task.requesterId, task.startDate,
-            task.dueDate, task.effort, priorityName, priorityId, task.columnId, task.boardId, task.position || 0,
+            task.dueDate, task.effort, priorityName, priorityId, task.columnId, boardIdToWrite, task.position || 0,
             task.sprintId || null, previousBoardId, previousColumnId, now, now, task.id
           ]
         });
@@ -1983,7 +2015,7 @@ router.post('/batch-update', authenticateToken, async (req, res) => {
           query: updateQuerySameColumn,
           params: [
             task.title, task.description, task.memberId, task.requesterId, task.startDate,
-            task.dueDate, task.effort, priorityName, priorityId, task.columnId, task.boardId, task.position || 0,
+            task.dueDate, task.effort, priorityName, priorityId, task.columnId, boardIdToWrite, task.position || 0,
             task.sprintId || null, previousBoardId, previousColumnId, now, task.id
           ]
         });
@@ -2116,6 +2148,7 @@ router.post('/:id/restore', authenticateToken, async (req, res) => {
     }
 
     const boardId = task.boardid || task.boardId;
+    if (boardId && !(await assertBoardAccess(req, res, boardId))) return;
     const board = await boardQueries.getBoardById(db, boardId);
     if (!board) {
       return res.status(409).json({
@@ -2363,6 +2396,11 @@ router.post('/batch-update-positions', authenticateToken, async (req, res) => {
     }
     
     const taskMap = new Map(currentTasks.map(t => [t.id, t]));
+
+    for (const currentTask of currentTasks) {
+      const boardId = currentTask.boardId || currentTask.boardid;
+      if (boardId && !(await assertBoardAccess(req, res, boardId))) return;
+    }
     
     // Group updates by column for efficient batch processing
     const updatesByColumn = new Map();
@@ -2688,6 +2726,9 @@ router.post('/reorder', authenticateToken, async (req, res) => {
     if (!currentTask) {
       return res.status(404).json({ error: tTranslator('errors.taskNotFound') });
     }
+
+    const reorderBoardId = currentTask.boardId || currentTask.boardid;
+    if (reorderBoardId && !(await assertBoardAccess(req, res, reorderBoardId))) return;
 
     // Ensure positions are numbers for comparison
     const currentPosition = typeof currentTask.position === 'number' 

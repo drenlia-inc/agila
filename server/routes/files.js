@@ -77,14 +77,17 @@ async function assertActiveFileUser(req, token, via) {
     if (!userMayUseSession(userInDb)) {
       return { ok: false, status: 401, error: userInDb ? 'Invalid token' : 'Invalid token for this tenant' };
     }
+    return { ok: true, decoded, db, user: userInDb };
   } catch (dbError) {
     console.error('❌ Error checking user for file access:', dbError);
     return { ok: false, status: 401, error: 'Authentication failed' };
   }
-
-  return { ok: true, decoded, db };
 }
 
+/**
+ * Attachments require board membership for the owning task.
+ * Avatars remain tenant-visible to any active authenticated user (by design).
+ */
 async function serveAuthenticatedFile(req, res, kind) {
   const cred = resolveFileAccessCredential(req);
   if (!cred) {
@@ -97,8 +100,31 @@ async function serveAuthenticatedFile(req, res, kind) {
       return res.status(auth.status).json({ error: auth.error });
     }
 
+    // Media cookie / query tokens do not populate req.user — hydrate for AuthZ helpers.
+    if (!req.user) {
+      const roleNames = String(auth.user?.roles || '')
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean);
+      req.user = {
+        id: auth.decoded.id,
+        role: roleNames[0] || auth.decoded.role,
+        roles: roleNames.length ? roleNames : auth.decoded.roles,
+      };
+    }
+
     const storagePaths = getRequestStoragePaths(req);
     const safeName = path.basename(req.params.filename);
+
+    if (kind === 'attachments') {
+      const attachment = await fileQueries.getAttachmentByFilename(auth.db, safeName);
+      const taskId = attachment?.resolvedTaskId || attachment?.taskId || attachment?.taskid;
+      if (!taskId) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      if (!(await assertTaskBoardAccess(req, res, taskId))) return;
+    }
+
     const obj = await getObject(auth.db, storagePaths, kind, safeName);
 
     if (!obj) {

@@ -486,25 +486,18 @@ export const createTaskRelationshipBodySchema = z.object({
 
 // —— Task work / agent control ——
 
-export const updateTaskWorkBodySchema = z
-  .object({
-    repoUrl: z.string().max(2048).optional(),
-    repoBranch: z.string().max(256).optional(),
-    status: z.string().max(64).optional(),
-    agentMode: z.string().max(64).optional(),
-    automationScope: z.string().max(64).optional(),
-    automationBoardIds: z
-      .union([z.array(idSchema).max(100), z.string().max(4000)])
-      .optional(),
-    llmModel: z.string().max(128).optional(),
-    entries: z
-      .record(
-        z.string().max(128),
-        z.union([z.string().max(100_000), z.number(), z.boolean(), z.null()])
-      )
-      .optional()
-  })
-  .passthrough();
+export const updateTaskWorkBodySchema = z.object({
+  repoUrl: z.string().max(2048).optional(),
+  repoBranch: z.string().max(256).optional(),
+  status: z.string().max(64).optional(),
+  agentMode: z.string().max(64).optional(),
+  automationScope: z.string().max(64).optional(),
+  automationBoardIds: z
+    .union([z.array(idSchema).max(100), z.string().max(4000)])
+    .optional(),
+  llmModel: z.string().max(128).optional()
+  // Free-form `entries` removed — clients must use typed fields only (A-1).
+});
 
 export const taskWorkControlBodySchema = z.object({
   control: z.preprocess(

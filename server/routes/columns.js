@@ -324,6 +324,7 @@ router.post('/reorder', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const t = await getTranslator(db);
+    if (!(await assertBoardAccess(req, res, boardId))) return;
     
     // MIGRATED: Get column position using sqlManager
     const currentColumn = await helpers.getColumnPosition(db, columnId);
@@ -408,6 +409,7 @@ router.post('/renumber', authenticateToken, async (req, res) => {
   const { boardId } = parsed.data;
   try {
     const db = getRequestDatabase(req);
+    if (!(await assertBoardAccess(req, res, boardId))) return;
 
     let allColumns;
     await dbTransaction(db, async () => {

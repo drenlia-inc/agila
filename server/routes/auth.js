@@ -399,6 +399,26 @@ router.get('/demo-credentials', async (req, res) => {
       return res.status(404).json({ error: 'Not found' });
     }
 
+    // Defense in depth: never expose cleartext admin passwords on production hosts,
+    // even if DEMO_ENABLED were mis-set on the shared image.
+    const host = String(req.get('x-forwarded-host') || req.get('host') || '')
+      .split(',')[0]
+      .trim()
+      .toLowerCase();
+    const hostname = host.split(':')[0];
+    const demoHostAllowlist = new Set(
+      String(process.env.DEMO_CREDENTIALS_HOSTS || 'kanban.demo.drenlia.com,localhost,127.0.0.1')
+        .split(',')
+        .map((h) => h.trim().toLowerCase())
+        .filter(Boolean)
+    );
+    if (
+      process.env.NODE_ENV === 'production' &&
+      (hostname === 'app.agila.dev' || !demoHostAllowlist.has(hostname))
+    ) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     // Prevent browsers/proxies from caching passwords across demo resets
     res.set({
       'Cache-Control': 'no-store, no-cache, must-revalidate, private',
