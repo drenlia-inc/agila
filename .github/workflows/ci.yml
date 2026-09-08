@@ -33,4 +33,4 @@ jobs:
         run: npm run build
 
       - name: Security audit (high+)
-        run: npm audit --audit-level=high
+        run: node scripts/ci-npm-audit.js

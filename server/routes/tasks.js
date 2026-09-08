@@ -1270,6 +1270,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
       // Both have values - compare
       return normalizedOld !== normalizedNew;
     };
+
+    // Partial PUTs (mobile status/assignee moves) omit most fields — only log keys present in the body.
+    const bodyHasField = (field) =>
+      Object.prototype.hasOwnProperty.call(task, field) ||
+      Object.prototype.hasOwnProperty.call(task, field.toLowerCase());
     
     // Generate change details
     const changes = [];
@@ -1324,12 +1329,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     }
     
-    // Check if sprint changed - handle separately like priority
+    // Check if sprint changed - only when the client explicitly sent sprintId (partial PUTs omit it).
     const currentSprintId = currentTask.sprint_id || currentTask.sprintId || null;
-    const newSprintId = task.sprintId || null;
+    const newSprintId = bodyHasField('sprintId')
+      ? (task.sprintId || null)
+      : currentSprintId;
     let oldSprintName = null;
     let newSprintName = null;
-    if (hasChanged(currentSprintId, newSprintId)) {
+    if (bodyHasField('sprintId') && hasChanged(currentSprintId, newSprintId)) {
       
       if (currentSprintId) {
         try {
@@ -1437,6 +1444,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     let columnMoveDisplayOld = null;
     let columnMoveDisplayNew = null;
     for (const field of fieldsToTrack) {
+      if (!bodyHasField(field)) continue;
       const oldValue = normalizedCurrentTask[field];
       const newValue = task[field];
       
@@ -1445,7 +1453,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
           // MIGRATED: Special handling for column moves - get column titles for better readability
           const oldColumn = await helpers.getColumnById(db, oldValue);
           const newColumn = await helpers.getColumnById(db, newValue);
-          const taskRef = task.ticket ? ` (${task.ticket})` : '';
+          const taskTitle =
+            task.title ??
+            normalizedCurrentTask.title ??
+            currentTask.title ??
+            '';
+          const taskRef = (task.ticket || currentTask.ticket)
+            ? ` (${task.ticket || currentTask.ticket})`
+            : '';
           const fromColumnEn = oldColumn?.title || t('activity.unknownColumn', {}, 'en');
           const toColumnEn = newColumn?.title || t('activity.unknownColumn', {}, 'en');
           const fromColumnFr = oldColumn?.title || t('activity.unknownColumn', {}, 'fr');
@@ -1456,13 +1471,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
           // Create bilingual message for column move
           const movedTaskText = JSON.stringify({
             en: t('activity.movedTaskFromTo', {
-              taskTitle: task.title,
+              taskTitle,
               taskRef,
               fromColumn: fromColumnEn,
               toColumn: toColumnEn
             }, 'en'),
             fr: t('activity.movedTaskFromTo', {
-              taskTitle: task.title,
+              taskTitle,
               taskRef,
               fromColumn: fromColumnFr,
               toColumn: toColumnFr
@@ -1561,8 +1576,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
         for (const change of changes) {
           try {
             const parsed = JSON.parse(change);
-            if (parsed.en && parsed.fr) {
-              // Bilingual JSON
+            if (parsed && typeof parsed.en === 'string' && typeof parsed.fr === 'string') {
+              // Skip empty bilingual fragments that would otherwise appear as raw JSON.
+              if (!parsed.en && !parsed.fr) continue;
               messagesEn.push(parsed.en);
               messagesFr.push(parsed.fr);
             } else {
@@ -1621,6 +1637,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
       for (const field of fieldsToTrack) {
         if (field === 'effort') continue;
+        if (!bodyHasField(field)) continue;
         if (!hasChanged(normalizedCurrentTask[field], task[field])) continue;
         if (field === 'columnId' && columnMoveDisplayOld != null && columnMoveDisplayNew != null) {
           emailItems.push({
@@ -1637,11 +1654,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
         });
       }
 
-      const skipEmailEffortOnly = emailItems.length === 0 && hasChanged(normalizedCurrentTask.effort, task.effort);
+      const skipEmailEffortOnly =
+        emailItems.length === 0 &&
+        bodyHasField('effort') &&
+        hasChanged(normalizedCurrentTask.effort, task.effort);
 
       if (changes.length === 1) {
-        changedField = fieldsToTrack.find((field) =>
-          hasChanged(normalizedCurrentTask[field], task[field])
+        changedField = fieldsToTrack.find(
+          (field) => bodyHasField(field) && hasChanged(normalizedCurrentTask[field], task[field]),
         );
         if (!changedField && priorityChanged) changedField = 'priorityId';
         if (!changedField && hasChanged(currentSprintId, newSprintId)) changedField = 'sprintId';
@@ -1739,6 +1759,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Determine which fields changed (already tracked in changes array, but build explicit list)
     const changedFields = [];
     for (const field of fieldsToTrack) {
+      if (!bodyHasField(field)) continue;
       const oldValue = normalizedCurrentTask[field];
       const newValue = task[field];
       if (hasChanged(oldValue, newValue)) {
@@ -1746,18 +1767,27 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     }
     const currentBoardId = normalizedCurrentTask.boardId;
-    if (hasChanged(currentBoardId, task.boardId)) changedFields.push('boardId');
+    if (bodyHasField('boardId') && hasChanged(currentBoardId, task.boardId)) {
+      changedFields.push('boardId');
+    }
     const currentPosition = currentTask.position || 0;
-    const newPosition = task.position ?? 0;
-    if (currentPosition !== newPosition) changedFields.push('position');
-    // Sprint change detection is handled earlier in the function (around line 1028)
+    if (bodyHasField('position')) {
+      const newPosition = task.position ?? 0;
+      if (currentPosition !== newPosition) changedFields.push('position');
+    }
+    // Sprint change detection is handled earlier in the function
     // where we also generate the bilingual activity log message
     // Reuse the same variables declared earlier for WebSocket tracking
-    if (hasChanged(currentSprintId, newSprintId)) changedFields.push('sprintId');
+    if (bodyHasField('sprintId') && hasChanged(currentSprintId, newSprintId)) {
+      changedFields.push('sprintId');
+    }
     // Reason-only edits must still publish so board cards / peers refresh the tooltip text
     const newBlockedReason =
       task.blockedReason !== undefined ? (task.blockedReason || null) : normalizedCurrentTask.blockedReason;
-    if (hasChanged(normalizedCurrentTask.blockedReason, newBlockedReason)) {
+    if (
+      bodyHasField('blockedReason') &&
+      hasChanged(normalizedCurrentTask.blockedReason, newBlockedReason)
+    ) {
       changedFields.push('blockedReason');
     }
     

@@ -6261,8 +6261,7 @@ function AppContent() {
               onPageChange={handlePageChange}
               onRefresh={handleRefreshData}
               onInviteUser={handleInviteUser}
-              // isAutoRefreshEnabled={isAutoRefreshEnabled} // Disabled - using real-time updates
-              // onToggleAutoRefresh={handleToggleAutoRefresh} // Disabled - using real-time updates
+              statusBanner={versionStatus.InstanceStatusBanner()}
             />
           </Suspense>
         </TourProvider>
@@ -6351,15 +6350,11 @@ function AppContent() {
         currentUser={currentUser}
         siteSettings={siteSettings}
         currentPage={currentPage}
-        // isPolling={isPolling} // Removed - using real-time WebSocket updates
-        // lastPollTime={lastPollTime} // Removed - using real-time WebSocket updates
         members={members}
         onProfileClick={() => modalState.openProfileModal()}
         onLogout={handleLogout}
         onPageChange={handlePageChange}
           onRefresh={handleRefreshData}
-          // isAutoRefreshEnabled={isAutoRefreshEnabled} // Disabled - using real-time updates
-          // onToggleAutoRefresh={handleToggleAutoRefresh} // Disabled - using real-time updates
         onHelpClick={() => modalState.openHelpModal()}
         onInviteUser={handleInviteUser}
         selectedSprintId={taskFilters.selectedSprintId}
@@ -6376,6 +6371,7 @@ function AppContent() {
         selectedBoard={selectedBoard}
         sprints={availableSprints}
         sprintsReady={sprintsReady}
+        statusBanner={versionStatus.InstanceStatusBanner()}
       />
 
       <MobileUnoptimizedBanner enabled={currentPage === 'kanban'} />
@@ -6383,7 +6379,7 @@ function AppContent() {
       {/* Network Status Indicator */}
       <NetworkStatusIndicator isOnline={isOnline} />
 
-      <div className={versionStatus.instanceStatus.status !== 'active' && !versionStatus.instanceStatus.isDismissed ? 'pt-20' : ''}>
+      <div>
         <MainLayout
         currentPage={currentPage}
         currentUser={currentUser} 
@@ -6555,8 +6551,6 @@ function AppContent() {
         />
       </div>
 
-      {versionStatus.InstanceStatusBanner()}
-      
       {/* Version Update Banner */}
       {versionStatus.showVersionBanner && (
         <VersionUpdateBanner

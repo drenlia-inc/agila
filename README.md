@@ -6,7 +6,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 
 *[View sample screenshots →](/screenshots/SCREENSHOTS.md)*
 
-**Quick start (Docker):** `git clone https://github.com/drenlia-inc/agila.git && cd agila && cp docker-compose-example.yml docker-compose.yml && docker compose up --build -d` — then open http://localhost:3010. Default admin is created on first boot; see [Installation](#installation).
+**Quick start (Docker, local):** `git clone https://github.com/drenlia-inc/agila.git && cd agila && cp docker-compose-example.yml docker-compose.yml && docker compose up --build -d` — then open http://localhost:3010. For production / self-hosted, use `docker-compose-prod.yml` and see [DOCKER.md Part 1](/DOCKER.md#part-1--production-deployment). Default admin is created on first boot; see [Installation](#installation).
 
 ## Key Features
 
@@ -152,7 +152,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 
 ## Installation
 
-### Docker (recommended)
+### Docker — local development
 
 ```bash
 git clone https://github.com/drenlia-inc/agila.git
@@ -161,17 +161,25 @@ cp docker-compose-example.yml docker-compose.yml
 docker compose up --build -d
 ```
 
-Containers start in the background. For a foreground session with live logs (typical local development), use `npm run docker:dev` (`docker compose up --build`, no `-d`).
-
-Before the first production run, edit `docker-compose.yml`:
-- `JWT_SECRET`: strong secret for authentication
-- `ALLOWED_ORIGINS`: your domain(s), e.g. `yourdomain.com`
-- `DEMO_ENABLED`: `false` for a real instance; `true` only for a generated demo dataset
-- Optional AI runner (Agent **Code** jobs): `AI_RUNNER_URL`, `AI_CALLBACK_BASE_URL`, `RUNNER_TOKEN`
+Containers start in the background. For a foreground session with live logs, use `npm run docker:dev` (`docker compose up --build`, no `-d`).
 
 **Access:** frontend http://localhost:3010 · API http://localhost:3222
 
-More detail: [DOCKER.md](/DOCKER.md)
+### Docker — production / self-hosted
+
+Use the production Compose file and follow **[DOCKER.md — Part 1](/DOCKER.md#part-1--production-deployment)** (Ubuntu, nginx, Let’s Encrypt):
+
+```bash
+cp docker-compose-prod.yml docker-compose.yml
+cp .env.example .env
+# Set JWT_SECRET, SETTINGS_ENCRYPTION_KEY, POSTGRES_PASSWORD in .env
+# Set ALLOWED_ORIGINS in docker-compose.yml to your FQDN
+docker compose up --build -d
+```
+
+`docker-compose-prod.yml` builds with `Dockerfile.prod` (`NODE_ENV=production`). Do not use `docker-compose-example.yml` on a public server.
+
+More detail: [DOCKER.md](/DOCKER.md) — **Part 1** production, **Part 2** local development.
 
 ### Default admin (first boot)
 

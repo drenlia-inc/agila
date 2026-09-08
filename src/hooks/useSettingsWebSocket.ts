@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getAllTags, getAllPriorities, getAllSprints, getSettings } from '../api';
 import { versionDetection } from '../utils/versionDetection';
 
@@ -17,23 +18,6 @@ interface UseSettingsWebSocketProps {
   };
 }
 
-const getStatusMessage = (status: string) => {
-  switch (status) {
-    case 'active':
-      return 'This instance is running normally.';
-    case 'suspended':
-      return 'This instance has been temporarily suspended. Please contact support for assistance.';
-    case 'terminated':
-      return 'This instance has been terminated. Please contact support for assistance.';
-    case 'failed':
-      return 'This instance has failed. Please contact support for assistance.';
-    case 'deploying':
-      return 'This instance is currently being deployed. Please try again in a few minutes.';
-    default:
-      return 'This instance is currently unavailable. Please contact support.';
-  }
-};
-
 export const useSettingsWebSocket = ({
   setAvailableTags,
   setAvailablePriorities,
@@ -42,6 +26,7 @@ export const useSettingsWebSocket = ({
   refreshMembers,
   versionStatus,
 }: UseSettingsWebSocketProps) => {
+  const { t } = useTranslation('common');
   
   const handleTagCreated = useCallback(async (data: any) => {
     console.log('📨 Tag created via WebSocket:', data);
@@ -188,13 +173,15 @@ export const useSettingsWebSocket = ({
   }, [refreshMembers]);
 
   const handleInstanceStatusUpdated = useCallback((data: any) => {
-    console.log('📨 Instance status updated via WebSocket:', data);
+    const status = data?.status || 'unavailable';
     versionStatus.setInstanceStatus({
-      status: data.status,
-      message: getStatusMessage(data.status),
+      status,
+      message: t(`instanceStatus.messages.${status}`, {
+        defaultValue: t('instanceStatus.messages.unavailable'),
+      }),
       isDismissed: false
     });
-  }, [versionStatus.setInstanceStatus]);
+  }, [t, versionStatus.setInstanceStatus]);
 
   const handleVersionUpdated = useCallback((data: any) => {
     console.log('📦 Version updated via WebSocket:', data);

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { login } from '../api';
+import api from '../api';
+import InstanceStatusBanner from './layout/InstanceStatusBanner';
 import { Github, MousePointerClick, RefreshCw, Sparkles } from 'lucide-react';
 import { SsoLoginButton } from './auth/SsoLoginButton';
 import { useSettings } from '../contexts/SettingsContext';
@@ -34,6 +36,7 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
     refreshSettings,
   } = useSettings();
   const [theme, setTheme] = useState<'light' | 'dark'>(readDocumentTheme);
+  const [instanceStatus, setInstanceStatus] = useState<{ status: string; message: string } | null>(null);
   const brandSettings = contextSiteSettings || siteSettings;
   const logoSrc = resolvePublicBrandLogoSrc(brandSettings, theme);
   const siteName = String(brandSettings?.SITE_NAME ?? '').trim();
@@ -60,6 +63,27 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   };
 
   const errorMessage = errorKey ? t(errorKey) : errorRaw;
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get('/auth/instance-status')
+      .then((response) => {
+        if (cancelled) return;
+        if (response.data && response.data.isActive === false) {
+          setInstanceStatus({
+            status: response.data.status,
+            message: response.data.message || '',
+          });
+        }
+      })
+      .catch(() => {
+        /* login page still works if status cannot be loaded */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const syncTheme = () => setTheme(readDocumentTheme());
@@ -424,7 +448,15 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   // viewport shrinks, flex re-centers the form, Safari blurs the field, and the keyboard
   // dismisses. Top-align with padding keeps the focused input stable.
   return (
-    <div className="min-h-[100dvh] bg-gray-100 dark:bg-gray-900 flex items-start justify-center pt-16 pb-12 px-4 sm:px-6 lg:px-8 relative">
+    <div className="min-h-[100dvh] bg-gray-100 dark:bg-gray-900 flex flex-col">
+      {instanceStatus && (
+        <InstanceStatusBanner
+          status={instanceStatus.status}
+          message={instanceStatus.message}
+          layout="page"
+        />
+      )}
+    <div className="flex-1 flex items-start justify-center pt-16 pb-12 px-4 sm:px-6 lg:px-8 relative">
       {/* Utilities — top right (matches app header: GitHub + language) */}
       <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
         {!hideGithubLink && (
@@ -774,6 +806,7 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
         </form>
         )}
       </div>
+    </div>
     </div>
   );
 }
