@@ -3296,7 +3296,7 @@ router.post('/:taskId/collaborators/:memberId', authenticateToken, async (req, r
 });
 
 // Remove collaborator from task
-router.delete('/:taskId/collaborators/:memberId', async (req, res) => {
+router.delete('/:taskId/collaborators/:memberId', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const tTranslator = await getTranslator(db);
