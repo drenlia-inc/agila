@@ -6,6 +6,11 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { getRequestDatabase, getTenantId } from '../middleware/tenantRouting.js';
+import {
+  assertTaskBoardAccess,
+  userCanAccessBoard,
+  userHasAdminRole
+} from '../middleware/boardAccess.js';
 import { isAiEnabled } from '../utils/aiEnabled.js';
 import {
   tasks as taskQueries,
@@ -21,6 +26,7 @@ import {
   taskWorkControlBodySchema,
   workMapsBodySchema
 } from '../utils/requestValidation.js';
+import { redactWorkMapForClient } from '../utils/taskWorkPublic.js';
 
 const router = express.Router();
 
@@ -32,7 +38,7 @@ async function publishWork(req, taskId, work) {
     {
       taskId,
       boardId: task?.boardid || task?.boardId,
-      work,
+      work: redactWorkMapForClient(work),
       timestamp: new Date().toISOString()
     },
     getTenantId(req)
@@ -47,9 +53,10 @@ function dispatchCtx(req) {
 
 router.get('/:taskId/work', authenticateToken, async (req, res) => {
   try {
+    if (!(await assertTaskBoardAccess(req, res, req.params.taskId))) return;
     const db = getRequestDatabase(req);
     const work = await taskWorkQueries.getWorkMapByTaskId(db, req.params.taskId);
-    res.json({ work });
+    res.json({ work: redactWorkMapForClient(work) });
   } catch (error) {
     console.error('Get task work error:', error);
     res.status(500).json({ error: 'Failed to get task work' });
@@ -58,10 +65,12 @@ router.get('/:taskId/work', authenticateToken, async (req, res) => {
 
 /**
  * Bind repo / initialize agent work when assigning to Agent.
- * Body: { repoUrl, repoBranch?, status? }
+ * Body: { repoUrl, repoBranch?, status?, agentMode?, ... } — no free-form entries.
  */
 router.put('/:taskId/work', authenticateToken, async (req, res) => {
   try {
+    if (!(await assertTaskBoardAccess(req, res, req.params.taskId))) return;
+
     const db = getRequestDatabase(req);
     if (!(await isAiEnabled(db))) {
       return res.status(403).json({ error: 'AI features are disabled for this instance' });
@@ -83,6 +92,7 @@ router.put('/:taskId/work', authenticateToken, async (req, res) => {
     }
     const body = parsed.data;
 
+    // Only typed top-level fields — never accept arbitrary task_work keys from clients.
     const entries = {};
     if (body.repoUrl !== undefined) {
       // Empty string = assist-only (no code repo)
@@ -106,19 +116,14 @@ router.put('/:taskId/work', authenticateToken, async (req, res) => {
         : [];
       entries.automation_board_ids = JSON.stringify(ids.filter(Boolean));
     }
-    if (body.entries && typeof body.entries === 'object') {
-      Object.assign(entries, body.entries);
+
+    // Per-task LLM model override — admins only
+    if (isAdmin && body.llmModel !== undefined) {
+      entries.llm_model = String(body.llmModel || '').trim();
     }
 
-    // Per-task LLM model override — admins only (strip if sneaked via entries)
-    if (!isAdmin) {
-      delete entries.llm_model;
-      // Non-admins cannot launch automation
-      if (entries.agent_mode === 'automation') {
-        return res.status(403).json({ error: 'Only admins can run Automation jobs' });
-      }
-    } else if (body.llmModel !== undefined) {
-      entries.llm_model = String(body.llmModel || '').trim();
+    if (!isAdmin && entries.agent_mode === 'automation') {
+      return res.status(403).json({ error: 'Only admins can run Automation jobs' });
     }
 
     if (entries.agent_mode === 'automation' && entries.status === 'queued') {
@@ -154,15 +159,9 @@ router.put('/:taskId/work', authenticateToken, async (req, res) => {
       }
     }
 
-    // Bind coding/automation credentials to the assigning user (not admin/global PAT)
+    // Always bind credentials to the caller when queuing — never client-supplied owner.
     if (entries.status === 'queued' && req.user?.id) {
-      if (
-        body.repoUrl !== undefined ||
-        body.agentMode !== undefined ||
-        !existing.agent_owner_user_id
-      ) {
-        entries.agent_owner_user_id = req.user.id;
-      }
+      entries.agent_owner_user_id = req.user.id;
     }
 
     // Clear stale PR/branch outcomes when the linked repo changes
@@ -218,7 +217,7 @@ router.put('/:taskId/work', authenticateToken, async (req, res) => {
       }
     }
 
-    res.json({ work });
+    res.json({ work: redactWorkMapForClient(work) });
   } catch (error) {
     console.error('Put task work error:', error);
     res.status(500).json({ error: 'Failed to update task work' });
@@ -231,6 +230,8 @@ router.put('/:taskId/work', authenticateToken, async (req, res) => {
  */
 router.put('/:taskId/work/control', authenticateToken, async (req, res) => {
   try {
+    if (!(await assertTaskBoardAccess(req, res, req.params.taskId))) return;
+
     const db = getRequestDatabase(req);
     if (!(await isAiEnabled(db))) {
       return res.status(403).json({ error: 'AI features are disabled for this instance' });
@@ -289,6 +290,9 @@ router.put('/:taskId/work/control', authenticateToken, async (req, res) => {
           error: 'Task description is required before starting the agent'
         });
       }
+      // On resume/re-queue, credentials belong to the caller if no owner yet.
+      // Never accept a client-supplied owner; do not overwrite an existing owner
+      // (original assigner's PAT/SSH) unless missing.
       if (!workBefore.agent_owner_user_id && req.user?.id) {
         updates.agent_owner_user_id = req.user.id;
       }
@@ -355,7 +359,7 @@ router.put('/:taskId/work/control', authenticateToken, async (req, res) => {
       }
     }
 
-    res.json({ work });
+    res.json({ work: redactWorkMapForClient(work) });
   } catch (error) {
     console.error('Task work control error:', error);
     res.status(500).json({ error: 'Failed to update control' });
@@ -376,8 +380,20 @@ router.post('/work-maps', authenticateToken, async (req, res) => {
     }
     const taskIds = parsed.data.taskIds.slice(0, 500);
     const result = {};
+    const isAdmin = userHasAdminRole(req.user);
     for (const taskId of taskIds) {
-      result[taskId] = await taskWorkQueries.getWorkMapByTaskId(db, taskId);
+      // Skip inaccessible / unknown tasks rather than failing the whole batch.
+      if (!isAdmin) {
+        const boardId = await taskQueries.getTaskBoardId(db, taskId);
+        if (!boardId || !(await userCanAccessBoard(db, req.user, boardId))) {
+          continue;
+        }
+      } else {
+        const boardId = await taskQueries.getTaskBoardId(db, taskId);
+        if (!boardId) continue;
+      }
+      const work = await taskWorkQueries.getWorkMapByTaskId(db, taskId);
+      result[taskId] = redactWorkMapForClient(work);
     }
     res.json({ workByTaskId: result });
   } catch (error) {
