@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { Copy, Eye, UserPlus, GripVertical, TagIcon, Plus, Trash2, GitBranch, Archive } from 'lucide-react';
+import { Copy, Eye, UserPlus, GripVertical, TagIcon, Plus, Trash2, GitBranch, Archive, MoreVertical } from 'lucide-react';
 import { Task, TeamMember, Tag } from '../types';
 import { formatMembersTooltip } from '../utils/taskUtils';
 import AddTagModal from './AddTagModal';
@@ -17,6 +17,8 @@ import {
 import type { TaskRelationshipSummary } from '../utils/taskRelationshipSummary';
 import { getTaskRelationshipSummary } from '../utils/taskRelationshipSummary';
 import { getArchivedColumnId, isArchivedColumnFlag } from '../utils/columnUtils';
+import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import { useFloatingOverlayDismiss } from '../hooks/useFloatingOverlayDismiss';
 
 interface TaskCardToolbarProps {
   task: Task;
@@ -71,6 +73,8 @@ interface TaskCardToolbarProps {
   canMutate?: boolean;
   /** Task card root — constrains link tooltip width so long copy wraps within the card. */
   cardWidthAnchorRef?: React.RefObject<HTMLElement | null>;
+  /** Live card node (memoized cards do not re-render on column resize). */
+  cardWidthAnchorEl?: HTMLElement | null;
 }
 
 export default function TaskCardToolbar({
@@ -116,14 +120,20 @@ export default function TaskCardToolbar({
   isAdmin = false,
   canMutate = true,
   cardWidthAnchorRef,
+  cardWidthAnchorEl = null,
 }: TaskCardToolbarProps) {
   const { t } = useTranslation('tasks');
   const _priorityButtonRef = useRef<HTMLButtonElement>(null);
   const [showQuickTagDropdown, setShowQuickTagDropdown] = useState(false);
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [tagDropdownPosition, setTagDropdownPosition] = useState<{left: number, top: number}>({left: 0, top: 0});
+  const [overflowMenuPosition, setOverflowMenuPosition] = useState<{left: number, top: number}>({left: 0, top: 0});
   const quickTagButtonRef = useRef<HTMLButtonElement>(null);
   const quickTagDropdownRef = useRef<HTMLDivElement>(null);
+  const overflowMoreButtonRef = useRef<HTMLButtonElement>(null);
+  const overflowMenuRef = useRef<HTMLDivElement>(null);
+  const overflowPointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const memberButtonRef = useRef<HTMLButtonElement>(null);
   
   const toolbarPinnedOpen =
@@ -261,33 +271,34 @@ export default function TaskCardToolbar({
 
   // Debug logging removed for clarity
 
-  const handleQuickTagClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (!showQuickTagDropdown && quickTagButtonRef.current) {
-      // Calculate position for portal dropdown
-      const rect = quickTagButtonRef.current.getBoundingClientRect();
-      const dropdownWidth = 200;
-      const dropdownHeight = 200;
-      
-      // Position below the button, centered
-      let left = rect.left + (rect.width / 2) - (dropdownWidth / 2);
-      let top = rect.bottom + 5;
-      
-      // Keep within viewport
-      if (left + dropdownWidth > window.innerWidth - 20) {
-        left = window.innerWidth - dropdownWidth - 20;
-      }
-      if (left < 20) {
-        left = 20;
-      }
-      if (top + dropdownHeight > window.innerHeight - 20) {
-        top = rect.top - dropdownHeight - 5; // Position above instead
-      }
-      
-      setTagDropdownPosition({ left, top });
+  const positionMenuFromButton = (
+    el: HTMLElement | null,
+    dropdownWidth: number,
+    dropdownHeight: number
+  ) => {
+    if (!el) return { left: 20, top: 20 };
+    const rect = el.getBoundingClientRect();
+    let left = rect.left + rect.width / 2 - dropdownWidth / 2;
+    let top = rect.bottom + 5;
+    if (left + dropdownWidth > window.innerWidth - 20) {
+      left = window.innerWidth - dropdownWidth - 20;
     }
-    
+    if (left < 20) left = 20;
+    if (top + dropdownHeight > window.innerHeight - 20) {
+      top = rect.top - dropdownHeight - 5;
+    }
+    return { left, top };
+  };
+
+  const handleQuickTagClick = (e: React.MouseEvent, fromEl?: HTMLElement | null) => {
+    e.stopPropagation();
+
+    if (!showQuickTagDropdown) {
+      setTagDropdownPosition(
+        positionMenuFromButton(fromEl || quickTagButtonRef.current, 200, 200)
+      );
+    }
+
     setShowQuickTagDropdown(!showQuickTagDropdown);
   };
 
@@ -335,7 +346,9 @@ export default function TaskCardToolbar({
       
       // Check if click is on the button itself - if so, let the toggle handle it
       if (quickTagButtonRef.current && quickTagButtonRef.current.contains(target)) {
-        // The button's onClick will toggle, so we don't need to close here
+        return;
+      }
+      if (overflowMoreButtonRef.current && overflowMoreButtonRef.current.contains(target)) {
         return;
       }
       
@@ -387,40 +400,108 @@ export default function TaskCardToolbar({
   const currentColumn = columns && columns[task.columnId];
   const showArchiveButton = Boolean(archiveColumnId && !isArchivedColumnFlag(currentColumn));
 
-  const [hideCopyButton, setHideCopyButton] = useState(false);
-  useEffect(() => {
-    const card = cardWidthAnchorRef?.current;
+  const [compactLevel, setCompactLevel] = useState<0 | 1 | 2>(0);
+  const [toolbarLayoutReady, setToolbarLayoutReady] = useState(false);
+  const hasTagAction = Boolean(onTagAdd);
+  const hasLinkAction = Boolean(onStartLinking);
+  useLayoutEffect(() => {
+    const card = cardWidthAnchorEl ?? cardWidthAnchorRef?.current;
     if (!card) return;
 
     const TOOLBAR_SLOT_PX = 22;
     const TOOLBAR_GAP_PX = 2;
     const LEFT_INSET_PX = 4;
-    const TRASH_FROM_RIGHT_PX = 96;
-    const TRASH_SLOT_PX = 22;
     const GUTTER_PX = 8;
+    const hasTag = hasTagAction;
+    const hasLink = hasLinkAction;
+    const hasArchive = showArchiveButton;
+    const hasAgent = isAgentAssigned;
 
-    const sync = (cardWidth: number) => {
-      if (cardWidth <= 0) return;
-      const leftSlots =
-        1 +
-        (isAgentAssigned ? 1 : 0) +
-        (onStartLinking ? 1 : 0) +
-        (onTagAdd ? 1 : 0) +
-        1 +
-        (showArchiveButton ? 1 : 0);
-      const leftWidth =
-        LEFT_INSET_PX + leftSlots * TOOLBAR_SLOT_PX + Math.max(0, leftSlots - 1) * TOOLBAR_GAP_PX;
-      const reservedRight = TRASH_FROM_RIGHT_PX + TRASH_SLOT_PX;
-      setHideCopyButton(leftWidth + reservedRight + GUTTER_PX > cardWidth);
+    const slotCount = (opts: {
+      tag: boolean;
+      copy: boolean;
+      archive: boolean;
+      more: boolean;
+    }) =>
+      1 +
+      (hasAgent ? 1 : 0) +
+      (hasLink ? 1 : 0) +
+      (opts.tag ? 1 : 0) +
+      (opts.copy ? 1 : 0) +
+      (opts.archive ? 1 : 0) +
+      (opts.more ? 1 : 0);
+
+    const clusterWidth = (slots: number) =>
+      slots * TOOLBAR_SLOT_PX + Math.max(0, slots - 1) * TOOLBAR_GAP_PX;
+
+    const sync = () => {
+      const cardRect = card.getBoundingClientRect();
+      if (cardRect.width <= 0) return;
+      const trash = card.querySelector<HTMLElement>('[data-tour-id="task-card-delete"]');
+      const trashLeft = trash
+        ? trash.getBoundingClientRect().left
+        : cardRect.right - 118;
+      const available = trashLeft - cardRect.left - LEFT_INSET_PX - GUTTER_PX;
+      const full = clusterWidth(
+        slotCount({ tag: hasTag, copy: true, archive: hasArchive, more: false })
+      );
+      const mid = clusterWidth(
+        slotCount({ tag: hasTag, copy: false, archive: false, more: true })
+      );
+      let next: 0 | 1 | 2 = 0;
+      if (available < full) next = 1;
+      if (available < mid) next = 2;
+      setCompactLevel(next);
+      setToolbarLayoutReady(true);
     };
 
-    sync(card.getBoundingClientRect().width);
-    const ro = new ResizeObserver(([entry]) => {
-      sync(entry.contentRect.width);
-    });
+    sync();
+    const ro = new ResizeObserver(sync);
     ro.observe(card);
     return () => ro.disconnect();
-  }, [cardWidthAnchorRef, isAgentAssigned, onStartLinking, onTagAdd, showArchiveButton]);
+  }, [
+    cardWidthAnchorEl,
+    cardWidthAnchorRef,
+    isAgentAssigned,
+    showArchiveButton,
+    hasLinkAction,
+    hasTagAction,
+  ]);
+
+  const hideCopyAndArchive = compactLevel >= 1;
+  const hideTagInOverflow = compactLevel >= 2 && Boolean(onTagAdd);
+  const showOverflowTrigger = hideCopyAndArchive;
+
+  useEffect(() => {
+    if (compactLevel < 1) setShowOverflowMenu(false);
+  }, [compactLevel]);
+
+  useEscapeDismiss(() => setShowOverflowMenu(false), { enabled: showOverflowMenu });
+  useFloatingOverlayDismiss(showOverflowMenu, `${task.id}:overflow`, () => setShowOverflowMenu(false));
+  useFloatingOverlayDismiss(showQuickTagDropdown, `${task.id}:add-tag`, () =>
+    setShowQuickTagDropdown(false)
+  );
+
+  useEffect(() => {
+    if (!showOverflowMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (overflowMoreButtonRef.current?.contains(target)) return;
+      if (overflowMenuRef.current?.contains(target)) return;
+      if (target.closest('[data-toolbar-overflow-menu]')) return;
+      setShowOverflowMenu(false);
+    };
+
+    const timer = window.setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
+  }, [showOverflowMenu]);
 
   const toolbarHoverVisibility = toolbarPinnedOpen
     ? 'pointer-events-auto opacity-100'
@@ -618,8 +699,8 @@ export default function TaskCardToolbar({
             </div>
           )}
 
-          {onTagAdd && (
-            <div className={`flex h-[22px] items-center transition-opacity duration-200 ${toolbarHoverVisibility}`}>
+          {onTagAdd && !hideTagInOverflow && (
+            <div className={`flex h-[22px] items-center ${toolbarLayoutReady ? `transition-opacity duration-200 ${toolbarHoverVisibility}` : 'opacity-0 pointer-events-none'}`}>
               <KanbanChromeTooltip label={agentBlocking ? agentLockedLabel : t('toolbar.addTag')}>
                 <button
                   ref={quickTagButtonRef}
@@ -640,8 +721,8 @@ export default function TaskCardToolbar({
             </div>
           )}
 
-          {!hideCopyButton && (
-          <div className={`flex h-[22px] items-center transition-opacity duration-200 ${toolbarHoverVisibility}`}>
+          {!hideCopyAndArchive && (
+          <div className={`flex h-[22px] items-center ${toolbarLayoutReady ? `transition-opacity duration-200 ${toolbarHoverVisibility}` : 'opacity-0 pointer-events-none'}`}>
             <KanbanChromeTooltip label={t('toolbar.copyTask')}>
               <button
                 onClick={handleCopy}
@@ -653,8 +734,8 @@ export default function TaskCardToolbar({
           </div>
           )}
 
-          {showArchiveButton && archiveColumnId && (
-              <div className={`flex h-[22px] items-center transition-opacity duration-200 ${toolbarHoverVisibility}`}>
+          {showArchiveButton && archiveColumnId && !hideCopyAndArchive && (
+              <div className={`flex h-[22px] items-center ${toolbarLayoutReady ? `transition-opacity duration-200 ${toolbarHoverVisibility}` : 'opacity-0 pointer-events-none'}`}>
                 <KanbanChromeTooltip label={agentBlocking ? agentLockedLabel : t('toolbar.archiveTask')}>
                   <button
                     disabled={agentBlocking}
@@ -673,6 +754,43 @@ export default function TaskCardToolbar({
                   </button>
                 </KanbanChromeTooltip>
               </div>
+          )}
+
+          {showOverflowTrigger && (
+            <div className={`flex h-[22px] items-center ${toolbarLayoutReady ? `transition-opacity duration-200 ${toolbarHoverVisibility}` : 'opacity-0 pointer-events-none'}`}>
+              <KanbanChromeTooltip label={t('toolbar.moreActions')}>
+                <button
+                  ref={overflowMoreButtonRef}
+                  type="button"
+                  aria-label={t('toolbar.moreActions')}
+                  aria-expanded={showOverflowMenu}
+                  className={`p-1 rounded-full inline-flex h-[22px] w-[22px] items-center justify-center ${toolbarReachClass} hover:bg-gray-100 dark:hover:bg-gray-700`}
+                  onPointerDown={(e) => {
+                    overflowPointerStartRef.current = { x: e.clientX, y: e.clientY };
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const start = overflowPointerStartRef.current;
+                    overflowPointerStartRef.current = null;
+                    if (
+                      start &&
+                      (Math.abs(e.clientX - start.x) > 5 || Math.abs(e.clientY - start.y) > 5)
+                    ) {
+                      return;
+                    }
+                    if (!showOverflowMenu && overflowMoreButtonRef.current) {
+                      setOverflowMenuPosition(
+                        positionMenuFromButton(overflowMoreButtonRef.current, 200, 140)
+                      );
+                    }
+                    setShowOverflowMenu((open) => !open);
+                    setShowQuickTagDropdown(false);
+                  }}
+                >
+                  <MoreVertical size={14} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" />
+                </button>
+              </KanbanChromeTooltip>
+            </div>
           )}
         </div>
       </div>
@@ -768,11 +886,92 @@ export default function TaskCardToolbar({
         </div>
       </div>
 
+      {showOverflowMenu && createPortal(
+        <div
+          ref={overflowMenuRef}
+          data-toolbar-overflow-menu
+          data-floating-overlay=""
+          data-no-dnd="true"
+          role="menu"
+          className="fixed min-w-[11rem] py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg z-[9999]"
+          style={{
+            left: `${overflowMenuPosition.left}px`,
+            top: `${overflowMenuPosition.top}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {hideTagInOverflow && onTagAdd && (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={agentBlocking}
+              className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-left ${
+                agentBlocking
+                  ? 'opacity-40 cursor-not-allowed text-gray-400'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+              onClick={(e) => {
+                if (agentBlocking) return;
+                e.stopPropagation();
+                setShowOverflowMenu(false);
+                setTagDropdownPosition(
+                  positionMenuFromButton(overflowMoreButtonRef.current, 200, 200)
+                );
+                setShowQuickTagDropdown(true);
+              }}
+            >
+              <span className="relative inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                <TagIcon size={14} className="text-gray-400" />
+                <Plus size={7} className="text-gray-400 absolute -top-1 -right-1" />
+              </span>
+              {t('toolbar.addTag')}
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-left text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowOverflowMenu(false);
+              handleCopy();
+            }}
+          >
+            <Copy size={14} className="text-gray-400" />
+            {t('toolbar.copyTask')}
+          </button>
+          {showArchiveButton && archiveColumnId && (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={agentBlocking}
+              className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-sm text-left ${
+                agentBlocking
+                  ? 'opacity-40 cursor-not-allowed text-gray-400'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-yellow-50 dark:hover:bg-yellow-900/30'
+              }`}
+              onClick={(e) => {
+                if (agentBlocking) return;
+                e.stopPropagation();
+                setShowOverflowMenu(false);
+                onEdit({ ...task, columnId: archiveColumnId });
+              }}
+            >
+              <Archive size={14} className="text-yellow-600" />
+              {t('toolbar.archiveTask')}
+            </button>
+          )}
+        </div>,
+        document.body
+      )}
+
       {/* Portal-rendered quick tag dropdown */}
       {showQuickTagDropdown && createPortal(
         <div 
           ref={quickTagDropdownRef}
           data-tag-dropdown
+          data-floating-overlay=""
           className="fixed w-[200px] bg-white border border-gray-200 rounded-md shadow-lg z-[9999] max-h-[400px] overflow-y-auto"
           style={{
             left: `${tagDropdownPosition.left}px`,
@@ -839,6 +1038,7 @@ export default function TaskCardToolbar({
         return createPortal(
           <div
             data-member-dropdown="true"
+            data-floating-overlay=""
             className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-[99999] overflow-hidden flex flex-col"
             style={{
               left: `${position.left}px`,

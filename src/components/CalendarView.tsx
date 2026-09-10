@@ -51,6 +51,7 @@ import { createComment, batchUpdateTasks } from '../api';
 import { parseLocalDate } from '../utils/dateUtils';
 import { getTagDisplayStyle, getTextColorForBackground } from '../utils/tagUtils';
 import { memberIsViewer } from '../utils/memberUtils';
+import { useFloatingOverlayDismiss } from '../hooks/useFloatingOverlayDismiss';
 import { commentTextToHtml } from '../utils/commentContent';
 import { getAuthenticatedAttachmentUrl } from '../utils/authImageUrl';
 import { completeTaskJump, subscribeTaskJump } from '../utils/taskJumpEvents';
@@ -877,6 +878,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     setAssigneeMenuPosition(null);
     setHoverCommentId(null);
   }, []);
+
+  useFloatingOverlayDismiss(Boolean(assigneeMenuTaskId), `calendar:${assigneeMenuTaskId || 'none'}:assignee`, () => {
+    setAssigneeMenuTaskId(null);
+    setAssigneeMenuPosition(null);
+  });
 
   /**
    * Same placement rule as the Kanban card comment tooltip: centred on the icon,
@@ -2860,7 +2866,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         createPortal(
           <div
             ref={assigneeMenuRef}
-            className="fixed z-[9999] overflow-hidden flex flex-col rounded-lg border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-gray-800"
+            data-floating-overlay=""
+            className="fixed z-[10050] overflow-hidden flex flex-col rounded-lg border-2 border-gray-300 bg-white shadow-2xl dark:border-gray-600 dark:bg-gray-800"
             role="menu"
             style={{
               left: assigneeMenuPosition.left,

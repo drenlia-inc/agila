@@ -1569,11 +1569,14 @@ export async function getLifecycleDeletedTasks(db, boardId = null, search = null
 
 /**
  * Soft-deleted tasks matching a text query, for the header search dropdown.
- * Board-agnostic like the live corpus the client already holds, so trashed work
- * stays findable; capped because this runs per keystroke batch.
+ * Scoped to boards the caller can access (admins see all), matching getAllTasks.
  */
-export async function searchTrashedTasks(db, search, limit = 20) {
+export async function searchTrashedTasks(db, search, limit = 20, access = null) {
   const needle = `%${String(search).trim().toLowerCase()}%`;
+  const accessSql =
+    access && !access.isAdmin && access.userId
+      ? `AND t.boardid IN (SELECT board_id FROM board_participants WHERE user_id = $3)`
+      : '';
   const query = `
     SELECT t.id, t.title, t.ticket, t.description,
            t.memberid as "memberId", t.requesterid as "requesterId",
@@ -1594,10 +1597,14 @@ export async function searchTrashedTasks(db, search, limit = 20) {
         OR LOWER(t.title) LIKE $1
         OR LOWER(COALESCE(t.description, '')) LIKE $1
       )
+      ${accessSql}
     ORDER BY t.deleted_at DESC
     LIMIT $2
   `;
   const stmt = wrapQuery(db.prepare(query), 'SELECT');
+  if (access && !access.isAdmin && access.userId) {
+    return await stmt.all(needle, limit, access.userId);
+  }
   return await stmt.all(needle, limit);
 }
 

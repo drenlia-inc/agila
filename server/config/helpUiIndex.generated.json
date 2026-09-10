@@ -19,6 +19,23 @@
       "file": "src/components/ActivityFeed.tsx"
     },
     {
+      "id": "help:agent-code-iteration",
+      "attr": "help",
+      "value": "agent-code-iteration",
+      "en": "{{count}} branches from GitHub (including agent branches).",
+      "fr": "{{count}} branches GitHub (y compris les branches agent).",
+      "searchEn": "{{count}} branches from GitHub (including agent branches). {{count}} branches from GitHub (including agent branches). Branch suggestions require a GitHub PAT (Profile → Dev). SSH still works at run time. Tip: for coding jobs, add an AGENTS.md in the repo for project context. Set your GitHub PAT (or SSH key) under Profile → Dev before assigning a private repo. Each Start or Resume clones the branch you selected from the repo (the list in this form), edits, pushes an agent branch, and opens a PR against that branch. The next run starts over from that same selected branch — merge the last PR first if those changes should be included. Back to activity agent-code-iteration",
+      "searchFr": "{{count}} branches GitHub (y compris les branches agent). {{count}} branches GitHub (y compris les branches agent). Les suggestions de branches nécessitent un PAT GitHub (Profil → Dev). SSH fonctionne toujours à l'exécution. Astuce : pour le code, ajoutez un AGENTS.md dans le dépôt. Configurez un PAT GitHub (ou clé SSH) sous Profil → Dev avant un dépôt privé. Chaque Démarrer ou Reprendre clone la branche que vous avez choisie dans le dépôt (la liste de ce formulaire), modifie le code, pousse une branche agent et ouvre une PR vers cette branche. La prochaine exécution repart de cette même branche — fusionnez d'abord la dernière PR si ces changements doivent être inclus. Retour à l'activité agent-code-iteration",
+      "kind": "view",
+      "mode": "kanban",
+      "highlights": [
+        "[data-help-target=\"agent-code-iteration\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/AssignToAgentModal.tsx"
+    },
+    {
       "id": "help:board-members",
       "attr": "help",
       "value": "board-members",
@@ -228,8 +245,8 @@
       "value": "add-user",
       "en": "Failed to check user limit. Please try again.",
       "fr": "Échec de la vérification de la limite d'utilisateurs. Veuillez réessayer.",
-      "searchEn": "Failed to check user limit. Please try again. Failed to check user limit. Please try again. User limit reached. Cannot create more users. Add User add-user",
-      "searchFr": "Échec de la vérification de la limite d'utilisateurs. Veuillez réessayer. Échec de la vérification de la limite d'utilisateurs. Veuillez réessayer. Limite d'utilisateurs atteinte. Impossible de créer plus d'utilisateurs. Ajouter un utilisateur add-user",
+      "searchEn": "Failed to check user limit. Please try again. Failed to check user limit. Please try again. Add User add-user",
+      "searchFr": "Échec de la vérification de la limite d'utilisateurs. Veuillez réessayer. Échec de la vérification de la limite d'utilisateurs. Veuillez réessayer. Ajouter un utilisateur add-user",
       "kind": "admin",
       "hash": "#admin#users",
       "highlights": [
@@ -2487,10 +2504,10 @@
       "id": "tour:task-card-delete",
       "attr": "tour",
       "value": "task-card-delete",
-      "en": "Delete Task (Shift+click to delete forever)",
-      "fr": "Supprimer la tâche (Maj+clic pour supprimer définitivement)",
-      "searchEn": "Delete Task (Shift+click to delete forever) Delete Task (Shift+click to delete forever) Delete Task task-card-delete",
-      "searchFr": "Supprimer la tâche (Maj+clic pour supprimer définitivement) Supprimer la tâche (Maj+clic pour supprimer définitivement) Supprimer la tâche task-card-delete",
+      "en": "task card delete",
+      "fr": "task card delete",
+      "searchEn": "task card delete  task-card-delete",
+      "searchFr": "task card delete  task-card-delete",
       "kind": "view",
       "mode": "kanban",
       "highlights": [

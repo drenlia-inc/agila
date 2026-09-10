@@ -210,6 +210,8 @@ const HELP_AI_KEYS = [
   'help.ai.overview', 'help.ai.overviewDesc1', 'help.ai.overviewDesc2',
   'help.ai.assigning', 'help.ai.assigningDesc',
   'help.ai.assignStep1', 'help.ai.assignStep2', 'help.ai.assignStep3', 'help.ai.assignStep4',
+  'help.ai.codingJobs', 'help.ai.codingJobsDesc',
+  'help.ai.codingStep1', 'help.ai.codingStep2', 'help.ai.codingStep3', 'help.ai.codingStep4',
   'help.ai.controlling', 'help.ai.controllingDesc',
   'help.ai.controlStep1', 'help.ai.controlStep2', 'help.ai.controlStep3',
   'help.ai.devCredentials', 'help.ai.devCredentialsDesc',
@@ -1867,6 +1869,16 @@ export default function HelpModal({
         ClipboardList,
         'text-orange-600 dark:text-orange-400',
         'bg-orange-50 dark:bg-orange-900/40'
+      ),
+      renderChecklistSection(
+        'help.ai.codingJobs',
+        'help.ai.codingJobsDesc',
+        [
+          'help.ai.codingStep1', 'help.ai.codingStep2', 'help.ai.codingStep3', 'help.ai.codingStep4',
+        ],
+        GitBranch,
+        'text-teal-700 dark:text-teal-400',
+        'bg-teal-50 dark:bg-teal-900/40'
       ),
       renderChecklistSection(
         'help.ai.controlling',

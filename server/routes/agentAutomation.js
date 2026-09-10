@@ -27,6 +27,7 @@ import { COMMENT_ACTIONS } from '../constants/activityActions.js';
 import { logCommentActivity } from '../services/activityLogger.js';
 import { markdownToHtml } from '../utils/markdownToHtml.js';
 import { parseBody, agentToolCallBodySchema } from '../utils/requestValidation.js';
+import { redactWorkMapForClient } from '../utils/taskWorkPublic.js';
 
 const router = express.Router();
 const requireAi = requireAiEnabledMiddleware(getRequestDatabase);
@@ -40,7 +41,7 @@ async function publishWork(req, taskId) {
     {
       taskId,
       boardId: task?.boardid || task?.boardId,
-      work,
+      work: redactWorkMapForClient(work),
       timestamp: new Date().toISOString()
     },
     getTenantId(req)
@@ -70,6 +71,7 @@ async function requireAutomationToken(req, res, next) {
       ownerUserId: auth.ownerUserId,
       scopeType: auth.scopeType,
       boardIds: auth.boardIds,
+      launchBoardId: Array.isArray(auth.boardIds) ? auth.boardIds[0] || '' : '',
       agentMemberId: AGENT_MEMBER_ID
     };
     next();

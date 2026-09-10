@@ -65,11 +65,14 @@ const TOOLS = [
   },
   {
     name: 'list_columns',
-    description: 'List columns for a board (includes boardTitle). Use titles in human summaries.',
+    description:
+      'List columns for a board (includes boardTitle). boardId may be omitted when scope is a single board; a board title is also accepted.',
     parameters: {
       type: 'object',
-      properties: { boardId: { type: 'string' } },
-      required: ['boardId']
+      properties: {
+        boardId: { type: 'string', description: 'Board UUID, or omit for the launch board' },
+        boardTitle: { type: 'string' }
+      }
     }
   },
   {
@@ -719,7 +722,9 @@ export async function runAutomationJob(job) {
         }
       }
       if (!applied && !finished) {
-        throw new Error('Timed out waiting for admin Apply');
+        throw new Error(
+          'Timed out waiting for admin Apply. Apply the last plan or Restart.'
+        );
       }
       submittedPlan = false; // allow finish loop
     }

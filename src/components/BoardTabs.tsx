@@ -13,6 +13,7 @@ import {
   getBoardTabDropClasses 
 } from '../utils/crossBoardDragUtils';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
+import { useFloatingOverlayDismiss } from '../hooks/useFloatingOverlayDismiss';
 import { BOARD_TITLE_MAX_LENGTH } from '../constants/appConstants';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import {
@@ -916,10 +917,8 @@ export default function BoardTabs({
 
     updatePosition();
     window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
     return () => {
       window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
     };
   }, [editingBoardId, boards, selectedBoard]);
 
@@ -1024,6 +1023,8 @@ export default function BoardTabs({
 
   useEscapeDismiss(cancelBoardEdit, { enabled: editingBoardId != null });
 
+  useFloatingOverlayDismiss(Boolean(editingBoardId), `board-tab:${editingBoardId || 'none'}:edit`, cancelBoardEdit);
+
   const boardEffortTooltip = (effort: number) =>
     t('boardTabs.totalEffortTooltip', {
       display: formatEffortDisplay(effort, parseEffortUnit(siteSettings)),
@@ -1053,7 +1054,8 @@ export default function BoardTabs({
         role="dialog"
         aria-modal="true"
         aria-label={t('boardTabs.editBoard')}
-        className="fixed z-[9999] w-[15rem] space-y-2 rounded-lg border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-600 dark:bg-gray-800"
+        className="fixed z-[10050] w-[15rem] space-y-2 rounded-lg border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-600 dark:bg-gray-800"
+        data-floating-overlay=""
         style={{ top: editMenuPosition.top, left: editMenuPosition.left }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {

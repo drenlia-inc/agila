@@ -19,6 +19,7 @@ import { requireAiEnabledMiddleware } from '../utils/aiEnabled.js';
 import { markdownToHtml } from '../utils/markdownToHtml.js';
 import { stripModelReasoning } from '../utils/stripModelReasoning.js';
 import { parseBody, agentRunnerCallbackBodySchema } from '../utils/requestValidation.js';
+import { redactWorkMapForClient } from '../utils/taskWorkPublic.js';
 
 const router = express.Router();
 const requireAi = requireAiEnabledMiddleware(getRequestDatabase);
@@ -34,7 +35,7 @@ async function publishWork(req, taskId) {
     {
       taskId,
       boardId: task?.boardid || task?.boardId,
-      work,
+      work: redactWorkMapForClient(work),
       timestamp: new Date().toISOString()
     },
     getTenantId(req)
@@ -89,6 +90,8 @@ router.post('/callback', async (req, res) => {
     }
     if (body.prUrl) {
       updates.pr_url = String(body.prUrl);
+    } else if (terminal && event === 'done' && typeof body.prUrl === 'string') {
+      updates.pr_url = '';
     }
     if (body.branch) {
       updates.agent_branch = String(body.branch);
@@ -183,11 +186,21 @@ router.post('/callback', async (req, res) => {
     } else if (event === 'failed') {
       updates.status = 'failed';
       updates.control = 'none';
-      updates.awaiting_apply = '';
+      if (work.automation_pending_plan) {
+        updates.awaiting_apply = 'true';
+        updates.automation_context_lost = 'true';
+      } else {
+        updates.awaiting_apply = '';
+      }
     } else if (event === 'stopped' || event === 'cancelled') {
       updates.status = 'stopped';
       updates.control = 'stop';
-      updates.awaiting_apply = '';
+      if (work.automation_pending_plan) {
+        updates.awaiting_apply = 'true';
+        updates.automation_context_lost = 'true';
+      } else {
+        updates.awaiting_apply = '';
+      }
     } else if (body.status) {
       updates.status = String(body.status);
     }

@@ -8,6 +8,7 @@ import { layoutMemberDropdownFromElement, type MemberDropdownLayout } from '../.
 import MemberAvatar from './MemberAvatar';
 import MemberSearchList from './MemberSearchList';
 import { formPickerShellClass } from '../../utils/formFieldClasses';
+import { useFloatingOverlayDismiss } from '../../hooks/useFloatingOverlayDismiss';
 
 export interface MemberPickerProps {
   members: TeamMember[];
@@ -66,6 +67,7 @@ export default function MemberPicker({
   const selected = value ? members.find((m) => m.id === value) : undefined;
 
   const close = () => setOpen(false);
+  useFloatingOverlayDismiss(open, `member-picker:${mode}:${value ?? 'none'}`, close);
 
   const measure = () => {
     const el = triggerRef.current;
@@ -97,11 +99,9 @@ export default function MemberPicker({
     const onWin = () => measure();
     document.addEventListener('mousedown', onDoc);
     window.addEventListener('resize', onWin);
-    window.addEventListener('scroll', onWin, true);
     return () => {
       document.removeEventListener('mousedown', onDoc);
       window.removeEventListener('resize', onWin);
-      window.removeEventListener('scroll', onWin, true);
     };
   }, [open, members, preferAgentSection, excludeViewers, excludeInactive, value, mode]);
 
@@ -217,7 +217,8 @@ export default function MemberPicker({
         createPortal(
           <div
             ref={panelRef}
-            className="fixed z-[80] rounded-lg border border-gray-200 dark:border-gray-600 shadow-lg overflow-hidden flex flex-col bg-white dark:bg-gray-800"
+            data-floating-overlay=""
+            className="fixed z-[10050] rounded-lg border border-gray-200 dark:border-gray-600 shadow-lg overflow-hidden flex flex-col bg-white dark:bg-gray-800"
             style={{
               left: layout.left,
               top: layout.top,

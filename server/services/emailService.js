@@ -50,12 +50,16 @@ class EmailService {
       }
 
       if (key === 'SMTP_PASSWORD' && value) {
-        try {
-          const { decryptSettingValue } = await import('../utils/secretCrypto.js');
-          value = decryptSettingValue(value);
-        } catch (err) {
-          console.error('Failed to decrypt SMTP_PASSWORD:', err.message);
+        const { decryptSettingValueSafe } = await import('../utils/secretCrypto.js');
+        const result = decryptSettingValueSafe(value);
+        if (result.unreadable) {
+          console.error(
+            'Failed to decrypt SMTP_PASSWORD: encryption key changed — re-paste this secret in Settings → Mail'
+          );
+          emailSettings.SMTP_PASSWORD_UNREADABLE = true;
           value = '';
+        } else {
+          value = result.value;
         }
       }
       
@@ -101,6 +105,15 @@ class EmailService {
 
     // Validate required settings
     const requiredSettings = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL'];
+    if (settings.SMTP_PASSWORD_UNREADABLE && !settings.SMTP_PASSWORD) {
+      return {
+        valid: false,
+        error: 'SMTP password cannot be decrypted',
+        errorCode: 'secret_unreadable',
+        details: 'Paste the SMTP password again in Settings → Mail and save.',
+        missingSettings: ['SMTP_PASSWORD']
+      };
+    }
     const missingSettings = requiredSettings.filter(key => !settings[key]);
     
     if (missingSettings.length > 0) {
@@ -133,6 +146,9 @@ class EmailService {
         continue;
       }
       settings[key] = value;
+      if (key === 'SMTP_PASSWORD') {
+        settings.SMTP_PASSWORD_UNREADABLE = false;
+      }
     }
     
     // Check if demo mode is enabled
@@ -147,6 +163,15 @@ class EmailService {
 
     // Validate required settings (excluding MAIL_ENABLED)
     const requiredSettings = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL'];
+    if (settings.SMTP_PASSWORD_UNREADABLE && !settings.SMTP_PASSWORD) {
+      return {
+        valid: false,
+        error: 'SMTP password cannot be decrypted',
+        errorCode: 'secret_unreadable',
+        details: 'Paste the SMTP password again in Settings → Mail and save.',
+        missingSettings: ['SMTP_PASSWORD']
+      };
+    }
     const missingSettings = requiredSettings.filter(key => !settings[key]);
     
     if (missingSettings.length > 0) {

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { parseLocalDate, formatToYYYYMMDD } from '../utils/dateUtils';
+import { useFloatingOverlayDismiss } from '../hooks/useFloatingOverlayDismiss';
 
 export type DateRangePickerSprint = {
   id: string;
@@ -17,6 +18,7 @@ interface DateRangePickerProps {
   endDate: string | null | undefined;
   onDateChange: (startDate: string, endDate: string) => void;
   onClose: () => void;
+  overlayId?: string;
   position: { left: number; top: number };
   /** Currently associated sprint (enables “apply sprint dates”). */
   sprint?: DateRangePickerSprint | null;
@@ -32,6 +34,7 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
   endDate,
   onDateChange,
   onClose,
+  overlayId = 'date-range-picker',
   position,
   sprint,
   availableSprints = [],
@@ -126,6 +129,8 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose]);
+
+  useFloatingOverlayDismiss(true, overlayId, onClose);
 
   // Update temp dates when props change
   useEffect(() => {
@@ -405,6 +410,7 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
   return createPortal(
     <div
       ref={pickerRef}
+      data-floating-overlay=""
       className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl z-[9999] p-2 overflow-y-auto"
       style={{
         left: `${adjustedPosition.left}px`,

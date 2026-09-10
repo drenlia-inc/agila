@@ -11,6 +11,14 @@ function isUnlimitedNumeric(value) {
   return n === -1;
 }
 
+function throwCountedLimit(message, current, maximum, extra = {}) {
+  const error = new Error(message);
+  error.current = current;
+  error.maximum = maximum;
+  Object.assign(error, extra);
+  throw error;
+}
+
 class LicenseManager {
   constructor(db) {
     this.db = db;
@@ -205,7 +213,11 @@ class LicenseManager {
 
     const userCount = await this.getUserCount();
     if (userCount >= limits.USER_LIMIT) {
-      throw new Error(`User limit exceeded. Current: ${userCount}, Maximum: ${limits.USER_LIMIT}`);
+      throwCountedLimit(
+        `User limit exceeded. Current: ${userCount}, Maximum: ${limits.USER_LIMIT}`,
+        userCount,
+        limits.USER_LIMIT
+      );
     }
     return true;
   }
@@ -219,7 +231,11 @@ class LicenseManager {
 
     const taskCount = await this.getTaskCount(boardId);
     if (taskCount >= limits.TASK_LIMIT) {
-      throw new Error(`Task limit exceeded for this board. Current: ${taskCount}, Maximum: ${limits.TASK_LIMIT}`);
+      throwCountedLimit(
+        `Task limit exceeded for this board. Current: ${taskCount}, Maximum: ${limits.TASK_LIMIT}`,
+        taskCount,
+        limits.TASK_LIMIT
+      );
     }
     return true;
   }
@@ -233,14 +249,17 @@ class LicenseManager {
 
     const breakdown = await this.getBoardCountBreakdown();
     if (breakdown.total >= limits.BOARD_LIMIT) {
-      const error = new Error(
-        `Board limit exceeded. Current: ${breakdown.total}, Maximum: ${limits.BOARD_LIMIT}`
+      throwCountedLimit(
+        `Board limit exceeded. Current: ${breakdown.total}, Maximum: ${limits.BOARD_LIMIT}`,
+        breakdown.total,
+        limits.BOARD_LIMIT,
+        {
+          code: 'BOARD_LIMIT',
+          liveCount: breakdown.live,
+          softDeletedCount: breakdown.softDeleted,
+          boardLimit: limits.BOARD_LIMIT,
+        }
       );
-      error.code = 'BOARD_LIMIT';
-      error.liveCount = breakdown.live;
-      error.softDeletedCount = breakdown.softDeleted;
-      error.boardLimit = limits.BOARD_LIMIT;
-      throw error;
     }
     return true;
   }
@@ -258,8 +277,10 @@ class LicenseManager {
     const storageUsage = await this.getStorageUsage();
     const projected = storageUsage + (Number(additionalBytes) || 0);
     if (projected > maxBytes) {
-      throw new Error(
-        `Storage limit exceeded. Current: ${storageUsage} bytes, Maximum: ${maxBytes} bytes`
+      throwCountedLimit(
+        `Storage limit exceeded. Current: ${storageUsage} bytes, Maximum: ${maxBytes} bytes`,
+        storageUsage,
+        maxBytes
       );
     }
     return true;

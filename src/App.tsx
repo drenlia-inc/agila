@@ -63,6 +63,7 @@ import VersionUpdateBanner from './components/VersionUpdateBanner';
 import { useTaskDeleteConfirmation } from './hooks/useTaskDeleteConfirmation';
 import api, { getMembers, getBoards, getBoardFull, deleteTask, updateTask, reorderTasks, reorderColumns, reorderBoards, updateColumn, updateBoard, createTaskAtTop, createTask, copyTask, createColumn, createBoard, deleteColumn, deleteBoard, getBoardTrashCount, purgeBoard, getUserSettings, createUser, getUserStatus, getActivityFeed, ACTIVITY_FEED_DEFAULT_LIMIT, updateSavedFilterView, getCurrentUser, updateAppUrl, restoreTask, purgeTask, getTaskById, hashHasOAuthToken } from './api';
 import { toast, ToastContainer } from './utils/toast';
+import { licenseLimitToastCopy } from './utils/licenseLimitToast';
 import { getWipStatus, hasWipLimit, getBoardWipTaskCount, getBoardWipTasks, isBoardWipActiveColumn } from './utils/kanbanFlowUtils';
 import { applyActiveColumnFilters } from './utils/columnFilters';
 import { closeBoardTrashView, openBoardTrashView } from './utils/boardTrashEvents';
@@ -190,6 +191,13 @@ declare global {
 function AppContent() {
   const { t } = useTranslation('tasks');
   const { t: tCommon } = useTranslation('common');
+  const notifyLicenseLimit = useCallback(
+    (data: { limit?: string; current?: number; maximum?: number; details?: string }) => {
+      const copy = licenseLimitToastCopy(tCommon, data);
+      toast.error(copy.title, copy.message, 5000);
+    },
+    [tCommon]
+  );
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [boards, setBoards] = useState<Board[]>([]);
   const boardsRef = useRef<Board[]>([]);
@@ -3477,26 +3485,12 @@ function AppContent() {
             details,
           });
         } else {
-          let title = '';
-          let message = '';
-          switch (limitType) {
-            case 'USER_LIMIT':
-              title = 'User Limit Reached';
-              message = `You've reached the maximum number of users. ${details}`;
-              break;
-            case 'TASK_LIMIT':
-              title = 'Task Limit Reached';
-              message = `You've reached the maximum number of tasks for this board. ${details}`;
-              break;
-            case 'STORAGE_LIMIT':
-              title = 'Storage Limit Reached';
-              message = `You've reached the maximum storage limit. ${details}`;
-              break;
-            default:
-              title = 'License Limit Exceeded';
-              message = details;
-          }
-          toast.error(title, message, 5000);
+          notifyLicenseLimit({
+            limit: limitType,
+            current: error.response.data.current,
+            maximum: error.response.data.maximum,
+            details,
+          });
         }
       } else if (await handleInstanceStatusError(error)) {
         // Instance status error handled by utility function
@@ -3863,31 +3857,12 @@ function AppContent() {
         const limitType = error.response.data.limit;
         const details = error.response.data.details;
         
-        let title = '';
-        let message = '';
-        switch (limitType) {
-          case 'BOARD_LIMIT':
-            title = 'Board Limit Reached';
-            message = `You've reached the maximum number of boards. ${details}`;
-            break;
-          case 'USER_LIMIT':
-            title = 'User Limit Reached';
-            message = `You've reached the maximum number of users. ${details}`;
-            break;
-          case 'TASK_LIMIT':
-            title = 'Task Limit Reached';
-            message = `You've reached the maximum number of tasks for this board. ${details}`;
-            break;
-          case 'STORAGE_LIMIT':
-            title = 'Storage Limit Reached';
-            message = `You've reached the maximum storage limit. ${details}`;
-            break;
-          default:
-            title = 'License Limit Exceeded';
-            message = details;
-        }
-        
-        toast.error(title, message, 5000);
+        notifyLicenseLimit({
+          limit: limitType,
+          current: error.response.data.current,
+          maximum: error.response.data.maximum,
+          details,
+        });
       } else if (await handleInstanceStatusError(error)) {
         // Instance status error handled by utility function
       } else {

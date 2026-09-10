@@ -45,6 +45,7 @@ import {
 } from '../utils/newTaskReveal';
 import { commentTextToHtml } from '../utils/commentContent';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
+import { useFloatingOverlayDismiss } from '../hooks/useFloatingOverlayDismiss';
 import { isEditableEscapeTarget, hasEscapeConsumingOverlay } from '../utils/escapeKeyUtils';
 import { isTypingTarget } from '../utils/keyboardShortcutUtils';
 import {
@@ -231,18 +232,6 @@ const TaskCard = React.memo(function TaskCard({
   };
   const [showMemberSelect, setShowMemberSelect] = useState(false);
   const [showCommentTooltip, setShowCommentTooltip] = useState(false);
-
-  // Only one assignee menu across all cards
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const openTaskId = (event as CustomEvent<{ taskId?: string }>).detail?.taskId;
-      if (openTaskId && openTaskId !== task.id) {
-        setShowMemberSelect(false);
-      }
-    };
-    window.addEventListener('easykanban:assignee-menu-open', handler);
-    return () => window.removeEventListener('easykanban:assignee-menu-open', handler);
-  }, [task.id]);
   const [tooltipPosition, setTooltipPosition] = useState<{left: number, top: number}>({left: 0, top: 0});
   const [showTagRemovalMenu, setShowTagRemovalMenu] = useState(false);
   const [selectedTagForRemoval, setSelectedTagForRemoval] = useState<Tag | null>(null);
@@ -1138,6 +1127,17 @@ const TaskCard = React.memo(function TaskCard({
     setSprintSearchTerm('');
     setHighlightedSprintIndex(-1);
   };
+
+  useFloatingOverlayDismiss(showMemberSelect, `${task.id}:assignee`, () => setShowMemberSelect(false));
+  useFloatingOverlayDismiss(showAttachmentsDropdown, `${task.id}:attachments`, () =>
+    setShowAttachmentsDropdown(false)
+  );
+  useFloatingOverlayDismiss(showPrioritySelect, `${task.id}:priority`, () => setShowPrioritySelect(false));
+  useFloatingOverlayDismiss(showTagRemovalMenu, `${task.id}:tag`, () => {
+    setShowTagRemovalMenu(false);
+    setSelectedTagForRemoval(null);
+  });
+  useFloatingOverlayDismiss(showSprintSelector, `${task.id}:sprint`, closeSprintSelector);
 
   // Sprint selector handlers
   const handleSprintSelectorOpen = (triggerElement?: React.RefObject<HTMLElement>) => {
@@ -2088,11 +2088,6 @@ const TaskCard = React.memo(function TaskCard({
             void (async () => {
               if (!showMemberSelect) {
                 await flushPendingEdits();
-                window.dispatchEvent(
-                  new CustomEvent('easykanban:assignee-menu-open', {
-                    detail: { taskId: task.id },
-                  })
-                );
                 setShowMemberSelect(true);
               } else {
                 setShowMemberSelect(false);
@@ -2131,6 +2126,7 @@ const TaskCard = React.memo(function TaskCard({
           isAdmin={Boolean(currentUser?.roles?.includes('admin'))}
           canMutate={allowMutations}
           cardWidthAnchorRef={cardElRef}
+          cardWidthAnchorEl={cardElement}
         />
 
         {/* Bulk-select checkbox — fixed under the drag handle; hidden during inline title/description edit. */}
@@ -2903,6 +2899,7 @@ const TaskCard = React.memo(function TaskCard({
             {showAttachmentsDropdown && createPortal(
               <div 
                 ref={attachmentsDropdownRef}
+                data-floating-overlay=""
                 className="fixed w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-[9999] max-h-80 overflow-y-auto"
                 style={{
                   top: `${attachmentsDropdownPosition.top}px`,
@@ -3049,6 +3046,7 @@ const TaskCard = React.memo(function TaskCard({
       {showPrioritySelect && createPortal(
         <div 
           ref={priorityDropdownRef}
+          data-floating-overlay=""
           className="fixed w-24 bg-white dark:bg-gray-800 rounded-md shadow-lg z-[9999] border border-gray-200 dark:border-gray-700"
           style={{
             top: `${priorityDropdownPosition.top}px`,
@@ -3271,6 +3269,7 @@ const TaskCard = React.memo(function TaskCard({
         <div 
           ref={tagRemovalMenuRef}
           data-tag-removal-menu="true"
+          data-floating-overlay=""
           className="fixed w-[220px] bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] p-3"
           style={{ 
             left: `${tagRemovalPosition.left}px`, 
@@ -3324,6 +3323,7 @@ const TaskCard = React.memo(function TaskCard({
         <div
           ref={sprintSelectorRef}
           data-sprint-selector="true"
+          data-floating-overlay=""
           className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-[9999]"
           style={{
             left: `${sprintSelectorCoords.left}px`,
@@ -3461,6 +3461,7 @@ const TaskCard = React.memo(function TaskCard({
           endDate={task.dueDate}
           onDateChange={handleDateRangeChange}
           onClose={handleDateRangePickerClose}
+          overlayId={`${task.id}:dates`}
           position={dateRangePickerPosition}
           sprint={task.sprintId && sprints.length > 0 ? sprints.find(s => s.id === task.sprintId) : null}
           availableSprints={sprints}

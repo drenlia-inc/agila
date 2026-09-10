@@ -19,62 +19,25 @@ type LineGeometry = {
 };
 
 const MIN_LINE_HEIGHT_PX = 44;
-const EMPTY_COLUMN_LINE_PX = 88;
 const HIT_WIDTH_PX = 14;
+/** Fade only in the last stretch of the column, not across the whole line. */
+const FADE_LENGTH_PX = 300;
 
-function visibleTaskRows(columnWrap: HTMLElement): HTMLElement[] {
-  const taskList = columnWrap.querySelector('[data-kanban-task-list]');
-  const rowNodes = taskList
-    ? Array.from(taskList.querySelectorAll<HTMLElement>('[data-kanban-task-row]'))
-    : Array.from(columnWrap.querySelectorAll<HTMLElement>('.task-card'));
-  return rowNodes.filter((row) => row.getBoundingClientRect().height > 6);
-}
-
-function adjacentColumnWrap(columnWrap: HTMLElement): HTMLElement | null {
-  const next = columnWrap.nextElementSibling;
-  return next instanceof HTMLElement && next.hasAttribute('data-kanban-column-id')
-    ? next
-    : null;
-}
-
-type CardStackBounds = { top: number; bottom: number };
-
-function cardStackBounds(columnWrap: HTMLElement): CardStackBounds | null {
-  const rows = visibleTaskRows(columnWrap);
-  if (rows.length === 0) return null;
-
-  let top = Infinity;
-  let bottom = -Infinity;
-  for (const row of rows) {
-    const rect = row.getBoundingClientRect();
-    top = Math.min(top, rect.top);
-    bottom = Math.max(bottom, rect.bottom);
-  }
-  return top === Infinity ? null : { top, bottom };
-}
-
-function emptyColumnBounds(columnWrap: HTMLElement): CardStackBounds {
-  const taskList = columnWrap.querySelector('[data-kanban-task-list]');
-  const fallbackEl =
-    taskList ??
-    columnWrap.querySelector('[data-kanban-drop-placeholder]')?.parentElement ??
-    columnWrap;
-  const fallbackRect = fallbackEl.getBoundingClientRect();
-  return {
-    top: fallbackRect.top,
-    bottom: fallbackRect.top + EMPTY_COLUMN_LINE_PX,
-  };
-}
+const LINE_FADE_MASK = `linear-gradient(to bottom, #000 0%, #000 max(0px, calc(100% - ${FADE_LENGTH_PX}px)), transparent 100%)`;
 
 function measureLineGeometry(
   columnWrap: HTMLElement,
   stickyTopPx: number
 ): LineGeometry {
-  const columnRect = columnWrap.getBoundingClientRect();
+  const wrapRect = columnWrap.getBoundingClientRect();
 
-  if (columnRect.right < 0 || columnRect.left > window.innerWidth) {
+  if (wrapRect.right < 0 || wrapRect.left > window.innerWidth) {
     return { top: 0, height: 0, visible: false };
   }
+
+  const columnBox =
+    columnWrap.querySelector<HTMLElement>('.column-container') ?? columnWrap;
+  const columnRect = columnBox.getBoundingClientRect();
 
   const columnId = columnWrap.getAttribute('data-kanban-column-id');
   const header =
@@ -85,33 +48,21 @@ function measureLineGeometry(
   const pinBelowHeader =
     (header?.getBoundingClientRect().bottom ?? stickyTopPx) + 4;
 
-  const neighbor = adjacentColumnWrap(columnWrap);
-  const columns = neighbor ? [columnWrap, neighbor] : [columnWrap];
-
-  let anchorTop = Infinity;
-  let stackBottom = Infinity;
-
-  for (const col of columns) {
-    const bounds = cardStackBounds(col) ?? emptyColumnBounds(col);
-    anchorTop = Math.min(anchorTop, bounds.top);
-    stackBottom = Math.min(stackBottom, bounds.bottom);
-  }
-
-  const topVp = Math.max(anchorTop, pinBelowHeader);
-  const height = Math.max(MIN_LINE_HEIGHT_PX, stackBottom - topVp);
+  const topVp = Math.max(columnRect.top, pinBelowHeader);
+  const height = Math.max(0, columnRect.bottom - topVp);
 
   return {
-    top: topVp - columnRect.top,
-    height,
-    visible: height > 0 && stackBottom > topVp,
+    top: topVp - wrapRect.top,
+    height: Math.max(MIN_LINE_HEIGHT_PX, height),
+    visible: height > 0,
   };
 }
 
 /**
- * Resize handle between Kanban columns — spans the shared card stack on both sides
- * of the gap (stops at the shorter column's last card). Anchored in the column
- * (`absolute`) so horizontal board scroll stays in sync; Y is measured below the
- * sticky header. Hidden while a task/column is dragged so it cannot steal DnD.
+ * Resize handle on the right edge of a Kanban column. Height follows this
+ * column (not the shorter neighbor). Anchored in the column (`absolute`) so
+ * horizontal board scroll stays in sync; Y starts below the sticky header.
+ * Hidden while a task/column is dragged so it cannot steal DnD.
  */
 const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
   onResize,
@@ -157,12 +108,12 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
     window.addEventListener('resize', onScrollOrResize);
 
     const ro = columnWrap ? new ResizeObserver(onScrollOrResize) : null;
-    const adjacent = columnWrap ? adjacentColumnWrap(columnWrap) : null;
-    if (columnWrap && ro) ro.observe(columnWrap);
-    if (adjacent && ro) ro.observe(adjacent);
-    for (const col of [columnWrap, adjacent]) {
-      const taskList = col?.querySelector('[data-kanban-task-list]');
-      if (taskList && ro) ro.observe(taskList);
+    if (columnWrap && ro) {
+      ro.observe(columnWrap);
+      const columnBox = columnWrap.querySelector('.column-container');
+      if (columnBox) ro.observe(columnBox);
+      const taskList = columnWrap.querySelector('[data-kanban-task-list]');
+      if (taskList) ro.observe(taskList);
     }
 
     return () => {
@@ -258,9 +209,13 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
             className={`absolute left-1/2 top-0 w-px -translate-x-1/2 transition-colors duration-150 ${
               active
                 ? 'bg-blue-400 dark:bg-blue-500'
-                : 'bg-gradient-to-b from-gray-300/90 via-gray-300/45 to-transparent dark:from-gray-500/90 dark:via-gray-500/40 dark:to-transparent'
+                : 'bg-gray-300/90 dark:bg-gray-500/90'
             }`}
-            style={{ height: '100%' }}
+            style={{
+              height: '100%',
+              WebkitMaskImage: LINE_FADE_MASK,
+              maskImage: LINE_FADE_MASK,
+            }}
           />
           <div
             className={`absolute left-1/2 top-1/2 h-5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-150 ${

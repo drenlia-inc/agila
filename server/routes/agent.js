@@ -7,6 +7,7 @@ import express from 'express';
 import crypto from 'crypto';
 import { authenticateToken } from '../middleware/auth.js';
 import { getRequestDatabase, getTenantId } from '../middleware/tenantRouting.js';
+import { assertTaskBoardAccess, userCanAccessBoard, userHasAdminRole } from '../middleware/boardAccess.js';
 import { requireAiEnabledMiddleware } from '../utils/aiEnabled.js';
 import {
   tasks as taskQueries,
@@ -29,6 +30,11 @@ import {
   agentPatchTaskBodySchema,
   agentUpdateWorkBodySchema
 } from '../utils/requestValidation.js';
+import {
+  redactWorkMapForClient,
+  sanitizeWorkEntries,
+  FORBIDDEN_AGENT_WORK_WRITE_KEYS
+} from '../utils/taskWorkPublic.js';
 
 const router = express.Router();
 const requireAi = requireAiEnabledMiddleware(getRequestDatabase);
@@ -43,7 +49,7 @@ async function publishTaskWork(req, taskId, work) {
     {
       taskId,
       boardId: task?.boardid || task?.boardId,
-      work,
+      work: redactWorkMapForClient(work),
       timestamp: new Date().toISOString()
     },
     tenantId
@@ -54,23 +60,45 @@ function dbOr(req) {
   return getRequestDatabase(req);
 }
 
-async function ensureAgentTask(db, taskId) {
+/**
+ * Ensure task exists, is assigned to Agent, and caller may access its board.
+ * On board denial, assertTaskBoardAccess already wrote the response — `sent: true`.
+ */
+async function ensureAgentTask(req, res, taskId) {
+  const db = dbOr(req);
   const task = await taskQueries.getTaskById(db, taskId);
   if (!task) return { error: 'Task not found', status: 404 };
   const memberId = task.memberid || task.memberId;
   if (memberId !== AGENT_MEMBER_ID) {
     return { error: 'Task is not assigned to the Agent', status: 400 };
   }
+  if (!(await assertTaskBoardAccess(req, res, taskId))) {
+    return { error: true, sent: true };
+  }
   return { task };
 }
 
-// Pending / claimable tasks
+function agentDenied(res, check) {
+  if (check.sent) return true;
+  if (check.error) {
+    res.status(check.status).json({ error: check.error });
+    return true;
+  }
+  return false;
+}
+
+// Pending / claimable tasks — scoped to boards the caller can access; secrets redacted.
 router.get('/tasks/pending', async (req, res) => {
   try {
     const db = dbOr(req);
     const rows = await taskWorkQueries.getPendingAgentTasks(db, ['queued']);
     const tasks = [];
+    const isAdmin = userHasAdminRole(req.user);
     for (const row of rows) {
+      if (!isAdmin) {
+        const allowed = await userCanAccessBoard(db, req.user, row.boardid);
+        if (!allowed) continue;
+      }
       const work = await taskWorkQueries.getWorkMapByTaskId(db, row.id);
       tasks.push({
         id: row.id,
@@ -79,7 +107,7 @@ router.get('/tasks/pending', async (req, res) => {
         boardId: row.boardid,
         columnId: row.columnid,
         priority: row.priority,
-        work
+        work: redactWorkMapForClient(work)
       });
     }
     res.json({ tasks });
@@ -92,8 +120,8 @@ router.get('/tasks/pending', async (req, res) => {
 router.post('/tasks/:id/claim', agentClaimLimiter, async (req, res) => {
   try {
     const db = dbOr(req);
-    const check = await ensureAgentTask(db, req.params.id);
-    if (check.error) return res.status(check.status).json({ error: check.error });
+    const check = await ensureAgentTask(req, res, req.params.id);
+    if (agentDenied(res, check)) return;
 
     const claimParsed = parseBody(agentClaimBodySchema, req.body || {});
     if (!claimParsed.success) {
@@ -110,7 +138,7 @@ router.post('/tasks/:id/claim', agentClaimLimiter, async (req, res) => {
     }
 
     await publishTaskWork(req, req.params.id, work);
-    res.json({ taskId: req.params.id, work });
+    res.json({ taskId: req.params.id, work: redactWorkMapForClient(work) });
   } catch (error) {
     console.error('Agent claim error:', error);
     res.status(500).json({ error: 'Failed to claim task' });
@@ -120,8 +148,8 @@ router.post('/tasks/:id/claim', agentClaimLimiter, async (req, res) => {
 router.get('/tasks/:id', async (req, res) => {
   try {
     const db = dbOr(req);
-    const check = await ensureAgentTask(db, req.params.id);
-    if (check.error) return res.status(check.status).json({ error: check.error });
+    const check = await ensureAgentTask(req, res, req.params.id);
+    if (agentDenied(res, check)) return;
 
     const full = await taskQueries.getTaskWithRelationships(db, req.params.id);
     const work = await taskWorkQueries.getWorkMapByTaskId(db, req.params.id);
@@ -134,7 +162,7 @@ router.get('/tasks/:id', async (req, res) => {
 
     res.json({
       task: full || check.task,
-      work,
+      work: redactWorkMapForClient(work),
       attachments
     });
   } catch (error) {
@@ -146,8 +174,8 @@ router.get('/tasks/:id', async (req, res) => {
 router.post('/tasks/:id/move', async (req, res) => {
   try {
     const db = dbOr(req);
-    const check = await ensureAgentTask(db, req.params.id);
-    if (check.error) return res.status(check.status).json({ error: check.error });
+    const check = await ensureAgentTask(req, res, req.params.id);
+    if (agentDenied(res, check)) return;
 
     const moveParsed = parseBody(agentMoveTaskBodySchema, req.body || {});
     if (!moveParsed.success) {
@@ -192,8 +220,8 @@ router.post('/tasks/:id/move', async (req, res) => {
 router.post('/tasks/:id/comments', async (req, res) => {
   try {
     const db = dbOr(req);
-    const check = await ensureAgentTask(db, req.params.id);
-    if (check.error) return res.status(check.status).json({ error: check.error });
+    const check = await ensureAgentTask(req, res, req.params.id);
+    if (agentDenied(res, check)) return;
 
     const commentParsed = parseBody(agentCommentBodySchema, req.body || {});
     if (!commentParsed.success) {
@@ -264,8 +292,8 @@ router.post('/tasks/:id/comments', async (req, res) => {
 router.post('/tasks/:id/attachments', async (req, res) => {
   try {
     const db = dbOr(req);
-    const check = await ensureAgentTask(db, req.params.id);
-    if (check.error) return res.status(check.status).json({ error: check.error });
+    const check = await ensureAgentTask(req, res, req.params.id);
+    if (agentDenied(res, check)) return;
 
     const attParsed = parseBody(agentAttachmentsBodySchema, req.body || {});
     if (!attParsed.success) {
@@ -304,8 +332,8 @@ router.post('/tasks/:id/attachments', async (req, res) => {
 router.patch('/tasks/:id', async (req, res) => {
   try {
     const db = dbOr(req);
-    const check = await ensureAgentTask(db, req.params.id);
-    if (check.error) return res.status(check.status).json({ error: check.error });
+    const check = await ensureAgentTask(req, res, req.params.id);
+    if (agentDenied(res, check)) return;
 
     const patchParsed = parseBody(agentPatchTaskBodySchema, req.body || {});
     if (!patchParsed.success) {
@@ -365,10 +393,10 @@ router.patch('/tasks/:id', async (req, res) => {
 router.get('/tasks/:id/work', async (req, res) => {
   try {
     const db = dbOr(req);
-    const check = await ensureAgentTask(db, req.params.id);
-    if (check.error) return res.status(check.status).json({ error: check.error });
+    const check = await ensureAgentTask(req, res, req.params.id);
+    if (agentDenied(res, check)) return;
     const work = await taskWorkQueries.getWorkMapByTaskId(db, req.params.id);
-    res.json({ work });
+    res.json({ work: redactWorkMapForClient(work) });
   } catch (error) {
     console.error('Agent get work error:', error);
     res.status(500).json({ error: 'Failed to get task work' });
@@ -378,8 +406,8 @@ router.get('/tasks/:id/work', async (req, res) => {
 router.put('/tasks/:id/work', async (req, res) => {
   try {
     const db = dbOr(req);
-    const check = await ensureAgentTask(db, req.params.id);
-    if (check.error) return res.status(check.status).json({ error: check.error });
+    const check = await ensureAgentTask(req, res, req.params.id);
+    if (agentDenied(res, check)) return;
 
     const workParsed = parseBody(agentUpdateWorkBodySchema, req.body || {});
     if (!workParsed.success) {
@@ -392,8 +420,7 @@ router.put('/tasks/:id/work', async (req, res) => {
     }
 
     const { appendLog, ...rest } = entries;
-    const toUpsert = { ...rest };
-    // Never allow arbitrary overwrite of reserved structure via empty body
+    const toUpsert = sanitizeWorkEntries(rest, FORBIDDEN_AGENT_WORK_WRITE_KEYS);
     delete toUpsert.appendLog;
     delete toUpsert.entries;
 
@@ -406,7 +433,7 @@ router.put('/tasks/:id/work', async (req, res) => {
 
     const work = await taskWorkQueries.getWorkMapByTaskId(db, req.params.id);
     await publishTaskWork(req, req.params.id, work);
-    res.json({ work });
+    res.json({ work: redactWorkMapForClient(work) });
   } catch (error) {
     console.error('Agent put work error:', error);
     res.status(500).json({ error: 'Failed to update task work' });
@@ -416,8 +443,8 @@ router.put('/tasks/:id/work', async (req, res) => {
 router.get('/control/:id', async (req, res) => {
   try {
     const db = dbOr(req);
-    const check = await ensureAgentTask(db, req.params.id);
-    if (check.error) return res.status(check.status).json({ error: check.error });
+    const check = await ensureAgentTask(req, res, req.params.id);
+    if (agentDenied(res, check)) return;
     const work = await taskWorkQueries.getWorkMapByTaskId(db, req.params.id);
     res.json({
       status: work.status || null,

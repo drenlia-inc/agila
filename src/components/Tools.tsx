@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState, type RefObject } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Minimize2, Maximize2, Search, Minus, LayoutGrid, List, Calendar, CalendarDays, ChevronUp, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { TaskViewMode, ViewMode } from '../utils/userPreferences';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
 import { KbdBadge } from './ui/KbdBadge';
+import { useFloatingOverlayDismiss } from '../hooks/useFloatingOverlayDismiss';
 
 interface ToolsProps {
   taskViewMode: TaskViewMode;
@@ -149,6 +150,11 @@ function ToolsViewDensityControls({
 }) {
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewBtnRef = useRef<HTMLButtonElement>(null);
+  const densityBtnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const overlayNs = useId();
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const {
     viewModeOptions,
     densityOptions,
@@ -159,13 +165,28 @@ function ToolsViewDensityControls({
     densityTooltip,
   } = useToolsOptions(viewMode, taskViewMode);
 
+  useLayoutEffect(() => {
+    const el = openMenu === 'view' ? viewBtnRef.current : openMenu === 'density' ? densityBtnRef.current : null;
+    if (!el) {
+      setMenuPos(null);
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left });
+  }, [openMenu]);
+
+  useFloatingOverlayDismiss(Boolean(openMenu), `tools:${overlayNs}:${openMenu || 'none'}`, () =>
+    setOpenMenu(null)
+  );
+
   useEffect(() => {
     if (!openMenu) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpenMenu(null);
-      }
+      const target = event.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpenMenu(null);
     };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpenMenu(null);
@@ -219,10 +240,36 @@ function ToolsViewDensityControls({
       ? 'absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-red-500 ring-1 ring-white dark:ring-gray-800'
       : 'absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 ring-1 ring-white dark:ring-gray-800';
 
-  const menuClass =
-    layout === 'stack'
-      ? 'absolute left-full top-0 z-[61] ml-1 min-w-[9.5rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden'
-      : 'absolute left-0 top-full z-[60] mt-1 min-w-[9.5rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden';
+  const menuItems =
+    openMenu === 'view'
+      ? viewModeOptions.map((option) =>
+          renderMenuItem(
+            option.mode,
+            viewMode === option.mode,
+            option.icon,
+            option.label,
+            option.shortcut,
+            () => {
+              onViewModeChange(option.mode);
+              setOpenMenu(null);
+            }
+          )
+        )
+      : openMenu === 'density'
+        ? densityOptions.map((option) =>
+            renderMenuItem(
+              option.mode,
+              taskViewMode === option.mode,
+              option.icon,
+              option.label,
+              option.shortcut,
+              () => {
+                onTaskViewModeChange(option.mode);
+                setOpenMenu(null);
+              }
+            )
+          )
+        : null;
 
   return (
     <div
@@ -238,6 +285,7 @@ function ToolsViewDensityControls({
       <div className="relative shrink-0">
         <KanbanChromeTooltip label={viewTooltip} placement={tooltipPlacement}>
           <button
+            ref={viewBtnRef}
             type="button"
             onClick={() => setOpenMenu(openMenu === 'view' ? null : 'view')}
             className={`${controlButtonClass} ${
@@ -250,23 +298,6 @@ function ToolsViewDensityControls({
             <ToolIcon icon={currentViewOption.icon} />
           </button>
         </KanbanChromeTooltip>
-        {openMenu === 'view' && (
-          <div role="menu" className={menuClass}>
-            {viewModeOptions.map((option) =>
-              renderMenuItem(
-                option.mode,
-                viewMode === option.mode,
-                option.icon,
-                option.label,
-                option.shortcut,
-                () => {
-                  onViewModeChange(option.mode);
-                  setOpenMenu(null);
-                }
-              )
-            )}
-          </div>
-        )}
       </div>
 
       {middle}
@@ -274,6 +305,7 @@ function ToolsViewDensityControls({
       <div className="relative shrink-0">
         <KanbanChromeTooltip label={densityTooltip} placement={tooltipPlacement}>
           <button
+            ref={densityBtnRef}
             type="button"
             onClick={() => setOpenMenu(openMenu === 'density' ? null : 'density')}
             className={`${controlButtonClass} ${
@@ -287,24 +319,22 @@ function ToolsViewDensityControls({
             {isCompact && <span className={compactDotClass} aria-hidden="true" />}
           </button>
         </KanbanChromeTooltip>
-        {openMenu === 'density' && (
-          <div role="menu" className={menuClass}>
-            {densityOptions.map((option) =>
-              renderMenuItem(
-                option.mode,
-                taskViewMode === option.mode,
-                option.icon,
-                option.label,
-                option.shortcut,
-                () => {
-                  onTaskViewModeChange(option.mode);
-                  setOpenMenu(null);
-                }
-              )
-            )}
-          </div>
-        )}
       </div>
+      {openMenu &&
+        menuPos &&
+        menuItems &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            data-floating-overlay=""
+            className="fixed z-[10050] min-w-[9.5rem] rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg overflow-hidden"
+            style={{ top: menuPos.top, left: menuPos.left }}
+          >
+            {menuItems}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

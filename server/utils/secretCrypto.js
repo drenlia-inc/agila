@@ -59,6 +59,17 @@ export function decryptSecret(payload) {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
 }
 
+/** True when ciphertext decrypts with the current JWT_SECRET. */
+export function canDecryptSecret(payload) {
+  if (!payload) return false;
+  try {
+    decryptSecret(payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * @param {string|null|undefined} value
  * @returns {boolean}
@@ -101,4 +112,25 @@ export function decryptSettingValue(value) {
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+}
+
+/**
+ * @param {string|null|undefined} value
+ * @returns {{ value: string, hasValue: boolean, unreadable: boolean }}
+ */
+export function decryptSettingValueSafe(value) {
+  const raw = String(value ?? '');
+  if (!raw.trim()) {
+    return { value: '', hasValue: false, unreadable: false };
+  }
+  try {
+    return { value: decryptSettingValue(raw), hasValue: true, unreadable: false };
+  } catch {
+    return { value: '', hasValue: true, unreadable: true };
+  }
+}
+
+/** True when an enc:v1: blob decrypts with the current SETTINGS_ENCRYPTION_KEY / JWT fallback. */
+export function canDecryptSettingValue(value) {
+  return !decryptSettingValueSafe(value).unreadable;
 }

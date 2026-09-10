@@ -93,6 +93,7 @@ export default function EnumPicker({
           open={open}
           triggerRef={triggerRef}
           panelRef={panelRef}
+          onDismiss={() => setOpen(false)}
           preferredMaxHeight={280}
           minWidth={200}
           className="flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800"

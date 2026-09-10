@@ -439,6 +439,7 @@ const SprintSelector: React.FC<SprintSelectorProps> = ({
         open={isOpen}
         triggerRef={triggerRef}
         panelRef={panelRef}
+        onDismiss={() => setIsOpen(false)}
         width={panelWidth}
         minWidth={isAssign ? 360 : undefined}
         preferredMaxHeight={panelMaxHeight}

@@ -96,6 +96,7 @@ export default function TagPicker({
         open={open && !disabled}
         triggerRef={triggerRef}
         panelRef={panelRef}
+        onDismiss={() => setOpen(false)}
         preferredMaxHeight={400}
         className="flex flex-col overflow-hidden rounded-md border border-gray-300 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
       >

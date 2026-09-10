@@ -4,15 +4,18 @@
 
 import { settings as settingsQueries } from './sqlManager/index.js';
 import {
-  decryptSettingValue,
+  decryptSettingValueSafe,
   encryptSettingValue,
-  isEncryptedSettingValue
+  isEncryptedSettingValue,
 } from './secretCrypto.js';
 import { isSecretSettingKey, SECRET_SETTING_PLACEHOLDER } from '../constants/secretSettings.js';
 import { isMaskedOrEmptyApiKey } from './maskSecret.js';
 
+export const SECRET_UNREADABLE_CODE = 'secret_unreadable';
+
 /**
  * Load a setting and decrypt if it is a known secret (or any enc:v1: value).
+ * Unreadable ciphertext returns '' (callers that need a hint should use inspectSecretSetting).
  * @param {object} db
  * @param {string} key
  * @returns {Promise<string>}
@@ -22,14 +25,33 @@ export async function getDecryptedSetting(db, key) {
   const raw = row?.value ?? '';
   if (!raw) return '';
   if (isSecretSettingKey(key) || isEncryptedSettingValue(raw)) {
-    try {
-      return decryptSettingValue(raw);
-    } catch (err) {
-      console.error(`Failed to decrypt setting ${key}:`, err.message);
+    const result = decryptSettingValueSafe(raw);
+    if (result.unreadable) {
+      console.error(
+        `Failed to decrypt setting ${key}: SETTINGS_ENCRYPTION_KEY or JWT_SECRET changed — re-paste this secret in Settings`
+      );
       return '';
     }
+    return result.value;
   }
   return String(raw);
+}
+
+/**
+ * @param {object} db
+ * @param {string} key
+ * @returns {Promise<{ hasValue: boolean, readable: boolean }>}
+ */
+export async function inspectSecretSetting(db, key) {
+  const row = await settingsQueries.getSettingByKey(db, key);
+  const raw = row?.value ?? '';
+  if (!String(raw).trim()) {
+    return { hasValue: false, readable: true };
+  }
+  if (!isSecretSettingKey(key) && !isEncryptedSettingValue(raw)) {
+    return { hasValue: true, readable: true };
+  }
+  return { hasValue: true, readable: !decryptSettingValueSafe(raw).unreadable };
 }
 
 /**
@@ -47,13 +69,16 @@ export function hasSecretValue(storedValue) {
  * @param {Record<string, string>} target
  */
 export function projectSecretForAdminApi(key, storedValue, target) {
+  const inspected = decryptSettingValueSafe(storedValue);
   if (!hasSecretValue(storedValue)) {
     target[key] = '';
     target[`${key}_SET`] = 'false';
+    target[`${key}_UNREADABLE`] = 'false';
     return;
   }
   target[key] = SECRET_SETTING_PLACEHOLDER;
   target[`${key}_SET`] = 'true';
+  target[`${key}_UNREADABLE`] = inspected.unreadable ? 'true' : 'false';
 }
 
 /**

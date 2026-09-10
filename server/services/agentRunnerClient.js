@@ -69,6 +69,18 @@ export async function resolveRunnerConfig(db, overrides = {}) {
 export async function probeRunner(db, overrides = {}) {
   const { url, token } = await resolveRunnerConfig(db, overrides);
   if (!token) {
+    if (process.env.MULTI_TENANT !== 'true') {
+      const { inspectSecretSetting } = await import('../utils/settingsSecrets.js');
+      const inspect = await inspectSecretSetting(db, 'AI_RUNNER_TOKEN');
+      if (inspect.hasValue && !inspect.readable) {
+        return {
+          ok: false,
+          errorCode: 'secret_unreadable',
+          error:
+            'Saved runner token cannot be decrypted. Paste the same token again in Settings → AI and save.'
+        };
+      }
+    }
     return {
       ok: false,
       error:
@@ -243,6 +255,45 @@ export async function cancelJob(db, jobId, reason = 'cancelled') {
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+/**
+ * @param {object} db
+ * @param {string} jobId
+ * @returns {Promise<{ ok: boolean, missing?: boolean, status?: string, error?: string }>}
+ */
+export async function getRunnerJob(db, jobId) {
+  if (!jobId) return { ok: false, missing: true };
+  const { url, token } = await resolveRunnerConfig(db);
+  if (!token || !url) {
+    return { ok: false, error: 'Runner is not configured' };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json'
+      },
+      signal: controller.signal
+    });
+    if (res.status === 404) {
+      return { ok: false, missing: true };
+    }
+    if (!res.ok) {
+      return { ok: false, status: res.status, error: `HTTP ${res.status}` };
+    }
+    const body = await res.json().catch(() => ({}));
+    return { ok: true, status: body?.status || 'unknown' };
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      return { ok: false, error: 'Timed out reaching runner' };
+    }
+    return { ok: false, error: err?.message || String(err) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

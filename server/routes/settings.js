@@ -22,6 +22,7 @@ import { AI_PROVIDER_PRESETS } from '../constants/aiProviders.js';
 import { isMaskedOrEmptyApiKey } from '../utils/maskSecret.js';
 import {
   getDecryptedSetting,
+  inspectSecretSetting,
   projectSecretForAdminApi,
   upsertSecretSetting
 } from '../utils/settingsSecrets.js';
@@ -149,6 +150,12 @@ async function resolveAiCredentials(db, overrides = {}) {
       : '';
   if (!apiKey) {
     apiKey = await getDecryptedSetting(db, 'AI_API_KEY');
+  }
+  if (!apiKey && !(overrides.apiKey && !isMaskedOrEmptyApiKey(overrides.apiKey))) {
+    const inspect = await inspectSecretSetting(db, 'AI_API_KEY');
+    if (inspect.hasValue && !inspect.readable) {
+      return { provider, baseUrl, apiKey: '', model, unreadableSecret: true };
+    }
   }
   return { provider, baseUrl, apiKey, model };
 }
@@ -357,16 +364,19 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
         settingsObj[setting.key] = '';
         if (setting.key === 'SMTP_PASSWORD') {
           settingsObj.SMTP_PASSWORD_SET = 'false';
+          settingsObj.SMTP_PASSWORD_UNREADABLE = 'false';
         }
       } else if (storageManaged && STORAGE_MANAGED_HIDDEN_KEYS.includes(setting.key)) {
         settingsObj[setting.key] = '';
         if (setting.key === 'S3_SECRET_ACCESS_KEY') {
           settingsObj.S3_SECRET_ACCESS_KEY_SET = 'false';
+          settingsObj.S3_SECRET_ACCESS_KEY_UNREADABLE = 'false';
         }
       } else if (hideGoogleCreds && SSO_MANAGED_HIDDEN_KEYS.includes(setting.key)) {
         settingsObj[setting.key] = '';
         if (setting.key === 'GOOGLE_CLIENT_SECRET') {
           settingsObj.GOOGLE_CLIENT_SECRET_SET = 'false';
+          settingsObj.GOOGLE_CLIENT_SECRET_UNREADABLE = 'false';
         }
       } else if (isSecretSettingKey(setting.key)) {
         projectSecretForAdminApi(setting.key, setting.value, settingsObj);
@@ -414,6 +424,7 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
         settingsObj.AI_RUNNER_TOKEN = '';
         settingsObj.AI_RUNNER_TOKEN_SET = 'false';
       }
+      settingsObj.AI_RUNNER_TOKEN_UNREADABLE = 'false';
     }
 
     await applyEffectiveAiEnabledToSettings(db, settingsObj);
@@ -447,6 +458,14 @@ router.post('/ai/validate', authenticateToken, requireRole(['admin']), async (re
       apiKey: parsed.data.apiKey,
       model: parsed.data.model
     });
+    if (creds.unreadableSecret) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          'Saved AI API key cannot be decrypted. Paste the same key again in Settings → AI and save.',
+        errorCode: 'secret_unreadable'
+      });
+    }
     const result = await validateAiConnectivity(creds);
     if (!result.ok) {
       return res.status(400).json({ ok: false, error: result.error, status: result.status });
@@ -496,6 +515,14 @@ router.post('/ai/models', authenticateToken, requireRole(['admin']), async (req,
       apiKey: parsed.data.apiKey,
       model: parsed.data.model
     });
+    if (creds.unreadableSecret) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          'Saved AI API key cannot be decrypted. Paste the same key again in Settings → AI and save.',
+        errorCode: 'secret_unreadable'
+      });
+    }
     const result = await listAiModels(creds);
     if (!result.ok) {
       return res.status(400).json({ ok: false, error: result.error, status: result.status });
@@ -834,6 +861,14 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
         return res.status(403).json({ error: 'AI features are not available on this plan' });
       }
       const creds = await resolveAiCredentials(db, {});
+      if (creds.unreadableSecret) {
+        return res.status(400).json({
+          error:
+            'Saved AI API key cannot be decrypted. Paste the same key again in Settings → AI and save.',
+          code: 'secret_unreadable',
+          errorCode: 'secret_unreadable'
+        });
+      }
       const probe = await validateAiConnectivity(creds);
       if (!probe.ok) {
         return res.status(400).json({
@@ -847,7 +882,8 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
         if (!runnerProbe.ok) {
           return res.status(400).json({
             error: runnerProbe.error || 'Agent runner is not reachable',
-            code: 'AI_RUNNER_UNREACHABLE'
+            code: runnerProbe.errorCode === 'secret_unreadable' ? 'secret_unreadable' : 'AI_RUNNER_UNREACHABLE',
+            errorCode: runnerProbe.errorCode
           });
         }
       } catch (e) {

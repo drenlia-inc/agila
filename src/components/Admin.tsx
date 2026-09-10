@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import api, { createUser, updateUser, deleteUser, getUserTaskCount, resendUserInvitation, getTags, createTag, updateTag, deleteTag, getTagUsage, getBatchTagUsage, getPriorities, createPriority, updatePriority, deletePriority, reorderPriorities, setDefaultPriority, getPriorityUsage, getBatchPriorityUsage, getLifecycleSummary } from '../api';
 import { ADMIN_TABS, ROUTES } from '../constants';
 import { toast } from '../utils/toast';
+import { licenseLimitToastCopy } from '../utils/licenseLimitToast';
 import AdminSiteSettingsTab from './admin/AdminSiteSettingsTab';
 import AdminTagsTab from './admin/AdminTagsTab';
 import AdminPrioritiesTab from './admin/AdminPrioritiesTab';
@@ -161,6 +162,7 @@ const Admin: React.FC<AdminProps> = ({
   boards = [],
 }) => {
   const { t } = useTranslation('admin');
+  const { t: tCommon } = useTranslation('common');
   const { systemSettings, refreshSettings, updateSiteSetting, updateSiteSettings } = useSettings(); // Use SettingsContext for admin settings
   const refreshSettingsRef = useRef(refreshSettings);
   refreshSettingsRef.current = refreshSettings;
@@ -721,12 +723,21 @@ const Admin: React.FC<AdminProps> = ({
         t('failedToUpdateUser');
       if (
         err.response?.status === 403 &&
-        (errorMessage.includes('limit') || errorMessage.includes('Limit'))
+        (err.response?.data?.error === 'License limit exceeded' ||
+          errorMessage.includes('limit') ||
+          errorMessage.includes('Limit'))
       ) {
-        errorMessage =
-          err.response?.data?.message || err.response?.data?.error || t('users.userLimitReached');
+        const data = err.response?.data || {};
+        const copy = licenseLimitToastCopy(tCommon, {
+          limit: data.limit || 'USER_LIMIT',
+          current: data.current,
+          maximum: data.maximum,
+          details: data.details || data.message,
+        });
+        toast.error(copy.title, copy.message);
+      } else {
+        toast.error(errorMessage, '');
       }
-      toast.error(errorMessage, '');
       console.error(err);
     }
   };
@@ -1098,7 +1109,7 @@ const Admin: React.FC<AdminProps> = ({
         }
 
         // Client-only flags from admin GET (e.g. SMTP_PASSWORD_SET) — not DB keys
-        if (key.endsWith('_SET')) {
+        if (key.endsWith('_SET') || key.endsWith('_UNREADABLE')) {
           continue;
         }
 
@@ -1269,14 +1280,7 @@ const Admin: React.FC<AdminProps> = ({
       }
     } catch (error: any) {
       console.error('Failed to create user:', error);
-      const message =
-        error.response?.data?.error ||
-        error.message ||
-        t('failedToCreateUser');
-      // Re-throw so AdminUsersTab can show a single toast (avoid double toast)
-      const wrapped = new Error(message);
-      (wrapped as any).response = error.response;
-      throw wrapped;
+      throw error;
     }
   };
 
@@ -1365,18 +1369,7 @@ const Admin: React.FC<AdminProps> = ({
       toast.success(t('userUpdatedSuccessfully'), '');
     } catch (err: any) {
       console.error('❌ Failed to save user:', err);
-      // Extract detailed error message, including user limit errors
-      let errorMessage = err.response?.data?.error || err.response?.data?.message || err.message || t('failedToUpdateUser');
-      
-      // Check for user limit error specifically
-      if (err.response?.status === 403 && (errorMessage.includes('limit') || errorMessage.includes('Limit'))) {
-        errorMessage = err.response?.data?.message || err.response?.data?.error || t('users.userLimitReached');
-      }
-      
-      // Let AdminUsersTab show the toast once
-      const wrapped = new Error(errorMessage);
-      (wrapped as any).response = err.response;
-      throw wrapped;
+      throw err;
     }
   };
 
@@ -1601,7 +1594,11 @@ const Admin: React.FC<AdminProps> = ({
         method: err.config?.method || 'POST'
       };
       
-      setTestEmailError(JSON.stringify(errorDetails, null, 2));
+      setTestEmailError(
+        err.response?.data?.errorCode === 'secret_unreadable'
+          ? t('secretUnreadableHint')
+          : JSON.stringify(errorDetails, null, 2)
+      );
       setShowTestEmailErrorModal(true);
     } finally {
       setIsTestingEmail(false);

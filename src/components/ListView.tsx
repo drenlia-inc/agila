@@ -29,6 +29,7 @@ import AgentPanel from './AgentPanel';
 import type { AgentPanelView } from './AgentPanel';
 import ExportMenu from './ExportMenu';
 import DateRangePicker from './DateRangePicker';
+import { useFloatingOverlayDismiss } from '../hooks/useFloatingOverlayDismiss';
 import TextEditor from './TextEditor';
 import AddTagModal from './AddTagModal';
 import AddCommentModal from './AddCommentModal';
@@ -1460,6 +1461,25 @@ export default function ListView({
     setSprintSearchTerm('');
     setHighlightedSprintIndex(-1);
   };
+
+  const closeListFloatingDropdowns = () => {
+    setShowDropdown(null);
+    setAssigneeDropdownCoords(null);
+    setPriorityDropdownCoords(null);
+    setStatusDropdownCoords(null);
+    setTagsDropdownCoords(null);
+  };
+
+  useFloatingOverlayDismiss(
+    Boolean(showDropdown),
+    showDropdown ? `list:${showDropdown.taskId}:${showDropdown.field}` : 'list-dropdown',
+    closeListFloatingDropdowns
+  );
+  useFloatingOverlayDismiss(
+    Boolean(showSprintSelector),
+    showSprintSelector ? `list:${showSprintSelector}:sprint` : 'list-sprint',
+    closeSprintSelector
+  );
 
   // Sprint selector handlers
   const handleSprintSelectorOpen = (taskId: string, event: React.SyntheticEvent<HTMLDivElement>) => {
@@ -3058,6 +3078,7 @@ export default function ListView({
       {showDropdown?.field === 'assignee' && assigneeDropdownCoords && createPortal(
         <div 
           ref={dropdownRef}
+          data-floating-overlay=""
           className="fixed bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl z-[9999] overflow-hidden flex flex-col"
           style={{
             left: `${assigneeDropdownCoords.left}px`,
@@ -3124,6 +3145,7 @@ export default function ListView({
       {showDropdown?.field === 'priority' && priorityDropdownCoords && createPortal(
         <div 
           ref={dropdownRef}
+          data-floating-overlay=""
           className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-[9999] min-w-[120px]"
           style={{
             left: `${priorityDropdownCoords.left}px`,
@@ -3158,6 +3180,7 @@ export default function ListView({
       {showDropdown?.field === 'column' && statusDropdownCoords && createPortal(
         <div 
           ref={dropdownRef}
+          data-floating-overlay=""
           className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-[9999] min-w-[150px]"
           style={{
             left: `${statusDropdownCoords.left}px`,
@@ -3256,6 +3279,7 @@ export default function ListView({
       {showDropdown?.field === 'tags' && tagsDropdownCoords && createPortal(
         <div 
           ref={dropdownRef}
+          data-floating-overlay=""
           className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-[9999] min-w-[180px]"
           style={{
             left: `${tagsDropdownCoords.left}px`,
@@ -3419,6 +3443,7 @@ export default function ListView({
           return (
         <div 
           ref={sprintSelectorRef}
+          data-floating-overlay=""
           className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-[9999]"
           style={{
             left: `${sprintSelectorCoords.left}px`,
@@ -3547,6 +3572,7 @@ export default function ListView({
               endDate={task.dueDate}
               onDateChange={(startDate, endDate) => handleDateRangeChange(showDateRangePicker, startDate, endDate)}
               onClose={handleDateRangePickerClose}
+              overlayId={`${showDateRangePicker}:dates`}
               position={dateRangePickerPosition}
               sprint={sprint}
               availableSprints={sprints}

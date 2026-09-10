@@ -3,7 +3,7 @@
  */
 
 import crypto from 'crypto';
-export { encryptSecret, decryptSecret } from './secretCrypto.js';
+export { encryptSecret, decryptSecret, canDecryptSecret } from './secretCrypto.js';
 
 function sshString(buf) {
   const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);

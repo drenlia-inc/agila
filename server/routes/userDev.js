@@ -17,7 +17,8 @@ import {
 import {
   generateEd25519SshKeyPair,
   encryptSecret,
-  decryptSecret
+  decryptSecret,
+  canDecryptSecret
 } from '../utils/sshKeyCrypto.js';
 import { tokenMintLimiter, githubRepoProbeLimiter } from '../middleware/rateLimiters.js';
 import { maskApiKey, isMaskedOrEmptyApiKey } from '../utils/maskSecret.js';
@@ -124,15 +125,20 @@ router.get('/ssh-key', authenticateToken, requireAi, async (req, res) => {
     const db = getRequestDatabase(req);
     const row = await sshQueries.getSshKeyMeta(db, req.user.id);
     if (!row) {
-      return res.json({ key: null });
+      return res.json({ key: null, needsReenter: false });
     }
+    const full = await sshQueries.getSshKeyWithPrivate(db, req.user.id);
+    const needsReenter = Boolean(
+      full?.private_key_encrypted && !canDecryptSecret(full.private_key_encrypted)
+    );
     res.json({
       key: {
         publicKey: row.public_key,
         fingerprint: row.fingerprint,
         createdAt: row.created_at,
         updatedAt: row.updated_at
-      }
+      },
+      needsReenter
     });
   } catch (error) {
     console.error('Get SSH key error:', error);
@@ -179,6 +185,12 @@ router.get('/ssh-key/private', authenticateToken, requireAi, async (req, res) =>
     if (!row) {
       return res.status(404).json({ error: 'No SSH key found. Generate one first.' });
     }
+    if (!canDecryptSecret(row.private_key_encrypted)) {
+      return res.status(400).json({
+        error: 'Saved SSH key cannot be decrypted. Generate a new key under Profile → Dev.',
+        code: 'secret_unreadable'
+      });
+    }
     const privateKey = decryptSecret(row.private_key_encrypted);
     res.json({ privateKey, fingerprint: row.fingerprint });
   } catch (error) {
@@ -193,10 +205,13 @@ router.get('/github-token', authenticateToken, requireAi, async (req, res) => {
     const db = getRequestDatabase(req);
     const row = await githubTokenQueries.getGithubTokenMeta(db, req.user.id);
     if (!row) {
-      return res.json({ configured: false, token: null });
+      return res.json({ configured: false, token: null, needsReenter: false });
     }
+    const enc = await githubTokenQueries.getGithubTokenEncrypted(db, req.user.id);
+    const readable = canDecryptSecret(enc?.token_encrypted);
     res.json({
       configured: true,
+      needsReenter: !readable,
       token: {
         hint: row.token_hint || '',
         createdAt: row.created_at,
@@ -280,16 +295,18 @@ router.post(
       let githubToken = '';
       const patRow = await githubTokenQueries.getGithubTokenEncrypted(db, req.user.id);
       if (patRow?.token_encrypted) {
-        try {
-          githubToken = decryptSecret(patRow.token_encrypted);
-        } catch (e) {
-          console.error('Decrypt GitHub PAT for probe failed:', e);
-          return res.status(500).json({
+        if (!canDecryptSecret(patRow.token_encrypted)) {
+          console.warn(
+            'GitHub PAT ciphertext cannot be decrypted (JWT_SECRET changed or data is corrupt) — re-paste the PAT under Profile → Dev'
+          );
+          return res.json({
             ok: false,
-            reason: 'decrypt_error',
-            error: 'Failed to read GitHub token'
+            reason: 'pat_unreadable',
+            error:
+              'Saved GitHub token cannot be decrypted. Paste the same PAT again under Profile → Dev.'
           });
         }
+        githubToken = decryptSecret(patRow.token_encrypted);
       }
 
       const result = await probeGithubRepoWithPat(githubToken, repoUrl);

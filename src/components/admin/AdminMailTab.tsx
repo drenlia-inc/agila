@@ -16,6 +16,10 @@ import {
 } from '../../utils/adminFieldLimits';
 import { AdminFieldDraftControls } from './AdminFieldDraftControls';
 import {
+  AdminSecretUnreadableHint,
+  isAdminSecretUnreadable,
+} from './AdminSecretUnreadableHint';
+import {
   AdminActionsBar,
   AdminPageShell,
   AdminSection,
@@ -583,6 +587,9 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {t('mail.smtpPasswordDescription')}
                 </p>
+                {isAdminSecretUnreadable(editingSettings, 'SMTP_PASSWORD') && (
+                  <AdminSecretUnreadableHint />
+                )}
               </div>
 
               <div data-setting-key="SMTP_SECURE">

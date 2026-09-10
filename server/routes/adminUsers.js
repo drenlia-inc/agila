@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { avatarUpload } from '../config/multer.js';
 import { getLicenseManager } from '../config/license.js';
+import { licenseLimitBody } from '../middleware/licenseCheck.js';
 import { createDefaultAvatar, getRandomColor } from '../utils/avatarGenerator.js';
 // Note: Email notification service (getNotificationService) is not yet implemented
 // import { getNotificationService } from '../services/notificationService.js';
@@ -207,11 +208,7 @@ router.put('/:userId', authenticateToken, requireRole(['admin']), async (req, re
           await licenseManager.checkUserLimit();
         } catch (limitError) {
           console.warn('User limit check failed during activation:', limitError.message);
-          return res.status(403).json({ 
-            error: 'User limit reached',
-            message: limitError.message,
-            details: 'Your current plan does not allow activating more users. Please upgrade your plan or contact support.'
-          });
+          return res.status(403).json(licenseLimitBody('USER_LIMIT', limitError));
         }
       }
     }
@@ -356,6 +353,7 @@ router.get('/can-create', authenticateToken, requireRole(['admin']), async (req,
           reason: 'User limit reached',
           message: `Your current plan allows ${limits.USER_LIMIT} active users. You currently have ${userCount}. Please upgrade your plan or contact support.`,
           current: userCount,
+          maximum: limits.USER_LIMIT,
           limit: limits.USER_LIMIT
         });
       } catch (detailsError) {
@@ -439,11 +437,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
         await licenseManager.checkUserLimit();
       } catch (limitError) {
         console.warn('User limit check failed:', limitError.message);
-        return res.status(403).json({ 
-          error: 'User limit reached',
-          message: limitError.message,
-          details: 'Your current plan does not allow creating more users. Please upgrade your plan or contact support.'
-        });
+        return res.status(403).json(licenseLimitBody('USER_LIMIT', limitError));
       }
     }
     

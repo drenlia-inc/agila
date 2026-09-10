@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { authenticateToken, JWT_SECRET, userMayUseSession } from '../middleware/auth.js';
 import { updateStorageUsage } from '../utils/storageUtils.js';
 import notificationService from '../services/notificationService.js';
-import { getRequestDatabase } from '../middleware/tenantRouting.js';
+import { getRequestDatabase, getTenantId } from '../middleware/tenantRouting.js';
 import { files as fileQueries, tasks as taskQueries } from '../utils/sqlManager/index.js';
 import { assertTaskBoardAccess } from '../middleware/boardAccess.js';
 import {
@@ -77,14 +77,17 @@ async function assertActiveFileUser(req, token, via) {
     if (!userMayUseSession(userInDb)) {
       return { ok: false, status: 401, error: userInDb ? 'Invalid token' : 'Invalid token for this tenant' };
     }
+    return { ok: true, decoded, db, user: userInDb };
   } catch (dbError) {
     console.error('❌ Error checking user for file access:', dbError);
     return { ok: false, status: 401, error: 'Authentication failed' };
   }
-
-  return { ok: true, decoded, db };
 }
 
+/**
+ * Attachments require board membership for the owning task.
+ * Avatars remain tenant-visible to any active authenticated user (by design).
+ */
 async function serveAuthenticatedFile(req, res, kind) {
   const cred = resolveFileAccessCredential(req);
   if (!cred) {
@@ -97,8 +100,31 @@ async function serveAuthenticatedFile(req, res, kind) {
       return res.status(auth.status).json({ error: auth.error });
     }
 
+    // Media cookie / query tokens do not populate req.user — hydrate for AuthZ helpers.
+    if (!req.user) {
+      const roleNames = String(auth.user?.roles || '')
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean);
+      req.user = {
+        id: auth.decoded.id,
+        role: roleNames[0] || auth.decoded.role,
+        roles: roleNames.length ? roleNames : auth.decoded.roles,
+      };
+    }
+
     const storagePaths = getRequestStoragePaths(req);
     const safeName = path.basename(req.params.filename);
+
+    if (kind === 'attachments') {
+      const attachment = await fileQueries.getAttachmentByFilename(auth.db, safeName);
+      const taskId = attachment?.resolvedTaskId || attachment?.taskId || attachment?.taskid;
+      if (!taskId) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      if (!(await assertTaskBoardAccess(req, res, taskId))) return;
+    }
+
     const obj = await getObject(auth.db, storagePaths, kind, safeName);
 
     if (!obj) {
@@ -155,7 +181,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
     }
-    if (!(await assertTaskBoardAccess(req, res, attachment.taskId || attachment.taskid))) return;
+    const taskId = attachment.resolvedTaskId || attachment.taskId || attachment.taskid;
+    if (!(await assertTaskBoardAccess(req, res, taskId))) return;
     
     const filename = filenameFromPublicUrl(attachment.url, 'attachments');
     if (filename) {
@@ -176,30 +203,44 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     
     await updateStorageUsage(db);
     
-    const task = await fileQueries.getTaskByIdForFiles(db, attachment.taskId);
+    const task = taskId ? await fileQueries.getTaskByIdForFiles(db, taskId) : null;
     
-    if (task?.boardId) {
-      const taskWithRelationships = await taskQueries.getTaskWithRelationships(db, attachment.taskId);
-      
+    if (task?.boardId && taskId) {
+      const tenantId = getTenantId(req);
+      const taskWithRelationships = await taskQueries.getTaskWithRelationships(db, taskId);
+
       if (taskWithRelationships) {
-        const taskResponse = taskWithRelationships;
-        const tenantId = req.tenantId || null;
+        const remaining =
+          taskWithRelationships.attachmentCount == null
+            ? 0
+            : Number(taskWithRelationships.attachmentCount) || 0;
         await notificationService.publish('task-updated', {
           boardId: task.boardId,
-          task: taskResponse,
+          task: {
+            ...taskWithRelationships,
+            boardId: taskWithRelationships.boardid || taskWithRelationships.boardId,
+            columnId: taskWithRelationships.columnid || taskWithRelationships.columnId,
+            sprintId: taskWithRelationships.sprint_id || taskWithRelationships.sprintId || null,
+            memberId: taskWithRelationships.memberid || taskWithRelationships.memberId,
+            requesterId: taskWithRelationships.requesterid || taskWithRelationships.requesterId,
+            attachmentCount: remaining,
+            updatedBy: req.user?.id || 'system'
+          },
           timestamp: new Date().toISOString()
         }, tenantId);
       }
-      
-      console.log('📤 Publishing attachment-deleted to Redis for board:', task.boardId);
-      const tenantId = req.tenantId || null;
+
       await notificationService.publish('attachment-deleted', {
         boardId: task.boardId,
-        taskId: attachment.taskId,
+        taskId,
         attachmentId: id,
+        attachmentCount: taskWithRelationships
+          ? (taskWithRelationships.attachmentCount == null
+            ? 0
+            : Number(taskWithRelationships.attachmentCount) || 0)
+          : 0,
         timestamp: new Date().toISOString()
       }, tenantId);
-      console.log('✅ Attachment-deleted published to Redis');
     }
     
     res.json({ message: 'Attachment and file deleted successfully' });

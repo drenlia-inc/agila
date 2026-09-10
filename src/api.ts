@@ -1608,7 +1608,10 @@ export interface UserSshKeyMeta {
   updatedAt?: string;
 }
 
-export const getUserSshKey = async (): Promise<{ key: UserSshKeyMeta | null }> => {
+export const getUserSshKey = async (): Promise<{
+  key: UserSshKeyMeta | null;
+  needsReenter?: boolean;
+}> => {
   const { data } = await api.get('/user/dev/ssh-key');
   return data;
 };
@@ -1637,6 +1640,7 @@ export interface UserGithubTokenMeta {
 
 export const getUserGithubToken = async (): Promise<{
   configured: boolean;
+  needsReenter?: boolean;
   token: UserGithubTokenMeta | null;
 }> => {
   const { data } = await api.get('/user/dev/github-token');
