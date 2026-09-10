@@ -3649,7 +3649,7 @@ function AppContent() {
 
     const newTask: Task = {
       id: generateUUID(),
-      title: t('taskCard.newTask'),
+      title: i18n.t('taskCard.newTask', { ns: 'tasks' }),
       description: '',
       memberId: null,
       startDate: taskStartDate,

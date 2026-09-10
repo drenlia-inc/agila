@@ -60,6 +60,8 @@ interface KanbanColumnProps {
     isCrossColumn?: boolean;
   } | null;
   onAddTask: (columnId: string) => void;
+  /** Forces a column re-render when the UI language changes (memo skips onAddTask). */
+  uiLanguage?: string;
   columnWarnings?: Record<string, ColumnVisibilityWarning>;
   onDismissColumnWarning?: (columnId: string) => void;
   onClearFiltersForHiddenTask?: () => void;
@@ -2123,6 +2125,7 @@ function areKanbanColumnPropsEqual(
   if (prev.selectedMembers !== next.selectedMembers) return false;
   if (prev.selectedBoardId !== next.selectedBoardId) return false;
   if (prev.columnHeaderStickyTopPx !== next.columnHeaderStickyTopPx) return false;
+  if (prev.uiLanguage !== next.uiLanguage) return false;
 
   return true;
 }

@@ -356,9 +356,8 @@ export default function BoardTrashView({
       const columnId = task.columnId || (task as any).columnid;
       if (columnId && map.has(columnId)) {
         map.get(columnId)!.push(task);
-      } else if (columnId && columns[columnId]) {
-        // Column exists but is filtered from display — skip to keep alignment with live
       } else {
+        // Unknown / deleted column — keep in a virtual bucket so the header count matches.
         // Orphan: park under first display column so nothing is lost, or a virtual bucket
         const orphanKey = '__orphan__';
         if (!map.has(orphanKey)) map.set(orphanKey, []);
