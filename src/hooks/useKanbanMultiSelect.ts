@@ -22,7 +22,7 @@ import {
   writeKanbanMultiSelectSession,
   type ToggleTaskCheckedOptions,
 } from '../utils/kanbanMultiSelect';
-import { hasEscapeConsumingOverlay, isEditableEscapeTarget } from '../utils/escapeKeyUtils';
+import { blurEditableEscapeTarget, hasEscapeConsumingOverlay } from '../utils/escapeKeyUtils';
 
 type EditTaskOptions = { skipActivity?: boolean };
 
@@ -239,11 +239,17 @@ export function useKanbanMultiSelect({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (e.defaultPrevented) return;
-      if (isEditableEscapeTarget(e.target)) return;
+      if (blurEditableEscapeTarget(e)) return;
       if (hasEscapeConsumingOverlay()) return;
       e.preventDefault();
       lastAnchorIdRef.current = null;
       setCheckedTaskIds(new Set());
+      if (
+        document.activeElement instanceof HTMLInputElement &&
+        document.activeElement.type === 'checkbox'
+      ) {
+        document.activeElement.blur();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
