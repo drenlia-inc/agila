@@ -1,0 +1,29 @@
+---
+description: High-severity npm audit before commit, push, merge, or test01 deploy
+alwaysApply: true
+---
+
+# High-severity npm audit before ship
+
+Before **commit**, **push**, **merge** to `main`/`dev`, or finishing work for **test01**, fail closed on **high+** npm advisories.
+
+## Which trees
+
+- If `package.json` or `package-lock.json` changed: audit that repo.
+- If the work is for **test01** (local Docker, auth-dev, test01 host): audit **agila**, **agila-web**, and **agila-admin** even when only one tree changed.
+
+Skip `agila-mobile` unless its lockfile changed.
+
+## How
+
+From each repo root (after install / lockfile updates):
+
+```
+npm audit --audit-level=high
+```
+
+Prefer `node scripts/ci-npm-audit.js` when that file exists (skips if the registry audit API is down).
+
+- **Pass:** exit 0; moderate/low findings may remain.
+- **Fail:** high or critical — upgrade or pin via `overrides` to a patched version, update the lockfile, re-run audit. Do **not** `npm audit fix --force` when that forces a breaking major (e.g. TipTap 2 → 3).
+- **Registry down:** do not block (same as CI).

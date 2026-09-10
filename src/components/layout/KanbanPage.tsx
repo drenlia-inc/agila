@@ -57,6 +57,8 @@ import {
   writeBoardTrashOpenPreference,
 } from '../../utils/boardTrashEvents';
 import { getTaskSprintId, taskMatchesSelectedSprint } from '../../utils/columnFilters';
+import { calculateGridStyle } from '../../utils/dragDropUtils';
+import { MIN_COLUMN_WIDTH } from '../../constants';
 import { isArchivedColumnFlag, applyFinishedColumnVisibility, isFinishedColumnFlag } from '../../utils/columnUtils';
 import { isKanbanPageScrolledDown, scrollKanbanPageToTopFastSmooth } from '../../utils/kanbanScroll';
 import { onHelpReveal, takeHelpReveal } from '../../utils/helpGoThere';
@@ -1057,6 +1059,22 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     return filtered;
   }, [visibleColumnsForCurrentBoard, columns]);
 
+  const visibleKanbanGridStyle = useMemo(() => {
+    const count = Object.values(getFilteredColumnsForDisplay).filter(
+      (column) => column && column.id
+    ).length;
+    return calculateGridStyle(count, kanbanColumnWidth || MIN_COLUMN_WIDTH);
+  }, [getFilteredColumnsForDisplay, kanbanColumnWidth]);
+
+  /** Trash lists every status so counts match the badge, including hidden Archive/Done. */
+  const allBoardColumnsForTrash = useMemo(
+    () =>
+      Object.values(columns)
+        .filter((column) => column && column.id)
+        .sort((a, b) => (a.position || 0) - (b.position || 0)),
+    [columns]
+  );
+
   // Get fully filtered columns (search filters + column visibility)
   const getFullyFilteredColumns = useMemo(() => {
     const visibleColumnIds = getVisibleColumns(selectedBoard);
@@ -1360,13 +1378,22 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
     }
   }, [viewMode]);
 
-  // Keep the trash grid and live Kanban grid on the same horizontal position.
+  // Keep trash and live Kanban on the same horizontal position when they share
+  // the same column set. If the board hides statuses, trash stays independently
+  // scrollable so hidden-column cards (e.g. Archive) remain reachable.
   useEffect(() => {
     if (!trashOpen || viewMode !== 'kanban' || trashLoading) return;
 
     const boardScroller = columnsContainerRef.current;
     const trashScroller = trashScrollContainerRef.current;
     if (!boardScroller || !trashScroller) return;
+
+    const boardColumnCount = Object.values(getFilteredColumnsForDisplay).filter(
+      (column) => column && column.id
+    ).length;
+    if (allBoardColumnsForTrash.length !== boardColumnCount) {
+      return;
+    }
 
     const syncScroll = (source: HTMLDivElement, target: HTMLDivElement) => {
       if (syncingHorizontalScrollRef.current) return;
@@ -1405,7 +1432,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
       }
       syncingHorizontalScrollRef.current = false;
     };
-  }, [trashOpen, trashLoading, viewMode, selectedBoard, gridStyle]);
+  }, [trashOpen, trashLoading, viewMode, selectedBoard, gridStyle, getFilteredColumnsForDisplay, allBoardColumnsForTrash]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -1608,9 +1635,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               tasks={trashTasks.filter((task) =>
                 taskMatchesSelectedSprint(task, selectedSprintId)
               )}
-              displayColumns={Object.values(getFilteredColumnsForDisplay)
-                .filter((column) => column && column.id)
-                .sort((a, b) => (a.position || 0) - (b.position || 0))}
+              displayColumns={allBoardColumnsForTrash}
               columns={columns}
               members={members}
               isAdmin={isAdmin && canMutate}
@@ -1927,7 +1952,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                   They intentionally live outside each column header/count slot. */}
               {canMutate && (
               <div
-                style={gridStyle}
+                style={visibleKanbanGridStyle}
                 className="h-5 items-center"
                 data-kanban-selection-strip
               >
@@ -1961,7 +1986,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                 }
                 strategy={rectSortingStrategy}
               >
-                <BoardDropArea selectedBoard={selectedBoard} style={gridStyle}>
+                <BoardDropArea selectedBoard={selectedBoard} style={visibleKanbanGridStyle}>
                   {Object.values(getFilteredColumnsForDisplay)
                     .filter(column => column && column.id) // Filter out null/undefined columns
                     .sort((a, b) => (a.position || 0) - (b.position || 0))
@@ -1979,6 +2004,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                             draggedColumn={draggedColumn}
                             dragPreview={dragPreview}
                             onAddTask={onAddTask}
+                            uiLanguage={i18n.resolvedLanguage || i18n.language}
                             columnWarnings={columnWarnings}
                             onDismissColumnWarning={onDismissColumnWarning}
                             onClearFiltersForHiddenTask={onClearFiltersForHiddenTask}
@@ -2076,7 +2102,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
               </SortableContext>
             ) : (
               /* Regular user view */
-              <BoardDropArea selectedBoard={selectedBoard} style={gridStyle}>
+              <BoardDropArea selectedBoard={selectedBoard} style={visibleKanbanGridStyle}>
                 {Object.values(getFilteredColumnsForDisplay)
                   .filter(column => column && column.id) // Filter out null/undefined columns
                   .sort((a, b) => (a.position || 0) - (b.position || 0))
@@ -2094,6 +2120,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
                       draggedColumn={draggedColumn}
                       dragPreview={dragPreview}
                       onAddTask={onAddTask}
+                      uiLanguage={i18n.resolvedLanguage || i18n.language}
                       columnWarnings={columnWarnings}
                       onDismissColumnWarning={onDismissColumnWarning}
                       onClearFiltersForHiddenTask={onClearFiltersForHiddenTask}
