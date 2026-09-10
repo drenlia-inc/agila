@@ -180,6 +180,7 @@
     "sourceTaskForLinking": "Source task for linking",
     "holdAndDragToLink": "Hold and drag to link (parent-child), shift to relate",
     "noMoreTagsAvailable": "No more tags available",
+    "moreActions": "More actions",
     "disabledWhileAgent": "Unavailable while the Agent is working on this task"
   },
   "addTagModal": {

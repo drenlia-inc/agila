@@ -20,6 +20,10 @@ import { toast } from '../../utils/toast';
 import { AdminFieldDraftControls } from './AdminFieldDraftControls';
 import { AdminUnsavedHint } from './AdminUnsavedChanges';
 import { adminFieldClass, adminFocusToEditFieldClass } from './AdminSection';
+import {
+  AdminSecretUnreadableHint,
+  isAdminSecretUnreadable,
+} from './AdminSecretUnreadableHint';
 
 interface AdminAISettingsTabProps {
   editingSettings: { [key: string]: string | undefined };
@@ -60,6 +64,13 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
 }) => {
   const { t } = useTranslation('admin');
   const { updateSiteSetting } = useSettings();
+  const messageFromApiError = (error: any, fallback: string) => {
+    const data = error?.response?.data;
+    if (data?.errorCode === 'secret_unreadable' || data?.code === 'secret_unreadable') {
+      return t('secretUnreadableHint');
+    }
+    return data?.error || error?.message || fallback;
+  };
   const [savingEnabled, setSavingEnabled] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [savingAgentName, setSavingAgentName] = useState(false);
@@ -239,11 +250,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
       toast.success(t('appSettings.aiAgentNameApplied'), '');
     } catch (error: any) {
       console.error('Failed to apply agent name:', error);
-      const msg =
-        error?.response?.data?.error ||
-        error?.message ||
-        t('failedToSaveSettings');
-      toast.error(String(msg), '');
+      toast.error(String(messageFromApiError(error, t('failedToSaveSettings'))), '');
     } finally {
       setSavingAgentName(false);
     }
@@ -339,11 +346,7 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
       toast.success(t('appSettings.aiConfigSaved'), '');
     } catch (error: any) {
       console.error('Failed to save AI configuration:', error);
-      const msg =
-        error?.response?.data?.error ||
-        error?.message ||
-        t('failedToSaveSettings');
-      toast.error(String(msg), '');
+      toast.error(String(messageFromApiError(error, t('failedToSaveSettings'))), '');
     } finally {
       setSavingConfig(false);
     }
@@ -398,12 +401,9 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
         setModelMode('custom');
       }
     } catch (error: any) {
-      const msg =
-        error?.response?.data?.error ||
-        error?.message ||
-        t('appSettings.aiModelsFailed');
-      setValidationError(String(msg));
-      toast.error(String(msg), '');
+      const msg = String(messageFromApiError(error, t('appSettings.aiModelsFailed')));
+      setValidationError(msg);
+      toast.error(msg, '');
     } finally {
       setLoadingModels(false);
     }
@@ -437,12 +437,9 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
         void refreshModels();
       }
     } catch (error: any) {
-      const msg =
-        error?.response?.data?.error ||
-        error?.message ||
-        t('appSettings.aiValidationFailed');
-      setValidationError(String(msg));
-      toast.error(String(msg), '');
+      const msg = String(messageFromApiError(error, t('appSettings.aiValidationFailed')));
+      setValidationError(msg);
+      toast.error(msg, '');
     } finally {
       setTesting(false);
     }
@@ -461,8 +458,12 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
           };
       const { data } = await api.post('/admin/settings/ai/runner/probe', body);
       if (!data?.ok) {
-        setValidationError(data?.error || t('appSettings.aiRunnerProbeFailed'));
-        toast.error(data?.error || t('appSettings.aiRunnerProbeFailed'), '');
+        const msg =
+          data?.errorCode === 'secret_unreadable'
+            ? t('secretUnreadableHint')
+            : data?.error || t('appSettings.aiRunnerProbeFailed');
+        setValidationError(msg);
+        toast.error(msg, '');
         return;
       }
       const running = data.status?.running ?? data.status?.runningJobs ?? '?';
@@ -474,12 +475,9 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
       setValidationOk(detail);
       toast.success(detail, '');
     } catch (error: any) {
-      const msg =
-        error?.response?.data?.error ||
-        error?.message ||
-        t('appSettings.aiRunnerProbeFailed');
-      setValidationError(String(msg));
-      toast.error(String(msg), '');
+      const msg = String(messageFromApiError(error, t('appSettings.aiRunnerProbeFailed')));
+      setValidationError(msg);
+      toast.error(msg, '');
     } finally {
       setTestingRunner(false);
     }
@@ -507,13 +505,10 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
         ''
       );
     } catch (error: any) {
-      const msg =
-        error?.response?.data?.error ||
-        error?.message ||
-        t('failedToSaveSettings');
-      setValidationError(String(msg));
+      const msg = String(messageFromApiError(error, t('failedToSaveSettings')));
+      setValidationError(msg);
       applyAiPatch({ AI_ENABLED: previous });
-      toast.error(String(msg), '');
+      toast.error(msg, '');
     } finally {
       setSavingEnabled(false);
     }
@@ -810,6 +805,9 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
               }
               className={adminFocusToEditFieldClass('block w-full max-w-xl sm:text-sm font-mono')}
             />
+            {isAdminSecretUnreadable(editingSettings, 'AI_API_KEY') && (
+              <AdminSecretUnreadableHint />
+            )}
           </div>
 
           <div data-setting-key="AI_MODEL">
@@ -1012,6 +1010,9 @@ const AdminAISettingsTab: React.FC<AdminAISettingsTabProps> = ({
                 }
                 className={adminFieldClass(false, 'block w-full max-w-xl sm:text-sm font-mono')}
               />
+              {isAdminSecretUnreadable(editingSettings, 'AI_RUNNER_TOKEN') && (
+                <AdminSecretUnreadableHint />
+              )}
             </div>
           )}
 

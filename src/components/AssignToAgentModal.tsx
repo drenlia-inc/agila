@@ -59,6 +59,8 @@ interface AssignToAgentModalProps {
       description?: string;
     }
   ) => void | Promise<void>;
+  /** Persist unsaved description across minimize/remount (task id). */
+  draftStorageKey?: string;
   onCancel: () => void;
   /** When set, panel is positioned near this rect instead of viewport-centered. */
   anchorRect?: RectLike | null;
@@ -92,6 +94,7 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
   readOnly = false,
   onConfirm,
   onCancel,
+  draftStorageKey,
   anchorRect,
   embedded = false,
 }) => {
@@ -131,14 +134,45 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [softWarnDismissed, setSoftWarnDismissed] = useState(false);
-  const [descriptionDraft, setDescriptionDraft] = useState(taskDescription);
+  const [descriptionDraft, setDescriptionDraft] = useState(() => {
+    if (draftStorageKey) {
+      try {
+        const stored = sessionStorage.getItem(`agila-agent-desc:${draftStorageKey}`);
+        if (stored && !isTaskDescriptionEmpty(stored)) return stored;
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }
+    return taskDescription;
+  });
+  const descriptionDirtyRef = useRef(
+    Boolean(
+      draftStorageKey &&
+        !isTaskDescriptionEmpty(descriptionDraft) &&
+        descriptionDraft !== taskDescription
+    )
+  );
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const probeSeq = useRef(0);
 
   useEffect(() => {
+    if (descriptionDirtyRef.current) return;
     setDescriptionDraft(taskDescription);
   }, [taskDescription]);
+
+  useEffect(() => {
+    if (!draftStorageKey) return;
+    try {
+      if (isTaskDescriptionEmpty(descriptionDraft)) {
+        sessionStorage.removeItem(`agila-agent-desc:${draftStorageKey}`);
+      } else {
+        sessionStorage.setItem(`agila-agent-desc:${draftStorageKey}`, descriptionDraft);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [descriptionDraft, draftStorageKey]);
 
   const descriptionEmpty = useMemo(
     () => isTaskDescriptionEmpty(descriptionDraft),
@@ -279,6 +313,15 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
         return;
       }
 
+      if (result.reason === 'pat_unreadable') {
+        setProbeState({
+          kind: 'failed',
+          message: t('agent.probePatUnreadable'),
+        });
+        setBranches([]);
+        return;
+      }
+
       if (!result.ok) {
         setProbeState({
           kind: 'failed',
@@ -380,6 +423,14 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
     );
     try {
       await onConfirm(effectiveRepoUrl, effectiveRepoBranch, buildConfirmOptions(opts));
+      descriptionDirtyRef.current = false;
+      if (draftStorageKey) {
+        try {
+          sessionStorage.removeItem(`agila-agent-desc:${draftStorageKey}`);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (err: any) {
       setError(
         err?.message ||
@@ -679,7 +730,10 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
                 <TextEditor
                   key={descriptionLocked ? 'desc-locked' : 'desc-edit'}
                   initialContent={descriptionDraft}
-                  onChange={(content) => setDescriptionDraft(content)}
+                  onChange={(content) => {
+                    descriptionDirtyRef.current = true;
+                    setDescriptionDraft(content);
+                  }}
                   onSubmit={async () => {}}
                   showSubmitButtons={false}
                   showAttachments={false}
@@ -901,6 +955,12 @@ const AssignToAgentModal: React.FC<AssignToAgentModalProps> = ({
             </div>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">{t('agent.agentsMdHint')}</p>
+            <p
+              data-help-target="agent-code-iteration"
+              className="text-xs text-gray-500 dark:text-gray-400"
+            >
+              {t('agent.codeIterationHint')}
+            </p>
           </div>
         )}
           </div>

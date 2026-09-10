@@ -75,6 +75,7 @@ export default function TaskPickerDropdown({
           open={open}
           triggerRef={triggerRef}
           panelRef={panelRef}
+          onDismiss={() => onOpenChange(false)}
           preferredMaxHeight={280}
           className="flex flex-col overflow-hidden rounded-md border border-gray-300 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
         >

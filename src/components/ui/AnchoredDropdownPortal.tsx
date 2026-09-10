@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   layoutAnchoredDropdown,
   type AnchoredDropdownLayout,
 } from '../../utils/anchoredDropdownLayout';
+import { FLOATING_OVERLAY_ATTR, useFloatingOverlayDismiss } from '../../hooks/useFloatingOverlayDismiss';
 
 export interface AnchoredDropdownPortalProps {
   open: boolean;
@@ -16,6 +17,9 @@ export interface AnchoredDropdownPortalProps {
   /** When width is `trigger`, enforce at least this many pixels. */
   minWidth?: number;
   panelRef?: React.RefObject<HTMLDivElement | null>;
+  /** Close on board/page scroll and when another overlay opens. */
+  onDismiss?: () => void;
+  overlayId?: string;
 }
 
 export default function AnchoredDropdownPortal({
@@ -27,9 +31,12 @@ export default function AnchoredDropdownPortal({
   width = 'trigger',
   minWidth,
   panelRef,
+  onDismiss,
+  overlayId,
 }: AnchoredDropdownPortalProps) {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = panelRef ?? internalRef;
+  const generatedId = useId();
   const [layout, setLayout] = useState<AnchoredDropdownLayout | null>(null);
 
   const recompute = useCallback(() => {
@@ -58,12 +65,12 @@ export default function AnchoredDropdownPortal({
   useEffect(() => {
     if (!open) return;
     window.addEventListener('resize', recompute);
-    window.addEventListener('scroll', recompute, true);
-    return () => {
-      window.removeEventListener('resize', recompute);
-      window.removeEventListener('scroll', recompute, true);
-    };
+    return () => window.removeEventListener('resize', recompute);
   }, [open, recompute]);
+
+  useFloatingOverlayDismiss(open && Boolean(onDismiss), overlayId || generatedId, () => {
+    onDismiss?.();
+  });
 
   if (!open || !layout) return null;
 
@@ -71,6 +78,7 @@ export default function AnchoredDropdownPortal({
     <div
       ref={ref}
       className={className}
+      {...{ [FLOATING_OVERLAY_ATTR]: '' }}
       style={{
         position: 'fixed',
         left: layout.left,
@@ -79,7 +87,7 @@ export default function AnchoredDropdownPortal({
           : { bottom: layout.bottom }),
         width: layout.width,
         maxHeight: layout.maxHeight,
-        zIndex: 9999,
+        zIndex: 10050,
       }}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}

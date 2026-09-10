@@ -6,7 +6,6 @@
 const REDACTED_KEYS = new Set([
   'callback_token',
   'runner_job_id',
-  'automation_pending_plan',
   'automation_plan_hash',
   'automation_apply_hash',
 ]);
@@ -19,9 +18,11 @@ export const FORBIDDEN_CLIENT_WORK_WRITE_KEYS = new Set([
   'runner_job_id',
   'agent_owner_user_id',
   'automation_pending_plan',
+  'automation_plan_summary',
   'automation_plan_hash',
   'automation_apply_hash',
   'awaiting_apply',
+  'automation_context_lost',
   'log',
   'pr_url',
   'agent_branch',
@@ -49,6 +50,13 @@ export function redactWorkMapForClient(work) {
     if (REDACTED_KEYS.has(key)) continue;
     out[key] = value;
   }
+  const lost = work.automation_context_lost === 'true';
+  const status = String(work.status || '');
+  const runnerAlive =
+    !lost &&
+    Boolean(work.callback_token) &&
+    ['running', 'waiting', 'queued', 'paused'].includes(status);
+  out.automation_runner_alive = runnerAlive ? 'true' : 'false';
   return out;
 }
 

@@ -45,7 +45,9 @@ const ProfileDevTab: React.FC = () => {
   const { t } = useTranslation('common');
   const [tokens, setTokens] = useState<UserApiTokenMeta[]>([]);
   const [sshKey, setSshKey] = useState<UserSshKeyMeta | null>(null);
+  const [sshNeedsReenter, setSshNeedsReenter] = useState(false);
   const [githubConfigured, setGithubConfigured] = useState(false);
+  const [githubNeedsReenter, setGithubNeedsReenter] = useState(false);
   const [githubMeta, setGithubMeta] = useState<UserGithubTokenMeta | null>(null);
   const [githubDraft, setGithubDraft] = useState('');
   const [replacingPat, setReplacingPat] = useState(false);
@@ -64,7 +66,9 @@ const ProfileDevTab: React.FC = () => {
       ]);
       setTokens(tokenList.filter((tok) => !tok.revokedAt));
       setSshKey(ssh.key);
+      setSshNeedsReenter(Boolean(ssh.needsReenter));
       setGithubConfigured(Boolean(gh.configured));
+      setGithubNeedsReenter(Boolean(gh.needsReenter));
       setGithubMeta(gh.token);
       setGithubDraft('');
       setReplacingPat(false);
@@ -116,6 +120,7 @@ const ProfileDevTab: React.FC = () => {
     try {
       const result = await generateUserSshKey();
       setSshKey(result.key);
+      setSshNeedsReenter(false);
       setPrivateKeyOnce(result.privateKey);
       toast.success(t('profile.devSshGenerated'), '');
     } catch (error) {
@@ -139,9 +144,15 @@ const ProfileDevTab: React.FC = () => {
       a.download = 'easy-kanban-agent-ed25519';
       a.click();
       URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error(t('profile.devSshDownloadError'), '');
+      const code = error?.response?.data?.code;
+      toast.error(
+        code === 'secret_unreadable'
+          ? t('profile.devSshUnreadable')
+          : t('profile.devSshDownloadError'),
+        ''
+      );
     } finally {
       setBusy(false);
     }
@@ -157,6 +168,7 @@ const ProfileDevTab: React.FC = () => {
     try {
       const result = await saveUserGithubToken(trimmed);
       setGithubConfigured(true);
+      setGithubNeedsReenter(false);
       setGithubMeta(result.token);
       setGithubDraft('');
       setReplacingPat(false);
@@ -200,7 +212,7 @@ const ProfileDevTab: React.FC = () => {
     return <div className="text-sm text-gray-500 dark:text-gray-400">{t('profile.devLoading')}</div>;
   }
 
-  const showPatForm = !githubConfigured || replacingPat;
+  const showPatForm = !githubConfigured || replacingPat || githubNeedsReenter;
 
   return (
     <div className="space-y-6">
@@ -224,17 +236,28 @@ const ProfileDevTab: React.FC = () => {
             <span className="text-xs text-teal-700 dark:text-teal-300 font-medium">
               {t('profile.devRecommended')}
             </span>
-            <StatusBadge
-              ok={githubConfigured}
-              okLabel={t('profile.devStatusConfigured')}
-              missingLabel={t('profile.devStatusNotSet')}
-            />
+            {githubNeedsReenter ? (
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                {t('profile.devStatusNeedsReenter')}
+              </span>
+            ) : (
+              <StatusBadge
+                ok={githubConfigured}
+                okLabel={t('profile.devStatusConfigured')}
+                missingLabel={t('profile.devStatusNotSet')}
+              />
+            )}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
             {t('profile.devGithubPatHint')}
           </p>
+          {githubNeedsReenter && (
+            <p className="text-xs text-amber-800 dark:text-amber-200 leading-snug">
+              {t('profile.devGithubPatUnreadable')}
+            </p>
+          )}
 
-          {githubConfigured && !replacingPat && (
+          {githubConfigured && !replacingPat && !githubNeedsReenter && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <code className="text-xs font-mono text-gray-600 dark:text-gray-300 truncate max-w-full">
                 {githubMeta?.hint || '••••••••'}
@@ -338,15 +361,26 @@ const ProfileDevTab: React.FC = () => {
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {t('profile.devOptional')}
             </span>
-            <StatusBadge
-              ok={Boolean(sshKey)}
-              okLabel={t('profile.devStatusGenerated')}
-              missingLabel={t('profile.devStatusNotSet')}
-            />
+            {sshNeedsReenter ? (
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                {t('profile.devStatusNeedsReenter')}
+              </span>
+            ) : (
+              <StatusBadge
+                ok={Boolean(sshKey)}
+                okLabel={t('profile.devStatusGenerated')}
+                missingLabel={t('profile.devStatusNotSet')}
+              />
+            )}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
             {t('profile.devSshKeyHint')}
           </p>
+          {sshNeedsReenter && (
+            <p className="text-xs text-amber-800 dark:text-amber-200 leading-snug">
+              {t('profile.devSshUnreadable')}
+            </p>
+          )}
 
           {sshKey ? (
             <div className="space-y-2">

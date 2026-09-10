@@ -6,6 +6,10 @@ import { SsoLoginButton } from '../auth/SsoLoginButton';
 import { isMaskedApiKeyDisplay } from '../../utils/maskSecret';
 import { revertAdminSettingField } from '../../utils/adminSettingsDirty';
 import {
+  AdminSecretUnreadableHint,
+  isAdminSecretUnreadable,
+} from './AdminSecretUnreadableHint';
+import {
   buildByoOAuthDraftFromManaged,
   buildByoOAuthDraftFromOff,
   buildGithubByoDraft,
@@ -505,6 +509,9 @@ const AdminSSOTab: React.FC<AdminSSOTabProps> = ({
           )}
         </div>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{opts.description}</p>
+        {isAdminSecretUnreadable(editingSettings, opts.keyName) && (
+          <AdminSecretUnreadableHint />
+        )}
       </div>
     );
   };

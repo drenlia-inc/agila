@@ -32,6 +32,7 @@ import { getDefaultBoardColumns } from '../utils/defaultBoardColumns.js';
 import { updateStorageUsage } from '../utils/storageUtils.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { classifyRelationshipConflict } from '../utils/taskRelationshipValidation.js';
+import { parseScopeBoardIds } from '../utils/automationToken.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -318,6 +319,52 @@ function assertBoardInScope(boardId, allowedBoardIds) {
   }
 }
 
+function pickToolArg(args, ...keys) {
+  for (const key of keys) {
+    const value = args?.[key];
+    if (value != null && String(value).trim()) return String(value).trim();
+  }
+  return '';
+}
+
+/**
+ * Accept UUID, board title, or omitted boardId (defaults to the launch / only in-scope board).
+ * @returns {{ boardId: string } | { error: string }}
+ */
+async function resolveBoardIdInScope(ctx, args, allowedBoardIds) {
+  if (!allowedBoardIds.length) {
+    return { error: 'Board is outside automation scope' };
+  }
+
+  const rawId = pickToolArg(args, 'boardId', 'board_id');
+  const rawTitle = pickToolArg(args, 'boardTitle', 'board_title');
+  if (rawId && allowedBoardIds.includes(rawId)) {
+    return { boardId: rawId };
+  }
+
+  const titles = await getBoardTitleMap(ctx);
+  const needle = (rawTitle || rawId).toLowerCase();
+  if (needle) {
+    const exact = allowedBoardIds.filter(
+      (id) => String(titles.get(id) || '').toLowerCase() === needle
+    );
+    if (exact.length === 1) return { boardId: exact[0] };
+    if (exact.length > 1) {
+      return { error: 'Board title is ambiguous in this automation scope' };
+    }
+  }
+
+  if (!rawId && !rawTitle) {
+    if (ctx.launchBoardId && allowedBoardIds.includes(ctx.launchBoardId)) {
+      return { boardId: ctx.launchBoardId };
+    }
+    if (allowedBoardIds.length === 1) return { boardId: allowedBoardIds[0] };
+    return { error: 'boardId is required when more than one board is in scope' };
+  }
+
+  return { error: 'Board is outside automation scope' };
+}
+
 async function journal(ctx, op, entityType, entityId, before, after) {
   const seq = await automationJournal.getNextSeq(ctx.db, ctx.jobId);
   await automationJournal.appendEntry(ctx.db, {
@@ -365,10 +412,13 @@ async function searchTasksInternal(ctx, args = {}, allowedBoardIds) {
   const params = [];
   let idx = 1;
 
-  const scopeIds =
-    args.boardId && allowedBoardIds.includes(args.boardId)
-      ? [args.boardId]
-      : allowedBoardIds;
+  let scopeIds = allowedBoardIds;
+  const boardFilter = pickToolArg(args, 'boardId', 'board_id', 'boardTitle', 'board_title');
+  if (boardFilter) {
+    const resolved = await resolveBoardIdInScope(ctx, args, allowedBoardIds);
+    if (resolved.error) return { error: resolved.error, tasks: [], count: 0, totalCount: 0 };
+    scopeIds = [resolved.boardId];
+  }
 
   if (!scopeIds.length) {
     return {
@@ -486,9 +536,9 @@ async function toolListBoards(ctx, allowedBoardIds) {
 }
 
 async function toolListColumns(ctx, args, allowedBoardIds) {
-  const { boardId } = args || {};
-  if (!boardId) return { error: 'boardId is required' };
-  assertBoardInScope(boardId, allowedBoardIds);
+  const resolved = await resolveBoardIdInScope(ctx, args, allowedBoardIds);
+  if (resolved.error) return { error: resolved.error };
+  const boardId = resolved.boardId;
   const boards = await getBoardTitleMap(ctx);
   const boardTitle = boards.get(boardId) || null;
   const cols = await helpers.getColumnsForBoard(ctx.db, boardId);
@@ -1601,6 +1651,7 @@ async function toolSubmitDryRunPlan(ctx, args) {
   if (ops.length === 0) {
     await taskWorkQueries.upsertWorkEntries(ctx.db, ctx.launchTaskId, {
       automation_pending_plan: JSON.stringify(plan),
+      automation_plan_summary: String(summary),
       automation_plan_hash: hashPlan(plan),
       awaiting_apply: '',
       control: 'none'
@@ -1616,6 +1667,7 @@ async function toolSubmitDryRunPlan(ctx, args) {
 
   await taskWorkQueries.upsertWorkEntries(ctx.db, ctx.launchTaskId, {
     automation_pending_plan: JSON.stringify(plan),
+    automation_plan_summary: String(summary),
     automation_plan_hash: hashPlan(plan),
     awaiting_apply: 'true',
     status: 'waiting'
@@ -1983,6 +2035,7 @@ export async function applyStoredPlan(ctx) {
       automation_apply_hash: planHash,
       control: 'none',
       awaiting_apply: '',
+      automation_context_lost: '',
       automation_undoable: 'true',
       automation_undone_at: '',
       automation_undo_summary: ''
@@ -2012,4 +2065,39 @@ export async function buildDryRunArtifactCsv(ctx, plan) {
   });
   const planSummary = (plan?.summary || '').replace(/"/g, '""');
   return `# Plan: "${planSummary}"\n${header}\n${lines.join('\n')}\n`;
+}
+
+export function buildUserAutomationCtx(db, task, work, { tenantId, ownerUserId } = {}) {
+  const launchBoardId = task?.boardid || task?.boardId || '';
+  let boardIds = parseScopeBoardIds(work);
+  const scopeType = work?.automation_scope || AUTOMATION_SCOPE.THIS_BOARD;
+  if (scopeType === AUTOMATION_SCOPE.THIS_BOARD && launchBoardId) {
+    boardIds = [launchBoardId];
+  }
+  return {
+    db,
+    tenantId: tenantId || null,
+    jobId: work?.runner_job_id || work?.automation_token_id || crypto.randomUUID(),
+    launchTaskId: task.id,
+    ownerUserId: ownerUserId || work?.agent_owner_user_id || '',
+    scopeType,
+    boardIds,
+    launchBoardId,
+    agentMemberId: AGENT_MEMBER_ID
+  };
+}
+
+export async function markAutomationContextLost(db, taskId, work, reason) {
+  const status = String(work?.status || '');
+  const updates = { automation_context_lost: 'true' };
+  if (!['done', 'undone'].includes(status)) {
+    updates.status = 'failed';
+  }
+  await taskWorkQueries.upsertWorkEntries(db, taskId, updates);
+  await taskWorkQueries.appendWorkLog(
+    db,
+    taskId,
+    `[${new Date().toISOString()}] ${reason || 'Automation runner context is gone — Apply the last plan or Restart'}`
+  );
+  return taskWorkQueries.getWorkMapByTaskId(db, taskId);
 }

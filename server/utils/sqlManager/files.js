@@ -18,10 +18,20 @@ import { wrapQuery } from '../queryLogger.js';
  */
 export async function getAttachmentById(db, attachmentId) {
   const query = `
-    SELECT * FROM attachments 
-    WHERE id = $1
+    SELECT a.id,
+           a.taskid as "taskId",
+           a.commentid as "commentId",
+           a.name,
+           a.url,
+           a.type,
+           a.size,
+           a.created_at as "createdAt",
+           COALESCE(a.taskid, c.taskid) as "resolvedTaskId"
+    FROM attachments a
+    LEFT JOIN comments c ON c.id = a.commentid
+    WHERE a.id = $1
   `;
-  
+
   const stmt = wrapQuery(db.prepare(query), 'SELECT');
   return await stmt.get(attachmentId);
 }

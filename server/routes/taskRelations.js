@@ -11,6 +11,7 @@ import * as reportingLogger from '../services/reportingLogger.js';
 import notificationService from '../services/notificationService.js';
 import { updateStorageUsage } from '../utils/storageUtils.js';
 import { getLicenseManager } from '../config/license.js';
+import { licenseLimitBody } from '../middleware/licenseCheck.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 import { helpers, tasks as taskQueries, files as fileQueries, activity as activityQueries, members as memberQueries } from '../utils/sqlManager/index.js';
 import { getBilingualTranslation, getTranslatorForLanguage, getTranslator } from '../utils/i18n.js';
@@ -752,11 +753,7 @@ router.post('/:taskId/attachments', authenticateToken, requireTaskBoardAccess, a
         try {
           await licenseManager.checkStorageLimit(addBytes);
         } catch (limitErr) {
-          return res.status(403).json({
-            error: 'License limit exceeded',
-            details: limitErr.message,
-            limit: 'STORAGE_LIMIT'
-          });
+          return res.status(403).json(licenseLimitBody('STORAGE_LIMIT', limitErr));
         }
       }
 

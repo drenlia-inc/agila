@@ -355,6 +355,25 @@ export async function testS3Connection(db, overrides = {}) {
     overrides.asDestination === 1 ||
     overrides.asDestination === '1';
 
+  const secretDraft = String(overrides.S3_SECRET_ACCESS_KEY || '').trim();
+  const usingDraftSecret =
+    Boolean(secretDraft) &&
+    secretDraft !== '••••••••' &&
+    !secretDraft.includes('••••');
+
+  if (!usingDraftSecret && !asDestination) {
+    const { inspectSecretSetting } = await import('../../utils/settingsSecrets.js');
+    const inspect = await inspectSecretSetting(db, 'S3_SECRET_ACCESS_KEY');
+    if (inspect.hasValue && !inspect.readable) {
+      return {
+        ok: false,
+        error: 'S3 secret cannot be decrypted',
+        errorCode: 'secret_unreadable',
+        technicalDetail: 'Paste the secret access key again in Settings → Storage and save.'
+      };
+    }
+  }
+
   const base = asDestination ? { ...EMPTY_S3_BASE } : await loadStorageConfig(db);
   const config = storageConfigFromOverrides(overrides, base);
   const validation = validateS3Config(config);

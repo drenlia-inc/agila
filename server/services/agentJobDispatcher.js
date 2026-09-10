@@ -31,6 +31,7 @@ import {
 } from '../constants/automation.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { resolveCorrespondenceLanguage } from '../utils/i18n.js';
+import { redactWorkMapForClient } from '../utils/taskWorkPublic.js';
 
 async function getSetting(db, key) {
   const { getDecryptedSetting } = await import('../utils/settingsSecrets.js');
@@ -50,7 +51,7 @@ async function publishWork(db, tenantId, taskId) {
     {
       taskId,
       boardId: task?.boardid || task?.boardId,
-      work,
+      work: redactWorkMapForClient(work),
       timestamp: new Date().toISOString()
     },
     tenantId
@@ -70,7 +71,13 @@ async function loadUserGitCredentials(db, userId) {
   try {
     const patRow = await githubTokenQueries.getGithubTokenEncrypted(db, userId);
     if (patRow?.token_encrypted) {
-      githubToken = decryptSecret(patRow.token_encrypted);
+      try {
+        githubToken = decryptSecret(patRow.token_encrypted);
+      } catch (err) {
+        console.error(
+          'Failed to decrypt user GitHub token: encryption key changed — re-paste the PAT under Profile → Dev'
+        );
+      }
     }
   } catch (err) {
     console.error('Failed to decrypt user GitHub token:', err?.message || err);
@@ -78,7 +85,13 @@ async function loadUserGitCredentials(db, userId) {
   try {
     const sshRow = await sshQueries.getSshKeyWithPrivate(db, userId);
     if (sshRow?.private_key_encrypted) {
-      sshPrivateKey = decryptSecret(sshRow.private_key_encrypted);
+      try {
+        sshPrivateKey = decryptSecret(sshRow.private_key_encrypted);
+      } catch (err) {
+        console.error(
+          'Failed to decrypt user SSH key: encryption key changed — regenerate the key under Profile → Dev'
+        );
+      }
     }
   } catch (err) {
     console.error('Failed to decrypt user SSH key:', err?.message || err);
@@ -326,11 +339,13 @@ export async function launchSingleTask(db, tenantId, taskId, ctx = {}) {
   };
 
   if (!payload.llm.apiKey) {
-    await taskWorkQueries.appendWorkLog(
-      db,
-      taskId,
-      `[${new Date().toISOString()}] Launch skipped: AI_API_KEY not configured`
-    );
+    const { inspectSecretSetting } = await import('../utils/settingsSecrets.js');
+    const inspect = await inspectSecretSetting(db, 'AI_API_KEY');
+    const skipped =
+      inspect.hasValue && !inspect.readable
+        ? `[${new Date().toISOString()}] Launch skipped: AI_API_KEY cannot be decrypted — re-paste the key in Settings → AI`
+        : `[${new Date().toISOString()}] Launch skipped: AI_API_KEY not configured`;
+    await taskWorkQueries.appendWorkLog(db, taskId, skipped);
     await publishWork(db, tenantId, taskId);
     return { launched: false, reason: 'no_llm_key' };
   }
@@ -372,8 +387,12 @@ export async function launchSingleTask(db, tenantId, taskId, ctx = {}) {
     launch_attempt_at: new Date().toISOString(),
     agent_mode: mode,
     awaiting_apply: '',
+    automation_context_lost: '',
     automation_pending_plan: mode === AUTOMATION_MODE ? '' : work.automation_pending_plan || '',
-    automation_apply_hash: mode === AUTOMATION_MODE ? '' : work.automation_apply_hash || ''
+    automation_plan_summary: mode === AUTOMATION_MODE ? '' : work.automation_plan_summary || '',
+    automation_apply_hash: mode === AUTOMATION_MODE ? '' : work.automation_apply_hash || '',
+    pr_url: '',
+    agent_branch: ''
   });
 
   const launch = await launchJob(db, payload);

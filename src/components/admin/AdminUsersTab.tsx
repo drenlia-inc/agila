@@ -1,13 +1,15 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { Edit, Trash2, User as UserIcon, Mail, Loader2, Search, X, ArrowUp, ArrowDown, ChevronsUpDown, ChevronDown, Check, Eye, Shield } from 'lucide-react';
 import { getAuthenticatedAvatarUrl } from '../../utils/authImageUrl';
 import { AGENT_BOT_AVATAR_SRC } from '../../utils/agentMemberUi';
 import { toast } from '../../utils/toast';
+import { licenseLimitToastCopy } from '../../utils/licenseLimitToast';
 import { CHROME_TOOLTIP_SURFACE_CLASS } from '../KanbanChromeTooltip';
 import { ModernCheckbox } from '../ModernCheckbox';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
+import { useFloatingOverlayDismiss } from '../../hooks/useFloatingOverlayDismiss';
 import { useSettings } from '../../contexts/SettingsContext';
 import {
   ADMIN_TABLE_ROW_ACTIVE_CLASS,
@@ -148,6 +150,8 @@ function StatusBadgeSelect({
   const menuRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const overlayId = useId();
+  useFloatingOverlayDismiss(open, overlayId, () => setOpen(false));
 
   const updateMenuPos = () => {
     const el = triggerRef.current;
@@ -190,14 +194,11 @@ function StatusBadgeSelect({
       if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       setOpen(false);
     };
-    const onReposition = () => updateMenuPos();
     document.addEventListener('mousedown', onDoc);
-    window.addEventListener('resize', onReposition);
-    window.addEventListener('scroll', onReposition, true);
+    window.addEventListener('resize', updateMenuPos);
     return () => {
       document.removeEventListener('mousedown', onDoc);
-      window.removeEventListener('resize', onReposition);
-      window.removeEventListener('scroll', onReposition, true);
+      window.removeEventListener('resize', updateMenuPos);
     };
   }, [open, statusValue]);
 
@@ -266,6 +267,7 @@ function StatusBadgeSelect({
             tabIndex={-1}
             onKeyDown={onMenuKeyDown}
             className="fixed z-[11000] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1"
+            data-floating-overlay=""
             style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
           >
             {STATUS_OPTIONS.map((status, index) => {
@@ -340,6 +342,8 @@ function RoleBadgeSelect({
   const menuRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const overlayId = useId();
+  useFloatingOverlayDismiss(open, overlayId, () => setOpen(false));
 
   const isMd = size === 'md';
   const hasDescriptions = Boolean(descriptions && ROLE_OPTIONS.some((r) => descriptions[r]));
@@ -383,14 +387,11 @@ function RoleBadgeSelect({
       if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       setOpen(false);
     };
-    const onReposition = () => updateMenuPos();
     document.addEventListener('mousedown', onDoc);
-    window.addEventListener('resize', onReposition);
-    window.addEventListener('scroll', onReposition, true);
+    window.addEventListener('resize', updateMenuPos);
     return () => {
       document.removeEventListener('mousedown', onDoc);
-      window.removeEventListener('resize', onReposition);
-      window.removeEventListener('scroll', onReposition, true);
+      window.removeEventListener('resize', updateMenuPos);
     };
   }, [open, isMd, hasDescriptions, value]);
 
@@ -486,6 +487,7 @@ function RoleBadgeSelect({
             tabIndex={-1}
             onKeyDown={onMenuKeyDown}
             className="fixed z-[11000] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1"
+            data-floating-overlay=""
             style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
           >
             {ROLE_OPTIONS.map((role, index) => {
@@ -1073,7 +1075,18 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       }
     } catch (err: any) {
       console.error('Failed to add user:', err);
-      const backendError = err.response?.data?.error || err.message || '';
+      const data = err.response?.data;
+      if (err.response?.status === 403 && data?.error === 'License limit exceeded') {
+        const copy = licenseLimitToastCopy(tCommon, {
+          limit: data.limit || 'USER_LIMIT',
+          current: data.current,
+          maximum: data.maximum,
+          details: data.details || data.message,
+        });
+        toast.error(copy.title, copy.message);
+        return;
+      }
+      const backendError = data?.error || err.message || '';
       const errorMessage =
         /already exists/i.test(String(backendError))
           ? t('users.emailAlreadyExists', { email: emailNorm })
@@ -1147,7 +1160,18 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       setShowEditUserForm(false);
     } catch (err: any) {
       console.error('Failed to save user:', err);
-      const backendError = err.response?.data?.error || err.message || '';
+      const data = err.response?.data;
+      if (err.response?.status === 403 && data?.error === 'License limit exceeded') {
+        const copy = licenseLimitToastCopy(tCommon, {
+          limit: data.limit || 'USER_LIMIT',
+          current: data.current,
+          maximum: data.maximum,
+          details: data.details || data.message,
+        });
+        toast.error(copy.title, copy.message);
+        return;
+      }
+      const backendError = data?.error || err.message || '';
       const errorMessage = /already exists/i.test(String(backendError))
         ? t('users.emailAlreadyExists', {
             email: String(editingUserData.email || '').trim().toLowerCase(),
@@ -1300,7 +1324,12 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       const result = await response.json();
 
       if (!result.canCreate) {
-        toast.error(result.message || t('users.userLimitReached'), '');
+        const copy = licenseLimitToastCopy(tCommon, {
+          limit: 'USER_LIMIT',
+          current: result.current,
+          maximum: result.maximum ?? result.limit,
+        });
+        toast.error(copy.title, copy.message);
         return;
       }
 
@@ -1312,7 +1341,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
       setShowAddUserForm(true);
     } catch (error) {
       console.error('Error checking user limit:', error);
-      toast.error('Failed to check user limit. Please try again.', '');
+      toast.error(t('users.failedToCheckUserLimit'), '');
     }
   };
 

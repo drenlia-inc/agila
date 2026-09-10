@@ -16,7 +16,9 @@ import {
   commitAll,
   pushBranch,
   openPullRequest,
-  cleanupWorkspace
+  cleanupWorkspace,
+  agentWorkingBranchName,
+  redactGitError
 } from './git.js';
 import { updateJob, removeJob } from './jobQueue.js';
 import { runAutomationJob } from './automationLoop.js';
@@ -247,10 +249,11 @@ async function runAssistJob(job, payload) {
 export async function runAgentJob(job) {
   const payload = job.payload;
   const workDir = workspacePath(payload.tenantId, job.jobId);
-  const branchName = `agent/${(payload.ticket || job.taskId || 'task')
-    .toString()
-    .replace(/[^a-zA-Z0-9._-]/g, '-')
-    .slice(0, 60)}`;
+  const branchName = agentWorkingBranchName({
+    ticket: payload.ticket,
+    taskId: job.taskId,
+    jobId: job.jobId
+  });
 
   updateJob(job.jobId, { status: 'running', progress: 5 });
   await sendCallback(job, {
@@ -374,6 +377,7 @@ export async function runAgentJob(job) {
     const { committed } = await commitAll(workDir, commitMsg);
 
     let prUrl = null;
+    let pushFailed = false;
     if (committed && (payload.githubToken || payload.sshPrivateKey)) {
       try {
         await pushBranch(workDir, branchName, {
@@ -396,14 +400,15 @@ export async function runAgentJob(job) {
           });
         }
       } catch (err) {
+        pushFailed = true;
         await sendCallback(job, {
           event: 'log',
-          log: `[runner] Push/PR warning: ${err?.message || err}`
+          log: `[runner] Push/PR failed: ${redactGitError(err)}`
         });
       }
     }
 
-    const summary = stripModelReasoning(
+    let summary = stripModelReasoning(
       finished?.summary ||
         (committed
           ? `Committed changes on branch ${branchName}.`
@@ -411,7 +416,10 @@ export async function runAgentJob(job) {
     ).trim() || (committed
       ? `Committed changes on branch ${branchName}.`
       : 'No file changes were committed.');
-    const success = finished?.success !== false;
+    if (pushFailed) {
+      summary = `${summary}\n\nGit push to ${branchName} failed. Changes are not on GitHub.`.trim();
+    }
+    const success = finished?.success !== false && !pushFailed;
 
     updateJob(job.jobId, {
       status: success ? 'done' : 'failed',
@@ -425,7 +433,7 @@ export async function runAgentJob(job) {
       status: success ? 'done' : 'failed',
       comment: summary,
       log: `[runner] Finished (${success ? 'done' : 'failed'})`,
-      prUrl: prUrl || undefined,
+      prUrl: prUrl || '',
       branch: branchName
     });
   } catch (err) {

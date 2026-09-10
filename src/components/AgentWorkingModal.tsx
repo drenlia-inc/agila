@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
 import { X, Pause, Play, Square, Send, Settings2, CheckCircle2, Undo2 } from 'lucide-react';
+import { AgentStatusIcon } from './AgentStatusButton';
 import type { TaskWorkMap } from '../api';
 import type { Comment, TeamMember } from '../types';
 import { commentTextToHtml } from '../utils/commentContent';
@@ -78,9 +79,19 @@ const AgentWorkingModal: React.FC<AgentWorkingModalProps> = ({
     pendingPlan.empty !== true &&
     pendingOpsCount > 0;
 
+  const contextLost =
+    work.automation_context_lost === 'true' ||
+    (hasApplyablePlan &&
+      work.automation_runner_alive === 'false' &&
+      (work.awaiting_apply === 'true' ||
+        status === 'waiting' ||
+        status === 'failed' ||
+        status === 'stopped'));
+
   const awaitingApply =
     hasApplyablePlan &&
     (work.awaiting_apply === 'true' ||
+      contextLost ||
       (isAutomation && status === 'waiting'));
   const log = work.log || '';
   const progress = work.progress;
@@ -94,13 +105,15 @@ const AgentWorkingModal: React.FC<AgentWorkingModalProps> = ({
   const canPause = actionsAllowed && (status === 'running' || status === 'queued');
   const canResume =
     actionsAllowed &&
-    (isIdle ||
-      status === 'paused' ||
-      status === 'waiting' ||
-      status === 'stopped' ||
-      status === 'failed' ||
-      status === 'done' ||
-      status === 'undone');
+    (contextLost ||
+      (!awaitingApply &&
+        (isIdle ||
+          status === 'paused' ||
+          status === 'waiting' ||
+          status === 'stopped' ||
+          status === 'failed' ||
+          status === 'done' ||
+          status === 'undone')));
   const canStop =
     actionsAllowed &&
     (status === 'running' ||
@@ -109,7 +122,11 @@ const AgentWorkingModal: React.FC<AgentWorkingModalProps> = ({
       status === 'waiting');
   const showStartLabel = isIdle;
   const showRestartLabel =
-    status === 'stopped' || status === 'failed' || status === 'done' || status === 'undone';
+    contextLost ||
+    status === 'stopped' ||
+    status === 'failed' ||
+    status === 'done' ||
+    status === 'undone';
 
   const [refineText, setRefineText] = useState('');
   const [refineBusy, setRefineBusy] = useState(false);
@@ -126,7 +143,12 @@ const AgentWorkingModal: React.FC<AgentWorkingModalProps> = ({
   }, [comments]);
 
   const automationPlanSummary =
-    typeof pendingPlan?.summary === 'string' ? pendingPlan.summary : null;
+    typeof pendingPlan?.summary === 'string'
+      ? pendingPlan.summary
+      : typeof work.automation_plan_summary === 'string' &&
+          work.automation_plan_summary.trim()
+        ? work.automation_plan_summary.trim()
+        : null;
 
   const undoSummary =
     typeof work.automation_undo_summary === 'string' && work.automation_undo_summary.trim()
@@ -204,7 +226,11 @@ const AgentWorkingModal: React.FC<AgentWorkingModalProps> = ({
 
       {/* Status + controls */}
       <div className="px-4 py-2 flex flex-wrap items-center gap-2 border-b border-gray-100 dark:border-gray-700 shrink-0">
-        <span className="text-xs text-gray-600 dark:text-gray-300">
+        <span className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+          <AgentStatusIcon
+            status={isIdle ? 'idle' : status}
+            size={14}
+          />
           {t('agent.status')}: <strong>{statusLabel}</strong>
         </span>
         {waitingForSlot && (
@@ -343,6 +369,17 @@ const AgentWorkingModal: React.FC<AgentWorkingModalProps> = ({
         </div>
       )}
 
+      {contextLost && (
+        <div className="px-4 py-2 border-b border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/20 shrink-0">
+          <p className="text-xs font-medium text-amber-900 dark:text-amber-100">
+            {t('agent.automationContextLost')}
+          </p>
+          <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+            {t('agent.automationContextLostHint')}
+          </p>
+        </div>
+      )}
+
       {awaitingApply && isAdmin && (
         <div className="px-4 py-2 border-b border-teal-100 dark:border-teal-900/40 bg-teal-50 dark:bg-teal-900/20 shrink-0">
           <p className="text-xs font-medium text-teal-900 dark:text-teal-100 mb-1.5">
@@ -356,9 +393,9 @@ const AgentWorkingModal: React.FC<AgentWorkingModalProps> = ({
         </div>
       )}
 
-      {status === 'waiting' && (
+      {status === 'waiting' && !contextLost && (
         <div className="px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-xs text-amber-900 dark:text-amber-100 shrink-0">
-          {isAutomation && awaitingApply
+          {isAutomation && (awaitingApply || work.awaiting_apply === 'true')
             ? t('agent.automationWaitingApplyHint')
             : t('agent.waitingHint')}
         </div>

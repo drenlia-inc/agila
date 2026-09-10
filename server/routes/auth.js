@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { authenticateToken, requireRole, JWT_SECRET, JWT_EXPIRES_IN, primaryRole } from '../middleware/auth.js';
 import { getLicenseManager } from '../config/license.js';
+import { licenseLimitBody } from '../middleware/licenseCheck.js';
 import notificationService from '../services/notificationService.js';
 import { loginLimiter, activationLimiter, invitationVerifyLimiter, registrationLimiter, oauthUrlLimiter, oauthCallbackLimiter } from '../middleware/rateLimiters.js';
 import { createDefaultAvatar, getRandomColor } from '../utils/avatarGenerator.js';
@@ -269,11 +270,7 @@ router.post('/register', registrationLimiter, authenticateToken, requireRole(['a
       await licenseManager.checkUserLimit();
     } catch (limitError) {
       console.warn('User limit check failed:', limitError.message);
-      return res.status(403).json({ 
-        error: 'User limit reached',
-        message: limitError.message,
-        details: 'Your current plan does not allow creating more users. Please upgrade your plan or contact support.'
-      });
+      return res.status(403).json(licenseLimitBody('USER_LIMIT', limitError));
     }
     
     // MIGRATED: Check if user already exists using sqlManager

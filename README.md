@@ -24,7 +24,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 ### AI Agent (optional)
 - **Assign tasks to an Agent** when an admin enables AI for the instance
 - **Assist** — Agent comments on the task using a configured LLM (OpenAI, Anthropic, OpenRouter, Ollama, or custom OpenAI-compatible)
-- **Code** — Agent works a linked Git repository via the push runner (users add Profile → Dev credentials: API token and/or SSH key)
+- **Code** — each run clones the linked repo at the **branch you pick** from the repo list, edits, pushes an agent branch, and opens a PR against that branch; Resume repeats from that same selected branch (merge first if the next run should include the last PR). Profile → Dev credentials required
 - **Automation** (admins) — board automation with dry-run review, Apply, and Undo
 - **Live activity** on the card (queued / running / waiting) with pause, stop, and resume
 - Configure in **Settings → System Settings → AI** (enable AI, provider, model, runner URL/token). Details: [Documentation.md — AI Agent](/Documentation.md#ai-agent) and [`docs/AI_INTEGRATION.md`](/docs/AI_INTEGRATION.md)

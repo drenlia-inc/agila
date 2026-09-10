@@ -13,6 +13,7 @@
   "leaveStay": "Stay on Settings",
   "leaveDiscard": "Discard & leave",
   "leaveSave": "Save & leave",
+  "secretUnreadableHint": "This saved secret cannot be decrypted (the server encryption key changed). Paste the same value again and save — you only need a new token if that secret was also rotated.",
   "revertField": "Revert",
   "wasValue": "Was: {{value}}",
   "numberOutOfRange": "{{label}} must be between {{min}} and {{max}}.",
@@ -623,6 +624,7 @@
       "access_denied": "Credentials work, but this key is not allowed to read/write the bucket. Grant at least s3:PutObject, s3:GetObject, and s3:DeleteObject on the bucket (or prefix).",
       "network": "This server could not reach the S3 endpoint. Check the Endpoint URL, DNS, firewall, and that the instance can access the internet (or your private MinIO host).",
       "tls": "TLS/SSL failed when connecting. Use an https:// Endpoint and a valid certificate (self-signed MinIO often needs extra setup).",
+      "secret_unreadable": "The saved S3 secret cannot be decrypted. Paste the secret access key again in this form and save.",
       "unknown": "The S3 test failed. Double-check bucket name, region, endpoint, and access keys, then try again."
     },
     "testRequiredBeforeMigrate": "Run a successful S3 test before migrating to S3",

@@ -15,6 +15,7 @@ import { TASK_COUNT_PILL_BASE, taskCountPillToneClass, taskCountPillWeightClass 
 import { sumTaskEffort, formatEffortDisplay, parseEffortUnit } from '../utils/taskUtils';
 import { showColumnEffort, showColumnTaskCounts } from '../utils/kanbanChromeVisibility';
 import { KanbanChromeTooltip } from './KanbanChromeTooltip';
+import { useFloatingOverlayDismiss } from '../hooks/useFloatingOverlayDismiss';
 import { COLUMN_TITLE_MAX_LENGTH, COLUMN_POLICY_MAX_LENGTH } from '../constants/appConstants';
 import { resolveTaskMember } from '../utils/agentMemberUi';
 import {
@@ -449,7 +450,7 @@ function KanbanColumn({
     setShowMenu(true);
   };
 
-  // Auto-close menu when clicking outside; keep portaled menu aligned on scroll/resize
+  // Auto-close menu when clicking outside
   React.useEffect(() => {
     if (!showMenu) return;
 
@@ -464,26 +465,16 @@ function KanbanColumn({
       }
     };
 
-    const reposition = () => {
-      const button = columnMenuButtonRef.current;
-      if (!button) return;
-      const rect = button.getBoundingClientRect();
-      const menuWidth = 192;
-      setColumnMenuPosition({
-        top: rect.bottom + 4,
-        left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
-      });
-    };
-
     document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('resize', reposition);
-    window.addEventListener('scroll', reposition, true);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('resize', reposition);
-      window.removeEventListener('scroll', reposition, true);
     };
   }, [showMenu]);
+
+  useFloatingOverlayDismiss(showMenu, `column:${column.id}:menu`, () => {
+    setShowMenu(false);
+    setColumnMenuPosition(null);
+  });
 
   // Auto-save and close when clicking outside the edit form
   React.useEffect(() => {
@@ -1732,7 +1723,8 @@ function KanbanColumn({
                 columnMenuPosition &&
                 createPortal(
                   <div
-                    className="column-management-menu-portal fixed w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-[10000] border border-gray-100 dark:border-gray-700"
+                    className="column-management-menu-portal fixed w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-[10050] border border-gray-100 dark:border-gray-700"
+                    data-floating-overlay=""
                     style={{ top: columnMenuPosition.top, left: columnMenuPosition.left }}
                     role="menu"
                   >

@@ -14,6 +14,7 @@ import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
 import { validateUploadedFileMagic } from '../utils/fileMagicBytes.js';
 import { getAdminFileSettings } from '../utils/fileValidation.js';
 import { getLicenseManager } from '../config/license.js';
+import { licenseLimitBody } from '../middleware/licenseCheck.js';
 import {
   parseBody,
   updateProfileBodySchema,
@@ -66,11 +67,7 @@ router.post('/upload', authenticateToken, createUploadMiddleware, async (req, re
       try {
         await licenseManager.checkStorageLimit(req.file.size || 0);
       } catch (limitErr) {
-        return res.status(403).json({
-          error: 'License limit exceeded',
-          details: limitErr.message,
-          limit: 'STORAGE_LIMIT'
-        });
+        return res.status(403).json(licenseLimitBody('STORAGE_LIMIT', limitErr));
       }
     }
 

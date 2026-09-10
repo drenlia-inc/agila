@@ -473,12 +473,15 @@ export async function getOAuthSettings(db) {
   const secretKeys = ['GOOGLE_CLIENT_SECRET', 'GITHUB_CLIENT_SECRET', 'M365_CLIENT_SECRET'];
   for (const secretKey of secretKeys) {
     if (!settingsObj[secretKey]) continue;
-    try {
-      const { decryptSettingValue } = await import('../../utils/secretCrypto.js');
-      settingsObj[secretKey] = decryptSettingValue(settingsObj[secretKey]);
-    } catch (err) {
-      console.error(`Failed to decrypt ${secretKey}:`, err.message);
+    const { decryptSettingValueSafe } = await import('../../utils/secretCrypto.js');
+    const result = decryptSettingValueSafe(settingsObj[secretKey]);
+    if (result.unreadable) {
+      console.error(
+        `Failed to decrypt ${secretKey}: encryption key changed — re-paste this secret in Settings → SSO`
+      );
       settingsObj[secretKey] = '';
+    } else {
+      settingsObj[secretKey] = result.value;
     }
   }
   

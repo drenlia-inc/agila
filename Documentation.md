@@ -713,12 +713,22 @@ Optional feature. Requires an administrator to enable AI and configure an LLM (a
 - For coding jobs, can commit, push a branch, and open a **pull request** when GitHub credentials allow
 - For Automation: dry-run plan → admin **Apply** → optional **Undo**; copy the task to reuse the recipe, or edit and Re-run
 
+### How coding jobs work
+Each **Assign & Launch**, **Start**, or **Resume** is a **new** runner job. The Agent does not keep a checkout between runs.
+
+1. Clone the linked repository at the **branch you selected** when assigning (from the repo’s available branches)
+2. Edit files, commit, push an **agent branch**, and open a **pull request** against that selected branch when credentials allow
+3. You review and merge on GitHub as usual
+4. The next iteration **clones that same selected branch again** from the remote — it does not continue the previous agent working tree. Merge the last PR into that branch first if the next run should include those changes, or pick a different starting branch in Configuration
+
+Closing the Agent activity window does not stop a running job; reopen it from the task card. Assist mode (no repo) only comments on the task; it does not clone or push.
+
 ### Assigning work
 1. Ensure the task has a **description** (required before the Agent can be queued)
 2. Open **Assign to Agent** from the task card toolbar (or assignee flow when AI is on)
 3. Choose:
    - **Assist** — no repository
-   - **Code** — repository URL + optional branch
+   - **Code** — repository URL, then pick the starting branch from the repo’s available branches
    - **Automation** (admins) — scope: this board / selected boards / all boards
    - Optional model override (admins) when allowed
 4. Confirm — the task is assigned to the Agent and status becomes **queued**, then **running** when a runner slot is available
@@ -727,7 +737,7 @@ Optional feature. Requires an administrator to enable AI and configure an LLM (a
 ### Controlling a running job
 - Open the **Agent activity** screen from the card
 - **Pause** / **Stop** — requests the runner to cancel; status updates on the card
-- **Resume** / **Re-run** — re-queues work after pause, wait, stop, or failure (as allowed by status)
+- **Resume** / **Re-run** — starts a **new** job (for Code: clone the selected starting branch again, then a new branch/PR). Does not resume the previous git checkout
 - **Apply** / **Undo** (Automation, admins) — execute or reverse the dry-run plan
 - While the Agent is actively working, dragging the card may be blocked
 
@@ -841,6 +851,7 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
   - Task has a non-empty description
   - Coding jobs: Profile → Dev has a GitHub PAT and/or SSH key; use **Repo check** for the URL
   - Assist jobs do not need a runner for LLM chat alone in the same way as coding — if coding is intended, confirm runner URL/token and that `AI_CALLBACK_BASE_URL` / networking allows the runner to reach the app (Docker/K8s)
+  - Coding **Resume** clones the **starting branch you selected** again (not the last agent branch). Merge the previous PR into that branch if the next run should include those commits
 - **Developer reference**: [`docs/AI_INTEGRATION.md`](docs/AI_INTEGRATION.md)
 
 ### Getting Help

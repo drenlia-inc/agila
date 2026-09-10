@@ -13,6 +13,7 @@
   "leaveStay": "Rester dans Paramètres",
   "leaveDiscard": "Abandonner et quitter",
   "leaveSave": "Enregistrer et quitter",
+  "secretUnreadableHint": "Ce secret enregistré ne peut pas être déchiffré (la clé de chiffrement du serveur a changé). Collez la même valeur et enregistrez — un nouveau jeton n’est nécessaire que s’il a aussi été renouvelé.",
   "revertField": "Rétablir",
   "wasValue": "Était : {{value}}",
   "numberOutOfRange": "{{label}} doit être entre {{min}} et {{max}}.",
@@ -626,6 +627,7 @@
       "access_denied": "Les identifiants sont valides, mais cette clé n’a pas le droit de lire/écrire le bucket. Accordez au moins s3:PutObject, s3:GetObject et s3:DeleteObject sur le bucket (ou le préfixe).",
       "network": "Ce serveur n’a pas pu joindre le point de terminaison S3. Vérifiez l’URL, le DNS, le pare-feu et l’accès Internet (ou votre hôte MinIO privé).",
       "tls": "Échec TLS/SSL lors de la connexion. Utilisez une URL https:// et un certificat valide (MinIO auto-signé nécessite souvent une config supplémentaire).",
+      "secret_unreadable": "Le secret S3 enregistré ne peut pas être déchiffré. Collez à nouveau la clé secrète dans ce formulaire et enregistrez.",
       "unknown": "Le test S3 a échoué. Vérifiez le nom du bucket, la région, le point de terminaison et les clés, puis réessayez."
     },
     "testRequiredBeforeMigrate": "Effectuez un test S3 réussi avant de migrer vers S3",

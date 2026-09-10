@@ -1798,7 +1798,7 @@ const KanbanPage: React.FC<KanbanPageProps> = ({
           ) : viewMode === 'calendar' ? (
             <Suspense fallback={<div className="flex items-center justify-center h-64"><LoadingSpinner /></div>}>
               <CalendarView
-                columns={filteredColumns}
+                columns={getFullyFilteredColumns}
                 onSelectTask={onSelectTask}
                 selectedTask={selectedTask}
                 taskViewMode={taskViewMode}

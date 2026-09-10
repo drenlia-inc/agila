@@ -11,6 +11,32 @@ import path from 'path';
 
 const execFileAsync = promisify(execFile);
 
+/** Hide PATs accidentally included in git/exec error text. */
+export function redactGitError(err) {
+  return String(err?.message || err?.stderr || err || '')
+    .replace(/x-access-token:[^@\s]+/gi, 'x-access-token:***')
+    .replace(/ghp_[A-Za-z0-9]+/g, 'ghp_***')
+    .replace(/github_pat_[A-Za-z0-9_]+/g, 'github_pat_***');
+}
+
+/**
+ * One branch per runner job so later iterations (and leftover remote
+ * branches after merge) never collide with --force-with-lease.
+ * @param {{ ticket?: string, taskId?: string, jobId?: string }} opts
+ */
+export function agentWorkingBranchName({ ticket, taskId, jobId } = {}) {
+  const base =
+    String(ticket || taskId || 'task')
+      .replace(/[^a-zA-Z0-9._-]/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'task';
+  const suffix = String(jobId || '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 8)
+    .toLowerCase();
+  return suffix ? `agent/${base}-${suffix}` : `agent/${base}`;
+}
+
 export function workspacePath(tenantId, jobId) {
   const safeTenant = String(tenantId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
   const safeJob = String(jobId || 'job').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -138,23 +164,32 @@ export async function commitAll(workDir, message) {
 }
 
 export async function pushBranch(workDir, branchName, { token, sshPrivateKey, repoUrl }) {
-  if (token) {
-    const url = authRepoUrl(repoUrl, token);
-    await run(workDir, ['push', '-u', url, `HEAD:${branchName}`, '--force-with-lease']);
-    return;
-  }
-  if (sshPrivateKey) {
-    const sshUrl = toSshGithubUrl(repoUrl);
-    await withSshKey(sshPrivateKey, (env) =>
-      run(workDir, ['push', '-u', sshUrl, `HEAD:${branchName}`, '--force-with-lease'], { env })
-    );
-    return;
+  // New per-job branch names: a normal push is enough. Do not use
+  // --force-with-lease without a fetched remote SHA (Git reports "stale info"
+  // after a fresh clone of main while agent/<ticket> still exists).
+  const refspec = `HEAD:${branchName}`;
+  try {
+    if (token) {
+      const url = authRepoUrl(repoUrl, token);
+      await run(workDir, ['push', '-u', url, refspec]);
+      return;
+    }
+    if (sshPrivateKey) {
+      const sshUrl = toSshGithubUrl(repoUrl);
+      await withSshKey(sshPrivateKey, (env) =>
+        run(workDir, ['push', '-u', sshUrl, refspec], { env })
+      );
+      return;
+    }
+  } catch (err) {
+    throw new Error(redactGitError(err) || 'git push failed');
   }
   throw new Error('No GitHub credentials to push');
 }
 
 /**
  * Open a GitHub PR via API when a PAT is available.
+ * If a PR for this head already exists, return that URL instead of failing.
  */
 export async function openPullRequest({ repoUrl, token, head, base, title, body }) {
   if (!token) return null;
@@ -170,14 +205,16 @@ export async function openPullRequest({ repoUrl, token, head, base, title, body 
   }
   if (!owner || !repo) return null;
 
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+    'User-Agent': 'easy-kanban-runner'
+  };
+
   const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-      'User-Agent': 'easy-kanban-runner'
-    },
+    headers,
     body: JSON.stringify({
       title,
       head,
@@ -185,13 +222,25 @@ export async function openPullRequest({ repoUrl, token, head, base, title, body 
       body: body || ''
     })
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    console.warn(`[runner] PR create failed: ${res.status} ${text.slice(0, 200)}`);
-    return null;
+  if (res.ok) {
+    const data = await res.json();
+    return data.html_url || null;
   }
-  const data = await res.json();
-  return data.html_url || null;
+  const text = await res.text().catch(() => '');
+  console.warn(`[runner] PR create failed: ${res.status} ${text.slice(0, 200)}`);
+
+  const headParam = encodeURIComponent(`${owner}:${head}`);
+  const listed = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls?head=${headParam}&state=open`,
+    { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'easy-kanban-runner' } }
+  ).catch(() => null);
+  if (listed?.ok) {
+    const pulls = await listed.json().catch(() => []);
+    if (Array.isArray(pulls) && pulls[0]?.html_url) {
+      return pulls[0].html_url;
+    }
+  }
+  return null;
 }
 
 export async function cleanupWorkspace(workDir) {

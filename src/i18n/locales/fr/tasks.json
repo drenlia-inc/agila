@@ -180,6 +180,7 @@
     "sourceTaskForLinking": "Tâche source pour le lien",
     "holdAndDragToLink": "Maintenir et glisser pour lier (parent-enfant), Maj pour associer",
     "noMoreTagsAvailable": "Aucune autre étiquette disponible",
+    "moreActions": "Plus d'actions",
     "disabledWhileAgent": "Indisponible pendant que l'Agent travaille sur cette tâche"
   },
   "addTagModal": {

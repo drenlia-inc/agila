@@ -19,7 +19,12 @@ import {
 import { AGENT_MEMBER_ID } from '../constants/agentIdentity.js';
 import notificationService from '../services/notificationService.js';
 import { tryLaunchQueuedTasks } from '../services/agentJobDispatcher.js';
-import { cancelJob } from '../services/agentRunnerClient.js';
+import { cancelJob, getRunnerJob } from '../services/agentRunnerClient.js';
+import {
+  applyStoredPlan,
+  buildUserAutomationCtx,
+  markAutomationContextLost
+} from '../services/automationTools.js';
 import {
   parseBody,
   updateTaskWorkBodySchema,
@@ -51,11 +56,45 @@ function dispatchCtx(req) {
   return { reqHost: host, reqProtocol: proto };
 }
 
+async function reconcileAutomationRunner(db, taskId, work) {
+  const pending = Boolean(work?.automation_pending_plan);
+  const awaiting = work?.awaiting_apply === 'true';
+  if (!pending && !awaiting) return work;
+  if (work.automation_context_lost === 'true') return work;
+  if (['done', 'undone'].includes(String(work.status || ''))) return work;
+
+  const waitingLike = ['waiting', 'running', 'paused', 'queued'].includes(
+    String(work.status || '')
+  );
+  let gone = false;
+  if (awaiting && !waitingLike) {
+    gone = true;
+  } else if (awaiting || (pending && String(work.status) === 'waiting')) {
+    if (!work.runner_job_id || !work.callback_token) {
+      gone = true;
+    } else {
+      const job = await getRunnerJob(db, work.runner_job_id);
+      if (job.missing) gone = true;
+    }
+  }
+  if (!gone) return work;
+  return markAutomationContextLost(
+    db,
+    taskId,
+    work,
+    'Automation runner is gone — Apply the last plan or Restart'
+  );
+}
+
 router.get('/:taskId/work', authenticateToken, async (req, res) => {
   try {
     if (!(await assertTaskBoardAccess(req, res, req.params.taskId))) return;
     const db = getRequestDatabase(req);
-    const work = await taskWorkQueries.getWorkMapByTaskId(db, req.params.taskId);
+    const workRaw = await taskWorkQueries.getWorkMapByTaskId(db, req.params.taskId);
+    const work = await reconcileAutomationRunner(db, req.params.taskId, workRaw);
+    if (work.automation_context_lost === 'true' && workRaw.automation_context_lost !== 'true') {
+      await publishWork(req, req.params.taskId, work);
+    }
     res.json({ work: redactWorkMapForClient(work) });
   } catch (error) {
     console.error('Get task work error:', error);
@@ -172,6 +211,15 @@ router.put('/:taskId/work', authenticateToken, async (req, res) => {
       entries.agent_branch = '';
     }
 
+    if (
+      entries.agent_mode &&
+      entries.agent_mode !== 'automation' &&
+      existing.agent_mode === 'automation' &&
+      existing.automation_pending_plan
+    ) {
+      entries.automation_context_lost = 'true';
+    }
+
     if (!Object.keys(entries).length) {
       return res.status(400).json({ error: 'No work entries provided' });
     }
@@ -255,8 +303,14 @@ router.put('/:taskId/work/control', authenticateToken, async (req, res) => {
     }
     const control = controlParsed.data.control;
 
-    const workBefore = await taskWorkQueries.getWorkMapByTaskId(db, req.params.taskId);
+    const workBeforeRaw = await taskWorkQueries.getWorkMapByTaskId(db, req.params.taskId);
+    const workBefore = await reconcileAutomationRunner(
+      db,
+      req.params.taskId,
+      workBeforeRaw
+    );
     const updates = { control };
+    const contextLost = workBefore.automation_context_lost === 'true';
 
     if (control === 'apply') {
       const isAdmin =
@@ -265,16 +319,36 @@ router.put('/:taskId/work/control', authenticateToken, async (req, res) => {
       if (!isAdmin) {
         return res.status(403).json({ error: 'Only admins can apply automations' });
       }
-      if (workBefore.awaiting_apply !== 'true' && workBefore.agent_mode === 'automation') {
-        // Allow apply when waiting with pending plan
-        if (!workBefore.automation_pending_plan) {
-          return res.status(400).json({ error: 'No automation dry-run plan to apply' });
-        }
+      if (!workBefore.automation_pending_plan) {
+        return res.status(400).json({ error: 'No automation dry-run plan to apply' });
       }
-      updates.control = 'apply';
-      // Keep status waiting/running so runner can pick up apply signal
-      if (workBefore.status === 'waiting') {
-        updates.status = 'waiting';
+      const ctx = buildUserAutomationCtx(db, task, workBefore, {
+        tenantId: getTenantId(req),
+        ownerUserId: req.user?.id
+      });
+      const result = await applyStoredPlan(ctx);
+      if (result.error) {
+        const failed = await taskWorkQueries.getWorkMapByTaskId(db, req.params.taskId);
+        await publishWork(req, req.params.taskId, failed);
+        return res.status(400).json({
+          error: result.error,
+          work: redactWorkMapForClient(failed)
+        });
+      }
+      await taskWorkQueries.appendWorkLog(
+        db,
+        req.params.taskId,
+        `[${new Date().toISOString()}] Admin applied dry-run (${result.idempotent ? 'already applied' : `${result.applied || 0} ops`})`
+      );
+      if (contextLost) {
+        updates.control = 'none';
+        updates.status = 'done';
+        updates.awaiting_apply = '';
+        updates.automation_context_lost = '';
+      } else {
+        // Runner is still polling — signal it so it can post the finish summary.
+        updates.control = 'apply';
+        updates.status = 'running';
       }
     } else if (control === 'resume') {
       // Hard stop: cannot start/resume agent work without a real description
@@ -296,10 +370,13 @@ router.put('/:taskId/work/control', authenticateToken, async (req, res) => {
       if (!workBefore.agent_owner_user_id && req.user?.id) {
         updates.agent_owner_user_id = req.user.id;
       }
-      // Stop while waiting for Apply: keep the dry-run plan so Apply still works.
+      // Stale dry-run: runner is gone — Restart launches a new job instead of fake-waiting.
       if (
         workBefore.agent_mode === 'automation' &&
-        workBefore.automation_pending_plan
+        workBefore.automation_pending_plan &&
+        !contextLost &&
+        workBefore.callback_token &&
+        ['waiting', 'running'].includes(String(workBefore.status || ''))
       ) {
         updates.status = 'waiting';
         updates.control = 'none';
@@ -307,16 +384,21 @@ router.put('/:taskId/work/control', authenticateToken, async (req, res) => {
       } else {
         updates.status = 'queued';
         updates.control = 'resume';
-        if (workBefore.agent_mode === 'automation') {
+        if (workBefore.agent_mode === 'automation' || workBefore.automation_pending_plan) {
           updates.awaiting_apply = '';
           updates.automation_pending_plan = '';
+          updates.automation_plan_summary = '';
           updates.automation_plan_hash = '';
           updates.automation_apply_hash = '';
+          updates.automation_context_lost = '';
         }
       }
     } else if (control === 'stop') {
       updates.status = 'stopped';
       updates.control = 'stop';
+      if (workBefore.automation_pending_plan) {
+        updates.automation_context_lost = 'true';
+      }
     } else if (control === 'pause') {
       updates.control = 'pause';
       if (workBefore.status === 'running' || workBefore.status === 'queued') {

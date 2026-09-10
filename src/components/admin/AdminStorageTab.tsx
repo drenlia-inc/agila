@@ -10,6 +10,10 @@ import {
   revertAdminSettingField,
 } from '../../utils/adminSettingsDirty';
 import { AdminFieldDraftControls } from './AdminFieldDraftControls';
+import {
+  AdminSecretUnreadableHint,
+  isAdminSecretUnreadable,
+} from './AdminSecretUnreadableHint';
 import { AdminUnsavedHint } from './AdminUnsavedChanges';
 import {
   AdminActionsBar,
@@ -1054,6 +1058,9 @@ const AdminStorageTab: React.FC<AdminStorageTabProps> = ({
                         autoComplete="new-password"
                         className={inputClass}
                       />
+                      {isAdminSecretUnreadable(editingSettings, 'S3_SECRET_ACCESS_KEY') && (
+                        <AdminSecretUnreadableHint />
+                      )}
                     </div>
                   </div>
                 </div>

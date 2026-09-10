@@ -183,6 +183,17 @@ Coding jobs load credentials for `agent_owner_user_id` (the assigning user). Mis
 7. Terminal events (`done` / `failed` / `stopped` / `cancelled`) clear callback token and may re-dispatch queued work.
 8. User **pause/stop/resume** via `PUT /api/tasks/:taskId/work/control` (cancels remote job on pause/stop; resume re-queues and dispatches).
 
+### Code job git cycle
+
+Each coding launch is independent:
+
+1. Shallow-clone `repo_url` at `repo_branch` (the branch the user picked from the repo list; default `main` only if they leave it unset) into a fresh workspace.
+2. Tool loop (list/read/write files, allowlisted commands).
+3. Commit if there are changes; push an `agent/…` branch; open a GitHub PR against that same selected `repo_branch` when a PAT is available.
+4. Workspace is discarded. **Resume** is a new job: clone the **currently configured** `repo_branch` again (so merges you landed on that branch are included). It does not rebase onto the previous agent branch or reuse that checkout.
+
+Assist jobs skip git. See user-facing copy in [Documentation.md — How coding jobs work](../Documentation.md#how-coding-jobs-work).
+
 Periodic re-dispatch: `server/jobs/scheduler.js` calls `tryLaunchQueuedTasks` for known tenant DBs (same multi-tenant cache caveat as other cron jobs — see AGENTS.md).
 
 Real-time: `notificationService.publish('task-work-updated', …)` (and comment/task events as usual).
