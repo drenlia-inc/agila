@@ -2141,7 +2141,10 @@ const TaskCard = React.memo(function TaskCard({
                 toggleChecked({ range: true });
               }
             }}
-            onKeyDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              // Let Escape bubble so multi-select can clear while a checkbox is focused.
+              if (e.key !== 'Escape') e.stopPropagation();
+            }}
             onPointerDown={(e) => e.stopPropagation()}
           >
             <ModernCheckbox

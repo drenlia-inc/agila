@@ -160,7 +160,7 @@ import { renumberColumns, isArchivedColumnFlag, reconcileVisibleColumnIds, sameC
 import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveKanbanDropIndex, snapshotColumnTaskOrder, restoreColumnTaskOrders, TaskDropPlacement } from './utils/taskReorderingUtils';
 import { getTaskColumnId, orderedCheckedTasksInColumn, snapshotTaskBoardLocation } from './utils/kanbanMultiSelect';
 import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
-import { hasEscapeConsumingOverlay, isEditableEscapeTarget } from './utils/escapeKeyUtils';
+import { blurEditableEscapeTarget, hasEscapeConsumingOverlay } from './utils/escapeKeyUtils';
 import { focusHeaderTaskSearch } from './utils/keyboardShortcutUtils';
 import { handleInviteUser as handleInviteUserUtil } from './utils/userInvitationUtils';
 import { notifyBoardTrashChanged, notifyLifecycleDataChanged } from './utils/boardTrashEvents';
@@ -326,7 +326,7 @@ function AppContent() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (e.defaultPrevented) return;
-      if (isEditableEscapeTarget(e.target)) return;
+      if (blurEditableEscapeTarget(e)) return;
       if (hasEscapeConsumingOverlay()) return;
       e.preventDefault();
       handleSelectTask(null);
