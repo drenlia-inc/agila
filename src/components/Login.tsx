@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { login } from '../api';
 import api from '../api';
-import InstanceStatusBanner from './layout/InstanceStatusBanner';
+import { instanceStatusIsBlocking } from './layout/InstanceStatusBanner';
 import { Github, MousePointerClick, RefreshCw, Sparkles } from 'lucide-react';
 import { SsoLoginButton } from './auth/SsoLoginButton';
 import { useSettings } from '../contexts/SettingsContext';
@@ -36,7 +36,7 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
     refreshSettings,
   } = useSettings();
   const [theme, setTheme] = useState<'light' | 'dark'>(readDocumentTheme);
-  const [instanceStatus, setInstanceStatus] = useState<{ status: string; message: string } | null>(null);
+  const [instanceStatus, setInstanceStatus] = useState<string | null>(null);
   const brandSettings = contextSiteSettings || siteSettings;
   const logoSrc = resolvePublicBrandLogoSrc(brandSettings, theme);
   const siteName = String(brandSettings?.SITE_NAME ?? '').trim();
@@ -71,10 +71,7 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
       .then((response) => {
         if (cancelled) return;
         if (response.data && response.data.isActive === false) {
-          setInstanceStatus({
-            status: response.data.status,
-            message: response.data.message || '',
-          });
+          setInstanceStatus(response.data.status || 'unavailable');
         }
       })
       .catch(() => {
@@ -353,6 +350,7 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (instanceStatusIsBlocking(instanceStatus || '')) return;
     clearError();
     setIsLoading(true);
 
@@ -404,6 +402,7 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   };
 
   const handleSsoSignIn = async (provider: 'google' | 'github' | 'm365') => {
+    if (instanceStatusIsBlocking(instanceStatus || '')) return;
     if (isDemoMode || !ssoProviders[provider]) {
       setI18nError('login.oauthNotConfigured');
       return;
@@ -438,6 +437,14 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
     }
   };
 
+  const workspaceBlocked = instanceStatusIsBlocking(instanceStatus || '');
+  const workspaceTitle = workspaceBlocked
+    ? tCommon('instanceStatus.titles.unavailable')
+    : t('login.signInToAccount');
+  const workspaceBody = workspaceBlocked
+    ? tCommon('instanceStatus.messages.unavailable')
+    : t('login.welcome');
+
   const hideGithubLink =
     (contextSiteSettings?.HIDE_GITHUB_LINK ?? siteSettings?.HIDE_GITHUB_LINK) === 'true';
 
@@ -449,13 +456,6 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
   // dismisses. Top-align with padding keeps the focused input stable.
   return (
     <div className="min-h-[100dvh] bg-gray-100 dark:bg-gray-900 flex flex-col">
-      {instanceStatus && (
-        <InstanceStatusBanner
-          status={instanceStatus.status}
-          message={instanceStatus.message}
-          layout="page"
-        />
-      )}
     <div className="flex-1 flex items-start justify-center pt-16 pb-12 px-4 sm:px-6 lg:px-8 relative">
       {/* Utilities — top right (matches app header: GitHub + language) */}
       <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
@@ -497,10 +497,10 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
             />
           ) : null}
           <h2 className={`${logoSrc ? 'mt-6' : ''} text-center text-3xl font-extrabold text-gray-900 dark:text-gray-100`}>
-            {t('login.signInToAccount')}
+            {workspaceTitle}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            {t('login.welcome')}
+            {workspaceBody}
           </p>
         </div>
         
@@ -562,7 +562,13 @@ export default function Login({ onLogin, siteSettings, hasDefaultAdmin = true, i
           </div>
         )}
         
-        {!checkingBackend && backendAvailable && (
+        {!checkingBackend && backendAvailable && workspaceBlocked && (
+          <div className="mt-4 rounded-xl border border-gray-200 bg-white px-6 py-5 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <p className="text-sm text-gray-600 dark:text-gray-300">{t('login.signInDisabled')}</p>
+          </div>
+        )}
+
+        {!checkingBackend && backendAvailable && !workspaceBlocked && (
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {!isDemoMode && (
             <div className="rounded-md shadow-sm -space-y-px bg-white dark:bg-gray-800 p-6 rounded-lg">

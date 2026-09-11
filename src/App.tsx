@@ -1579,9 +1579,10 @@ function AppContent() {
         if (!response.data.isActive) {
           versionStatus.setInstanceStatus({
             status: response.data.status,
-            message: response.data.message,
+            message: '',
             isDismissed: false
           });
+          handleLogout();
         }
       } catch (error) {
         // If we can't check status, assume it's active
@@ -1592,7 +1593,7 @@ function AppContent() {
     if (isAuthenticated) {
       checkInitialInstanceStatus();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, handleLogout]);
   // Track if we've had our first successful connection and if we were offline
   const hasConnectedOnceRef = useRef(false);
   const wasOfflineRef = useRef(false);

@@ -445,11 +445,7 @@
     }
   },
   "instanceStatus": {
-    "suspended": "This instance has been temporarily suspended. Please contact support for assistance.",
-    "terminated": "This instance has been terminated. Please contact support for assistance.",
-    "failed": "This instance failed to deploy properly. Please contact support for assistance.",
-    "deploying": "This instance is currently being deployed. Please try again in a few minutes.",
-    "unavailable": "This instance is currently unavailable. Please contact support."
+    "unavailable": "This workspace is not available right now. Please contact support."
   },
   "system": {
     "achievementCheckCompleted": "Achievement check completed",

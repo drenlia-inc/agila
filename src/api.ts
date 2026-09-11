@@ -288,8 +288,12 @@ api.interceptors.response.use(
       const currentToken = localStorage.getItem('authToken');
       console.warn(`⚠️ Request rejected - no token available for ${error.config?.url || 'unknown'}. Token in storage: ${!!currentToken}`);
     } else if (error.response?.status === 503) {
-      // Service unavailable - don't clear token, just log
-      console.warn(`⚠️ Service unavailable (503) for ${error.config?.url} - keeping token`);
+      const code = error.response?.data?.code;
+      if (code === 'INSTANCE_UNAVAILABLE' || code === 'INSTANCE_SUSPENDED') {
+        handleAuthError('Workspace unavailable');
+      } else {
+        console.warn(`⚠️ Service unavailable (503) for ${error.config?.url} - keeping token`);
+      }
     }
     return Promise.reject(error);
   }

@@ -218,11 +218,17 @@ class WebSocketClient {
       
       // Handle authentication errors - redirect to login for expired/invalid tokens
       // Check for various auth error messages
+      const isUnavailable = error.message === 'Instance unavailable'
+        || error.message?.toLowerCase().includes('unavailable');
       const isAuthError = error.message === 'Invalid token' || 
                          error.message === 'Authentication required' ||
                          error.message?.toLowerCase().includes('token') ||
                          error.message?.toLowerCase().includes('auth');
       
+      if (isUnavailable) {
+        handleAuthError('Workspace unavailable');
+        return;
+      }
       if (isAuthError) {
           if (feDebug('FE_DEBUG_AUTH')) console.log('🔑 WebSocket auth error - token expired or invalid');
         handleAuthError('WebSocket authentication failed');
