@@ -16,23 +16,12 @@ export function instanceStatusIsBlocking(status: string): boolean {
   return Boolean(status) && status !== 'active';
 }
 
-function statusColorClass(status: string): string {
-  switch (status) {
-    case 'suspended':
-      return 'bg-amber-100 border-amber-500 text-amber-900 dark:bg-amber-950 dark:border-amber-600 dark:text-amber-100';
-    case 'terminated':
-    case 'failed':
-      return 'bg-red-100 border-red-500 text-red-800 dark:bg-red-950 dark:border-red-600 dark:text-red-100';
-    case 'deploying':
-      return 'bg-blue-100 border-blue-500 text-blue-800 dark:bg-blue-950 dark:border-blue-600 dark:text-blue-100';
-    default:
-      return 'bg-gray-100 border-gray-500 text-gray-800 dark:bg-gray-800 dark:border-gray-500 dark:text-gray-100';
-  }
+function statusColorClass(): string {
+  return 'bg-slate-50/95 text-slate-900 dark:bg-slate-900/70 dark:text-slate-100 border-slate-200 dark:border-slate-700';
 }
 
 export default function InstanceStatusBanner({
   status,
-  message,
   isDismissed = false,
   onDismiss,
   layout = 'header',
@@ -43,14 +32,8 @@ export default function InstanceStatusBanner({
     return null;
   }
 
-  const title = t(`instanceStatus.titles.${status}`, {
-    defaultValue: t('instanceStatus.titles.unavailable'),
-  });
-  const body =
-    message ||
-    t(`instanceStatus.messages.${status}`, {
-      defaultValue: t('instanceStatus.messages.unavailable'),
-    });
+  const title = t('instanceStatus.titles.unavailable');
+  const body = t('instanceStatus.messages.unavailable');
   const canDismiss = DISMISSABLE.has(status) && typeof onDismiss === 'function';
   const positionClass =
     layout === 'page'
@@ -60,13 +43,13 @@ export default function InstanceStatusBanner({
   return (
     <div
       role="status"
-      className={`${positionClass} border-b-2 border-l-4 px-4 py-3 shadow-sm ${statusColorClass(status)}`}
+      className={`${positionClass} border-b px-4 py-2.5 ${statusColorClass()}`}
       data-instance-status-banner={status}
     >
-      <div className="flex items-start justify-between gap-3 max-w-7xl mx-auto">
+      <div className="flex items-start justify-between gap-3 max-w-3xl mx-auto">
         <div className="min-w-0">
-          <p className="text-sm font-semibold">{title}</p>
-          <p className="text-sm mt-0.5">{body}</p>
+          <p className="text-sm font-medium tracking-tight">{title}</p>
+          <p className="text-sm mt-0.5 opacity-80">{body}</p>
         </div>
         {canDismiss && (
           <button

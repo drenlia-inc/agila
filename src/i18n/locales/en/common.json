@@ -1482,18 +1482,10 @@
   },
   "instanceStatus": {
     "titles": {
-      "suspended": "Workspace suspended",
-      "terminated": "Workspace terminated",
-      "failed": "Workspace unavailable",
-      "deploying": "Workspace deploying",
       "unavailable": "Workspace unavailable"
     },
     "messages": {
-      "suspended": "This workspace has been temporarily suspended. Please contact support.",
-      "terminated": "This workspace has been terminated. Please contact support.",
-      "failed": "This workspace is not available. Please contact support.",
-      "deploying": "This workspace is still being deployed. Please try again in a few minutes.",
-      "unavailable": "This workspace is currently unavailable. Please contact support."
+      "unavailable": "This workspace is not available right now. Contact support if you need access."
     }
   },
   "networkStatusIndicator": {

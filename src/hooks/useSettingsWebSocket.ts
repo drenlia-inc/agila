@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { getAllTags, getAllPriorities, getAllSprints, getSettings } from '../api';
 import { versionDetection } from '../utils/versionDetection';
+import { handleAuthError } from '../utils/authErrorHandler';
+import { instanceStatusIsBlocking } from '../components/layout/InstanceStatusBanner';
 
 interface UseSettingsWebSocketProps {
   // State setters
@@ -26,8 +27,6 @@ export const useSettingsWebSocket = ({
   refreshMembers,
   versionStatus,
 }: UseSettingsWebSocketProps) => {
-  const { t } = useTranslation('common');
-  
   const handleTagCreated = useCallback(async (data: any) => {
     console.log('📨 Tag created via WebSocket:', data);
     // Optimistic catalog update so cards can render the chip before getAllTags returns
@@ -176,12 +175,13 @@ export const useSettingsWebSocket = ({
     const status = data?.status || 'unavailable';
     versionStatus.setInstanceStatus({
       status,
-      message: t(`instanceStatus.messages.${status}`, {
-        defaultValue: t('instanceStatus.messages.unavailable'),
-      }),
+      message: '',
       isDismissed: false
     });
-  }, [t, versionStatus.setInstanceStatus]);
+    if (instanceStatusIsBlocking(status)) {
+      handleAuthError('Workspace unavailable');
+    }
+  }, [versionStatus.setInstanceStatus]);
 
   const handleVersionUpdated = useCallback((data: any) => {
     console.log('📦 Version updated via WebSocket:', data);

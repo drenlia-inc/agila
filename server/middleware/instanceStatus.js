@@ -2,104 +2,85 @@ import { wrapQuery } from '../utils/queryLogger.js';
 import { getTranslator } from '../utils/i18n.js';
 
 /**
- * Middleware to check instance status before processing requests
- * Blocks access if instance status is not 'active'
- * Valid statuses: 'deploying', 'active', 'suspended', 'terminated', 'failed'
+ * Blocks API/app access unless INSTANCE_STATUS is `active`.
+ * Admin portal (INSTANCE_TOKEN) and a few public probes stay reachable so
+ * operators can restore the workspace and the login page can explain why.
  */
+function isInstanceStatusExempt(req) {
+  const path = req.path || '';
+  if (
+    path === '/health' ||
+    path === '/ready' ||
+    path === '/api/health' ||
+    path === '/api/ready' ||
+    path === '/api/version'
+  ) {
+    return true;
+  }
+  if (path === '/api/auth/instance-status') return true;
+  if (path === '/api/auth/check-default-admin' && req.method === 'GET') return true;
+  if (path === '/api/settings' && req.method === 'GET') return true;
+  if (path === '/api/csp-report' && req.method === 'POST') return true;
+  if (path.startsWith('/api/admin-portal/')) return true;
+  return false;
+}
+
 export const checkInstanceStatus = (db) => {
   return async (req, res, next) => {
     try {
-      // Skip status check for essential endpoints that need to work even when suspended
-      const skipPaths = [
-        '/health',
-        '/ready',
-        '/api/health',
-        '/api/auth/instance-status',  // Allow status checking
-        '/api/user/status',           // Allow user status checking
-        '/api/settings',              // Allow loading site settings
-        '/api/auth/check-default-admin', // Allow admin check
-        '/api/auth/login',               // Allow login attempts
-
-        '/api/auth/google/url',          // Allow OAuth
-        '/api/auth/google/callback',     // Allow OAuth callback
-      ];
-      
-      const shouldSkip = skipPaths.some(path => 
-        req.path === path || req.path.startsWith('/api/admin-portal/')
-      );
-      
-      if (shouldSkip) {
+      if (isInstanceStatusExempt(req)) {
         return next();
       }
 
-      // Get instance status from settings
-      const statusSetting = await wrapQuery(db.prepare('SELECT value FROM settings WHERE key = ?'), 'SELECT').get('INSTANCE_STATUS');
+      const statusSetting = await wrapQuery(
+        db.prepare('SELECT value FROM settings WHERE key = ?'),
+        'SELECT'
+      ).get('INSTANCE_STATUS');
       const status = statusSetting ? statusSetting.value : 'active';
 
-      // Allow access only if status is active
       if (status !== 'active') {
-        const t = getTranslator(db);
+        const t = await getTranslator(db);
         const statusMessage = getStatusMessage(status, t);
-        
-        // Return JSON error for API requests
+
         if (req.path.startsWith('/api/')) {
           return res.status(503).json({
             error: 'Instance unavailable',
             status: status,
             message: statusMessage,
-            code: 'INSTANCE_SUSPENDED'
+            code: 'INSTANCE_UNAVAILABLE',
           });
         }
-        
-        // Return HTML page for web requests
-        return res.status(503).render('maintenance', {
-          status: status,
-          message: statusMessage,
-          title: 'Instance Unavailable'
-        });
+
+        // Let the SPA load so the login page can explain the lockout.
+        return next();
       }
 
       next();
     } catch (error) {
       console.error('Error checking instance status:', error);
-      // Fail open - allow access if status check fails
       next();
     }
   };
 };
 
-/**
- * Get user-friendly message for instance status
- * @param {string} status - Instance status
- * @param {Function} t - Translation function (optional, defaults to English)
- */
-const getStatusMessage = (status, t = (key) => key) => {
-  switch (status) {
-    case 'suspended':
-      return t('instanceStatus.suspended');
-    case 'terminated':
-      return t('instanceStatus.terminated');
-    case 'failed':
-      return t('instanceStatus.failed');
-    case 'deploying':
-      return t('instanceStatus.deploying');
-    default:
-      return t('instanceStatus.unavailable');
-  }
-};
+const getStatusMessage = (_status, t = (key) => key) => t('instanceStatus.unavailable');
 
 /**
- * Initialize instance status setting if it doesn't exist
- * Only sets to 'active' if the setting doesn't exist at all
- * Preserves existing status values (suspended/inactive) on restart
+ * Initialize instance status setting if it doesn't exist.
+ * Preserves existing status values on restart.
  */
 export const initializeInstanceStatus = async (db) => {
   try {
-    const existingSetting = await wrapQuery(db.prepare('SELECT value FROM settings WHERE key = ?'), 'SELECT').get('INSTANCE_STATUS');
-    
+    const existingSetting = await wrapQuery(
+      db.prepare('SELECT value FROM settings WHERE key = ?'),
+      'SELECT'
+    ).get('INSTANCE_STATUS');
+
     if (!existingSetting) {
-      await wrapQuery(db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)'), 'INSERT')
-        .run('INSTANCE_STATUS', 'active');
+      await wrapQuery(
+        db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)'),
+        'INSERT'
+      ).run('INSTANCE_STATUS', 'active');
       console.log('✅ Initialized INSTANCE_STATUS setting to active');
     } else {
       console.log(`ℹ️ Instance status preserved: ${existingSetting.value}`);

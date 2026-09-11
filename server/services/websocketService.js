@@ -177,6 +177,16 @@ class WebSocketService {
             console.log(`❌ WebSocket auth failed: User ${userInDb.email} (${userInDb.id}) is ${reason}`);
             return next(new Error('Invalid token'));
           }
+
+          const statusSetting = await wrapQuery(
+            db.prepare('SELECT value FROM settings WHERE key = ?'),
+            'SELECT'
+          ).get('INSTANCE_STATUS');
+          const instanceStatus = statusSetting?.value || 'active';
+          if (instanceStatus !== 'active') {
+            console.log(`❌ WebSocket auth failed: workspace status is ${instanceStatus}`);
+            return next(new Error('Instance unavailable'));
+          }
         } catch (dbError) {
           console.error('❌ Error checking user in database for WebSocket:', dbError);
           return next(new Error('Authentication failed'));
@@ -877,6 +887,9 @@ class WebSocketService {
       } else {
         this.io?.emit('instance-status-updated', data);
       }
+      if (data?.status && data.status !== 'active') {
+        setTimeout(() => this.disconnectTenantSockets(tenantId), 50);
+      }
     });
 
     // Version update events - broadcast to tenant-specific clients
@@ -898,6 +911,17 @@ class WebSocketService {
     const room = userSocketRoom(tenantId, userId);
     console.log(`🔌 Disconnecting sockets for user ${userId}${tenantId ? ` (tenant: ${tenantId})` : ''}`);
     this.io.in(room).disconnectSockets(true);
+  }
+
+  disconnectTenantSockets(tenantId = null) {
+    if (!this.io) return;
+    if (tenantId) {
+      console.log(`🔌 Disconnecting sockets for tenant ${tenantId} (workspace not active)`);
+      this.io.in(`tenant-${tenantId}`).disconnectSockets(true);
+      return;
+    }
+    console.log('🔌 Disconnecting all sockets (workspace not active)');
+    this.io.disconnectSockets(true);
   }
 
   getConnectedClients() {

@@ -21,14 +21,17 @@ export const checkInstanceStatusOnError = async (
     isDismissed: boolean;
   }) => void
 ): Promise<boolean> => {
-  if (error?.response?.status === 503 && error?.response?.data?.code === 'INSTANCE_SUSPENDED') {
-    // Update instance status state
+  const instanceCode = error?.response?.data?.code;
+  if (
+    error?.response?.status === 503 &&
+    (instanceCode === 'INSTANCE_UNAVAILABLE' || instanceCode === 'INSTANCE_SUSPENDED')
+  ) {
     setInstanceStatus({
       status: error.response.data.status,
-      message: error.response.data.message,
+      message: '',
       isDismissed: false
     });
-    return true; // Indicates this was an instance status error
+    return true;
   }
   
   // For any other API error, check if instance is still active
@@ -38,15 +41,14 @@ export const checkInstanceStatusOnError = async (
       if (!response.data.isActive) {
         setInstanceStatus({
           status: response.data.status,
-          message: response.data.message,
+          message: '',
           isDismissed: false
         });
       }
     } catch (statusError) {
-      // If we can't check status, assume it's suspended
       setInstanceStatus({
-        status: 'suspended',
-        message: 'Unable to determine instance status',
+        status: 'unavailable',
+        message: '',
         isDismissed: false
       });
     }

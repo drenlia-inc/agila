@@ -445,11 +445,7 @@
     }
   },
   "instanceStatus": {
-    "suspended": "Cette instance a été temporairement suspendue. Veuillez contacter le support pour obtenir de l'aide.",
-    "terminated": "Cette instance a été terminée. Veuillez contacter le support pour obtenir de l'aide.",
-    "failed": "Cette instance n'a pas pu être déployée correctement. Veuillez contacter le support pour obtenir de l'aide.",
-    "deploying": "Cette instance est actuellement en cours de déploiement. Veuillez réessayer dans quelques minutes.",
-    "unavailable": "Cette instance n'est actuellement pas disponible. Veuillez contacter le support."
+    "unavailable": "Cet espace de travail n'est pas disponible pour le moment. Veuillez contacter le support."
   },
   "system": {
     "achievementCheckCompleted": "Vérification des réalisations terminée",

@@ -8,7 +8,6 @@ import { licenseLimitBody } from '../middleware/licenseCheck.js';
 import notificationService from '../services/notificationService.js';
 import { loginLimiter, activationLimiter, invitationVerifyLimiter, registrationLimiter, oauthUrlLimiter, oauthCallbackLimiter } from '../middleware/rateLimiters.js';
 import { createDefaultAvatar, getRandomColor } from '../utils/avatarGenerator.js';
-import { getTranslator } from '../utils/i18n.js';
 import { getTenantId, getRequestDatabase, getTenantDatabase, isMultiTenant } from '../middleware/tenantRouting.js';
 import {
   getAuthHubCallbackUrl,
@@ -1272,32 +1271,13 @@ router.get('/debug/oauth', authenticateToken, requireRole(['admin']), async (req
 router.get('/instance-status', async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    const t = await getTranslator(db);
     // MIGRATED: Get setting using sqlManager
     const statusSetting = await authQueries.getSetting(db, 'INSTANCE_STATUS');
     const status = statusSetting?.value || 'active';
     
-    const getStatusMessage = (status) => {
-      switch (status) {
-        case 'active':
-          return 'This instance is running normally.'; // Active status doesn't need translation as it's not shown
-        case 'suspended':
-          return t('instanceStatus.suspended');
-        case 'terminated':
-          return t('instanceStatus.terminated');
-        case 'failed':
-          return t('instanceStatus.failed');
-        case 'deploying':
-          return t('instanceStatus.deploying');
-        default:
-          return t('instanceStatus.unavailable');
-      }
-    };
-    
     res.json({
       status: status,
       isActive: status === 'active',
-      message: getStatusMessage(status),
       timestamp: new Date().toISOString()
     });
   } catch (error) {

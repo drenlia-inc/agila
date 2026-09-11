@@ -1483,18 +1483,10 @@
   },
   "instanceStatus": {
     "titles": {
-      "suspended": "Espace suspendu",
-      "terminated": "Espace résilié",
-      "failed": "Espace indisponible",
-      "deploying": "Espace en cours de déploiement",
-      "unavailable": "Espace indisponible"
+      "unavailable": "Espace de travail indisponible"
     },
     "messages": {
-      "suspended": "Cet espace a été temporairement suspendu. Veuillez contacter le support.",
-      "terminated": "Cet espace a été résilié. Veuillez contacter le support.",
-      "failed": "Cet espace n'est pas disponible. Veuillez contacter le support.",
-      "deploying": "Cet espace est encore en cours de déploiement. Réessayez dans quelques minutes.",
-      "unavailable": "Cet espace est actuellement indisponible. Veuillez contacter le support."
+      "unavailable": "Cet espace de travail n’est pas disponible pour le moment. Contactez le support si vous avez besoin d’y accéder."
     }
   },
   "networkStatusIndicator": {
