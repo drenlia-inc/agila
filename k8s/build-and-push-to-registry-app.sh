@@ -17,6 +17,8 @@ NC='\033[0m' # No Color
 REGISTRY_HOST="internal-registry.kube-system.svc.cluster.local:5000"
 IMAGE_NAME="easy-kanban"
 IMAGE_TAG="latest"
+# Optional extra registry tag (full Git SHA) so rollouts can pin instead of :latest
+IMAGE_SHA="${IMAGE_SHA:-${GITHUB_SHA:-}}"
 FULL_IMAGE="${REGISTRY_HOST}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 # Get the project root
@@ -162,6 +164,10 @@ echo -e "${YELLOW}📦 Tagging image for registry...${NC}"
 docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${LOCAL_FULL_IMAGE}
 echo -e "${GREEN}✓ Tagged as ${LOCAL_FULL_IMAGE} (for push)${NC}"
 echo -e "${CYAN}   Will be available as ${FULL_IMAGE} in cluster${NC}"
+if [ -n "${IMAGE_SHA}" ]; then
+    docker tag ${IMAGE_NAME}:${IMAGE_TAG} "${LOCAL_REGISTRY}/${IMAGE_NAME}:${IMAGE_SHA}"
+    echo -e "${GREEN}✓ Tagged as ${LOCAL_REGISTRY}/${IMAGE_NAME}:${IMAGE_SHA}${NC}"
+fi
 echo ""
 
 # Push to registry
@@ -180,6 +186,11 @@ else
     echo -e "${RED}❌ Image push failed!${NC}"
     kill $PF_PID 2>/dev/null || true
     exit 1
+fi
+
+if [ -n "${IMAGE_SHA}" ]; then
+    docker push "${LOCAL_REGISTRY}/${IMAGE_NAME}:${IMAGE_SHA}"
+    echo -e "${GREEN}✅ Pushed ${LOCAL_REGISTRY}/${IMAGE_NAME}:${IMAGE_SHA}${NC}"
 fi
 
 # Stop port-forward
