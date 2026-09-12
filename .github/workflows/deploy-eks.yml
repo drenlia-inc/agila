@@ -1,0 +1,47 @@
+# Production tenant platform (EKS ns agila). Runner has no AWS — corp does.
+# Image only — see agila-admin docs/DEPLOYMENT.md section 2.
+name: Deploy EKS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "server/**"
+      - "k8s/**"
+      - "scripts/**"
+      - "Dockerfile.prod"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-eks.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-eks-app
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build on corp, push ECR, rollout
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and audit (high+)
+        run: |
+          npm ci
+          node scripts/ci-npm-audit.js
+
+      - name: Roll out on EKS via corp
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          CORP_SSH: daniel@corp.private.drenlia.com
+          CORP_REMOTE_DIR: /data/server-setup/terraform/easy-kanban
+        run: bash scripts/deploy-eks-via-ssh.sh

@@ -1,0 +1,47 @@
+# On-prem tenant platform (k8s.private, ns easy-kanban-pg).
+# Image only — see agila-admin docs/DEPLOYMENT.md section 2.
+name: Deploy k8s
+
+on:
+  push:
+    branches: [staging]
+    paths:
+      - "src/**"
+      - "server/**"
+      - "k8s/**"
+      - "scripts/**"
+      - "Dockerfile.prod"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-k8s.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-k8s-onprem
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build, push registry, rollout
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and audit (high+)
+        run: |
+          npm ci
+          node scripts/ci-npm-audit.js
+
+      - name: Roll out on k8s.private
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          K8S_SSH: daniel@k8s.private.drenlia.com
+          K8S_REMOTE_DIR: /home/daniel/easy-kanban
+        run: bash scripts/deploy-k8s-onprem-via-ssh.sh
