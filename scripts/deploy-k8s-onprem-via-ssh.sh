@@ -12,7 +12,9 @@ echo "On-prem deploy ${SHA} → ${REMOTE}:${DEST}"
 ssh -o BatchMode=yes "$REMOTE" bash -s <<EOF
 set -euo pipefail
 cd ${DEST}
-git fetch origin
+# Non-interactive: no GitHub SSH key on this hop (same as scripts/deploy-demo.sh)
+git remote set-url origin https://github.com/drenlia-inc/agila.git
+git fetch origin ${SHA}
 git reset --hard ${SHA}
 export GITHUB_SHA=${SHA}
 export IMAGE_SHA=${SHA}
