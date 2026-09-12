@@ -177,6 +177,7 @@ fi
 if [ "$SKIP_IMAGE" = false ]; then
     echo "🐳 Building Docker image..."
     cd "${SCRIPT_DIR}/.."
+    "${SCRIPT_DIR}/../scripts/prepare-prev-assets.sh" easy-kanban:latest || true
     docker build -f Dockerfile.prod -t easy-kanban:latest .
     echo "✅ Docker image built"
     

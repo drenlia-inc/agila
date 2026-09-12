@@ -75,6 +75,11 @@ echo -e "${CYAN}   Build Time: ${BUILD_TIME}${NC}"
 echo -e "${CYAN}   Multi-Tenant: ${MULTI_TENANT}${NC}"
 echo ""
 
+# Keep last image's hashed /assets so new pods can serve the previous HTML shell
+echo -e "${YELLOW}📦 Preparing previous hashed assets (N-1)...${NC}"
+"${PROJECT_ROOT}/scripts/prepare-prev-assets.sh" easy-kanban:latest || true
+echo ""
+
 # Build the image
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}🔨 Building Docker image...${NC}"

@@ -2,7 +2,7 @@
  * Hook for managing version and instance status state
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { versionDetection } from '../utils/versionDetection';
 import InstanceStatusBannerView from '../components/layout/InstanceStatusBanner';
 
@@ -17,112 +17,82 @@ export interface VersionInfo {
   newVersion: string;
 }
 
+export type VersionBannerMode = 'hidden' | 'deploying' | 'ready';
+
 export interface UseVersionStatusReturn {
-  // Instance Status
   instanceStatus: InstanceStatus;
   setInstanceStatus: (status: InstanceStatus | ((prev: InstanceStatus) => InstanceStatus)) => void;
-  
-  // Version Banner
+
+  versionBannerMode: VersionBannerMode;
   showVersionBanner: boolean;
   setShowVersionBanner: (show: boolean) => void;
   versionInfo: VersionInfo;
   setVersionInfo: (info: VersionInfo) => void;
-  
-  // Handlers
+
   handleRefreshVersion: () => void;
   handleDismissVersionBanner: () => void;
-  
-  // Component
+
   InstanceStatusBanner: () => JSX.Element | null;
 }
 
 export const useVersionStatus = (): UseVersionStatusReturn => {
-  // Instance Status Banner State
   const [instanceStatus, setInstanceStatus] = useState<InstanceStatus>({
     status: 'active',
     message: '',
-    isDismissed: false
+    isDismissed: false,
   });
 
-  // Version Update Banner State
-  const [showVersionBanner, setShowVersionBanner] = useState<boolean>(false);
+  const [versionBannerMode, setVersionBannerMode] = useState<VersionBannerMode>('hidden');
   const [versionInfo, setVersionInfo] = useState<VersionInfo>({
     currentVersion: '',
-    newVersion: ''
+    newVersion: '',
   });
+  const autoReloadStarted = useRef(false);
 
-  // Version detection setup
-  useEffect(() => {
-    const handleVersionChange = (oldVersion: string, newVersion: string) => {
-      console.log(`🔔 Version change detected: ${oldVersion} → ${newVersion}`);
+  const navigateWithCacheBust = (targetVersion?: string) => {
+    if (targetVersion) {
+      localStorage.setItem('dismissedVersion', targetVersion);
+    }
+    sessionStorage.setItem('pendingVersionRefresh', 'true');
+    const u = new URL(window.location.href);
+    u.searchParams.set('_v', String(Date.now()));
+    window.location.href = u.toString();
+  };
 
-      const dismissedVersion = localStorage.getItem('dismissedVersion');
-
-      // Only clear dismissal when a *different* version is a genuine upgrade path.
-      // Do NOT clear when an older pod answers mid-rollout (that caused 2nd/3rd banners).
-      if (dismissedVersion === newVersion) {
-        console.log(`🔕 Version ${newVersion} was already dismissed, not showing banner`);
-        setVersionInfo({
-          currentVersion: oldVersion === 'unknown' ? newVersion : oldVersion,
-          newVersion,
-        });
-        return;
-      }
-
-      let displayCurrentVersion = oldVersion;
-      if (oldVersion === 'unknown') {
-        const initialVersion = versionDetection.getInitialVersion();
-        if (initialVersion && initialVersion !== newVersion) {
-          displayCurrentVersion = initialVersion;
-          console.log(`📝 Using initial version from API headers: ${initialVersion}`);
-        } else {
-          displayCurrentVersion = newVersion;
-        }
-      }
-
-      setVersionInfo({
-        currentVersion: displayCurrentVersion,
-        newVersion,
-      });
-      setShowVersionBanner(true);
-    };
-
-    versionDetection.onVersionChange(handleVersionChange);
-    return () => {
-      versionDetection.offVersionChange(handleVersionChange);
-    };
-  }, []);
-
-  // Handlers for version banner
   const handleRefreshVersion = () => {
     const targetVersion = versionInfo.newVersion;
     if (targetVersion) {
       localStorage.setItem('dismissedVersion', targetVersion);
     }
     sessionStorage.setItem('pendingVersionRefresh', 'true');
-    setShowVersionBanner(false);
+    setVersionBannerMode('hidden');
 
-    const navigateWithCacheBust = () => {
-      const u = new URL(window.location.href);
-      u.searchParams.set('_v', String(Date.now()));
-      window.location.href = u.toString();
-    };
-
-    // Wait until we hit a pod that already serves the target build (avoids reload onto old replica).
     void (async () => {
       const maxAttempts = 12;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
           const res = await fetch('/api/version', { cache: 'no-store' });
           if (res.ok) {
-            const data = (await res.json().catch(() => null)) as { version?: string } | null;
-            const served = data?.version || res.headers.get('x-app-version') || '';
-            if (!targetVersion || served === targetVersion) {
-              navigateWithCacheBust();
+            const data = (await res.json().catch(() => null)) as {
+              version?: string;
+              fleetVersion?: string;
+              deployState?: string;
+            } | null;
+            const served =
+              data?.fleetVersion ||
+              data?.version ||
+              res.headers.get('x-deploy-fleet-version') ||
+              res.headers.get('x-app-version') ||
+              '';
+            const deployState =
+              data?.deployState || res.headers.get('x-deploy-state') || '';
+            const fleetReady = deployState !== 'deploying';
+            if (fleetReady && (!targetVersion || served === targetVersion)) {
+              navigateWithCacheBust(targetVersion);
               return;
             }
             console.log(
-              `⏳ Waiting for rollout: /api/version is ${served || 'unknown'}, want ${targetVersion} (try ${attempt + 1}/${maxAttempts})`
+              `⏳ Waiting for fleet: deployState=${deployState || 'unknown'} version=${served || 'unknown'} want ${targetVersion} (try ${attempt + 1}/${maxAttempts})`
             );
           }
         } catch {
@@ -130,23 +100,95 @@ export const useVersionStatus = (): UseVersionStatusReturn => {
         }
         await new Promise((r) => setTimeout(r, 400 + attempt * 200));
       }
-      navigateWithCacheBust();
+      navigateWithCacheBust(targetVersion);
     })();
   };
 
+  useEffect(() => {
+    const handleVersionChange = (oldVersion: string, newVersion: string) => {
+      console.log(`🔔 Fleet stable on newer build: ${oldVersion} → ${newVersion}`);
+
+      const dismissedVersion = localStorage.getItem('dismissedVersion');
+      if (dismissedVersion === newVersion) {
+        return;
+      }
+
+      setVersionInfo({
+        currentVersion: oldVersion === 'unknown' ? newVersion : oldVersion,
+        newVersion,
+      });
+
+      if (versionDetection.shouldAutoReload(newVersion) && !autoReloadStarted.current) {
+        autoReloadStarted.current = true;
+        setVersionBannerMode('ready');
+        // Defer so versionInfo is set for handleRefreshVersion's closure —
+        // navigate uses newVersion directly below.
+        localStorage.setItem('dismissedVersion', newVersion);
+        sessionStorage.setItem('pendingVersionRefresh', 'true');
+        void (async () => {
+          const maxAttempts = 12;
+          for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+              const res = await fetch('/api/version', { cache: 'no-store' });
+              if (res.ok) {
+                const data = (await res.json().catch(() => null)) as {
+                  version?: string;
+                  fleetVersion?: string;
+                  deployState?: string;
+                } | null;
+                const served = data?.fleetVersion || data?.version || '';
+                const deployState = data?.deployState || '';
+                if (deployState !== 'deploying' && served === newVersion) {
+                  const u = new URL(window.location.href);
+                  u.searchParams.set('_v', String(Date.now()));
+                  window.location.href = u.toString();
+                  return;
+                }
+              }
+            } catch {
+              /* retry */
+            }
+            await new Promise((r) => setTimeout(r, 400 + attempt * 200));
+          }
+          const u = new URL(window.location.href);
+          u.searchParams.set('_v', String(Date.now()));
+          window.location.href = u.toString();
+        })();
+        return;
+      }
+
+      setVersionBannerMode('ready');
+    };
+
+    const handleDeploying = (deploying: boolean, fleetVersion: string | null) => {
+      if (deploying) {
+        setVersionInfo((prev) => ({
+          currentVersion: versionDetection.getInitialVersion() || prev.currentVersion,
+          newVersion: fleetVersion || prev.newVersion,
+        }));
+        setVersionBannerMode('deploying');
+        return;
+      }
+      setVersionBannerMode((mode) => (mode === 'deploying' ? 'hidden' : mode));
+    };
+
+    versionDetection.onVersionChange(handleVersionChange);
+    versionDetection.onDeployingChange(handleDeploying);
+    return () => {
+      versionDetection.offVersionChange(handleVersionChange);
+      versionDetection.offDeployingChange(handleDeploying);
+    };
+  }, []);
+
   const handleDismissVersionBanner = () => {
-    setShowVersionBanner(false);
-    // When dismissing, we want to:
-    // 1. Remember this specific version was dismissed (localStorage)
-    // 2. NOT update initialVersion because we want to detect NEWER versions later
-    //    (e.g., if user dismisses v2, we still want to detect v3, v4, etc.)
-    // The lastNotifiedVersion tracking prevents duplicate notifications for the same version
-    if (versionInfo.newVersion) {
+    setVersionBannerMode('hidden');
+    // Only remember a skip for the *ready* (reload) banner. Dismissing
+    // "update in progress" must not block the post-rollout refresh.
+    if (versionBannerMode === 'ready' && versionInfo.newVersion) {
       localStorage.setItem('dismissedVersion', versionInfo.newVersion);
     }
   };
-  
-  // Instance Status Banner Component
+
   const InstanceStatusBanner = () => (
     <InstanceStatusBannerView
       status={instanceStatus.status}
@@ -160,8 +202,9 @@ export const useVersionStatus = (): UseVersionStatusReturn => {
   return {
     instanceStatus,
     setInstanceStatus,
-    showVersionBanner,
-    setShowVersionBanner,
+    versionBannerMode,
+    showVersionBanner: versionBannerMode !== 'hidden',
+    setShowVersionBanner: (show: boolean) => setVersionBannerMode(show ? 'ready' : 'hidden'),
     versionInfo,
     setVersionInfo,
     handleRefreshVersion,
@@ -169,4 +212,3 @@ export const useVersionStatus = (): UseVersionStatusReturn => {
     InstanceStatusBanner,
   };
 };
-

@@ -688,6 +688,14 @@ class WebSocketClient {
     this.removeEventListener('version-updated', callback);
   }
 
+  onDeployStateUpdated(callback: (data: any) => void) {
+    this.addEventListener('deploy-state-updated', callback);
+  }
+
+  offDeployStateUpdated(callback?: (data: any) => void) {
+    this.removeEventListener('deploy-state-updated', callback);
+  }
+
   offWebSocketReady(callback?: () => void) {
     if (callback) {
       const index = this.readyCallbacks.indexOf(callback);

@@ -59,6 +59,8 @@ echo -e "${BLUE}🔨 Building Docker image...${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
+"${PROJECT_ROOT}/scripts/prepare-prev-assets.sh" easy-kanban:latest || true
+
 docker build -f Dockerfile.prod -t easy-kanban:latest \
   --build-arg GIT_COMMIT="${GIT_COMMIT}" \
   --build-arg GIT_BRANCH="${GIT_BRANCH}" \

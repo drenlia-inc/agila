@@ -113,6 +113,10 @@ spec:
         - configMapRef:
             name: easy-kanban-config-pg
         env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:

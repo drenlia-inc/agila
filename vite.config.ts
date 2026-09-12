@@ -231,6 +231,18 @@ export default defineConfig({
     // Always emit string literals (undefined would skip replacement and break demo UI)
     'process.env.DEMO_ENABLED': JSON.stringify(process.env.DEMO_ENABLED === 'true' ? 'true' : 'false'),
     'process.env.MULTI_TENANT': JSON.stringify(process.env.MULTI_TENANT === 'true' ? 'true' : 'false'),
+    // Same string as server/version.json (scripts/generate-version.js runs before vite build)
+    '__AGILA_BUILD_VERSION__': JSON.stringify(
+      (() => {
+        try {
+          const raw = fs.readFileSync(path.join(process.cwd(), 'server/version.json'), 'utf8');
+          const parsed = JSON.parse(raw) as { version?: string };
+          return parsed.version || 'dev';
+        } catch {
+          return 'dev';
+        }
+      })()
+    ),
   },
   build: {
     // Ensure proper code splitting and asset handling

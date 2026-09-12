@@ -145,5 +145,9 @@ QA_Test_Plan.csv
 # Generated version file (created at Docker build time)
 server/version.json
 
+# Previous-release Vite assets extracted before docker build (keep .gitkeep)
+docker-prev-assets/*
+!docker-prev-assets/.gitkeep
+
 # Workspace
 *.code-workspace

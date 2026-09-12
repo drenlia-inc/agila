@@ -109,7 +109,6 @@ import { resolveActivityFeedPosition } from './utils/activityFeedPosition';
 import { isMobileViewport } from './utils/mobileViewport';
 import { loadUserPreferences, loadUserPreferencesAsync, mergeClearedKanbanVisibilityFilters, saveUserPreferences, updateUserPreference, updateActivityFeedPreference, loadAdminDefaults, TaskViewMode, ViewMode, isGloballySavingPreferences, registerSavingStateCallback, UserPreferences, clearAllUserPreferenceCookies } from './utils/userPreferences';
 import { resolveGuestLanguage, normalizeAppLanguage, getExplicitGuestLanguage, setExplicitGuestLanguage, consumeLanguageQueryParam } from './utils/guestLanguage';
-import { versionDetection } from './utils/versionDetection';
 import { getAllPriorities, getAllTags, getTags, getPriorities, getSettings, getTaskWatchers, getTaskCollaborators, addTagToTask, removeTagFromTask, getBoardTaskRelationships, getTaskRelationships, getAllSprints, getUserSettings, removeTaskRelationship } from './api';
 import { 
   DEFAULT_COLUMNS, 
@@ -1816,6 +1815,7 @@ function AppContent() {
     websocketClient.onTaskTagRemoved(taskWebSocket.handleTaskTagRemoved);
     websocketClient.onInstanceStatusUpdated(settingsWebSocket.handleInstanceStatusUpdated);
     websocketClient.onVersionUpdated(settingsWebSocket.handleVersionUpdated);
+    websocketClient.onDeployStateUpdated(settingsWebSocket.handleDeployStateUpdated);
     websocketClient.onCommentCreated(commentWebSocket.handleCommentCreated);
     websocketClient.onCommentUpdated(commentWebSocket.handleCommentUpdated);
     websocketClient.onCommentDeleted(commentWebSocket.handleCommentDeleted);
@@ -1871,6 +1871,7 @@ function AppContent() {
       websocketClient.offTaskTagRemoved(taskWebSocket.handleTaskTagRemoved);
       websocketClient.offInstanceStatusUpdated(settingsWebSocket.handleInstanceStatusUpdated);
       websocketClient.offVersionUpdated(settingsWebSocket.handleVersionUpdated);
+      websocketClient.offDeployStateUpdated(settingsWebSocket.handleDeployStateUpdated);
       websocketClient.offCommentCreated(commentWebSocket.handleCommentCreated);
       websocketClient.offCommentUpdated(commentWebSocket.handleCommentUpdated);
       websocketClient.offCommentDeleted(commentWebSocket.handleCommentDeleted);
@@ -6532,6 +6533,7 @@ function AppContent() {
         <VersionUpdateBanner
           currentVersion={versionStatus.versionInfo.currentVersion}
           newVersion={versionStatus.versionInfo.newVersion}
+          mode={versionStatus.versionBannerMode}
           onRefresh={versionStatus.handleRefreshVersion}
           onDismiss={versionStatus.handleDismissVersionBanner}
         />

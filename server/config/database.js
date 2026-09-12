@@ -1484,6 +1484,8 @@ const initializeDefaultData = async (db, tenantId = null) => {
 
   // Update APP_VERSION on every startup (from version.json or environment variable)
   // Priority: 1) version.json (build-time), 2) ENV variable (runtime)
+  // Admin → Licensing display only. Browser reload / banners use Redis fleet
+  // deploy state + version.json (see deployStateService.js), not this row.
   let appVersion = null;
   let versionChanged = false;
   

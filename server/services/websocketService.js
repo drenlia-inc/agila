@@ -900,6 +900,15 @@ class WebSocketService {
         this.io?.emit('version-updated', data);
       }
     });
+
+    // Fleet deploy state (instance-wide — all tenants / all sockets)
+    postgresNotificationService.subscribeToAllTenants('deploy-state-updated', (data, tenantId) => {
+      if (tenantId) {
+        this.io?.to(`tenant-${tenantId}`).emit('deploy-state-updated', data);
+      } else {
+        this.io?.emit('deploy-state-updated', data);
+      }
+    });
   }
 
   /**
