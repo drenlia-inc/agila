@@ -183,12 +183,18 @@ export const useSettingsWebSocket = ({
     }
   }, [versionStatus.setInstanceStatus]);
 
-  const handleVersionUpdated = useCallback((data: any) => {
-    console.log('📦 Version updated via WebSocket:', data);
-    if (data.version) {
-      // Pass isFromWebSocket=true so new sessions can detect new versions
-      versionDetection.checkVersion(data.version, true);
-    }
+  const handleVersionUpdated = useCallback((_data: any) => {
+    // DB APP_VERSION / legacy version-updated is not used for reload or banner.
+  }, []);
+
+  const handleDeployStateUpdated = useCallback((data: any) => {
+    console.log('📦 Fleet deploy state via WebSocket:', data);
+    versionDetection.applyFleetSignal({
+      version: data?.fleetVersion || data?.version,
+      fleetVersion: data?.fleetVersion || data?.version,
+      deployState: data?.deployState,
+      podCount: typeof data?.podCount === 'number' ? data.podCount : undefined,
+    });
   }, []);
 
   return {
@@ -205,6 +211,7 @@ export const useSettingsWebSocket = ({
     handleSettingsUpdated,
     handleInstanceStatusUpdated,
     handleVersionUpdated,
+    handleDeployStateUpdated,
   };
 };
 

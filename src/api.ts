@@ -224,10 +224,19 @@ api.interceptors.response.use(
         summarizeApiPayload(response.data, 500)
       );
     }
-    // Check for version updates via X-App-Version header
+    // Fleet deploy state + this-pod version (version.json), not DB APP_VERSION
     const appVersion = response.headers['x-app-version'];
-    if (appVersion) {
-      versionDetection.checkVersion(appVersion);
+    const deployState = response.headers['x-deploy-state'];
+    const fleetVersion = response.headers['x-deploy-fleet-version'];
+    const podCountRaw = response.headers['x-deploy-pod-count'];
+    if (appVersion || deployState) {
+      const podCount = podCountRaw != null ? parseInt(String(podCountRaw), 10) : undefined;
+      versionDetection.applyFleetSignal({
+        version: appVersion || fleetVersion || undefined,
+        fleetVersion: fleetVersion || appVersion || undefined,
+        deployState: deployState || undefined,
+        podCount: Number.isFinite(podCount) ? podCount : undefined,
+      });
     }
     return response;
   },

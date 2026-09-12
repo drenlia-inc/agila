@@ -1,16 +1,26 @@
+import { BUILD_VERSION } from './buildVersion';
+
 /**
- * Version Detection Utility
+ * Version / fleet-deploy detection.
  *
- * Tracks app version changes and notifies listeners when a new version is detected.
- * The initial version is stored in-memory when the app first loads, and subsequent
- * API responses are checked for version changes via the X-App-Version header.
+ * Reload and banner logic use the pod's version.json (X-App-Version /
+ * X-Deploy-Fleet-Version) plus Redis-derived X-Deploy-State — not DB APP_VERSION.
  *
- * During K8s rolling updates, clients may briefly hit old + new pods. We must not
- * treat a temporary "downgrade" (seeing an older X-App-Version) as a new update,
- * or clear a dismissed target version when an old pod answers.
+ * During a rolling update, pods disagree → deploying → never reload.
+ * When every live heartbeat agrees and this tab is behind → reload (or banner).
  */
 
 type VersionChangeCallback = (oldVersion: string, newVersion: string) => void;
+type DeployingCallback = (deploying: boolean, fleetVersion: string | null) => void;
+
+export type DeployState = 'deploying' | 'stable' | 'unknown';
+
+export type FleetSignal = {
+  version?: string | null;
+  deployState?: string | null;
+  podCount?: number | null;
+  fleetVersion?: string | null;
+};
 
 const DISMISSED_KEY = 'dismissedVersion';
 
@@ -22,21 +32,39 @@ function readDismissedVersion(): string | null {
   }
 }
 
+function normalizeDeployState(raw?: string | null): DeployState {
+  if (raw === 'deploying' || raw === 'stable') return raw;
+  return 'unknown';
+}
+
+export function shouldAutoReloadForFleet(opts: {
+  deployState: DeployState;
+  pageVersion: string | null;
+  fleetVersion: string | null;
+  sawDeploying: boolean;
+  podCount: number;
+}): boolean {
+  if (opts.deployState !== 'stable') return false;
+  if (!opts.fleetVersion || !opts.pageVersion) return false;
+  if (opts.fleetVersion === opts.pageVersion) return false;
+  if (readDismissedVersion() === opts.fleetVersion) return false;
+  return opts.sawDeploying || opts.podCount >= 2;
+}
+
 class VersionDetectionService {
   private initialVersion: string | null = null;
   private listeners: VersionChangeCallback[] = [];
+  private deployingListeners: DeployingCallback[] = [];
   private isInitialized = false;
   private lastNotifiedVersion: string | null = null;
+  private sawDeploying = false;
+  private lastPodCount = 0;
+  private lastDeployState: DeployState = 'unknown';
 
-  /**
-   * Set the initial app version (called on first API response)
-   * Can also be called to update the version after a refresh
-   */
   setInitialVersion(version: string) {
     const wasInitialized = this.isInitialized;
     this.initialVersion = version;
     this.isInitialized = true;
-    // Reset notification tracking when version is explicitly set (e.g., after refresh)
     this.lastNotifiedVersion = null;
     if (!wasInitialized) {
       console.log(`📦 Initial app version: ${version}`);
@@ -46,66 +74,57 @@ class VersionDetectionService {
   }
 
   /**
-   * Check if a new version has been detected
-   * @param newVersion - The new version to check
-   * @param isFromWebSocket - Whether this version came from WebSocket (vs API header)
+   * Apply fleet + this-pod version from headers, /api/version, or WebSocket.
+   */
+  applyFleetSignal(signal: FleetSignal): void {
+    const deployState = normalizeDeployState(signal.deployState);
+    const fleetVersion = signal.fleetVersion || signal.version || null;
+    const thisPodVersion = signal.version || fleetVersion;
+    const podCount = typeof signal.podCount === 'number' && Number.isFinite(signal.podCount)
+      ? signal.podCount
+      : 0;
+
+    this.lastDeployState = deployState;
+    this.lastPodCount = podCount;
+
+    if (!this.isInitialized || !this.initialVersion) {
+      if (thisPodVersion) {
+        this.setInitialVersion(thisPodVersion);
+      }
+      if (deployState === 'deploying') {
+        this.sawDeploying = true;
+        this.notifyDeploying(true, fleetVersion);
+      }
+      return;
+    }
+
+    if (deployState === 'deploying') {
+      this.sawDeploying = true;
+      this.notifyDeploying(true, fleetVersion);
+      return;
+    }
+
+    this.notifyDeploying(false, fleetVersion);
+
+    if (deployState !== 'stable' || !fleetVersion) {
+      return;
+    }
+
+    this.maybeNotifyStableUpgrade(fleetVersion);
+  }
+
+  /**
+   * @deprecated Prefer applyFleetSignal. Kept so older call sites still compile.
+   * Without deployState this never triggers a reload (avoids mid-rollout flips).
    */
   checkVersion(newVersion: string, isFromWebSocket: boolean = false): boolean {
     if (!newVersion) return false;
-
-    const dismissedVersion = readDismissedVersion();
-
-    // Already adopted / dismissed this build — ignore, including mid-rollout flip-flops
-    if (dismissedVersion === newVersion) {
-      if (!this.isInitialized) {
-        this.setInitialVersion(newVersion);
-      } else if (this.initialVersion !== newVersion) {
-        // Sticky: once user refreshed for V, don't let an old pod reset baseline to V-1
-        this.initialVersion = newVersion;
-      }
-      return false;
-    }
-
     if (!this.isInitialized || !this.initialVersion) {
-      if (isFromWebSocket) {
-        console.log(`🔄 New version detected on fresh session: ${newVersion} (not dismissed)`);
+      if (!isFromWebSocket) {
         this.setInitialVersion(newVersion);
-        this.notifyListeners('unknown', newVersion);
-        this.lastNotifiedVersion = newVersion;
-        return true;
       }
-      this.setInitialVersion(newVersion);
-      this.lastNotifiedVersion = null;
       return false;
     }
-
-    if (newVersion === this.initialVersion) {
-      return false;
-    }
-
-    // Once we're already prompting for a target build, ignore other builds (old pods mid-rollout)
-    if (this.lastNotifiedVersion && newVersion !== this.lastNotifiedVersion) {
-      console.log(
-        `⏭️ Ignoring version ${newVersion}; already notifying for ${this.lastNotifiedVersion}`
-      );
-      return false;
-    }
-
-    // Mid-rollout: old pod after we already saw / dismissed the new build — do not "update" to older
-    if (dismissedVersion && newVersion !== dismissedVersion) {
-      console.log(
-        `⏭️ Ignoring version ${newVersion} during rollout (target/dismissed: ${dismissedVersion}, baseline: ${this.initialVersion})`
-      );
-      return false;
-    }
-
-    if (newVersion !== this.lastNotifiedVersion) {
-      console.log(`🔄 Version change detected: ${this.initialVersion} → ${newVersion}`);
-      this.notifyListeners(this.initialVersion, newVersion);
-      this.lastNotifiedVersion = newVersion;
-      return true;
-    }
-
     return false;
   }
 
@@ -115,6 +134,56 @@ class VersionDetectionService {
 
   offVersionChange(callback: VersionChangeCallback) {
     this.listeners = this.listeners.filter((cb) => cb !== callback);
+  }
+
+  onDeployingChange(callback: DeployingCallback) {
+    this.deployingListeners.push(callback);
+  }
+
+  offDeployingChange(callback: DeployingCallback) {
+    this.deployingListeners = this.deployingListeners.filter((cb) => cb !== callback);
+  }
+
+  private notifyDeploying(deploying: boolean, fleetVersion: string | null) {
+    this.deployingListeners.forEach((callback) => {
+      try {
+        callback(deploying, fleetVersion);
+      } catch (error) {
+        console.error('Error in deploy-state callback:', error);
+      }
+    });
+  }
+
+  private maybeNotifyStableUpgrade(fleetVersion: string) {
+    const dismissedVersion = readDismissedVersion();
+    if (dismissedVersion === fleetVersion) {
+      if (this.initialVersion !== fleetVersion) {
+        this.initialVersion = fleetVersion;
+      }
+      return;
+    }
+
+    if (!this.initialVersion || fleetVersion === this.initialVersion) {
+      return;
+    }
+
+    if (this.lastNotifiedVersion === fleetVersion) {
+      return;
+    }
+
+    console.log(`🔄 Fleet stable on newer build: ${this.initialVersion} → ${fleetVersion}`);
+    this.notifyListeners(this.initialVersion, fleetVersion);
+    this.lastNotifiedVersion = fleetVersion;
+  }
+
+  shouldAutoReload(fleetVersion: string | null): boolean {
+    return shouldAutoReloadForFleet({
+      deployState: this.lastDeployState,
+      pageVersion: this.initialVersion,
+      fleetVersion,
+      sawDeploying: this.sawDeploying,
+      podCount: this.lastPodCount,
+    });
   }
 
   private notifyListeners(oldVersion: string, newVersion: string) {
@@ -131,12 +200,24 @@ class VersionDetectionService {
     return this.initialVersion;
   }
 
+  getSawDeploying(): boolean {
+    return this.sawDeploying;
+  }
+
   reset() {
     this.initialVersion = null;
     this.isInitialized = false;
     this.lastNotifiedVersion = null;
+    this.sawDeploying = false;
+    this.lastPodCount = 0;
+    this.lastDeployState = 'unknown';
     this.listeners = [];
+    this.deployingListeners = [];
   }
 }
 
 export const versionDetection = new VersionDetectionService();
+
+if (BUILD_VERSION && BUILD_VERSION !== 'dev') {
+  versionDetection.setInitialVersion(BUILD_VERSION);
+}

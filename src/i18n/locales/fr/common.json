@@ -1478,6 +1478,8 @@
   "versionUpdateBanner": {
     "title": "Nouvelle version disponible",
     "description": "Une nouvelle version de l'application a été déployée. Veuillez actualiser pour obtenir les dernières mises à jour.",
+    "deployingTitle": "Mise à jour en cours",
+    "deployingDescription": "Une nouvelle version est en cours de déploiement. Cette page s'actualisera lorsque tous les serveurs seront prêts.",
     "refreshNow": "Actualiser maintenant",
     "dismissTooltip": "Ignorer (s'actualisera au prochain chargement de page)"
   },

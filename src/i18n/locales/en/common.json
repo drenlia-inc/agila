@@ -1477,6 +1477,8 @@
   "versionUpdateBanner": {
     "title": "New version available",
     "description": "A new version of the application has been deployed. Please refresh to get the latest updates.",
+    "deployingTitle": "Update in progress",
+    "deployingDescription": "A new version is rolling out. This page will refresh when every server is ready.",
     "refreshNow": "Refresh Now",
     "dismissTooltip": "Dismiss (will refresh on next page load)"
   },

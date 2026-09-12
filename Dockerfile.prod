@@ -22,6 +22,17 @@ RUN npm ci --include=dev || npm install --include=dev
 # Copy source code
 COPY . .
 
+# Same git/build args as the production stage so the baked JS version matches
+# server/version.json (page baseline vs X-App-Version).
+ARG GIT_COMMIT=unknown
+ARG GIT_BRANCH=unknown
+ARG BUILD_TIME
+ARG BUILD_NUMBER
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV GIT_BRANCH=${GIT_BRANCH}
+ENV BUILD_TIME=${BUILD_TIME}
+ENV BUILD_NUMBER=${BUILD_NUMBER}
+
 # Build the frontend (MULTI_TENANT env var will be available to vite.config.ts)
 RUN npm run build
 
@@ -59,6 +70,13 @@ RUN ls -la node_modules/.bin/vite && node_modules/.bin/vite --version
 
 # Copy built frontend from builder stage
 COPY --from=frontend-builder /app/dist ./dist
+
+# Previous release hashed JS/CSS (optional). CI runs scripts/prepare-prev-assets.sh
+# so new pods can serve last generation's /assets during a rolling update.
+COPY docker-prev-assets/ /tmp/docker-prev-assets/
+RUN mkdir -p /app/dist/assets && \
+    find /tmp/docker-prev-assets -type f ! -name '.gitkeep' -exec cp -n {} /app/dist/assets/ \; && \
+    rm -rf /tmp/docker-prev-assets
 
 # Version tracking build args. Declared here (not at the top of the stage) so a new
 # commit hash does not invalidate the npm install layers above. `.git` is dockerignored,

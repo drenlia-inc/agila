@@ -17,6 +17,7 @@
     "audit:schema": "npm run audit:sql && npm run audit:js",
     "help:ui-index": "node scripts/harvest-help-ui-index.js",
     "help:ui-index:check": "node scripts/harvest-help-ui-index.js --check",
+    "test:deploy-state": "node --test server/services/deployStateService.test.js",
     "preview": "vite preview",
     "security:check": "node scripts/security-check.js",
     "security:offline": "node scripts/offline-security.js",

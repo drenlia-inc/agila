@@ -377,6 +377,10 @@ class PostgresNotificationService {
         this.allTenantsCallbacks.set(channel, new Set());
       }
       this.allTenantsCallbacks.get(channel).add(callback);
+
+      // Also LISTEN on the unprefixed channel so instance-wide publishes
+      // (tenantId null — e.g. fleet deploy-state) reach every pod.
+      await this.subscribe(channel, callback);
       
       console.log(`📡 Registered callback for all-tenant channel: ${channel} (will subscribe dynamically to tenant-specific channels)`);
     } else {

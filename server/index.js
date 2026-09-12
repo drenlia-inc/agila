@@ -18,6 +18,10 @@ import { checkInstanceStatus, initializeInstanceStatus } from './middleware/inst
 import { loginLimiter, passwordResetLimiter, registrationLimiter, activationLimiter } from './middleware/rateLimiters.js';
 import { getAppVersion } from './utils/appVersion.js';
 import { getTenantDomain } from './utils/tenantDomain.js';
+import {
+  getCachedFleetState,
+  startDeployStateHeartbeats,
+} from './services/deployStateService.js';
 
 // Import generateRandomPassword function
 const generateRandomPassword = (length = 12) => {
@@ -81,7 +85,6 @@ import { cspIngestRouter, cspAdminRouter } from './routes/cspReport.js';
 // Import real-time services
 import redisService from './services/redisService.js';
 import postgresNotificationService from './services/postgresNotificationService.js';
-import notificationService from './services/notificationService.js';
 import websocketService from './services/websocketService.js';
 
 // Import storage utilities
@@ -235,6 +238,22 @@ app.use(async (req, res, next) => {
   }
   
   res.setHeader('X-App-Version', version);
+  const fleet = getCachedFleetState();
+  if (fleet.deployState) {
+    res.setHeader('X-Deploy-State', fleet.deployState);
+  }
+  if (fleet.podCount != null) {
+    res.setHeader('X-Deploy-Pod-Count', String(fleet.podCount));
+  }
+  if (fleet.fleetVersion) {
+    res.setHeader('X-Deploy-Fleet-Version', fleet.fleetVersion);
+  }
+  const expose = res.getHeader('Access-Control-Expose-Headers');
+  const extra = 'X-App-Version, X-Deploy-State, X-Deploy-Pod-Count, X-Deploy-Fleet-Version';
+  res.setHeader(
+    'Access-Control-Expose-Headers',
+    expose ? `${expose}, ${extra}` : extra
+  );
   next();
 });
 
@@ -503,14 +522,24 @@ app.get('/api/version', async (req, res) => {
     // Try to read full version info from version.json
     const versionPath = new URL('./version.json', import.meta.url);
     const versionData = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
-    res.json(versionData);
+    const fleet = getCachedFleetState();
+    res.json({
+      ...versionData,
+      deployState: fleet.deployState,
+      fleetVersion: fleet.fleetVersion,
+      podCount: fleet.podCount,
+    });
   } catch (error) {
     // Fallback to basic version info
     const version = await getAppVersion(defaultDb);
+    const fleet = getCachedFleetState();
     res.json({
       version,
       source: 'environment',
-      environment: process.env.NODE_ENV || 'production'
+      environment: process.env.NODE_ENV || 'production',
+      deployState: fleet.deployState,
+      fleetVersion: fleet.fleetVersion,
+      podCount: fleet.podCount,
     });
   }
 });
@@ -608,27 +637,11 @@ async function initializeServices() {
     startAdminPortalInspectNotify();
     
     console.log('✅ Real-time services initialized');
-    
-    // Broadcast app version to all connected clients
-    // If version changed, broadcast immediately; otherwise wait briefly for WebSocket connections
-    const broadcastVersion = async () => {
-      // In single-tenant mode, broadcast version from default database
-      if (defaultDb) {
-        const appVersion = await getAppVersion(defaultDb);
-        notificationService.publish('version-updated', { version: appVersion }, null);
-        console.log(`📦 Broadcasting app version: ${appVersion}${versionInfo.versionChanged ? ' (version changed - notifying users)' : ''}`);
-      }
-      // In multi-tenant mode, version updates are broadcast per-tenant when databases are initialized
-      // (handled in tenantRouting middleware)
-    };
-    
-    if (versionInfo.versionChanged && versionInfo.appVersion) {
-      // Version changed - broadcast immediately to notify users
-      await broadcastVersion();
-    } else {
-      // Normal startup - wait briefly for WebSocket connections
-      setTimeout(broadcastVersion, 1000);
-    }
+
+    // Fleet version / rolling-update state (Redis heartbeats). DB APP_VERSION
+    // is still upserted on tenant init for Admin → Licensing; clients do not
+    // use that row for reload / banner.
+    startDeployStateHeartbeats();
   } catch (error) {
     console.error('❌ Failed to initialize real-time services:', error);
     // Continue without real-time features
