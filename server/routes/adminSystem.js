@@ -16,8 +16,10 @@ import {
   parseBody,
   jobsCleanupBodySchema,
   s3TestOverridesBodySchema,
-  migrateStorageBodySchema
+  migrateStorageBodySchema,
+  testEmailBodySchema
 } from '../utils/requestValidation.js';
+import { isUndeliverableTestRecipient } from '../utils/instanceOwner.js';
 
 const router = express.Router();
 
@@ -562,8 +564,19 @@ router.post('/test-email', authenticateToken, requireRole(['admin']), async (req
     const emailService = new EmailService.default(db);
     
     try {
-      const draft = req.body && typeof req.body === 'object' ? req.body : {};
-      const result = await emailService.sendTestEmail(req.user.email || 'admin@example.com', draft);
+      const parsed = parseBody(testEmailBodySchema, req.body || {});
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error });
+      }
+      const { to, ...draft } = parsed.data;
+      const recipient = String(to || req.user.email || '').trim();
+      if (isUndeliverableTestRecipient(recipient)) {
+        return res.status(400).json({
+          error: 'A deliverable recipient email is required for the test',
+          code: 'recipient_required'
+        });
+      }
+      const result = await emailService.sendTestEmail(recipient, draft);
       res.json(result);
     } catch (error) {
       console.error('❌ Email test failed:', error);

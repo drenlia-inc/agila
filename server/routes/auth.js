@@ -1286,20 +1286,51 @@ router.get('/instance-status', async (req, res) => {
   }
 });
 
-// Check if current user is instance owner
+// Check if current user is instance owner (Configuration guide, Help, Profile)
 router.get('/is-owner', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
-    // MIGRATED: Get setting using sqlManager
-    const ownerSetting = await authQueries.getSetting(db, 'OWNER');
-    const ownerEmail = ownerSetting?.value || null;
-    
-    const isOwner = ownerEmail === req.user.email;
-    
+    const {
+      getOwnerEmail,
+      isPortalLinked,
+      normalizeEmail,
+    } = await import('../utils/instanceOwner.js');
+
+    const ownerEmailRaw = await getOwnerEmail(db);
+    const ownerEmail = ownerEmailRaw ? normalizeEmail(ownerEmailRaw) : '';
+    const currentEmail = normalizeEmail(req.user.email);
+    const roles = Array.isArray(req.user.roles) ? req.user.roles : [];
+    const isAdmin =
+      roles.includes('admin') ||
+      req.user.role === 'admin';
+
+    // Setup owner → Configuration guide / Help
+    // Multi-tenant: OWNER only. Self-host: any admin.
+    let isOwner = false;
+    if (isMultiTenant()) {
+      isOwner = ownerEmail !== '' && ownerEmail === currentEmail;
+    } else {
+      isOwner = isAdmin;
+    }
+
+    const isAccountOwner = ownerEmail !== '' && ownerEmail === currentEmail;
+    const portalLinked = await isPortalLinked(db);
+    const showCustomerPortal = portalLinked && isAccountOwner;
+    const showGetSupportCta = !portalLinked && isAccountOwner;
+    // Admins and account owners never self-delete; demo / setting also block
+    const canSelfDelete =
+      !isAdmin &&
+      !isAccountOwner &&
+      process.env.DEMO_ENABLED !== 'true';
+
     res.json({
-      isOwner: isOwner,
-      ownerEmail: ownerEmail,
-      currentUser: req.user.email
+      isOwner,
+      isAccountOwner,
+      showCustomerPortal,
+      showGetSupportCta,
+      canSelfDelete,
+      ownerEmail: ownerEmailRaw || null,
+      currentUser: req.user.email,
     });
   } catch (error) {
     console.error('Error checking owner status:', error);

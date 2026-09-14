@@ -1,4 +1,12 @@
-# Pin project name so renaming the host folder (easy-kanban → agila) does not orphan volumes.
+# Public demo stack (DEMO_ENABLED=true). Pin project name so renaming the host
+# folder does not orphan volumes.
+#
+# Set host-specific values in project-root .env (Compose substitutes ${VAR}):
+#   ALLOWED_ORIGINS=kanban.demo.example.com
+#   TENANT_DOMAIN=example.com   # unused when MULTI_TENANT=false; kept for consistency
+#   POSTGRES_PASSWORD=…
+#   JWT_SECRET=…
+#
 name: easy-kanban
 
 services:
@@ -9,13 +17,12 @@ services:
       args:
         DEMO_ENABLED: "true"
         MULTI_TENANT: "false"
-        # Exported by scripts/deploy-demo.sh; `.git` is dockerignored so the build
-        # cannot resolve these itself.
+        # From scripts/deploy-demo.sh — `.git` is dockerignored so the build cannot resolve these
         GIT_COMMIT: "${GIT_COMMIT:-unknown}"
         GIT_BRANCH: "${GIT_BRANCH:-unknown}"
         BUILD_TIME: "${BUILD_TIME:-}"
     container_name: agila
-    # Named volumes were created by the old root/dev image; stay root so writes keep working.
+    # Named volumes mount as root; image USER is nextjs — run as root for writes
     user: "0:0"
     ports:
       - "3221:3010"
@@ -24,30 +31,28 @@ services:
       - NODE_ENV=production
       - DOCKER_ENV=true
       - PORT=3222
-      - VITE_API_URL=http://localhost:3222
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3222}
       - REDIS_URL=redis://redis:6379
-      # Database configuration - PostgreSQL (required)
+      # Database — PostgreSQL (required)
       - DB_TYPE=postgresql
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=kanban
       - POSTGRES_USER=kanban_user
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kanban_password}
-      # JWT / settings encryption (from project-root .env — Compose substitutes ${VAR})
+      # JWT / settings encryption (from project-root .env)
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-}
-      # Enable demo mode to show countdown timer for hourly resets (demo environments only)
-      # Allowed origins for CORS
-      - ALLOWED_ORIGINS=kanban.demo.drenlia.com
+      # CORS / Vite allowedHosts — set demo hostname in .env
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-kanban.demo.drenlia.com}
+      # Demo countdown / hourly reset UI
       - DEMO_ENABLED=true
       - LICENSE_ENABLED=false
-      # Multi-tenant configuration (set to false for single-tenant Docker deployments)
+      # false = single-tenant Docker
       - MULTI_TENANT=false
-      # Tenant domain (only used in multi-tenant mode, for extracting tenant ID from hostname)
-      # Example: If TENANT_DOMAIN=agila.dev, then customer1.agila.dev -> tenant ID: customer1
-      - TENANT_DOMAIN=agila.dev
-      # No APP_VERSION here on purpose: the version comes from build-time
-      # server/version.json (package version + commit), which startup prefers anyway.
+      # Multi-tenant only (unused here; kept for consistency)
+      - TENANT_DOMAIN=${TENANT_DOMAIN:-localhost}
+      # No APP_VERSION — version comes from build-time server/version.json
     volumes:
       - kanban-data:/app/server/data
       - kanban-attachments:/app/server/attachments

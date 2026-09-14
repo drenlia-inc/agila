@@ -21,24 +21,22 @@ services:
       # JWT / settings encryption (from project-root .env — Compose substitutes ${VAR})
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-}
-      # Allowed origins for CORS
-      - ALLOWED_ORIGINS=mydomainname.tld
-      # Enable demo mode to show countdown timer for hourly resets (demo environments only)
+      # CORS / Vite allowedHosts — set in .env (e.g. localhost or kanban.example.com)
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-localhost,127.0.0.1}
+      # Demo countdown / hourly reset UI (demo environments only)
       - DEMO_ENABLED=false
-      # Multi-tenant configuration (set to false for single-tenant Docker deployments)
+      # false = single-tenant Docker; true = multi-tenant (K8s)
       - MULTI_TENANT=false
-      # Tenant domain (only used in multi-tenant mode, for extracting tenant ID from hostname)
-      # Example: If TENANT_DOMAIN=agila.dev, then customer1.agila.dev -> tenant ID: customer1
-      - TENANT_DOMAIN=agila.dev
-      # Google SSO hub (managed mode). Public URL Google redirects to; must match Cloud Console.
-      - AUTH_HUB_PUBLIC_URL=${AUTH_HUB_PUBLIC_URL:-https://auth.agila.dev}
-      # Optional extra hub hosts (comma-separated URLs) if this process answers more than one name.
+      # Multi-tenant only: hostname suffix for tenant ID (customer1.example.com → customer1)
+      - TENANT_DOMAIN=${TENANT_DOMAIN:-localhost}
+      # Managed Google SSO hub — public callback URL must match Cloud Console
+      - AUTH_HUB_PUBLIC_URL=${AUTH_HUB_PUBLIC_URL:-}
+      # Optional extra hub hosts (comma-separated URLs)
       - AUTH_HUB_PUBLIC_URLS=${AUTH_HUB_PUBLIC_URLS:-}
-      # Single-tenant only: after the hub callback, send the browser back to this origin.
-      # Leave empty / unset in multi-tenant K8s (return host is {tenant}.{TENANT_DOMAIN}).
+      # Single-tenant: browser return origin after hub callback (leave empty in multi-tenant)
       - AUTH_HUB_RETURN_ORIGIN=${AUTH_HUB_RETURN_ORIGIN:-}
-      # Application version (optional, will override database value if set)
-      - APP_VERSION=1.0.0
+      # Optional — overrides DB APP_VERSION when set
+      - APP_VERSION=${APP_VERSION:-1.0.0}
       # Push agent runner (optional — enable AI in Admin → App Settings)
       - AI_RUNNER_URL=http://agila-runner:8080
       - AI_CALLBACK_BASE_URL=http://agila-app:3222
