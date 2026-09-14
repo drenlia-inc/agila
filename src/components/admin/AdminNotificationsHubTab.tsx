@@ -25,7 +25,8 @@ interface AdminNotificationsHubTabProps {
   onAutoSave?: (key: string, value: string) => Promise<void>;
   onSettingsReload?: (options?: { quiet?: boolean }) => Promise<void>;
   onApplySettingsPatch?: (patch: Record<string, string | undefined>) => void;
-  onTestEmail: () => Promise<void>;
+  onTestEmail: (recipientEmail?: string) => Promise<void>;
+  accountEmail?: string;
   onMailServerDisabled: () => void;
   isTestingEmail: boolean;
   showTestEmailModal: boolean;
@@ -73,6 +74,7 @@ const AdminNotificationsHubTab: React.FC<AdminNotificationsHubTabProps> = ({
   onSettingsReload,
   onApplySettingsPatch,
   onTestEmail,
+  accountEmail,
   onMailServerDisabled,
   isTestingEmail,
   showTestEmailModal,
@@ -212,6 +214,7 @@ const AdminNotificationsHubTab: React.FC<AdminNotificationsHubTabProps> = ({
               onSettingsChange={onSettingsChange}
               onCancel={onCancel}
               onTestEmail={onTestEmail}
+              accountEmail={accountEmail}
               onMailServerDisabled={onMailServerDisabled}
               isTestingEmail={isTestingEmail}
               showTestEmailModal={showTestEmailModal}

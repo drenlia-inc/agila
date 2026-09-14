@@ -18,7 +18,7 @@ import { setExplicitGuestLanguage } from '../utils/guestLanguage';
 import { userIsViewer, userIsAdmin } from '../utils/permissions';
 import { agilaGithubFeedbackUrls } from '../constants';
 import { isDemoModeClient } from '../utils/demoReset';
-import { buildCustomerPortalUrl } from '../utils/customerPortalUrl';
+import { buildCustomerPortalUrl, buildSelfHostSupportUrl } from '../utils/customerPortalUrl';
 import { formFieldClass, formInputEditableParts } from '../utils/formFieldClasses';
 
 type NotificationPreferenceKey = keyof UserPreferences['notifications'];
@@ -98,6 +98,9 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isInstanceOwner, setIsInstanceOwner] = useState<boolean | null>(null);
+  const [showCustomerPortal, setShowCustomerPortal] = useState(false);
+  const [showGetSupportCta, setShowGetSupportCta] = useState(false);
+  const [canSelfDelete, setCanSelfDelete] = useState(false);
 
   const websiteUrl = String(
     siteSettings?.WEBSITE_URL || contextSystemSettings?.WEBSITE_URL || ''
@@ -110,6 +113,15 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   const handleOpenCustomerPortal = () => {
     if (!websiteUrl) return;
     const target = buildCustomerPortalUrl(websiteUrl, currentUser?.email, i18n.language);
+    if (opensPortalInNewTab) {
+      window.open(target, '_blank', 'noopener,noreferrer');
+    } else {
+      window.location.href = target;
+    }
+  };
+
+  const handleOpenSelfHostSupport = () => {
+    const target = buildSelfHostSupportUrl(i18n.language, currentUser?.email);
     if (opensPortalInNewTab) {
       window.open(target, '_blank', 'noopener,noreferrer');
     } else {
@@ -133,10 +145,13 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
     }
   }, [isOpen, contextSystemSettings]);
 
-  // Instance owner cannot self-delete — show customer portal instead of Danger Zone
+  // Setup owner → Configuration guide. Portal / self-delete use dedicated flags.
   useEffect(() => {
     if (!isOpen) {
       setIsInstanceOwner(null);
+      setShowCustomerPortal(false);
+      setShowGetSupportCta(false);
+      setCanSelfDelete(false);
       return;
     }
     let cancelled = false;
@@ -144,10 +159,19 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
     (async () => {
       try {
         const { data } = await api.get('/auth/is-owner');
-        if (!cancelled) setIsInstanceOwner(Boolean(data?.isOwner));
+        if (cancelled) return;
+        setIsInstanceOwner(Boolean(data?.isOwner));
+        setShowCustomerPortal(Boolean(data?.showCustomerPortal));
+        setShowGetSupportCta(Boolean(data?.showGetSupportCta));
+        setCanSelfDelete(Boolean(data?.canSelfDelete));
       } catch (err) {
         console.error('Failed to check instance owner status:', err);
-        if (!cancelled) setIsInstanceOwner(false);
+        if (!cancelled) {
+          setIsInstanceOwner(false);
+          setShowCustomerPortal(false);
+          setShowGetSupportCta(false);
+          setCanSelfDelete(false);
+        }
       }
     })();
     return () => {
@@ -816,10 +840,10 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                 </div>
               )}
 
-              {/* Owner: customer portal. Demo: no self-delete (shared sandbox).
-                  Everyone else: Danger Zone / self-delete when allowed.
-                  Wait for is-owner check to avoid flashing Danger Zone for owners. */}
-              {isInstanceOwner === null ? null : isInstanceOwner ? (
+              {/* Portal when linked + account OWNER; get-support CTA when unlinked self-host.
+                  Else self-delete for non-admins when allowed. Admins never self-delete.
+                  Wait for /auth/is-owner to avoid UI flash. */}
+              {isInstanceOwner === null ? null : showCustomerPortal ? (
               <div className="mt-8 pt-6 border-t border-blue-200 dark:border-blue-800">
                 <div className="rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 p-4">
                   <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
@@ -844,7 +868,26 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                   )}
                 </div>
               </div>
-              ) : !isDemoModeClient() && systemSettings.ALLOW_USER_SELF_DELETE !== 'false' ? (
+              ) : showGetSupportCta ? (
+              <div className="mt-8 pt-6 border-t border-blue-200 dark:border-blue-800">
+                <div className="rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 p-4">
+                  <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    {t('profile.selfHostedSupport')}
+                  </h3>
+                  <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
+                    {t('profile.selfHostedSupportDescription')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleOpenSelfHostSupport}
+                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm font-medium"
+                  >
+                    {t('profile.getSelfHostedSupport')}
+                    <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+              </div>
+              ) : canSelfDelete && systemSettings.ALLOW_USER_SELF_DELETE !== 'false' ? (
               <div className="mt-8 pt-6 border-t border-red-200 dark:border-red-900">
                 <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
                   <h3 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-2 flex items-center">
@@ -938,7 +981,11 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                     {t('profile.dangerZone')}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-300">
-                    {t('profile.selfDeleteDisabled')}
+                    {isDemoModeClient()
+                      ? t('profile.selfDeleteDisabledDemo')
+                      : isInstanceOwner
+                        ? t('profile.selfDeleteDisabledAdmin')
+                        : t('profile.selfDeleteDisabled')}
                   </p>
                 </div>
               </div>

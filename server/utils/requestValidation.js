@@ -732,6 +732,23 @@ export const webhookEnabledBodySchema = z.object({
   enabled: z.boolean(),
 });
 
+/** SMTP draft overrides plus optional inbox when the signed-in admin is undeliverable. */
+export const testEmailBodySchema = z
+  .object({
+    to: z.preprocess(
+      (v) => (v === '' || v == null ? undefined : v),
+      z.string().trim().email().max(320).optional()
+    ),
+    SMTP_HOST: z.string().max(512).optional(),
+    SMTP_PORT: z.union([z.string().max(16), z.number()]).optional(),
+    SMTP_USERNAME: z.string().max(320).optional(),
+    SMTP_PASSWORD: z.string().max(1024).optional(),
+    SMTP_FROM_EMAIL: z.string().max(320).optional(),
+    SMTP_FROM_NAME: z.string().max(256).optional(),
+    SMTP_SECURE: z.string().max(16).optional(),
+  })
+  .passthrough();
+
 /** Probe draft webhook config without persisting (Admin → Webhooks editor). */
 export const webhookTestBodySchema = webhookUpsertBodySchema.extend({
   id: z.string().uuid().optional(),

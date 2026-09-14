@@ -20,6 +20,9 @@ services:
         GIT_BRANCH: "${GIT_BRANCH:-unknown}"
         BUILD_TIME: "${BUILD_TIME:-}"
     container_name: agila
+    # Named volumes mount as root; the image USER is nextjs (uid 1001). Run as root
+    # so first-boot writes to /app/server/{data,attachments,avatars} succeed (same as demo).
+    user: "0:0"
     ports:
       # nginx (or local browser) talks to the Vite preview front door only
       - "3010:3010"
@@ -34,13 +37,18 @@ services:
       - POSTGRES_DB=kanban
       - POSTGRES_USER=kanban_user
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kanban_password}
+      # JWT / settings encryption (from project-root .env)
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-}
-      # Set to your public hostname (e.g. kanban.example.com)
-      - ALLOWED_ORIGINS=mydomainname.tld
+      # Public hostname for CORS / Vite (set in .env, e.g. kanban.example.com)
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-mydomainname.tld}
       - DEMO_ENABLED=false
+      # Unlimited self-host — no plan limits
       - LICENSE_ENABLED=false
+      # false = single-tenant Docker; true = multi-tenant (K8s)
       - MULTI_TENANT=false
+      # Multi-tenant only: hostname suffix for tenant ID
+      - TENANT_DOMAIN=${TENANT_DOMAIN:-localhost}
       # Required when reverse-proxied (nginx). Set to false only if you hit :3010 directly.
       - TRUST_PROXY=1
     volumes:
