@@ -265,6 +265,9 @@
     "customerPortalDescription": "Manage your subscription, view billing history, change plans, and cancel your subscription through our customer portal.",
     "openCustomerPortal": "Open Customer Portal",
     "websiteUrlNotConfigured": "Customer portal URL is not configured for this instance.",
+    "selfHostedSupport": "Self-hosted support",
+    "selfHostedSupportDescription": "This instance is not linked to Agila support yet. Request a self-hosted support plan to get help from our team.",
+    "getSelfHostedSupport": "Get self-hosted support",
     "deleteAccountWarning": "Once you delete your account, there is no going back. This action cannot be undone.",
     "deleteMyAccount": "Delete My Account",
     "deleteAccountPermanent": "⚠️ This will permanently delete your account and all associated data:",
@@ -274,6 +277,7 @@
     "deleteAccountList4": "Your task creation and modification history",
     "selfDeleteDisabled": "Self-service account deletion is disabled for this workspace. Ask an administrator if you need your account removed.",
     "selfDeleteDisabledDemo": "Account deletion is disabled in demo mode.",
+    "selfDeleteDisabledAdmin": "Administrators cannot delete their own account. Ask another admin to remove your account if needed.",
     "typeDeleteToConfirm": "Type \"DELETE\" to confirm:",
     "typeDeletePlaceholder": "Type DELETE here",
     "pleaseTypeDelete": "Please type \"DELETE\" to confirm account deletion",
@@ -1952,7 +1956,7 @@
           "SMTP_USERNAME": "Enter the SMTP username / account.",
           "SMTP_PASSWORD": "Enter the SMTP password or app password.",
           "SMTP_FROM_EMAIL": "Set the From email address used in outgoing mail.",
-          "MAIL_TEST_EMAIL": "Send a test email to verify the configuration.",
+          "MAIL_TEST_EMAIL": "Send a test email to verify the configuration. If you still use the default admin@kanban.local sign-in, you will be asked for an inbox that can receive mail.",
           "MAIL_ENABLED": "After a successful test, enable the mail server."
         }
       },

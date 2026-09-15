@@ -992,6 +992,8 @@ const initializeDefaultData = async (db, tenantId = null) => {
     const tenantDomain = getTenantDomain();
     const defaultSettings = [
       ['APP_VERSION', '0'],
+      // Account owner for portal/billing; setup guide uses any admin on self-host
+      ['OWNER', 'admin@kanban.local'],
       ['ADMIN_PORTAL_URL', `https://admin.${tenantDomain}`],
       ['WEBSITE_URL', `https://${tenantDomain}`],
       ['SITE_NAME', ''], // blank by default — wordmark logo carries the product name
@@ -1549,6 +1551,29 @@ export const initializeDatabase = async (tenantId = null, options = {}) => {
   }
 
   const versionInfo = await initializeDefaultData(db, tenantId);
+
+  // Self-host: if OWNER is missing but bootstrap admin still exists, seed it so
+  // portal enroll / later transfer has a starting account owner.
+  if (process.env.MULTI_TENANT !== 'true') {
+    try {
+      const { getOwnerEmail, setOwnerEmail, BOOTSTRAP_ADMIN_EMAIL } = await import(
+        '../utils/instanceOwner.js'
+      );
+      const owner = await getOwnerEmail(db);
+      if (!owner) {
+        const bootstrap = await wrapQuery(
+          db.prepare('SELECT email FROM users WHERE lower(email) = lower(?) LIMIT 1'),
+          'SELECT'
+        ).get(BOOTSTRAP_ADMIN_EMAIL);
+        if (bootstrap?.email) {
+          await setOwnerEmail(db, BOOTSTRAP_ADMIN_EMAIL);
+          console.log(`✅ Seeded OWNER=${BOOTSTRAP_ADMIN_EMAIL} (self-host bootstrap)`);
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not ensure OWNER setting:', err?.message || err);
+    }
+  }
 
   return {
     db,

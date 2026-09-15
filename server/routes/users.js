@@ -274,6 +274,14 @@ router.delete("/account", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found or already inactive' });
     }
 
+    const roles = Array.isArray(req.user.roles) ? req.user.roles : [];
+    if (roles.includes('admin') || req.user.role === 'admin') {
+      return res.status(403).json({
+        error: 'Administrators cannot delete their own account.',
+        code: 'admin_cannot_self_delete',
+      });
+    }
+
     const ownerSetting = await settingsQueries.getSettingByKey(db, 'OWNER');
     const ownerEmail = ownerSetting?.value ? String(ownerSetting.value).trim().toLowerCase() : '';
     if (ownerEmail && String(user.email || '').trim().toLowerCase() === ownerEmail) {

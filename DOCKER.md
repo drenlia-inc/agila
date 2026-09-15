@@ -124,7 +124,7 @@ Set at least:
 
 ### 3. Set your public hostname
 
-In `docker-compose.yml`, set **`ALLOWED_ORIGINS`** to your FQDN (hostname is sufficient), for example `kanban.example.com`.
+Set **`ALLOWED_ORIGINS`** to your FQDN (hostname is sufficient), for example `kanban.example.com` — either in `.env` or in `docker-compose.yml` (Compose substitutes `${ALLOWED_ORIGINS}`).
 
 Leave **`DEMO_ENABLED=false`**, **`MULTI_TENANT=false`**, and **`TRUST_PROXY=1`** as shipped in the prod file.
 
@@ -203,7 +203,7 @@ Local health check: `http://127.0.0.1:3010/health`.
 1. Confirm SSH access, FQDN → IP, and public reachability on ports 80 and 443.
 2. Install packages (Docker, nginx, certbot).
 3. Clone the repository; copy **`docker-compose-prod.yml`** to `docker-compose.yml`.
-4. Create `.env` with strong secrets; set **`ALLOWED_ORIGINS`** to your FQDN.
+4. Create `.env` with strong secrets; set **`ALLOWED_ORIGINS`** (FQDN) in `.env` or compose.
 5. Run `docker compose up --build -d` and capture admin credentials from the logs.
 6. Configure nginx to proxy to `127.0.0.1:3010` (WebSockets and `client_max_body_size`).
 7. Run `certbot --nginx` for your FQDN.

@@ -265,6 +265,9 @@
     "customerPortalDescription": "Gérez votre abonnement, consultez l'historique de facturation, changez de plan et annulez votre abonnement via notre portail client.",
     "openCustomerPortal": "Ouvrir le portail client",
     "websiteUrlNotConfigured": "L'URL du portail client n'est pas configurée pour cette instance.",
+    "selfHostedSupport": "Support auto-hébergé",
+    "selfHostedSupportDescription": "Cette instance n'est pas encore liée au support Agila. Demandez un plan de support auto-hébergé pour obtenir de l'aide de notre équipe.",
+    "getSelfHostedSupport": "Obtenir le support auto-hébergé",
     "deleteAccountWarning": "Une fois votre compte supprimé, il n'y a pas de retour en arrière. Cette action ne peut pas être annulée.",
     "deleteMyAccount": "Supprimer mon compte",
     "deleteAccountPermanent": "⚠️ Cela supprimera définitivement votre compte et toutes les données associées :",
@@ -274,6 +277,7 @@
     "deleteAccountList4": "Votre historique de création et de modification de tâches",
     "selfDeleteDisabled": "La suppression de compte en libre-service est désactivée pour cet espace. Demandez à un administrateur si vous devez supprimer votre compte.",
     "selfDeleteDisabledDemo": "La suppression de compte est désactivée en mode démo.",
+    "selfDeleteDisabledAdmin": "Les administrateurs ne peuvent pas supprimer leur propre compte. Demandez à un autre administrateur de le faire si nécessaire.",
     "typeDeleteToConfirm": "Tapez \"DELETE\" pour confirmer :",
     "typeDeletePlaceholder": "Tapez DELETE ici",
     "pleaseTypeDelete": "Veuillez taper \"DELETE\" pour confirmer la suppression du compte",
@@ -1953,7 +1957,7 @@
           "SMTP_USERNAME": "Saisissez le nom d'utilisateur / compte SMTP.",
           "SMTP_PASSWORD": "Saisissez le mot de passe SMTP ou le mot de passe d'application.",
           "SMTP_FROM_EMAIL": "Définissez l'adresse From des e-mails sortants.",
-          "MAIL_TEST_EMAIL": "Envoyez un e-mail de test pour vérifier la configuration.",
+          "MAIL_TEST_EMAIL": "Envoyez un e-mail de test pour vérifier la configuration. Si vous utilisez encore l’adresse de connexion admin@kanban.local, on vous demandera une boîte qui peut recevoir du courrier.",
           "MAIL_ENABLED": "Après un test réussi, activez le serveur de messagerie."
         }
       },

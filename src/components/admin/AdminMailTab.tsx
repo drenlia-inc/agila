@@ -29,6 +29,9 @@ import {
 } from './AdminSection';
 import { useEscapeDismiss } from '../../hooks/useEscapeDismiss';
 import { isMailManagedEligible, resolveMailModeFromSettings } from '../../utils/mailAdminValidation';
+import { isUndeliverableTestRecipient } from '../../utils/placeholderLoginEmail';
+
+const TEST_RECIPIENT_STORAGE_KEY = 'agila.testEmailRecipient';
 
 /** True only for a stored-secret mask — empty is not a mask. */
 function isSmtpPasswordPlaceholder(value: string): boolean {
@@ -101,7 +104,8 @@ interface AdminMailTabProps {
   editingSettings: Settings;
   onSettingsChange: (settings: Settings) => void;
   onCancel: () => void;
-  onTestEmail: () => Promise<void>;
+  onTestEmail: (recipientEmail?: string) => Promise<void>;
+  accountEmail?: string;
   onMailServerDisabled: () => void;
   isTestingEmail: boolean;
   showTestEmailModal: boolean;
@@ -121,6 +125,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
   onSettingsChange,
   onCancel,
   onTestEmail,
+  accountEmail,
   onMailServerDisabled,
   isTestingEmail,
   showTestEmailModal,
@@ -152,9 +157,54 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const [modeActionBusy, setModeActionBusy] = useState(false);
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [showTestRecipientModal, setShowTestRecipientModal] = useState(false);
+  const [testRecipient, setTestRecipient] = useState('');
+  const [testRecipientError, setTestRecipientError] = useState('');
+
+  const closeTestRecipientModal = () => {
+    setShowTestRecipientModal(false);
+    setTestRecipientError('');
+  };
+
+  const requestTestEmail = () => {
+    if (isDemoMode || isManagedEmail) return;
+    if (isUndeliverableTestRecipient(accountEmail)) {
+      let stored = '';
+      try {
+        stored = sessionStorage.getItem(TEST_RECIPIENT_STORAGE_KEY) || '';
+      } catch {
+        stored = '';
+      }
+      setTestRecipient(isUndeliverableTestRecipient(stored) ? '' : stored);
+      setTestRecipientError('');
+      setShowTestRecipientModal(true);
+      return;
+    }
+    void onTestEmail();
+  };
+
+  const confirmTestRecipient = () => {
+    const to = testRecipient.trim();
+    if (isUndeliverableTestRecipient(to)) {
+      setTestRecipientError(t('mail.testRecipientInvalid'));
+      return;
+    }
+    try {
+      sessionStorage.setItem(TEST_RECIPIENT_STORAGE_KEY, to);
+    } catch {
+      /* ignore quota / private mode */
+    }
+    setShowTestRecipientModal(false);
+    setTestRecipientError('');
+    void onTestEmail(to);
+  };
 
   useEscapeDismiss(
     () => {
+      if (showTestRecipientModal) {
+        closeTestRecipientModal();
+        return;
+      }
       if (showSecondConfirm) {
         setShowSecondConfirm(false);
         return;
@@ -173,6 +223,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
     },
     {
       enabled:
+        showTestRecipientModal ||
         showFirstConfirm ||
         showSecondConfirm ||
         showTestEmailModal ||
@@ -228,6 +279,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
     !isTestingEmail && !isDemoMode && !isManagedEmail && canTestEmail;
   const testEmailDirty = testEmailEnabled && smtpDraftDirty;
   useDismissible(showRestoreConfirm, () => setShowRestoreConfirm(false), 'data-mail-restore-dialog');
+  useDismissible(showTestRecipientModal, closeTestRecipientModal, 'data-mail-test-recipient-dialog');
 
   const mailFieldClass = (disabled = false) => adminFieldClass(disabled, 'w-full max-w-md');
 
@@ -635,7 +687,7 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
               )}
               <button
                 type="button"
-                onClick={isDemoMode || isManagedEmail ? undefined : onTestEmail}
+                onClick={isDemoMode || isManagedEmail ? undefined : requestTestEmail}
                 disabled={!testEmailEnabled}
                 data-setting-key="MAIL_TEST_EMAIL"
                 className={`px-4 py-1.5 text-sm text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
@@ -873,6 +925,71 @@ const AdminMailTab: React.FC<AdminMailTabProps> = ({
         </div>,
         document.body
       )}
+
+      {showTestRecipientModal &&
+        createPortal(
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
+            <div
+              data-mail-test-recipient-dialog
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="mail-test-recipient-title"
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
+            >
+              <h3
+                id="mail-test-recipient-title"
+                className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2"
+              >
+                {t('mail.testRecipientTitle')}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t('mail.testRecipientDescription', { email: accountEmail })}
+              </p>
+              <label className="mt-4 block">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t('mail.testRecipientLabel')}
+                </span>
+                <input
+                  type="email"
+                  autoFocus
+                  value={testRecipient}
+                  onChange={(e) => {
+                    setTestRecipient(e.target.value);
+                    if (testRecipientError) setTestRecipientError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      confirmTestRecipient();
+                    }
+                  }}
+                  placeholder={t('mail.testRecipientPlaceholder')}
+                  className={adminFieldClass(false, 'mt-1 w-full')}
+                />
+              </label>
+              {testRecipientError ? (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{testRecipientError}</p>
+              ) : null}
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={closeTestRecipientModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+                >
+                  {t('buttons.cancel', { ns: 'common' })}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmTestRecipient}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                >
+                  {t('mail.testRecipientSend')}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {showRestoreConfirm &&
         createPortal(

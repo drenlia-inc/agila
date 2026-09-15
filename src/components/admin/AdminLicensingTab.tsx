@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle, Users, ClipboardList, Layout, HardDrive, Shield, ExternalLink, Webhook } from 'lucide-react';
 import api from '../../api';
-import { buildCustomerPortalUrl } from '../../utils/customerPortalUrl';
+import { buildCustomerPortalUrl, buildSelfHostSupportUrl } from '../../utils/customerPortalUrl';
 import { adminSubNavTabClass } from './AdminSection';
 
 interface BoardTaskCount {
@@ -60,7 +60,9 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   const [buildTime, setBuildTime] = useState<string | null>(null);
   
   // Subscription management state
-  const [isOwner, setIsOwner] = useState(false);
+  const [isAccountOwner, setIsAccountOwner] = useState(false);
+  const [showCustomerPortal, setShowCustomerPortal] = useState(false);
+  const [showGetSupportCta, setShowGetSupportCta] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState<string>('');
 
   useEffect(() => {
@@ -146,11 +148,15 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
 
   const checkOwnership = async () => {
     try {
-      const response = await api.get('/admin/owner');
-      setIsOwner(response.data.owner === currentUser?.email);
+      const response = await api.get('/auth/is-owner');
+      setIsAccountOwner(Boolean(response.data?.isAccountOwner));
+      setShowCustomerPortal(Boolean(response.data?.showCustomerPortal));
+      setShowGetSupportCta(Boolean(response.data?.showGetSupportCta));
     } catch (err) {
       console.error('Failed to check ownership:', err);
-      setIsOwner(false);
+      setIsAccountOwner(false);
+      setShowCustomerPortal(false);
+      setShowGetSupportCta(false);
     }
   };
 
@@ -614,7 +620,59 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   };
 
   const renderSubscriptionContent = () => {
-    if (!isOwner) {
+    if (!isAccountOwner) {
+      return (
+        <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6">
+          <div className="flex items-center">
+            <AlertCircle className="h-6 w-6 text-yellow-500 mr-3" />
+            <div>
+              <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200">
+                {t('licensing.accessRestricted')}
+              </h3>
+              <p className="text-yellow-700 dark:text-yellow-300 mt-1">
+                {t('licensing.onlyOwnerCanAccess')}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (showGetSupportCta) {
+      return (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                {t('licensing.selfHostedSupport')}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">
+                {t('licensing.selfHostedSupportDescription')}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  const opensInNewTab =
+                    settings?.SITE_OPENS_NEW_TAB === undefined || settings?.SITE_OPENS_NEW_TAB === 'true';
+                  const target = buildSelfHostSupportUrl(i18n.language, currentUser?.email);
+                  if (opensInNewTab) {
+                    window.open(target, '_blank', 'noopener,noreferrer');
+                  } else {
+                    window.location.href = target;
+                  }
+                }}
+                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                {t('licensing.getSelfHostedSupport')}
+                <ExternalLink className="ml-2 h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!showCustomerPortal) {
       return (
         <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6">
           <div className="flex items-center">
@@ -645,6 +703,7 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
             
             {hasWebsiteUrl ? (
               <button
+                type="button"
                 onClick={() => {
                   // Check SITE_OPENS_NEW_TAB setting (default to true if not set)
                   const opensInNewTab = settings?.SITE_OPENS_NEW_TAB === undefined || settings?.SITE_OPENS_NEW_TAB === 'true';

@@ -82,6 +82,10 @@ echo -e "${YELLOW}📦 Preparing previous hashed assets (N-1)...${NC}"
 "${PROJECT_ROOT}/scripts/prepare-prev-assets.sh" easy-kanban:latest || true
 echo ""
 
+echo -e "${YELLOW}🧹 Tidying old easy-kanban SHA tags and dangling images...${NC}"
+"${PROJECT_ROOT}/scripts/docker-tidy-before-build.sh" || true
+echo ""
+
 # Build the image
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${BLUE}🔨 Building Docker image...${NC}"

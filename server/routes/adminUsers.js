@@ -29,6 +29,10 @@ import {
   updateMemberColorBodySchema,
   resendInvitationBodySchema
 } from '../utils/requestValidation.js';
+import {
+  prepareUserDeletionOwnership,
+  prepareAdminDemotion,
+} from '../utils/instanceOwner.js';
 
 const router = express.Router();
 
@@ -267,8 +271,27 @@ router.put('/:userId/role', authenticateToken, requireRole(['admin']), async (re
       return res.status(400).json({ error: 'Cannot change your own admin role' });
     }
 
+    const targetUser = await userQueries.getUserByIdForAdmin(db, userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     // MIGRATED: Get current role using sqlManager
     const currentRole = await userQueries.getUserRole(db, userId);
+
+    if (currentRole === 'admin' && role !== 'admin') {
+      try {
+        await prepareAdminDemotion(db, {
+          userId,
+          userEmail: targetUser.email,
+        });
+      } catch (ownErr) {
+        if (ownErr?.status === 400) {
+          return res.status(400).json({ error: ownErr.message, code: ownErr.code });
+        }
+        throw ownErr;
+      }
+    }
 
     if (currentRole !== role) {
       // MIGRATED: Remove current role using sqlManager
@@ -799,6 +822,19 @@ router.delete("/:userId", authenticateToken, requireRole(["admin"]), async (req,
     const user = await userQueries.getUserByIdForAdmin(db, userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    try {
+      await prepareUserDeletionOwnership(db, {
+        deletedUserId: userId,
+        deletedUserEmail: user.email,
+        successorEmail: req.user.email,
+      });
+    } catch (ownErr) {
+      if (ownErr?.status === 400) {
+        return res.status(400).json({ error: ownErr.message, code: ownErr.code });
+      }
+      throw ownErr;
     }
 
     // Get the SYSTEM user ID (00000000-0000-0000-0000-000000000000)

@@ -29,6 +29,8 @@ if docker image inspect easy-kanban:latest >/dev/null 2>&1; then
   bash "${PROJECT_ROOT}/scripts/prepare-prev-assets.sh" easy-kanban:latest || true
 fi
 
+bash "${PROJECT_ROOT}/scripts/docker-tidy-before-build.sh" || true
+
 docker build -f Dockerfile.prod \
   -t "${IMAGE}:${IMAGE_SHA}" \
   -t "${IMAGE}:latest" \

@@ -1529,7 +1529,7 @@ const Admin: React.FC<AdminProps> = ({
     setTestEmailResult(null);
   };
 
-  const handleTestEmail = async () => {
+  const handleTestEmail = async (recipientEmail?: string) => {
     try {
       setIsTestingEmail(true);
 
@@ -1559,7 +1559,12 @@ const Admin: React.FC<AdminProps> = ({
         }
       }
 
-      const response = await api.post('/admin/test-email', draft);
+      const body: Record<string, string> = { ...draft };
+      const to = String(recipientEmail || '').trim();
+      if (to) {
+        body.to = to;
+      }
+      const response = await api.post('/admin/test-email', body);
 
       for (const { key, value } of pendingSaves) {
         await api.put('/admin/settings', { key, value });
@@ -1597,7 +1602,9 @@ const Admin: React.FC<AdminProps> = ({
       setTestEmailError(
         err.response?.data?.errorCode === 'secret_unreadable'
           ? t('secretUnreadableHint')
-          : JSON.stringify(errorDetails, null, 2)
+          : err.response?.data?.code === 'recipient_required'
+            ? t('mail.testRecipientInvalid')
+            : JSON.stringify(errorDetails, null, 2)
       );
       setShowTestEmailErrorModal(true);
     } finally {
@@ -1854,6 +1861,7 @@ const Admin: React.FC<AdminProps> = ({
                 onSettingsReload={loadData}
                 onApplySettingsPatch={applySettingsPatch}
                 onTestEmail={handleTestEmail}
+                accountEmail={currentUser?.email}
                 onMailServerDisabled={handleMailServerDisabled}
                 isTestingEmail={isTestingEmail}
                 showTestEmailModal={showTestEmailModal}

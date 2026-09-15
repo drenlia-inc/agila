@@ -9,47 +9,45 @@ services:
       - NODE_ENV=development
       - DOCKER_ENV=true
       - PORT=3222
-      - VITE_API_URL=http://localhost:3222
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3222}
       - REDIS_URL=redis://redis:6379
-      # Database configuration - PostgreSQL (required)
+      # Database — PostgreSQL (required)
       - DB_TYPE=postgresql
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=kanban
       - POSTGRES_USER=kanban_user
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-kanban_password}
-      # JWT / settings encryption (from project-root .env — Compose substitutes ${VAR})
+      # JWT / settings encryption (from project-root .env)
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-}
-      # Vite allowedHosts + CORS. Override via project-root .env (ALLOWED_ORIGINS=...)
-      # or copy this file to gitignored docker-compose.yml for local hostnames.
+      # Vite allowedHosts + CORS — set in project-root .env for custom hostnames
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-localhost,127.0.0.1}
-      # Enable demo mode to show countdown timer for hourly resets (demo environments only)
+      # Demo countdown / hourly reset UI (demo environments only)
       - DEMO_ENABLED=false
-      # Licensed local playground (edit limits in Admin → Licensing / admin-portal, or here for fresh DBs).
-      # For true self-host (no limits), use docker-compose-example.yml with LICENSE_ENABLED=false.
-      - LICENSE_ENABLED=true
-      - USER_LIMIT=50
-      - TASK_LIMIT=-1
-      - BOARD_LIMIT=-1
-      - STORAGE_LIMIT=107374182400
-      - SUPPORT_LEVEL=pro
-      - AI_TIER=full
-      # Instance token for admin portal Inspect / plan pushes (from project-root .env)
-      - INSTANCE_NAME=dev-instance
+      # Local playground with plan limits (Admin → Licensing). Unlimited self-host: docker-compose-prod.yml
+      - LICENSE_ENABLED=${LICENSE_ENABLED:-true}
+      - USER_LIMIT=${USER_LIMIT:-50}
+      - TASK_LIMIT=${TASK_LIMIT:--1}
+      - BOARD_LIMIT=${BOARD_LIMIT:--1}
+      - STORAGE_LIMIT=${STORAGE_LIMIT:-107374182400}
+      - SUPPORT_LEVEL=${SUPPORT_LEVEL:-pro}
+      - AI_TIER=${AI_TIER:-full}
+      # Admin portal Inspect / plan pushes (INSTANCE_TOKEN from .env)
+      - INSTANCE_NAME=${INSTANCE_NAME:-dev-instance}
       - INSTANCE_TOKEN=${INSTANCE_TOKEN:-kanban-dev-token-change-me}
-      - ADMIN_SERVICE_URL=${ADMIN_SERVICE_URL:-https://admin.agila.dev}
-      # Multi-tenant configuration (set to false for single-tenant Docker deployments)
+      - ADMIN_SERVICE_URL=${ADMIN_SERVICE_URL:-}
+      # false = single-tenant Docker; true = multi-tenant (K8s)
       - MULTI_TENANT=false
-      # Tenant domain (only used in multi-tenant mode, for extracting tenant ID from hostname)
-      # Example: If TENANT_DOMAIN=agila.dev, then customer1.agila.dev -> tenant ID: customer1
-      - TENANT_DOMAIN=agila.dev
-      - AUTH_HUB_PUBLIC_URL=${AUTH_HUB_PUBLIC_URL:-https://auth.agila.dev}
+      # Multi-tenant only: hostname suffix for tenant ID (customer1.example.com → customer1)
+      - TENANT_DOMAIN=${TENANT_DOMAIN:-localhost}
+      # Managed Google SSO hub — public callback URL must match Cloud Console
+      - AUTH_HUB_PUBLIC_URL=${AUTH_HUB_PUBLIC_URL:-}
       - AUTH_HUB_PUBLIC_URLS=${AUTH_HUB_PUBLIC_URLS:-}
-      # Fallback if the OAuth state has no returnOrigin (signed in from this compose stack).
-      - AUTH_HUB_RETURN_ORIGIN=${AUTH_HUB_RETURN_ORIGIN:-https://kanban.agila.dev}
-      # Application version (optional, will override database value if set)
-      - APP_VERSION=0.99-beta
+      # Fallback return origin after hub callback when OAuth state has none
+      - AUTH_HUB_RETURN_ORIGIN=${AUTH_HUB_RETURN_ORIGIN:-}
+      # Optional — overrides DB APP_VERSION when set
+      - APP_VERSION=${APP_VERSION:-0.99-beta}
       # Push agent runner (optional — enable AI in Admin → App Settings)
       - AI_RUNNER_URL=http://agila-runner:8080
       - AI_CALLBACK_BASE_URL=http://agila-app:3222
