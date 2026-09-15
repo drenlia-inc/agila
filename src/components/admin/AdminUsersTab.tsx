@@ -29,6 +29,7 @@ import MemberColorPickerDialog from './MemberColorPickerDialog';
 import { DEFAULT_MEMBER_COLOR } from '../../constants/memberColorPalette';
 import InviteBoardPicker from '../InviteBoardPicker';
 import { defaultInviteBoardIds, roleNeedsInviteBoards } from '../../utils/inviteBoardIds';
+import { BOOTSTRAP_ADMIN_EMAIL } from '../../utils/placeholderLoginEmail';
 
 interface User {
   id: string;
@@ -818,6 +819,9 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     return ownerEmail && userEmail === ownerEmail;
   };
 
+  const isBootstrapAdmin = (userEmail: string) =>
+    String(userEmail || '').trim().toLowerCase() === BOOTSTRAP_ADMIN_EMAIL;
+
   // Handle button hover for tooltips
   const handleButtonMouseEnter = (userId: string, type: 'promote' | 'demote' | 'edit' | 'delete' | 'resend', e: React.MouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -837,13 +841,17 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
 
   // Helper function to check if current user can modify a given user (role / delete / activate)
   const canModifyUser = (userEmail: string) => {
-    // Owner can only be modified by themselves
-    if (isOwner(userEmail)) {
-      return currentUser?.email === userEmail;
-    }
     // Pseudo-accounts: profile-only edits (name / display name / avatar)
     if (userEmail === 'agent@local' || userEmail === 'system@local') {
       return false;
+    }
+    // Account OWNER is normally self-only — except the self-host bootstrap admin.
+    // Other admins must be able to delete/replace it or OWNER never transfers (chicken-and-egg).
+    if (isOwner(userEmail)) {
+      if (isBootstrapAdmin(userEmail)) {
+        return true;
+      }
+      return currentUser?.email === userEmail;
     }
     // Other users can be modified by any admin
     return true;

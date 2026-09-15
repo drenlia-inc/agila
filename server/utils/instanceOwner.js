@@ -145,9 +145,10 @@ export async function prepareUserDeletionOwnership(db, {
 }
 
 /**
- * Before demoting an admin: block last admin or demoting the account OWNER.
+ * Before demoting an admin: block last admin or demoting the account OWNER
+ * (except self-host bootstrap admin@kanban.local — OWNER transfers to successor).
  */
-export async function prepareAdminDemotion(db, { userId, userEmail }) {
+export async function prepareAdminDemotion(db, { userId, userEmail, successorEmail = null }) {
   const remaining = await countHumanAdmins(db, { excludeUserId: userId });
   if (remaining < 1) {
     const err = new Error(
@@ -160,7 +161,15 @@ export async function prepareAdminDemotion(db, { userId, userEmail }) {
 
   const owner = normalizeEmail(await getOwnerEmail(db));
   const email = normalizeEmail(userEmail);
+  const successor = normalizeEmail(successorEmail);
+
   if (owner && owner === email) {
+    // Bootstrap OWNER: allow demotion and hand OWNER to the acting admin (same as delete).
+    if (email === BOOTSTRAP_ADMIN_EMAIL && successor && successor !== email) {
+      await setOwnerEmail(db, successor);
+      console.log(`✅ OWNER set to ${successor} (demoted bootstrap ${email})`);
+      return;
+    }
     const err = new Error(
       'Cannot demote the account owner. Another admin should become OWNER first (e.g. delete the bootstrap admin while logged in as the successor).'
     );
