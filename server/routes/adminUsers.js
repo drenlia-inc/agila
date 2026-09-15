@@ -284,6 +284,7 @@ router.put('/:userId/role', authenticateToken, requireRole(['admin']), async (re
         await prepareAdminDemotion(db, {
           userId,
           userEmail: targetUser.email,
+          successorEmail: req.user.email,
         });
       } catch (ownErr) {
         if (ownErr?.status === 400) {
