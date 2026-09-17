@@ -87,9 +87,10 @@ export async function applyPlatformGoogleShadowToActive(db) {
   return { ok: true, source: 'shadow' };
 }
 
-export async function fetchPlatformGoogleDefaultsFromAdmin() {
+export async function fetchPlatformGoogleDefaultsFromAdmin(db = null) {
   const base = String(process.env.ADMIN_SERVICE_URL || '').trim().replace(/\/+$/, '');
-  const token = String(process.env.INSTANCE_TOKEN || '').trim();
+  const { resolveInstanceToken } = await import('./instanceToken.js');
+  const token = await resolveInstanceToken(db);
   if (!base || !token) return null;
   try {
     const res = await axios.get(`${base}/api/instance-callback/google-sso-defaults`, {
@@ -211,7 +212,7 @@ export async function restoreManagedGoogleSso(db, tenantId) {
 
   let applied = await applyPlatformGoogleShadowToActive(db);
   if (!applied.ok) {
-    const fromAdmin = await fetchPlatformGoogleDefaultsFromAdmin();
+    const fromAdmin = await fetchPlatformGoogleDefaultsFromAdmin(db);
     if (!fromAdmin) {
       return { ok: false, error: 'platform_unavailable' };
     }

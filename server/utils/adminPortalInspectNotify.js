@@ -3,6 +3,7 @@
  */
 import axios from 'axios';
 import notificationService from '../services/notificationService.js';
+import { resolveInstanceToken } from './instanceToken.js';
 
 const CHANNELS = [
   'settings-updated',
@@ -19,13 +20,9 @@ function adminPortalBase() {
   return String(process.env.ADMIN_SERVICE_URL || '').trim().replace(/\/+$/, '');
 }
 
-function instanceToken() {
-  return String(process.env.INSTANCE_TOKEN || '').trim();
-}
-
 async function flushNotify() {
   const base = adminPortalBase();
-  const token = instanceToken();
+  const token = await resolveInstanceToken(null);
   if (!base || !token) return;
   try {
     await axios.post(
@@ -52,7 +49,8 @@ function scheduleNotify() {
 
 export function startAdminPortalInspectNotify() {
   if (started) return;
-  if (!adminPortalBase() || !instanceToken()) return;
+  // Env token only at boot; settings-based tokens still auth inbound admin-portal calls
+  if (!adminPortalBase() || !String(process.env.INSTANCE_TOKEN || '').trim()) return;
   started = true;
   for (const channel of CHANNELS) {
     notificationService.subscribeToAllTenants(channel, () => {

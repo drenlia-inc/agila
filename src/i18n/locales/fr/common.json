@@ -266,7 +266,7 @@
     "openCustomerPortal": "Ouvrir le portail client",
     "websiteUrlNotConfigured": "L'URL du portail client n'est pas configurée pour cette instance.",
     "selfHostedSupport": "Support auto-hébergé",
-    "selfHostedSupportDescription": "Cette instance n'est pas encore liée au support Agila. Demandez un plan de support auto-hébergé pour obtenir de l'aide de notre équipe.",
+    "selfHostedSupportDescription": "Cette instance n'est pas encore liée au support Agila. Obtenez un plan de support auto-hébergé pour recevoir de l'aide et des fonctionnalités supplémentaires.",
     "getSelfHostedSupport": "Obtenir le support auto-hébergé",
     "deleteAccountWarning": "Une fois votre compte supprimé, il n'y a pas de retour en arrière. Cette action ne peut pas être annulée.",
     "deleteMyAccount": "Supprimer mon compte",
@@ -384,6 +384,20 @@
     "devCopy": "Copier",
     "devCopied": "Copié.",
     "devCopyError": "Échec de la copie"
+  },
+  "connectPortal": {
+    "title": "Connecter au support Agila",
+    "description": "Entrez le code d'appariement reçu par courriel après votre demande de support pour lier cette instance.",
+    "codeLabel": "Code d'appariement",
+    "codePlaceholder": "XXXX-XXXX-XX",
+    "codeRequired": "Entrez le code d'appariement reçu par courriel.",
+    "submit": "Connecter",
+    "submitting": "Connexion…",
+    "needCode": "Besoin d'un code ? Demandez d'abord le support auto-hébergé.",
+    "alreadyLinked": "Cette instance est déjà liée.",
+    "invalidCode": "Ce code d'appariement est invalide ou expiré.",
+    "portalUnreachable": "Impossible de joindre le portail Agila. Réessayez plus tard.",
+    "failed": "Connexion impossible. Vérifiez le code et réessayez."
   },
   "agent": {
     "assignTitle": "Assigner à l'Agent",

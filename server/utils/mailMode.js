@@ -97,9 +97,10 @@ export async function applyPlatformSmtpShadowToActive(db) {
   return { ok: true, source: 'shadow' };
 }
 
-export async function fetchPlatformSmtpDefaultsFromAdmin() {
+export async function fetchPlatformSmtpDefaultsFromAdmin(db = null) {
   const base = String(process.env.ADMIN_SERVICE_URL || '').trim().replace(/\/+$/, '');
-  const token = String(process.env.INSTANCE_TOKEN || '').trim();
+  const { resolveInstanceToken } = await import('./instanceToken.js');
+  const token = await resolveInstanceToken(db);
   if (!base || !token) return null;
   try {
     const res = await axios.get(`${base}/api/instance-callback/mail-defaults`, {
@@ -159,7 +160,7 @@ export async function restoreManagedMail(db) {
 
   let applied = await applyPlatformSmtpShadowToActive(db);
   if (!applied.ok) {
-    const fromAdmin = await fetchPlatformSmtpDefaultsFromAdmin();
+    const fromAdmin = await fetchPlatformSmtpDefaultsFromAdmin(db);
     if (!fromAdmin) {
       return { ok: false, error: 'platform_unavailable' };
     }

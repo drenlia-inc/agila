@@ -18,7 +18,8 @@ import { setExplicitGuestLanguage } from '../utils/guestLanguage';
 import { userIsViewer, userIsAdmin } from '../utils/permissions';
 import { agilaGithubFeedbackUrls } from '../constants';
 import { isDemoModeClient } from '../utils/demoReset';
-import { buildCustomerPortalUrl, buildSelfHostSupportUrl } from '../utils/customerPortalUrl';
+import { buildCustomerPortalUrl } from '../utils/customerPortalUrl';
+import { ConnectPortalPanel } from './ConnectPortalPanel';
 import { formFieldClass, formInputEditableParts } from '../utils/formFieldClasses';
 
 type NotificationPreferenceKey = keyof UserPreferences['notifications'];
@@ -120,15 +121,6 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
     }
   };
 
-  const handleOpenSelfHostSupport = () => {
-    const target = buildSelfHostSupportUrl(i18n.language, currentUser?.email);
-    if (opensPortalInNewTab) {
-      window.open(target, '_blank', 'noopener,noreferrer');
-    } else {
-      window.location.href = target;
-    }
-  };
-  
   // Refs for focus management
   const displayNameRef = useRef<HTMLInputElement>(null);
   const bioRef = useRef<HTMLTextAreaElement>(null);
@@ -871,20 +863,23 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
               ) : showGetSupportCta ? (
               <div className="mt-8 pt-6 border-t border-blue-200 dark:border-blue-800">
                 <div className="rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 p-4">
-                  <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                    {t('profile.selfHostedSupport')}
-                  </h3>
-                  <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
-                    {t('profile.selfHostedSupportDescription')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleOpenSelfHostSupport}
-                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm font-medium"
-                  >
-                    {t('profile.getSelfHostedSupport')}
-                    <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
-                  </button>
+                  <ConnectPortalPanel
+                    onLinked={async () => {
+                      try {
+                        const { data } = await api.get('/auth/is-owner');
+                        setIsInstanceOwner(Boolean(data?.isOwner));
+                        setShowCustomerPortal(Boolean(data?.showCustomerPortal));
+                        setShowGetSupportCta(Boolean(data?.showGetSupportCta));
+                        setCanSelfDelete(Boolean(data?.canSelfDelete));
+                      } catch {
+                        setShowGetSupportCta(false);
+                        setShowCustomerPortal(true);
+                      }
+                    }}
+                    language={i18n.language}
+                    ownerEmail={currentUser?.email}
+                    openSupportInNewTab={opensPortalInNewTab}
+                  />
                 </div>
               </div>
               ) : canSelfDelete && systemSettings.ALLOW_USER_SELF_DELETE !== 'false' ? (

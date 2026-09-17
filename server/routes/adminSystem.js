@@ -8,20 +8,27 @@ import { manualTriggers } from '../jobs/scheduler.js';
 import { getTranslator } from '../utils/i18n.js';
 import { getLicenseManager } from '../config/license.js';
 import { getSystemDiskUsage } from '../utils/diskUsage.js';
-import { getRequestDatabase, getTenantId } from '../middleware/tenantRouting.js';
+import { getRequestDatabase, getTenantId, isMultiTenant } from '../middleware/tenantRouting.js';
 import notificationService from '../services/notificationService.js';
 // MIGRATED: Import sqlManager
-import { helpers } from '../utils/sqlManager/index.js';
+import { helpers, settings as settingsQueries } from '../utils/sqlManager/index.js';
 import {
   parseBody,
   jobsCleanupBodySchema,
   s3TestOverridesBodySchema,
   migrateStorageBodySchema,
-  testEmailBodySchema
+  testEmailBodySchema,
+  connectPortalBodySchema
 } from '../utils/requestValidation.js';
-import { isUndeliverableTestRecipient } from '../utils/instanceOwner.js';
+import {
+  isUndeliverableTestRecipient,
+  getOwnerEmail,
+  isPortalLinked
+} from '../utils/instanceOwner.js';
+import { upsertSecretSetting } from '../utils/settingsSecrets.js';
 
 const router = express.Router();
+const DEFAULT_ADMIN_PORTAL_URL = 'https://admin.agila.dev';
 
 // Database migrations status endpoint
 router.get('/migrations', authenticateToken, requireRole(['admin']), async (req, res) => {
@@ -232,6 +239,99 @@ router.get('/portal-config', authenticateToken, requireRole(['admin']), async (r
   } catch (error) {
     console.error('Error fetching portal config:', error);
     res.status(500).json({ error: 'Failed to fetch portal configuration' });
+  }
+});
+
+/**
+ * POST /api/admin/connect-portal
+ * Account owner redeems a pairing code and stores INSTANCE_ID + INSTANCE_TOKEN.
+ */
+router.post('/connect-portal', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    if (isMultiTenant()) {
+      return res.status(400).json({
+        error: 'Portal Connect is only available on self-hosted instances',
+        code: 'not_self_hosted'
+      });
+    }
+
+    const db = getRequestDatabase(req);
+    const ownerEmail = await getOwnerEmail(db);
+    if (
+      !ownerEmail ||
+      String(ownerEmail).trim().toLowerCase() !== String(req.user.email || '').trim().toLowerCase()
+    ) {
+      return res.status(403).json({ error: 'Only the instance owner can connect to Agila support' });
+    }
+
+    if (await isPortalLinked(db)) {
+      return res.status(409).json({
+        error: 'This instance is already linked to the Agila portal',
+        code: 'already_linked'
+      });
+    }
+
+    const parsed = parseBody(connectPortalBodySchema, req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const storedPortal = String((await helpers.getSetting(db, 'ADMIN_PORTAL_URL')) || '').trim();
+    const portalBase = String(parsed.data.adminPortalUrl || storedPortal || DEFAULT_ADMIN_PORTAL_URL)
+      .trim()
+      .replace(/\/$/, '');
+
+    let redeemResponse;
+    try {
+      redeemResponse = await axios.post(
+        `${portalBase}/api/public/instance-pair/redeem`,
+        { code: parsed.data.pairingCode },
+        {
+          timeout: 15000,
+          headers: { 'Content-Type': 'application/json' },
+          validateStatus: () => true
+        }
+      );
+    } catch (error) {
+      console.error('Connect portal redeem network error:', error.message);
+      return res.status(502).json({
+        error: 'Unable to reach the Agila portal. Check ADMIN_PORTAL_URL and try again.',
+        code: 'portal_unreachable'
+      });
+    }
+
+    if (redeemResponse.status < 200 || redeemResponse.status >= 300) {
+      return res.status(redeemResponse.status === 400 ? 400 : 502).json({
+        error: redeemResponse.data?.error || 'Failed to redeem pairing code',
+        code: redeemResponse.data?.code || 'redeem_failed'
+      });
+    }
+
+    const instanceId = String(redeemResponse.data?.instanceId || '').trim();
+    const instanceToken = String(redeemResponse.data?.instanceToken || '').trim();
+    const adminPortalUrl = String(redeemResponse.data?.adminPortalUrl || portalBase)
+      .trim()
+      .replace(/\/$/, '');
+
+    if (!instanceId || !instanceToken) {
+      return res.status(502).json({
+        error: 'Portal returned an incomplete pairing response',
+        code: 'invalid_redeem_response'
+      });
+    }
+
+    await settingsQueries.upsertSetting(db, 'INSTANCE_ID', instanceId);
+    await settingsQueries.upsertSetting(db, 'ADMIN_PORTAL_URL', adminPortalUrl);
+    await upsertSecretSetting(db, 'INSTANCE_TOKEN', instanceToken);
+
+    res.json({
+      linked: true,
+      instanceId,
+      adminPortalUrl
+    });
+  } catch (error) {
+    console.error('Error connecting portal:', error);
+    res.status(500).json({ error: 'Failed to connect to Agila portal' });
   }
 });
 
