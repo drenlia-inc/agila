@@ -26,9 +26,9 @@ import {
   isPortalLinked
 } from '../utils/instanceOwner.js';
 import { upsertSecretSetting } from '../utils/settingsSecrets.js';
+import { AGILA_ADMIN_PORTAL_URL, AGILA_MARKETING_ORIGIN } from '../constants/agilaPublicUrls.js';
 
 const router = express.Router();
-const DEFAULT_ADMIN_PORTAL_URL = 'https://admin.agila.dev';
 
 // Database migrations status endpoint
 router.get('/migrations', authenticateToken, requireRole(['admin']), async (req, res) => {
@@ -230,11 +230,8 @@ router.get('/owner', authenticateToken, requireRole(['admin']), async (req, res)
 // Get admin portal configuration
 router.get('/portal-config', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
-    const db = getRequestDatabase(req);
-    // MIGRATED: Get ADMIN_PORTAL_URL setting using sqlManager
-    const adminPortalUrl = await helpers.getSetting(db, 'ADMIN_PORTAL_URL');
     res.json({
-      adminPortalUrl: adminPortalUrl || null
+      adminPortalUrl: AGILA_ADMIN_PORTAL_URL
     });
   } catch (error) {
     console.error('Error fetching portal config:', error);
@@ -276,10 +273,8 @@ router.post('/connect-portal', authenticateToken, requireRole(['admin']), async 
       return res.status(400).json({ error: parsed.error });
     }
 
-    const storedPortal = String((await helpers.getSetting(db, 'ADMIN_PORTAL_URL')) || '').trim();
-    const portalBase = String(parsed.data.adminPortalUrl || storedPortal || DEFAULT_ADMIN_PORTAL_URL)
-      .trim()
-      .replace(/\/$/, '');
+    // Redeem always hits production admin.agila.dev (not TENANT_DOMAIN / app FQDN).
+    const portalBase = AGILA_ADMIN_PORTAL_URL;
 
     let redeemResponse;
     try {
@@ -293,9 +288,9 @@ router.post('/connect-portal', authenticateToken, requireRole(['admin']), async 
         }
       );
     } catch (error) {
-      console.error('Connect portal redeem network error:', error.message);
+      console.error('Connect portal redeem network error:', portalBase, error.message);
       return res.status(502).json({
-        error: 'Unable to reach the Agila portal. Check ADMIN_PORTAL_URL and try again.',
+        error: 'Unable to reach the Agila portal. Try again later.',
         code: 'portal_unreachable'
       });
     }
@@ -309,9 +304,6 @@ router.post('/connect-portal', authenticateToken, requireRole(['admin']), async 
 
     const instanceId = String(redeemResponse.data?.instanceId || '').trim();
     const instanceToken = String(redeemResponse.data?.instanceToken || '').trim();
-    const adminPortalUrl = String(redeemResponse.data?.adminPortalUrl || portalBase)
-      .trim()
-      .replace(/\/$/, '');
 
     if (!instanceId || !instanceToken) {
       return res.status(502).json({
@@ -321,13 +313,15 @@ router.post('/connect-portal', authenticateToken, requireRole(['admin']), async 
     }
 
     await settingsQueries.upsertSetting(db, 'INSTANCE_ID', instanceId);
-    await settingsQueries.upsertSetting(db, 'ADMIN_PORTAL_URL', adminPortalUrl);
+    // Bookkeeping only — Connect / billing CTAs use AGILA_* constants, not these settings.
+    await settingsQueries.upsertSetting(db, 'ADMIN_PORTAL_URL', AGILA_ADMIN_PORTAL_URL);
+    await settingsQueries.upsertSetting(db, 'WEBSITE_URL', AGILA_MARKETING_ORIGIN);
     await upsertSecretSetting(db, 'INSTANCE_TOKEN', instanceToken);
 
     res.json({
       linked: true,
       instanceId,
-      adminPortalUrl
+      adminPortalUrl: AGILA_ADMIN_PORTAL_URL
     });
   } catch (error) {
     console.error('Error connecting portal:', error);
@@ -345,15 +339,10 @@ router.get('/instance-portal/billing-history', authenticateToken, requireRole(['
       return res.status(403).json({ error: 'Only the instance owner can access billing history' });
     }
     
-    const adminPortalUrl = await helpers.getSetting(db, 'ADMIN_PORTAL_URL');
-    if (!adminPortalUrl || !String(adminPortalUrl).trim()) {
-      return res.status(404).json({ error: 'Admin portal URL not configured' });
-    }
-    
     const instanceId = await helpers.getSetting(db, 'INSTANCE_ID');
     
     const response = await axios.get(
-      `${String(adminPortalUrl).replace(/\/$/, '')}/api/instance-portal/billing-history`,
+      `${AGILA_ADMIN_PORTAL_URL}/api/instance-portal/billing-history`,
       {
         params: { instanceId: instanceId || undefined },
         headers: {
@@ -387,15 +376,10 @@ router.post('/instance-portal/change-plan', authenticateToken, requireRole(['adm
       return res.status(403).json({ error: 'Only the instance owner can change the subscription plan' });
     }
     
-    const adminPortalUrl = await helpers.getSetting(db, 'ADMIN_PORTAL_URL');
-    if (!adminPortalUrl || !String(adminPortalUrl).trim()) {
-      return res.status(404).json({ error: 'Admin portal URL not configured' });
-    }
-    
     const instanceId = await helpers.getSetting(db, 'INSTANCE_ID');
     
     const response = await axios.post(
-      `${String(adminPortalUrl).replace(/\/$/, '')}/api/instance-portal/subscription/change-plan`,
+      `${AGILA_ADMIN_PORTAL_URL}/api/instance-portal/subscription/change-plan`,
       {
         instanceId: instanceId || undefined,
         ...req.body
@@ -432,15 +416,10 @@ router.post('/instance-portal/cancel-subscription', authenticateToken, requireRo
       return res.status(403).json({ error: 'Only the instance owner can cancel the subscription' });
     }
     
-    const adminPortalUrl = await helpers.getSetting(db, 'ADMIN_PORTAL_URL');
-    if (!adminPortalUrl || !String(adminPortalUrl).trim()) {
-      return res.status(404).json({ error: 'Admin portal URL not configured' });
-    }
-    
     const instanceId = await helpers.getSetting(db, 'INSTANCE_ID');
     
     const response = await axios.post(
-      `${String(adminPortalUrl).replace(/\/$/, '')}/api/instance-portal/subscription/cancel`,
+      `${AGILA_ADMIN_PORTAL_URL}/api/instance-portal/subscription/cancel`,
       {
         instanceId: instanceId || undefined,
         ...req.body

@@ -23,6 +23,7 @@ import {
   DEFAULT_SITE_LOGO_DARK,
   isPublicBrandAssetPath,
 } from '../../constants';
+import { isMultiTenantDeploy } from '../../utils/ownerSetup';
 
 interface Settings {
   SITE_NAME?: string;
@@ -83,6 +84,8 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
     () => adminSettingsHaveChanges(settings, editingSettings),
     [settings, editingSettings]
   );
+  // SaaS only — self-host never shows this; Connect writes WEBSITE_URL for bookkeeping.
+  const showCustomerPortalWebsiteUrl = isMultiTenantDeploy();
 
   const handleInputChange = (key: string, value: string) => {
     onSettingsChange({ ...editingSettings, [key]: value });
@@ -421,22 +424,24 @@ const AdminSiteSettingsTab: React.FC<AdminSiteSettingsTabProps> = ({
           </div>
         </div>
 
-        <div className="pt-1">
-          <label className={adminSettingsLabelLockedClass}>
-            {t('siteSettings.websiteUrl')}
-          </label>
-          <input
-            type="url"
-            value={editingSettings.WEBSITE_URL || ''}
-            readOnly
-            disabled
-            className={adminInputLockedWideClass}
-            placeholder="https://customer-portal.example.com"
-          />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {t('siteSettings.websiteUrlDescription')}
-          </p>
-        </div>
+        {showCustomerPortalWebsiteUrl ? (
+          <div className="pt-1" data-setting-key="WEBSITE_URL">
+            <label className={adminSettingsLabelLockedClass}>
+              {t('siteSettings.websiteUrl')}
+            </label>
+            <input
+              type="url"
+              value={editingSettings.WEBSITE_URL || ''}
+              readOnly
+              disabled
+              className={adminInputLockedWideClass}
+              placeholder="https://agila.dev"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t('siteSettings.websiteUrlDescription')}
+            </p>
+          </div>
+        ) : null}
       </AdminSection>
 
       <AdminSection title={t('siteSettings.brandingSection')} dense>

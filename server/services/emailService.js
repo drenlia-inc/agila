@@ -239,7 +239,7 @@ class EmailService {
     const settings = validation.settings;
     const transporter = await this.createTransporter(settings);
 
-    const rawBase = String(settings.APP_URL || settings.WEBSITE_URL || '').trim();
+    const rawBase = String(settings.APP_URL || '').trim();
     const baseUrl = /^https?:\/\//i.test(rawBase) ? rawBase.replace(/\/+$/, '') : '';
     const sentAt = new Date().toISOString();
     const emailTemplate = await EmailTemplates.testEmail({
