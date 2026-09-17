@@ -266,7 +266,7 @@
     "openCustomerPortal": "Open Customer Portal",
     "websiteUrlNotConfigured": "Customer portal URL is not configured for this instance.",
     "selfHostedSupport": "Self-hosted support",
-    "selfHostedSupportDescription": "This instance is not linked to Agila support yet. Request a self-hosted support plan to get help from our team.",
+    "selfHostedSupportDescription": "This instance is not linked to Agila support yet. Obtain a self-hosted support plan to get help and additional features.",
     "getSelfHostedSupport": "Get self-hosted support",
     "deleteAccountWarning": "Once you delete your account, there is no going back. This action cannot be undone.",
     "deleteMyAccount": "Delete My Account",
@@ -383,6 +383,20 @@
     "devCopy": "Copy",
     "devCopied": "Copied.",
     "devCopyError": "Failed to copy"
+  },
+  "connectPortal": {
+    "title": "Connect to Agila support",
+    "description": "Enter the pairing code from your get-support confirmation email to link this instance.",
+    "codeLabel": "Pairing code",
+    "codePlaceholder": "XXXX-XXXX-XX",
+    "codeRequired": "Enter the pairing code from your email.",
+    "submit": "Connect",
+    "submitting": "Connecting…",
+    "needCode": "Need a pairing code? Request self-hosted support first.",
+    "alreadyLinked": "This instance is already linked.",
+    "invalidCode": "That pairing code is invalid or expired.",
+    "portalUnreachable": "Could not reach the Agila portal. Try again later.",
+    "failed": "Could not connect. Check the code and try again."
   },
   "agent": {
     "assignTitle": "Assign to Agent",

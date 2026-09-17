@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle, Users, ClipboardList, Layout, HardDrive, Shield, ExternalLink, Webhook } from 'lucide-react';
 import api from '../../api';
-import { buildCustomerPortalUrl, buildSelfHostSupportUrl } from '../../utils/customerPortalUrl';
+import { buildCustomerPortalUrl } from '../../utils/customerPortalUrl';
+import { ConnectPortalPanel } from '../ConnectPortalPanel';
 import { adminSubNavTabClass } from './AdminSection';
 
 interface BoardTaskCount {
@@ -59,8 +60,8 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   const [error, setError] = useState<string | null>(null);
   const [buildTime, setBuildTime] = useState<string | null>(null);
   
-  // Subscription management state
-  const [isAccountOwner, setIsAccountOwner] = useState(false);
+  // Subscription management state — null until /auth/is-owner resolves (avoid yellow flash)
+  const [isAccountOwner, setIsAccountOwner] = useState<boolean | null>(null);
   const [showCustomerPortal, setShowCustomerPortal] = useState(false);
   const [showGetSupportCta, setShowGetSupportCta] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState<string>('');
@@ -620,6 +621,15 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   };
 
   const renderSubscriptionContent = () => {
+    // Wait for ownership flags so we don't flash "access restricted" on refresh
+    if (isAccountOwner === null) {
+      return (
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('licensing.loading')}</p>
+        </div>
+      );
+    }
+
     if (!isAccountOwner) {
       return (
         <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6">
@@ -643,29 +653,16 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
         <div className="space-y-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="p-6">
-              <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-                {t('licensing.selfHostedSupport')}
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                {t('licensing.selfHostedSupportDescription')}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  const opensInNewTab =
-                    settings?.SITE_OPENS_NEW_TAB === undefined || settings?.SITE_OPENS_NEW_TAB === 'true';
-                  const target = buildSelfHostSupportUrl(i18n.language, currentUser?.email);
-                  if (opensInNewTab) {
-                    window.open(target, '_blank', 'noopener,noreferrer');
-                  } else {
-                    window.location.href = target;
-                  }
+              <ConnectPortalPanel
+                onLinked={async () => {
+                  await checkOwnership();
                 }}
-                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                {t('licensing.getSelfHostedSupport')}
-                <ExternalLink className="ml-2 h-4 w-4" />
-              </button>
+                language={i18n.language}
+                ownerEmail={currentUser?.email}
+                openSupportInNewTab={
+                  settings?.SITE_OPENS_NEW_TAB === undefined || settings?.SITE_OPENS_NEW_TAB === 'true'
+                }
+              />
             </div>
           </div>
         </div>

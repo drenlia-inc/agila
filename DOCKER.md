@@ -43,13 +43,14 @@ When you finish the checklist at the end of this part, **you are done**. You do 
 
 ## Assumptions
 
-This section assumes a normal self-hosted environment:
-
-- You can reach the server over **SSH**.
-- A **DNS fully qualified domain name (FQDN)** already resolves to the server’s public IP address.
-- The server is reachable from the internet on **TCP ports 80 and 443**.
-
-DNS registration and opening those ports at the cloud or network edge are out of scope.
+> [!IMPORTANT]
+> This guide assumes a normal self-hosted environment:
+>
+> - You can reach the server over **SSH**.
+> - A **DNS fully qualified domain name (FQDN)** already resolves to the server’s public IP address.
+> - The server is reachable from the internet on **TCP ports 80 and 443**.
+>
+> DNS registration and opening those ports at the cloud or network edge are **out of scope**.
 
 Agila runs PostgreSQL, Redis, the application, and the optional AI runner **inside Docker**. Do not install Node.js, PostgreSQL, or Redis on the host OS.
 

@@ -647,6 +647,12 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
       return res.status(403).json({ error: 'WEBSITE_URL is read-only and cannot be updated' });
     }
 
+    if (key === 'INSTANCE_ID' || key === 'INSTANCE_TOKEN' || key === 'ADMIN_PORTAL_URL') {
+      return res.status(403).json({
+        error: `${key} is managed via portal Connect and cannot be updated here`
+      });
+    }
+
     // Shared platform runner in multi-tenant: URL/token come from ConfigMap/Secret only
     if (
       process.env.MULTI_TENANT === 'true' &&
