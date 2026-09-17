@@ -1374,6 +1374,60 @@ const migrations = [
       `);
       console.log('✅ Migration 55: backfill board_participants for boards that already have work');
     }
+  },
+  {
+    version: 56,
+    name: 'fix_localhost_portal_urls',
+    description:
+      'Clear localhost portal URL seeds; set production agila.dev URLs only when INSTANCE_ID is present',
+    up: async (db) => {
+      // Linked instances: ensure bookkeeping rows match production constants
+      await dbRun(
+        db.prepare(`
+          UPDATE settings
+          SET value = 'https://agila.dev', updated_at = CURRENT_TIMESTAMP
+          WHERE key = 'WEBSITE_URL'
+            AND EXISTS (
+              SELECT 1 FROM settings s2
+              WHERE s2.key = 'INSTANCE_ID'
+                AND COALESCE(TRIM(s2.value), '') <> ''
+            )
+            AND value IS DISTINCT FROM 'https://agila.dev'
+        `)
+      );
+      await dbRun(
+        db.prepare(`
+          UPDATE settings
+          SET value = 'https://admin.agila.dev', updated_at = CURRENT_TIMESTAMP
+          WHERE key = 'ADMIN_PORTAL_URL'
+            AND EXISTS (
+              SELECT 1 FROM settings s2
+              WHERE s2.key = 'INSTANCE_ID'
+                AND COALESCE(TRIM(s2.value), '') <> ''
+            )
+            AND value IS DISTINCT FROM 'https://admin.agila.dev'
+        `)
+      );
+      // Unlinked self-host: clear bad localhost seeds (Connect will write real values later)
+      await dbRun(
+        db.prepare(`
+          UPDATE settings
+          SET value = '', updated_at = CURRENT_TIMESTAMP
+          WHERE key IN ('WEBSITE_URL', 'ADMIN_PORTAL_URL')
+            AND (
+              value ILIKE '%localhost%'
+              OR value ILIKE '%127.0.0.1%'
+              OR value ILIKE '%::1%'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM settings s2
+              WHERE s2.key = 'INSTANCE_ID'
+                AND COALESCE(TRIM(s2.value), '') <> ''
+            )
+        `)
+      );
+      console.log('✅ Migration 56: portal URL seeds normalized (linked → agila.dev, unlinked localhost → empty)');
+    }
   }
 ];
 

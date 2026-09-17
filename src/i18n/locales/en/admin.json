@@ -312,7 +312,7 @@
     "siteNameEmptyHint": "Leave blank to hide the site name in the header (useful when using a logo only). Clearing the name will not fall back to \"Agila\".",
     "siteUrl": "Site URL",
     "websiteUrl": "Website URL (Customer Portal)",
-    "websiteUrlDescription": "URL to your customer portal for subscription management. This value is set during instance purchase and is read-only.",
+    "websiteUrlDescription": "Always https://agila.dev — Agila’s customer portal. Read-only on hosted instances.",
     "brandingSection": "Branding",
     "siteLogo": "Site Logo",
     "siteLogoDescription": "Shown in the header (light mode). Upload a file to crop it, or paste an image URL. Click the preview to re-open the crop editor.",

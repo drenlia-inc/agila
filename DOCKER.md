@@ -129,6 +129,10 @@ Set **`ALLOWED_ORIGINS`** to your FQDN (hostname is sufficient), for example `ka
 
 Leave **`DEMO_ENABLED=false`**, **`MULTI_TENANT=false`**, and **`TRUST_PROXY=1`** as shipped in the prod file.
 
+**`TENANT_DOMAIN`** is only for multi-tenant SaaS host routing (`{tenantId}.agila.dev`). It is ignored in single-tenant Docker and does **not** control Customer Portal or Admin Portal URLs.
+
+On self-hosted installs, **Website URL (Customer Portal)** is hidden in Site Settings. Connect writes `https://agila.dev` / `https://admin.agila.dev` into settings on success for bookkeeping; the app always uses those production origins in code (your app FQDN, e.g. `agila.prod.ca`, is separate via nginx / `ALLOWED_ORIGINS`).
+
 nginx proxies to **`127.0.0.1:3010` only**. The production image serves the built frontend on that port and proxies `/api` and `/socket.io` to the backend inside the container.
 
 ### 4. Start the stack

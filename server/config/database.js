@@ -26,7 +26,8 @@ import { boardParticipants } from '../utils/sqlManager/index.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { dbExec, dbGet, dbAll, dbRun } from '../utils/dbAsync.js';
 import * as settingsQueries from '../utils/sqlManager/settings.js';
-import { getTenantDomain, getManagedSmtpSeedDefaults } from '../utils/tenantDomain.js';
+import { getManagedSmtpSeedDefaults } from '../utils/tenantDomain.js';
+import { AGILA_MARKETING_ORIGIN, AGILA_ADMIN_PORTAL_URL } from '../constants/agilaPublicUrls.js';
 import { getDefaultBoardColumns, DEFAULT_BOARD_COLUMNS_JSON } from '../utils/defaultBoardColumns.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -988,14 +989,22 @@ const initializeDefaultData = async (db, tenantId = null) => {
     console.log('===========================================');
     console.log('');
 
-    // Initialize default settings
-    const tenantDomain = getTenantDomain();
+    // Customer Portal / Admin Portal:
+    // - MULTI_TENANT (SaaS): seed production agila.dev URLs (purchase flow may refresh them).
+    // - Self-host: leave empty until Connect succeeds (then written to production URLs).
+    // Runtime CTAs always use server/constants/agilaPublicUrls.js — not these settings.
     const defaultSettings = [
       ['APP_VERSION', '0'],
       // Account owner for portal/billing; setup guide uses any admin on self-host
       ['OWNER', 'admin@kanban.local'],
-      ['ADMIN_PORTAL_URL', `https://admin.${tenantDomain}`],
-      ['WEBSITE_URL', `https://${tenantDomain}`],
+      [
+        'ADMIN_PORTAL_URL',
+        process.env.MULTI_TENANT === 'true' ? AGILA_ADMIN_PORTAL_URL : ''
+      ],
+      [
+        'WEBSITE_URL',
+        process.env.MULTI_TENANT === 'true' ? AGILA_MARKETING_ORIGIN : ''
+      ],
       ['SITE_NAME', ''], // blank by default — wordmark logo carries the product name
       ['SITE_URL', '/'],
       ['MAIL_ENABLED', 'false'],

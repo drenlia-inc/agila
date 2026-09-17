@@ -64,7 +64,6 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   const [isAccountOwner, setIsAccountOwner] = useState<boolean | null>(null);
   const [showCustomerPortal, setShowCustomerPortal] = useState(false);
   const [showGetSupportCta, setShowGetSupportCta] = useState(false);
-  const [websiteUrl, setWebsiteUrl] = useState<string>('');
 
   useEffect(() => {
     fetchLicenseInfo();
@@ -84,34 +83,6 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
       console.error('Failed to fetch build time:', err);
     }
   };
-
-  // Fetch WEBSITE_URL - check settings prop first, then fetch directly if needed
-  useEffect(() => {
-    const fetchWebsiteUrl = async () => {
-      try {
-        // First check if it's in the settings prop
-        if (settings?.WEBSITE_URL) {
-          setWebsiteUrl(settings.WEBSITE_URL);
-          return;
-        }
-        
-        // If not in settings prop, fetch it directly
-        const response = await api.get('/admin/settings');
-        const allSettings = response.data || {};
-        if (allSettings.WEBSITE_URL) {
-          setWebsiteUrl(allSettings.WEBSITE_URL);
-        } else {
-          console.warn('WEBSITE_URL not found in settings');
-          setWebsiteUrl('');
-        }
-      } catch (err) {
-        console.error('Failed to fetch WEBSITE_URL:', err);
-        setWebsiteUrl('');
-      }
-    };
-
-    fetchWebsiteUrl();
-  }, [settings]);
 
   // Initialize activeSubTab from URL hash
   useEffect(() => {
@@ -687,8 +658,6 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
       );
     }
 
-    const hasWebsiteUrl = websiteUrl.trim() !== '';
-
     return (
       <div className="space-y-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -697,35 +666,23 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               {t('licensing.customerPortalDescription')}
             </p>
-            
-            {hasWebsiteUrl ? (
-              <button
-                type="button"
-                onClick={() => {
-                  // Check SITE_OPENS_NEW_TAB setting (default to true if not set)
-                  const opensInNewTab = settings?.SITE_OPENS_NEW_TAB === undefined || settings?.SITE_OPENS_NEW_TAB === 'true';
-                  const target = buildCustomerPortalUrl(websiteUrl, currentUser?.email, i18n.language);
-                  if (opensInNewTab) {
-                    window.open(target, '_blank', 'noopener,noreferrer');
-                  } else {
-                    window.location.href = target;
-                  }
-                }}
-                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                {t('licensing.openCustomerPortal')}
-                <ExternalLink className="ml-2 h-4 w-4" />
-              </button>
-            ) : (
-              <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
-                <div className="flex items-center">
-                  <AlertCircle className="h-5 w-5 text-yellow-400 mr-2" />
-                  <p className="text-yellow-800 dark:text-yellow-200">
-                    {t('licensing.websiteUrlNotConfigured')}
-                  </p>
-                </div>
-              </div>
-            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                const opensInNewTab = settings?.SITE_OPENS_NEW_TAB === undefined || settings?.SITE_OPENS_NEW_TAB === 'true';
+                const target = buildCustomerPortalUrl(currentUser?.email, i18n.language);
+                if (opensInNewTab) {
+                  window.open(target, '_blank', 'noopener,noreferrer');
+                } else {
+                  window.location.href = target;
+                }
+              }}
+              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              {t('licensing.openCustomerPortal')}
+              <ExternalLink className="ml-2 h-4 w-4" />
+            </button>
           </div>
         </div>
       </div>
