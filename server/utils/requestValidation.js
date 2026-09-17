@@ -754,3 +754,9 @@ export const webhookTestBodySchema = webhookUpsertBodySchema.extend({
   id: z.string().uuid().optional(),
   name: z.string().trim().max(100).optional(),
 });
+
+/** Self-host Connect: redeem pairing code from admin portal. */
+export const connectPortalBodySchema = z.object({
+  pairingCode: z.string().trim().min(8).max(64),
+  adminPortalUrl: z.string().url().max(2048).optional()
+});

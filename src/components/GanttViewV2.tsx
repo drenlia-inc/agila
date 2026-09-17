@@ -132,7 +132,6 @@ const GanttViewV2 = ({
   selectedTask,
   taskViewMode = 'expand',
   onUpdateTask: onUpdateTaskProp,
-  onTaskDragStart,
   onTaskDragEnd,
   onClearDragState,
   boardId,
@@ -2078,18 +2077,11 @@ const GanttViewV2 = ({
         
         setLocalDragState(dragState);
         localDragStateRef.current = dragState;
-        
-        if (onTaskDragStart) {
-          const originalTask = Object.values(columns)
-            .flatMap(col => col.tasks)
-            .find(t => t.id === taskId);
-          if (originalTask) {
-            onTaskDragStart(originalTask);
-          }
-        }
+        // Do not call onTaskDragStart — that sets App draggedTask and shows the
+        // Kanban card DragOverlay ghost. Timeline moves only reposition the bar.
       }
     }
-  }, [ganttTasks, columns, onTaskDragStart, canMutate]);
+  }, [ganttTasks, canMutate]);
 
   const handleTimelineDragOver = useCallback((event: DragOverEvent) => {
     const { over } = event;

@@ -51,6 +51,12 @@ if [ "\$ok" != 1 ]; then
   docker compose logs --tail 80 agila-app >&2 || true
   exit 1
 fi
+
+# Reclaim dangling images / unused build cache left by --build (do not prune in-use volumes).
+echo "=== docker tidy ==="
+docker volume prune -f >/dev/null 2>&1 || true
+docker system prune -f >/dev/null 2>&1 || true
+docker system df 2>/dev/null || true
 EOF
 
 echo "Demo deploy complete (${SHA})"
