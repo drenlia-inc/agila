@@ -1,6 +1,9 @@
 /**
- * Shared tenant base domain for multi-tenant host routing and URL builders.
- * Override with TENANT_DOMAIN; default is the public SaaS domain.
+ * Shared tenant base domain for multi-tenant host routing only
+ * (`{tenantId}.{TENANT_DOMAIN}`). Override with TENANT_DOMAIN.
+ *
+ * Not used for Customer Portal (https://agila.dev) or Admin Portal
+ * (https://admin.agila.dev) — see server/constants/agilaPublicUrls.js.
  */
 
 export const DEFAULT_TENANT_DOMAIN = 'agila.dev';

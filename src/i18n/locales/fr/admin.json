@@ -315,7 +315,7 @@
     "siteNameEmptyHint": "Laissez vide pour masquer le nom du site dans l'en-tête (utile avec un logo uniquement). Un nom vide n'affichera pas « Agila ».",
     "siteUrl": "URL du site",
     "websiteUrl": "URL du site web (Portail client)",
-    "websiteUrlDescription": "URL vers votre portail client pour la gestion des abonnements. Cette valeur est définie lors de l'achat de l'instance et est en lecture seule.",
+    "websiteUrlDescription": "Toujours https://agila.dev — portail client Agila. En lecture seule sur les instances hébergées.",
     "brandingSection": "Image de marque",
     "siteLogo": "Logo du site",
     "siteLogoDescription": "Affiché dans l'en-tête (mode clair). Téléversez un fichier pour le recadrer, ou collez une URL. Cliquez l’aperçu pour rouvrir l’éditeur de recadrage.",

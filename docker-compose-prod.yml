@@ -47,7 +47,9 @@ services:
       - LICENSE_ENABLED=false
       # false = single-tenant Docker; true = multi-tenant (K8s)
       - MULTI_TENANT=false
-      # Multi-tenant only: hostname suffix for tenant ID
+      # Multi-tenant only: hostname suffix for tenant ID (`{tenantId}.{TENANT_DOMAIN}`).
+      # Ignored when MULTI_TENANT=false. Does NOT set Customer Portal / Admin Portal URLs
+      # (those are always https://agila.dev / https://admin.agila.dev in code).
       - TENANT_DOMAIN=${TENANT_DOMAIN:-localhost}
       # Required when reverse-proxied (nginx). Set to false only if you hit :3010 directly.
       - TRUST_PROXY=1

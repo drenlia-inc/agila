@@ -103,17 +103,13 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   const [showGetSupportCta, setShowGetSupportCta] = useState(false);
   const [canSelfDelete, setCanSelfDelete] = useState(false);
 
-  const websiteUrl = String(
-    siteSettings?.WEBSITE_URL || contextSystemSettings?.WEBSITE_URL || ''
-  ).trim();
   const opensPortalInNewTab = (() => {
     const flag = siteSettings?.SITE_OPENS_NEW_TAB ?? contextSystemSettings?.SITE_OPENS_NEW_TAB;
     return flag === undefined || flag === 'true';
   })();
 
   const handleOpenCustomerPortal = () => {
-    if (!websiteUrl) return;
-    const target = buildCustomerPortalUrl(websiteUrl, currentUser?.email, i18n.language);
+    const target = buildCustomerPortalUrl(currentUser?.email, i18n.language);
     if (opensPortalInNewTab) {
       window.open(target, '_blank', 'noopener,noreferrer');
     } else {
@@ -844,20 +840,14 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                   <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
                     {t('profile.customerPortalDescription')}
                   </p>
-                  {websiteUrl ? (
-                    <button
-                      type="button"
-                      onClick={handleOpenCustomerPortal}
-                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm font-medium"
-                    >
-                      {t('profile.openCustomerPortal')}
-                      <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
-                    </button>
-                  ) : (
-                    <p className="text-sm text-amber-800 dark:text-amber-200">
-                      {t('profile.websiteUrlNotConfigured')}
-                    </p>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleOpenCustomerPortal}
+                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-sm font-medium"
+                  >
+                    {t('profile.openCustomerPortal')}
+                    <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                  </button>
                 </div>
               </div>
               ) : showGetSupportCta ? (
