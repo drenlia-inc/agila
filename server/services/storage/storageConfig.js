@@ -47,7 +47,7 @@ export function defaultTenantKeyPrefix(tenantId) {
  * @param {*} db
  * @returns {Promise<StorageConfig>}
  */
-export async function loadStorageConfig(db) {
+export async function loadStorageConfig(db, options = {}) {
   const get = async (key, fallback = '') => {
     try {
       if (key === 'S3_SECRET_ACCESS_KEY') {
@@ -68,7 +68,7 @@ export async function loadStorageConfig(db) {
     bucket: await get('S3_BUCKET', ''),
   });
 
-  return {
+  const config = {
     backend,
     managed: storageMode === 'managed',
     endpoint: await get('S3_ENDPOINT', ''),
@@ -80,6 +80,14 @@ export async function loadStorageConfig(db) {
     keyPrefix: normalizeKeyPrefix(await get('S3_KEY_PREFIX', '')),
     testOk: (await get('STORAGE_TEST_OK', 'false')) === 'true'
   };
+
+  if (storageMode === 'managed') {
+    const tid = String(options.tenantId || '').trim();
+    if (tid) {
+      config.keyPrefix = normalizeKeyPrefix(`tenants/${tid}`);
+    }
+  }
+  return config;
 }
 
 /**
