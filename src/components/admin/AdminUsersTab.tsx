@@ -1797,11 +1797,19 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                           <UserListAvatarRoleBadge role={primaryRole} labels={roleLabels} />
                         )}
                       </div>
-                      <div className="min-w-0">
+                        <div className="min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                             {displayName}
                           </div>
+                          {user.email === 'system@local' && (
+                            <span
+                              className="shrink min-w-0 text-[11px] font-normal text-slate-400 dark:text-slate-500 truncate"
+                              title={t('users.systemAccountHint')}
+                            >
+                              — {t('users.systemAccountHint')}
+                            </span>
+                          )}
                           {isCurrentUserRow && (
                             <span className="shrink-0 inline-flex items-center px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide leading-none rounded border bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-700">
                               {t('users.youBadge')}
