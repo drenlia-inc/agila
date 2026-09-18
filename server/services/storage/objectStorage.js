@@ -234,7 +234,7 @@ function prefixBelongsToTenant(prefix, tenantId) {
  * }>}
  */
 export async function purgeManagedTenantObjects(db, options = {}) {
-  const config = await loadStorageConfig(db);
+  const config = await loadStorageConfig(db, { tenantId: options.tenantId });
   if (!config.managed) {
     return { skipped: true, reason: 'STORAGE_MODE is not managed' };
   }
@@ -374,8 +374,20 @@ export async function testS3Connection(db, overrides = {}) {
     }
   }
 
-  const base = asDestination ? { ...EMPTY_S3_BASE } : await loadStorageConfig(db);
-  const config = storageConfigFromOverrides(overrides, base);
+  const base = asDestination
+    ? { ...EMPTY_S3_BASE }
+    : await loadStorageConfig(db, { tenantId: overrides.tenantId });
+  const liveOverrides = { ...overrides };
+  if (base.managed && !asDestination) {
+    delete liveOverrides.S3_KEY_PREFIX;
+    delete liveOverrides.S3_ACCESS_KEY_ID;
+    delete liveOverrides.S3_SECRET_ACCESS_KEY;
+    delete liveOverrides.S3_BUCKET;
+    delete liveOverrides.S3_ENDPOINT;
+    delete liveOverrides.S3_REGION;
+    delete liveOverrides.S3_FORCE_PATH_STYLE;
+  }
+  const config = storageConfigFromOverrides(liveOverrides, base);
   const validation = validateS3Config(config);
   if (!validation.ok) {
     return { ok: false, error: validation.error };
@@ -562,7 +574,7 @@ async function acquireMigrationLock(db, direction, options = {}) {
     throw new Error('Migrating to disk is not supported in multi-tenant mode (no shared local disk across pods)');
   }
 
-  const config = await loadStorageConfig(db);
+  const config = await loadStorageConfig(db, { tenantId: options.tenantId });
   let destConfig = null;
 
   if (
@@ -598,6 +610,19 @@ async function acquireMigrationLock(db, direction, options = {}) {
     const destValidation = validateS3Config(destConfig);
     if (!destValidation.ok) {
       throw new Error(destValidation.error || 'Destination S3 is not configured');
+    }
+    const destBucket = String(destConfig.bucket || '').trim();
+    const destPrefix = normalizeKeyPrefix(destConfig.keyPrefix);
+    const tenantId = String(options.tenantId || '').trim();
+    if (destBucket === 'storage-agila' && tenantId) {
+      const expected = normalizeKeyPrefix(`tenants/${tenantId}`);
+      if (destPrefix !== expected) {
+        const err = new Error(
+          `Destination prefix must be ${expected} when using the platform bucket`
+        );
+        err.statusCode = 400;
+        throw err;
+      }
     }
     if (sameS3Target(config, destConfig)) {
       throw new Error('Source and destination resolve to the same bucket, endpoint, region, and prefix');

@@ -501,7 +501,10 @@ router.post('/test-storage', authenticateToken, requireRole(['admin']), async (r
       return res.status(400).json({ error: parsed.error });
     }
     const { testS3Connection } = await import('../services/storage/index.js');
-    const result = await testS3Connection(db, parsed.data);
+    const result = await testS3Connection(db, {
+      ...parsed.data,
+      tenantId: getTenantId(req)
+    });
 
     // Sync STORAGE_TEST_OK to clients (live probes only — not destination drafts)
     if (!result.asDestination) {
@@ -568,7 +571,8 @@ router.post('/migrate-storage', authenticateToken, requireRole(['admin']), async
         deleteSource,
         destination: parsed.data.destination || undefined,
         cutoverMode: parsed.data.cutoverMode || 'byo',
-        cutoverEligible: parsed.data.cutoverEligible
+        cutoverEligible: parsed.data.cutoverEligible,
+        tenantId: getTenantId(req)
       }
     );
 

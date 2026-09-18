@@ -1239,7 +1239,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
         const platformS3Bucket = platformS3Env('BUCKET');
         if (existingStorageMode === 'byo') {
           console.log('ℹ️  STORAGE_MODE=byo — leaving licensed storage seed unchanged');
-        } else if (platformS3Bucket) {
+        } else if (platformS3Bucket && process.env.MULTI_TENANT !== 'true') {
           const { encryptSettingValue: encryptS3Secret } = await import('../utils/secretCrypto.js');
           const managedS3SecretPlain = platformS3Env('SECRET_ACCESS_KEY');
           const managedS3SecretStored = managedS3SecretPlain
