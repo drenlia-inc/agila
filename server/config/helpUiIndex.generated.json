@@ -279,8 +279,8 @@
       "value": "licensing-panel",
       "en": "Open Customer Portal",
       "fr": "Ouvrir le portail client",
-      "searchEn": "Open Customer Portal Open Customer Portal Website URL not configured. Please contact your system administrator to set the WEBSITE_URL in Site Settings. Overview Manage Subscription licensing-panel",
-      "searchFr": "Ouvrir le portail client Ouvrir le portail client URL du site Web non configurée. Veuillez contacter votre administrateur système pour définir WEBSITE_URL dans les paramètres du site. Vue d'ensemble Gérer l'abonnement licensing-panel",
+      "searchEn": "Open Customer Portal Open Customer Portal Overview Manage Subscription licensing-panel",
+      "searchFr": "Ouvrir le portail client Ouvrir le portail client Vue d'ensemble Gérer l'abonnement licensing-panel",
       "kind": "admin",
       "hash": "#admin#licensing",
       "highlights": [
@@ -1530,6 +1530,23 @@
       "adminOnly": true,
       "audience": "admin",
       "file": "src/components/admin/AdminWebhooksTab.tsx"
+    },
+    {
+      "id": "setting:WEBSITE_URL",
+      "attr": "setting",
+      "value": "WEBSITE_URL",
+      "en": "Site URL",
+      "fr": "URL du site",
+      "searchEn": "Site URL Site URL Website URL (Customer Portal) Always https://agila.dev — Agila’s customer portal. Read-only on hosted instances. Branding WEBSITE_URL",
+      "searchFr": "URL du site URL du site URL du site web (Portail client) Toujours https://agila.dev — portail client Agila. En lecture seule sur les instances hébergées. Image de marque WEBSITE_URL",
+      "kind": "admin",
+      "hash": "#admin#site-settings",
+      "highlights": [
+        "[data-setting-key=\"WEBSITE_URL\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminSiteSettingsTab.tsx"
     },
     {
       "id": "tour:add-board-button",
