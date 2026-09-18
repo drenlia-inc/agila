@@ -14,6 +14,7 @@ interface BoardTaskCount {
 
 interface LicenseInfo {
   enabled: boolean;
+  supportOnly?: boolean;
   limits: {
     USER_LIMIT: number;
     TASK_LIMIT: number;
@@ -24,6 +25,9 @@ interface LicenseInfo {
     /** @deprecated legacy alias — prefer SUPPORT_LEVEL */
     SUPPORT_TYPE?: string;
     AI_TIER?: string;
+    SUPPORT_HOURS_MONTHLY?: number;
+    SUPPORT_HOURS_USED?: number;
+    SUPPORT_OVERAGE_RATE?: string;
   };
   usage: {
     users: number;
@@ -44,7 +48,7 @@ interface LicenseInfo {
 }
 
 function resolveSupportLevel(limits: LicenseInfo['limits'] | undefined): string {
-  return String(limits?.SUPPORT_LEVEL || limits?.SUPPORT_TYPE || 'basic');
+  return String(limits?.SUPPORT_LEVEL || limits?.SUPPORT_TYPE || 'community');
 }
 
 interface AdminLicensingTabProps {
@@ -167,8 +171,10 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   const getSupportTypeColor = (supportType: string): string => {
     switch (String(supportType || '').toLowerCase()) {
       case 'pro':
+      case 'priority':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
       case 'basic':
+      case 'essential':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'free':
       case 'community':
@@ -181,8 +187,10 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   const getSupportTypeIcon = (supportType: string) => {
     switch (String(supportType || '').toLowerCase()) {
       case 'pro':
+      case 'priority':
         return <Shield className="h-4 w-4" />;
       case 'basic':
+      case 'essential':
         return <CheckCircle className="h-4 w-4" />;
       case 'free':
       case 'community':
@@ -190,6 +198,21 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
       default:
         return <AlertCircle className="h-4 w-4" />;
     }
+  };
+
+  const supportPlanDescription = (level: string): string => {
+    const n = String(level || '').toLowerCase();
+    if (n === 'pro' || n === 'priority') return t('licensing.priorityPlanDescription');
+    if (n === 'basic' || n === 'essential') return t('licensing.essentialPlanDescription');
+    if (n === 'free' || n === 'community') return t('licensing.communityPlanDescription');
+    return t('licensing.communityPlanDescription');
+  };
+
+  const supportPlanTitle = (level: string): string => {
+    const n = String(level || '').toLowerCase();
+    if (n === 'pro' || n === 'priority') return t('licensing.supportPlanPriority');
+    if (n === 'basic' || n === 'essential') return t('licensing.supportPlanEssential');
+    return t('licensing.supportPlanCommunity');
   };
 
   const calculateUsagePercentage = (current: number, limit: number): number => {
@@ -237,6 +260,69 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
       );
     }
 
+    // Self-hosted / demo: show support plan without seat meters
+    if (!licenseInfo.enabled) {
+      const isDemoMode = process.env.DEMO_ENABLED === 'true';
+      const supportLevel = resolveSupportLevel(licenseInfo.limits);
+      const hoursIncluded = Number(licenseInfo.limits?.SUPPORT_HOURS_MONTHLY ?? 0);
+      const hoursUsed = Number(licenseInfo.limits?.SUPPORT_HOURS_USED ?? 0);
+      const overage = licenseInfo.limits?.SUPPORT_OVERAGE_RATE || '175';
+
+      return (
+        <div className="space-y-6">
+          <div className="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
+            <div className="flex items-center">
+              <CheckCircle className="h-6 w-6 text-blue-500 mr-3" />
+              <div>
+                <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200">
+                  {isDemoMode ? t('licensing.demoMode') : t('licensing.selfHostedMode')}
+                </h3>
+                <p className="text-blue-700 dark:text-blue-300 mt-1">
+                  {isDemoMode
+                    ? t('licensing.demoModeDescription')
+                    : t('licensing.selfHostedModeDescription')}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold flex items-center mb-4 text-gray-900 dark:text-white">
+                <Shield className="h-5 w-5 mr-2" />
+                {t('licensing.currentSupportPlan')}
+              </h3>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  {getSupportTypeIcon(supportLevel)}
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                      {supportPlanTitle(supportLevel)}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400">{supportPlanDescription(supportLevel)}</p>
+                  </div>
+                </div>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getSupportTypeColor(supportLevel)}`}>
+                  {supportPlanTitle(supportLevel)}
+                </span>
+              </div>
+              {!isDemoMode && (
+                <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                  {hoursIncluded > 0
+                    ? t('licensing.supportHoursSummary', {
+                        used: hoursUsed,
+                        included: hoursIncluded,
+                        overage
+                      })
+                    : t('licensing.supportHoursCommunity')}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // Handle case where license info doesn't have the expected structure
     if (!licenseInfo.usage || !licenseInfo.limits) {
       return (
@@ -246,28 +332,6 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
             <p className="text-yellow-800 dark:text-yellow-200">
               {licenseInfo.message || t('licensing.licenseInfoIncomplete')}
             </p>
-          </div>
-        </div>
-      );
-    }
-
-    if (!licenseInfo.enabled) {
-      const isDemoMode = process.env.DEMO_ENABLED === 'true';
-      return (
-        <div className="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
-          <div className="flex items-center">
-            <CheckCircle className="h-6 w-6 text-blue-500 mr-3" />
-            <div>
-              <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200">
-                {isDemoMode ? t('licensing.demoMode') : t('licensing.selfHostedMode')}
-              </h3>
-              <p className="text-blue-700 dark:text-blue-300 mt-1">
-                {isDemoMode 
-                  ? t('licensing.demoModeDescription')
-                  : t('licensing.selfHostedModeDescription')
-                }
-              </p>
-            </div>
           </div>
         </div>
       );
@@ -288,17 +352,14 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
               <div className="flex items-center space-x-3">
                 {getSupportTypeIcon(supportLevel)}
                 <div>
-                  <h3 className="text-xl font-semibold capitalize text-gray-900 dark:text-white">{supportLevel} {t('licensing.plan')}</h3>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    {supportLevel.toLowerCase() === 'pro' && t('licensing.proPlanDescription')}
-                    {supportLevel.toLowerCase() === 'basic' && t('licensing.basicPlanDescription')}
-                    {(supportLevel.toLowerCase() === 'free' || supportLevel.toLowerCase() === 'community') &&
-                      t('licensing.freePlanDescription')}
-                  </p>
+                  <h3 className="text-xl font-semibold capitalize text-gray-900 dark:text-white">
+                    {supportPlanTitle(supportLevel)} {t('licensing.plan')}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400">{supportPlanDescription(supportLevel)}</p>
                 </div>
               </div>
               <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getSupportTypeColor(supportLevel)}`}>
-                {supportLevel.toUpperCase()}
+                {supportPlanTitle(supportLevel)}
               </span>
             </div>
           </div>

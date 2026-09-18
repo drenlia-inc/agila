@@ -317,6 +317,20 @@ router.put('/:userId/role', authenticateToken, requireRole(['admin']), async (re
         timestamp: new Date().toISOString()
       }, getTenantId(req));
 
+      if (role === 'admin') {
+        const tenantId = getTenantId(req);
+        const allBoardIds = await participantQueries.addUserToAllLiveBoards(db, userId);
+        for (const boardId of allBoardIds) {
+          const participantCount = await participantQueries.countParticipants(db, boardId);
+          const userIds = await participantQueries.listParticipantUserIds(db, boardId);
+          await notificationService.publish(
+            'board-participants-updated',
+            { boardId, participantCount, userIds },
+            tenantId
+          );
+        }
+      }
+
       const linkedMember = await memberQueries.getMemberByUserId(db, userId);
       if (linkedMember) {
         await notificationService.publish('member-updated', {
@@ -526,7 +540,18 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
       await userQueries.updateUserAvatar(db, userId, avatarPath);
     }
 
-    if (validBoardIds.length > 0) {
+    if (role === 'admin') {
+      const allBoardIds = await participantQueries.addUserToAllLiveBoards(db, userId);
+      for (const boardId of allBoardIds) {
+        const participantCount = await participantQueries.countParticipants(db, boardId);
+        const userIds = await participantQueries.listParticipantUserIds(db, boardId);
+        await notificationService.publish(
+          'board-participants-updated',
+          { boardId, participantCount, userIds },
+          tenantId
+        );
+      }
+    } else if (validBoardIds.length > 0) {
       await participantQueries.addUserToBoards(db, userId, validBoardIds);
       for (const boardId of validBoardIds) {
         const participantCount = await participantQueries.countParticipants(db, boardId);

@@ -30,8 +30,11 @@ class LicenseManager {
       TASK_LIMIT: parseInt(process.env.TASK_LIMIT) || -1,
       BOARD_LIMIT: parseInt(process.env.BOARD_LIMIT) || 10,
       STORAGE_LIMIT: parseInt(process.env.STORAGE_LIMIT) || 107374182400, // 100 GiB
-      SUPPORT_LEVEL: process.env.SUPPORT_LEVEL || 'basic',
-      AI_TIER: process.env.AI_TIER || 'off'
+      SUPPORT_LEVEL: process.env.SUPPORT_LEVEL || 'community',
+      AI_TIER: process.env.AI_TIER || 'off',
+      SUPPORT_HOURS_MONTHLY: parseInt(process.env.SUPPORT_HOURS_MONTHLY, 10) || 0,
+      SUPPORT_HOURS_USED: parseInt(process.env.SUPPORT_HOURS_USED, 10) || 0,
+      SUPPORT_OVERAGE_RATE: process.env.SUPPORT_OVERAGE_RATE || '175'
     };
   }
 
@@ -53,10 +56,66 @@ class LicenseManager {
     return Number.isNaN(n) ? null : n;
   }
 
+  /**
+   * Read support entitlement keys even when LICENSE_ENABLED=false.
+   * Seat/board enforcement stays off; Licensing UI still shows the support plan.
+   */
+  async getSupportOnlyLimits() {
+    const supportKeys = new Set([
+      'SUPPORT_LEVEL',
+      'SUPPORT_TYPE',
+      'SUPPORT_HOURS_MONTHLY',
+      'SUPPORT_HOURS_USED',
+      'SUPPORT_OVERAGE_RATE',
+      'AI_TIER'
+    ]);
+    const limits = {
+      USER_LIMIT: -1,
+      TASK_LIMIT: -1,
+      BOARD_LIMIT: -1,
+      STORAGE_LIMIT: -1,
+      WEBHOOK_LIMIT: -1,
+      SUPPORT_LEVEL: 'community',
+      AI_TIER: 'full',
+      SUPPORT_HOURS_MONTHLY: 0,
+      SUPPORT_HOURS_USED: 0,
+      SUPPORT_OVERAGE_RATE: '175'
+    };
+
+    try {
+      const licenseSettings = await wrapQuery(
+        this.db.prepare('SELECT setting_key, setting_value FROM license_settings'),
+        'SELECT'
+      ).all();
+
+      for (const setting of licenseSettings || []) {
+        let key = setting.setting_key;
+        if (key === 'SUPPORT_TYPE') key = 'SUPPORT_LEVEL';
+        if (!supportKeys.has(key) && key !== 'SUPPORT_LEVEL') continue;
+        if (key === 'SUPPORT_LEVEL' || key === 'AI_TIER' || key === 'SUPPORT_OVERAGE_RATE') {
+          limits[key] = setting.setting_value;
+        } else if (
+          key === 'SUPPORT_HOURS_MONTHLY' ||
+          key === 'SUPPORT_HOURS_USED'
+        ) {
+          const n = parseInt(setting.setting_value, 10);
+          limits[key] = Number.isNaN(n) ? 0 : n;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to read support-only license settings:', error.message);
+    }
+
+    if (!limits.SUPPORT_LEVEL) {
+      limits.SUPPORT_LEVEL = 'community';
+    }
+    return limits;
+  }
+
   // Get current license limits (from database if available, otherwise from environment)
   async getLimits() {
     if (!this.enabled) {
-      return null; // No limits when licensing is disabled
+      return null; // No enforcement limits when licensing is disabled
     }
 
     const isMultiTenant = process.env.MULTI_TENANT === 'true';
@@ -79,7 +138,11 @@ class LicenseManager {
           // Legacy alias from older deploys
           if (key === 'SUPPORT_TYPE') key = 'SUPPORT_LEVEL';
 
-          if (key === 'SUPPORT_LEVEL' || key === 'AI_TIER') {
+          if (
+            key === 'SUPPORT_LEVEL' ||
+            key === 'AI_TIER' ||
+            key === 'SUPPORT_OVERAGE_RATE'
+          ) {
             limits[key] = value;
           } else {
             const n = parseInt(value, 10);
@@ -89,7 +152,7 @@ class LicenseManager {
 
         // Ensure SUPPORT_LEVEL is always present for Admin UI consumers
         if (!limits.SUPPORT_LEVEL) {
-          limits.SUPPORT_LEVEL = this.defaultLimits.SUPPORT_LEVEL || 'basic';
+          limits.SUPPORT_LEVEL = this.defaultLimits.SUPPORT_LEVEL || 'community';
         }
         
         return limits;
@@ -333,11 +396,27 @@ class LicenseManager {
   async getLicenseInfo() {
     if (!this.enabled) {
       const isDemoMode = process.env.DEMO_ENABLED === 'true';
+      const limits = await this.getSupportOnlyLimits();
       return {
         enabled: false,
-        message: isDemoMode 
+        supportOnly: true,
+        message: isDemoMode
           ? 'Licensing is disabled (demo mode - resets hourly)'
-          : 'Licensing is disabled (self-hosted mode)'
+          : 'Licensing is disabled (self-hosted mode)',
+        limits,
+        usage: {
+          users: 0,
+          boards: 0,
+          totalTasks: 0,
+          storage: 0,
+          webhooks: 0
+        },
+        limitsReached: {
+          users: false,
+          boards: false,
+          storage: false,
+          webhooks: false
+        }
       };
     }
 

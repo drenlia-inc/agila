@@ -272,12 +272,28 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
       columns: columnsObj,
       tasksHydrated: true,
       taskCount: 0,
+      participantCount: 0,
     };
+
+    // Seed participants: creator + all admins (avoids empty-membership admin UX).
+    try {
+      await participantQueries.ensureAdminsOnBoard(db, id, [req.user?.id].filter(Boolean));
+      const participantCount = await participantQueries.countParticipants(db, id);
+      const userIds = await participantQueries.listParticipantUserIds(db, id);
+      newBoard.participantCount = participantCount;
+      await notificationService.publish(
+        'board-participants-updated',
+        { boardId: id, participantCount, userIds },
+        tenantId
+      );
+    } catch (participantErr) {
+      console.error('Failed to seed board participants on create:', participantErr);
+    }
     
     // Publish to Redis for real-time updates
     notificationService.publish('board-created', {
       boardId: id,
-      board: { id, title, project: projectIdentifier, position },
+      board: { id, title, project: projectIdentifier, position, participantCount: newBoard.participantCount },
       timestamp: new Date().toISOString()
     }, tenantId);
 

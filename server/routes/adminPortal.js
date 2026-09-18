@@ -15,7 +15,7 @@ import { invalidateOAuthConfigCache } from '../utils/oauthConfigCache.js';
 import { getTenantDomain } from '../utils/tenantDomain.js';
 import { clearSqlDebugSettingsCache } from '../utils/sqlDebugSettingsCache.js';
 // MIGRATED: Import sqlManager modules
-import { users as userQueries, settings as settingsQueries, licenseSettings as licenseSettingsQueries, auth as authQueries, adminUsers as adminUserQueries, helpers, health as healthQueries } from '../utils/sqlManager/index.js';
+import { users as userQueries, settings as settingsQueries, licenseSettings as licenseSettingsQueries, auth as authQueries, adminUsers as adminUserQueries, helpers, health as healthQueries, boardParticipants as participantQueries } from '../utils/sqlManager/index.js';
 import { isSecretSettingKey, SECRET_SETTING_PLACEHOLDER } from '../constants/secretSettings.js';
 import {
   projectSecretForAdminApi,
@@ -559,9 +559,11 @@ router.post('/onboarding/welcome-tasks', authenticateAdminPortal, async (req, re
     }
 
     let assigneeMemberId = null;
+    let ownerUserId = null;
     if (ownerEmail) {
       const ownerUser = await userQueries.getUserByEmail(db, ownerEmail);
       if (ownerUser) {
+        ownerUserId = ownerUser.id;
         const ownerMember = await userQueries.getMemberByUserId(db, ownerUser.id);
         assigneeMemberId = ownerMember?.id || null;
       }
@@ -576,6 +578,10 @@ router.post('/onboarding/welcome-tasks', authenticateAdminPortal, async (req, re
         success: false,
         error: 'No board found'
       });
+    }
+
+    if (ownerUserId) {
+      await participantQueries.addUserToBoards(db, ownerUserId, [board.id]);
     }
 
     const columns = await wrapQuery(
@@ -945,9 +951,24 @@ router.post('/users', authenticateAdminPortal, async (req, res) => {
     }
     // MIGRATED: Create member using auth.createMemberForUser
     await authQueries.createMemberForUser(db, memberId, memberName, memberColor, userId);
+
+    const tenantId = getTenantId(req);
+
+    // New admins must be board participants (covers agila-admin instance owner create).
+    if (String(role).toLowerCase() === 'admin') {
+      const allBoardIds = await participantQueries.addUserToAllLiveBoards(db, userId);
+      for (const boardId of allBoardIds) {
+        const participantCount = await participantQueries.countParticipants(db, boardId);
+        const userIds = await participantQueries.listParticipantUserIds(db, boardId);
+        await notificationService.publish(
+          'board-participants-updated',
+          { boardId, participantCount, userIds },
+          tenantId
+        ).catch((err) => console.error('Failed to publish board-participants-updated:', err));
+      }
+    }
     
     // Publish to Redis for real-time updates
-    const tenantId = getTenantId(req);
     console.log('📤 Publishing user-created and member-created to Redis for admin portal');
     await notificationService.publish('user-created', {
       user: { 
@@ -1080,6 +1101,9 @@ router.put('/users/:userId', authenticateAdminPortal, async (req, res) => {
         const roleObj = await userQueries.getRoleByName(db, role);
         if (roleObj) {
           await userQueries.addUserRole(db, userId, roleObj.id);
+        }
+        if (String(role).toLowerCase() === 'admin') {
+          await participantQueries.addUserToAllLiveBoards(db, userId);
         }
       }
     }
@@ -1394,7 +1418,7 @@ router.put('/plan/:key', authenticateAdminPortal, async (req, res) => {
     const t = await getTranslator(db);
     
     // Validate key
-    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'];
+    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER', 'SUPPORT_HOURS_MONTHLY', 'SUPPORT_HOURS_USED', 'SUPPORT_OVERAGE_RATE'];
     if (!allowedKeys.includes(key)) {
       return res.status(400).json({ 
         success: false,
@@ -1403,7 +1427,12 @@ router.put('/plan/:key', authenticateAdminPortal, async (req, res) => {
     }
 
     // Validate value based on key type
-    if (key !== 'SUPPORT_LEVEL' && key !== 'AI_TIER' && value !== null) {
+    if (
+      key !== 'SUPPORT_LEVEL' &&
+      key !== 'AI_TIER' &&
+      key !== 'SUPPORT_OVERAGE_RATE' &&
+      value !== null
+    ) {
       const numValue = parseInt(value);
       if (isNaN(numValue) || numValue < -1) {
         return res.status(400).json({ 
@@ -1450,7 +1479,7 @@ router.delete('/plan/:key', authenticateAdminPortal, async (req, res) => {
     const t = await getTranslator(db);
     
     // Validate key
-    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'];
+    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER', 'SUPPORT_HOURS_MONTHLY', 'SUPPORT_HOURS_USED', 'SUPPORT_OVERAGE_RATE'];
     if (!allowedKeys.includes(key)) {
       return res.status(400).json({ 
         success: false,
