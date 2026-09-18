@@ -63,11 +63,10 @@ data:
   AI_RUNNER_URL: "http://kanban-runner:8080"
   AI_CALLBACK_BASE_URL: "http://easy-kanban-service:3222"
 
-  # Platform-managed S3 (optional). When MANAGED_S3_BUCKET is non-empty and
-  # LICENSE_ENABLED=true, new tenants get STORAGE_MANAGED=true + S3 backend.
-  # Credentials come from Secret easy-kanban-managed-s3 (not stored here).
+  # Platform S3 metadata (optional). Hosted/EKS tenants must not receive
+  # MANAGED_S3 access keys — agila-admin issues per-tenant IAM users.
+  # Self-hosted (MULTI_TENANT unset) may still seed from env.
   # Object keys use tenants/{tenantId}/ unless MANAGED_S3_KEY_PREFIX is set.
-  # SETTINGS_ENCRYPTION_KEY encrypts S3_SECRET_ACCESS_KEY in the tenant settings table.
   MANAGED_S3_BUCKET: ""
   MANAGED_S3_REGION: ""
   MANAGED_S3_ENDPOINT: ""

@@ -516,7 +516,8 @@ router.post('/storage/migrate-s3-to-s3', authenticateAdminPortal, async (req, re
       deleteSource: req.body?.deleteSource === true,
       destination,
       cutoverMode: req.body?.cutoverMode === 'managed' ? 'managed' : 'byo',
-      cutoverEligible: req.body?.cutoverEligible
+      cutoverEligible: req.body?.cutoverEligible,
+      tenantId: getTenantId(req) || req.tenantId || null
     });
     res.json({ success: true, ...result });
   } catch (error) {

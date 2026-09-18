@@ -142,20 +142,6 @@ spec:
               name: easy-kanban-settings-crypto
               key: SETTINGS_ENCRYPTION_KEY
               optional: true
-        # Platform-managed S3 credentials (optional). Used only when ConfigMap
-        # MANAGED_S3_BUCKET is set — seeded into new tenants as STORAGE_MANAGED.
-        - name: MANAGED_S3_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              name: easy-kanban-managed-s3
-              key: MANAGED_S3_ACCESS_KEY_ID
-              optional: true
-        - name: MANAGED_S3_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: easy-kanban-managed-s3
-              key: MANAGED_S3_SECRET_ACCESS_KEY
-              optional: true
         resources:
           requests:
             memory: "256Mi"

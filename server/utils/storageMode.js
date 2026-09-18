@@ -110,11 +110,25 @@ export async function markStorageByoAfterCutover(db) {
   await setStorageModeState(db, 'byo');
 }
 
-/** Switch off platform ownership without wiping live S3 (files still on the platform bucket). */
+/** Switch off platform ownership. Wipes platform secrets; IAM user stays in AWS without keys. */
 export async function switchToByoStorage(db) {
   const current = await resolveStorageMode(db);
   if (current === 'managed') {
-    await mirrorActiveS3ToPlatformShadow(db);
+    await settingsQueries.upsertSetting(db, 'S3_ACCESS_KEY_ID', '');
+    await upsertSecretSetting(db, 'S3_SECRET_ACCESS_KEY', '');
+    await settingsQueries.upsertSetting(db, 'PLATFORM_S3_ACCESS_KEY_ID', '');
+    await upsertSecretSetting(db, 'PLATFORM_S3_SECRET_ACCESS_KEY', '');
+    await settingsQueries.upsertSetting(db, 'S3_ENDPOINT', '');
+    await settingsQueries.upsertSetting(db, 'S3_REGION', '');
+    await settingsQueries.upsertSetting(db, 'S3_BUCKET', '');
+    await settingsQueries.upsertSetting(db, 'S3_FORCE_PATH_STYLE', 'false');
+    await settingsQueries.upsertSetting(db, 'S3_KEY_PREFIX', '');
+    try {
+      const { notifyAdminLeaveManagedStorage } = await import('./notifyAdminLeaveManagedStorage.js');
+      await notifyAdminLeaveManagedStorage(db);
+    } catch (err) {
+      console.warn('Could not deactivate platform IAM keys:', err.message);
+    }
   }
   await setStorageModeState(db, 'byo');
   await settingsQueries.upsertSetting(db, 'STORAGE_TEST_OK', 'false');
