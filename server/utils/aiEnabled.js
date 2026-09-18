@@ -22,8 +22,10 @@ export async function getAiTier(db) {
       if (tier) return String(tier).toLowerCase();
       // Legacy: no AI_TIER — infer from SUPPORT_LEVEL
       const support = String(limits?.SUPPORT_LEVEL || '').toLowerCase();
-      if (support === 'pro') return 'full';
       if (support === 'basic') return 'off';
+      if (support === 'pro' || support === 'priority' || support === 'essential' || support === 'community') {
+        return 'full';
+      }
     }
     const row = await helpers.getSetting(db, 'AI_TIER');
     if (row) return String(row).toLowerCase();

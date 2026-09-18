@@ -131,6 +131,58 @@ export async function addUserToBoards(db, userId, boardIds) {
   return added;
 }
 
+/** Live (non-trashed) board ids. */
+export async function listLiveBoardIds(db) {
+  const rows = await wrapQuery(
+    db.prepare('SELECT id FROM boards WHERE deleted_at IS NULL'),
+    'SELECT'
+  ).all();
+  return (rows || []).map((row) => row.id).filter(Boolean);
+}
+
+/**
+ * Add a user to every live board (e.g. new / promoted admins).
+ * @returns {Promise<string[]>} board ids considered
+ */
+export async function addUserToAllLiveBoards(db, userId) {
+  if (!userId) return [];
+  const boardIds = await listLiveBoardIds(db);
+  if (boardIds.length === 0) return [];
+  await addUserToBoards(db, userId, boardIds);
+  return boardIds;
+}
+
+/** Admin user ids (excludes agent/system pseudo accounts). */
+export async function listAdminUserIds(db) {
+  const rows = await wrapQuery(
+    db.prepare(`
+      SELECT DISTINCT u.id
+      FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id
+      JOIN roles r ON r.id = ur.role_id
+      WHERE r.name = 'admin'
+        AND COALESCE(u.email, '') NOT IN ('agent@local', 'system@local')
+    `),
+    'SELECT'
+  ).all();
+  return (rows || []).map((row) => row.id).filter(Boolean);
+}
+
+/**
+ * Ensure every admin (and optional extra user ids) are participants on a board.
+ * Used when creating boards so admins never land on an empty-membership board.
+ */
+export async function ensureAdminsOnBoard(db, boardId, extraUserIds = []) {
+  if (!boardId) return [];
+  const adminIds = await listAdminUserIds(db);
+  const userIds = [...new Set([...adminIds, ...(extraUserIds || [])].map(String).filter(Boolean))];
+  if (userIds.length === 0) return [];
+  for (const userId of userIds) {
+    await addUserToBoards(db, userId, [boardId]);
+  }
+  return userIds;
+}
+
 /** Add every active human user to a board without dropping existing members. */
 export async function addActiveUsersAsParticipants(db, boardId) {
   const rows = await wrapQuery(
