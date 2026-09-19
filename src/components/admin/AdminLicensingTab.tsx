@@ -15,6 +15,8 @@ interface BoardTaskCount {
 interface LicenseInfo {
   enabled: boolean;
   supportOnly?: boolean;
+  /** Hosted SKU when LICENSE_ENABLED (basic | pro); inferred when PLAN_NAME missing. */
+  planName?: string | null;
   limits: {
     USER_LIMIT: number;
     TASK_LIMIT: number;
@@ -24,6 +26,7 @@ interface LicenseInfo {
     SUPPORT_LEVEL?: string;
     /** @deprecated legacy alias — prefer SUPPORT_LEVEL */
     SUPPORT_TYPE?: string;
+    PLAN_NAME?: string;
     AI_TIER?: string;
     SUPPORT_HOURS_MONTHLY?: number;
     SUPPORT_HOURS_USED?: number;
@@ -48,7 +51,23 @@ interface LicenseInfo {
 }
 
 function resolveSupportLevel(limits: LicenseInfo['limits'] | undefined): string {
-  return String(limits?.SUPPORT_LEVEL || limits?.SUPPORT_TYPE || 'community');
+  const n = String(limits?.SUPPORT_LEVEL || limits?.SUPPORT_TYPE || 'community').toLowerCase();
+  if (n === 'pro' || n === 'priority') return 'priority';
+  if (n === 'basic' || n === 'essential') return 'essential';
+  if (n === 'free' || n === 'community' || !n) return 'community';
+  return n;
+}
+
+function resolveHostedPlanName(info: LicenseInfo | null): 'basic' | 'pro' | null {
+  if (!info?.enabled) return null;
+  const named = String(info.planName || info.limits?.PLAN_NAME || '').toLowerCase();
+  if (named === 'basic' || named === 'pro') return named;
+  const users = Number(info.limits?.USER_LIMIT);
+  const boards = Number(info.limits?.BOARD_LIMIT);
+  if (users === 5) return 'basic';
+  if (users <= 10 && boards !== -1 && boards <= 10) return 'basic';
+  if (users >= 50 || boards === -1) return 'pro';
+  return null;
 }
 
 interface AdminLicensingTabProps {
@@ -170,13 +189,10 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
 
   const getSupportTypeColor = (supportType: string): string => {
     switch (String(supportType || '').toLowerCase()) {
-      case 'pro':
       case 'priority':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-      case 'basic':
       case 'essential':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'free':
       case 'community':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
       default:
@@ -184,15 +200,23 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
     }
   };
 
+  const getHostedPlanColor = (planName: string): string => {
+    switch (String(planName || '').toLowerCase()) {
+      case 'pro':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+      case 'basic':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+    }
+  };
+
   const getSupportTypeIcon = (supportType: string) => {
     switch (String(supportType || '').toLowerCase()) {
-      case 'pro':
       case 'priority':
         return <Shield className="h-4 w-4" />;
-      case 'basic':
       case 'essential':
         return <CheckCircle className="h-4 w-4" />;
-      case 'free':
       case 'community':
         return <AlertCircle className="h-4 w-4" />;
       default:
@@ -201,18 +225,31 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
   };
 
   const supportPlanDescription = (level: string): string => {
-    const n = String(level || '').toLowerCase();
-    if (n === 'pro' || n === 'priority') return t('licensing.priorityPlanDescription');
-    if (n === 'basic' || n === 'essential') return t('licensing.essentialPlanDescription');
-    if (n === 'free' || n === 'community') return t('licensing.communityPlanDescription');
+    const n = resolveSupportLevel({ SUPPORT_LEVEL: level } as LicenseInfo['limits']);
+    if (n === 'priority') return t('licensing.priorityPlanDescription');
+    if (n === 'essential') return t('licensing.essentialPlanDescription');
     return t('licensing.communityPlanDescription');
   };
 
   const supportPlanTitle = (level: string): string => {
-    const n = String(level || '').toLowerCase();
-    if (n === 'pro' || n === 'priority') return t('licensing.supportPlanPriority');
-    if (n === 'basic' || n === 'essential') return t('licensing.supportPlanEssential');
+    const n = resolveSupportLevel({ SUPPORT_LEVEL: level } as LicenseInfo['limits']);
+    if (n === 'priority') return t('licensing.supportPlanPriority');
+    if (n === 'essential') return t('licensing.supportPlanEssential');
     return t('licensing.supportPlanCommunity');
+  };
+
+  const hostedPlanTitle = (planName: string): string => {
+    const n = String(planName || '').toLowerCase();
+    if (n === 'basic') return t('licensing.hostedPlanBasic');
+    if (n === 'pro') return t('licensing.hostedPlanPro');
+    return planName;
+  };
+
+  const hostedPlanDescription = (planName: string): string => {
+    const n = String(planName || '').toLowerCase();
+    if (n === 'basic') return t('licensing.basicPlanDescription');
+    if (n === 'pro') return t('licensing.proPlanDescription');
+    return t('licensing.proPlanDescription');
   };
 
   const calculateUsagePercentage = (current: number, limit: number): number => {
@@ -338,6 +375,7 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
     }
 
     const supportLevel = resolveSupportLevel(licenseInfo.limits);
+    const hostedPlan = resolveHostedPlanName(licenseInfo);
 
     return (
       <div className="space-y-6">
@@ -348,18 +386,37 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
               <Shield className="h-5 w-5 mr-2" />
               {t('licensing.currentPlan')}
             </h3>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                {getSupportTypeIcon(supportLevel)}
-                <div>
-                  <h3 className="text-xl font-semibold capitalize text-gray-900 dark:text-white">
-                    {supportPlanTitle(supportLevel)} {t('licensing.plan')}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center space-x-3 min-w-0">
+                <Shield className="h-4 w-4 shrink-0 text-gray-500" />
+                <div className="min-w-0">
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    {hostedPlan
+                      ? `${hostedPlanTitle(hostedPlan)} ${t('licensing.plan')}`
+                      : `${supportPlanTitle(supportLevel)} ${t('licensing.plan')}`}
                   </h3>
-                  <p className="text-gray-600 dark:text-gray-400">{supportPlanDescription(supportLevel)}</p>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {hostedPlan
+                      ? hostedPlanDescription(hostedPlan)
+                      : supportPlanDescription(supportLevel)}
+                  </p>
+                  {hostedPlan ? (
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {t('licensing.includesSupport', {
+                        level: supportPlanTitle(supportLevel),
+                      })}
+                    </p>
+                  ) : null}
                 </div>
               </div>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getSupportTypeColor(supportLevel)}`}>
-                {supportPlanTitle(supportLevel)}
+              <span
+                className={`shrink-0 px-3 py-1 rounded-full text-xs font-semibold ${
+                  hostedPlan
+                    ? getHostedPlanColor(hostedPlan)
+                    : getSupportTypeColor(supportLevel)
+                }`}
+              >
+                {hostedPlan ? hostedPlanTitle(hostedPlan) : supportPlanTitle(supportLevel)}
               </span>
             </div>
           </div>
@@ -633,7 +690,15 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('licensing.planType')}</span>
-                <span className="text-sm capitalize text-gray-900 dark:text-white">{supportLevel}</span>
+                <span className="text-sm text-gray-900 dark:text-white">
+                  {hostedPlan ? hostedPlanTitle(hostedPlan) : supportPlanTitle(supportLevel)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('licensing.supportLabel')}</span>
+                <span className="text-sm text-gray-900 dark:text-white">
+                  {supportPlanTitle(supportLevel)}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('licensing.appVersion')}</span>
