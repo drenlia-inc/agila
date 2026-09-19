@@ -11,6 +11,40 @@ function isUnlimitedNumeric(value) {
   return n === -1;
 }
 
+/** Map legacy support tokens to community | essential | priority. */
+export function normalizeSupportLevel(raw) {
+  const n = String(raw || '').trim().toLowerCase();
+  if (n === 'pro' || n === 'priority') return 'priority';
+  if (n === 'basic' || n === 'essential') return 'essential';
+  if (n === 'free' || n === 'community' || !n) return 'community';
+  return n;
+}
+
+/**
+ * Hosted SKU for Licensing Overview (basic | pro).
+ * Prefers PLAN_NAME; otherwise infer from seat/board caps matching the catalog.
+ */
+export function resolveHostedPlanName(limits) {
+  if (!limits || typeof limits !== 'object') return null;
+  const named = String(limits.PLAN_NAME || '').trim().toLowerCase();
+  if (named === 'basic' || named === 'pro') return named;
+
+  const users = Number(limits.USER_LIMIT);
+  const boards = Number(limits.BOARD_LIMIT);
+  if (Number.isFinite(users) && users === 5) return 'basic';
+  if (
+    Number.isFinite(users) &&
+    users <= 10 &&
+    Number.isFinite(boards) &&
+    boards !== -1 &&
+    boards <= 10
+  ) {
+    return 'basic';
+  }
+  if ((Number.isFinite(users) && users >= 50) || boards === -1) return 'pro';
+  return null;
+}
+
 function throwCountedLimit(message, current, maximum, extra = {}) {
   const error = new Error(message);
   error.current = current;
@@ -109,6 +143,7 @@ class LicenseManager {
     if (!limits.SUPPORT_LEVEL) {
       limits.SUPPORT_LEVEL = 'community';
     }
+    limits.SUPPORT_LEVEL = normalizeSupportLevel(limits.SUPPORT_LEVEL);
     return limits;
   }
 
@@ -141,7 +176,8 @@ class LicenseManager {
           if (
             key === 'SUPPORT_LEVEL' ||
             key === 'AI_TIER' ||
-            key === 'SUPPORT_OVERAGE_RATE'
+            key === 'SUPPORT_OVERAGE_RATE' ||
+            key === 'PLAN_NAME'
           ) {
             limits[key] = value;
           } else {
@@ -154,6 +190,7 @@ class LicenseManager {
         if (!limits.SUPPORT_LEVEL) {
           limits.SUPPORT_LEVEL = this.defaultLimits.SUPPORT_LEVEL || 'community';
         }
+        limits.SUPPORT_LEVEL = normalizeSupportLevel(limits.SUPPORT_LEVEL);
         
         return limits;
       }
@@ -435,9 +472,11 @@ class LicenseManager {
       const storage = await this.getStorageUsage();
       const webhooks = await webhookQueries.countWebhooks(this.db);
       const effectiveStorage = this.getEffectiveStorageLimitBytes(limits);
+      const planName = resolveHostedPlanName(limits);
 
       return {
         enabled: true,
+        planName,
         limits: limits,
         usage: {
           users,
