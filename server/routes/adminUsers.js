@@ -904,20 +904,11 @@ router.delete("/:userId", authenticateToken, requireRole(["admin"]), async (req,
         const existingSystemUser = await userQueries.getUserByIdForAdmin(db, SYSTEM_USER_ID);
         
         if (!existingSystemUser) {
-          // Create SYSTEM user account
+          // Create SYSTEM user account (no avatar file — UI uses an in-app letter mark)
           const systemPasswordHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10); // Random unguessable password
-          const systemAvatarPath = await createDefaultAvatar('System', SYSTEM_USER_ID, '#1E40AF', tenantId, {
-            db,
-            storagePaths: req.locals?.tenantStoragePaths || req.app.locals?.tenantStoragePaths
-          });
           
           // MIGRATED: Create SYSTEM user using sqlManager
           await userQueries.createUser(db, SYSTEM_USER_ID, 'system@local', systemPasswordHash, 'System', 'User', false, 'local');
-          
-          // MIGRATED: Update avatar using sqlManager
-          if (systemAvatarPath) {
-            await userQueries.updateUserAvatar(db, SYSTEM_USER_ID, systemAvatarPath);
-          }
           
           // MIGRATED: Assign user role using sqlManager
           const userRole = await userQueries.getRoleByName(db, 'user');

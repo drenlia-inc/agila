@@ -15,7 +15,7 @@ import {
   ADMIN_TABLE_ROW_ACTIVE_CLASS,
   ADMIN_TABLE_ROW_CLASS,
 } from '../../utils/adminFieldLimits';
-import { MODAL_OVERLAY_Z_INDEX } from '../../constants/appConstants';
+import { MODAL_OVERLAY_Z_INDEX, SYSTEM_USER_EMAIL } from '../../constants/appConstants';
 import { formatToYYYYMMDDHHmmss } from '../../utils/dateUtils';
 import {
   adminLabelClass,
@@ -30,6 +30,7 @@ import { DEFAULT_MEMBER_COLOR } from '../../constants/memberColorPalette';
 import InviteBoardPicker from '../InviteBoardPicker';
 import { defaultInviteBoardIds, roleNeedsInviteBoards } from '../../utils/inviteBoardIds';
 import { BOOTSTRAP_ADMIN_EMAIL } from '../../utils/placeholderLoginEmail';
+import { SystemLetterAvatar } from '../ui/MemberAvatar';
 
 interface User {
   id: string;
@@ -1773,7 +1774,9 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   <td className={`${tdClass} min-w-0`}>
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0 h-8 w-8">
-                        {user.email === 'agent@local' && !(user.googleAvatarUrl || user.avatarUrl) ? (
+                        {user.email === SYSTEM_USER_EMAIL ? (
+                          <SystemLetterAvatar sizeClass="h-8 w-8 text-xs" />
+                        ) : user.email === 'agent@local' && !(user.googleAvatarUrl || user.avatarUrl) ? (
                           <img
                             src={AGENT_BOT_AVATAR_SRC}
                             alt={fullName}
@@ -1802,7 +1805,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                           <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                             {displayName}
                           </div>
-                          {user.email === 'system@local' && (
+                          {user.email === SYSTEM_USER_EMAIL && (
                             <span
                               className="shrink min-w-0 text-[11px] font-normal text-slate-400 dark:text-slate-500 truncate"
                               title={t('users.systemAccountHint')}
@@ -2237,7 +2240,9 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 <label className={adminLabelClass}>{t('users.avatar')}</label>
                 <div className="flex items-center gap-3">
                   <div className="flex-shrink-0">
-                    {avatarPreviewUrl ? (
+                    {editingUserData.email === SYSTEM_USER_EMAIL ? (
+                      <SystemLetterAvatar sizeClass="w-12 h-12 text-lg" />
+                    ) : avatarPreviewUrl ? (
                       <img src={avatarPreviewUrl} alt="" className="w-12 h-12 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-600" />
                     ) : editingUserData.email === 'agent@local' && !(editingUserData.googleAvatarUrl || editingUserData.avatarUrl) ? (
                       <img src={AGENT_BOT_AVATAR_SRC} alt="" className="w-12 h-12 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-600" />
@@ -2256,7 +2261,11 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                       </div>
                     )}
                   </div>
-                  {editingUserData.authProvider === 'local' ? (
+                  {editingUserData.email === SYSTEM_USER_EMAIL ? (
+                    <div className="flex-1 text-xs text-slate-500 dark:text-slate-400">
+                      {t('users.systemAccountHint')}
+                    </div>
+                  ) : editingUserData.authProvider === 'local' ? (
                     <div className="flex-1 space-y-1.5 min-w-0">
                       <input
                         type="file"
