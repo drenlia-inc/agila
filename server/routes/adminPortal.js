@@ -440,6 +440,22 @@ router.post('/storage/purge-managed', authenticateAdminPortal, async (req, res) 
  * Migrate local/NFS staged objects into S3 after managed storage is configured.
  * Used by agila-admin post-deploy so seed avatars (disk-only at DB init) land in the bucket.
  */
+router.post('/storage/seed-default-avatars', authenticateAdminPortal, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const tenantId = getTenantId(req) || req.tenantId || null;
+    const { seedDefaultAvatarsToLiveStorage } = await import('../utils/seedDefaultAvatars.js');
+    const result = await seedDefaultAvatarsToLiveStorage(db, tenantId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error seeding default avatars:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to seed default avatars'
+    });
+  }
+});
+
 router.post('/storage/migrate-disk-to-s3', authenticateAdminPortal, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
