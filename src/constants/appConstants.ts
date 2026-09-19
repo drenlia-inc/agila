@@ -4,6 +4,9 @@
 
 // System user member ID - used to identify system-generated tasks and members
 export const SYSTEM_MEMBER_ID = '00000000-0000-0000-0000-000000000001';
+export const SYSTEM_USER_EMAIL = 'system@local';
+/** Letter-avatar color for the System account (no stored file). */
+export const SYSTEM_DEFAULT_COLOR = '#1E40AF';
 
 /** Sentinel in selectedMembers / saved memberFilters for “no assignee” tasks */
 export const UNASSIGNED_MEMBER_FILTER_ID = '__unassigned__';

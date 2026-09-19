@@ -1293,9 +1293,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
     const systemMemberId = '00000000-0000-0000-0000-000000000001';
     const systemPasswordHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10); // Random unguessable password
     
-    // Create system avatar (with tenant-specific path if in multi-tenant mode)
-    // After managed S3 settings above when MANAGED_S3_BUCKET is set — putObject uses STORAGE_BACKEND.
-    const systemAvatarPath = await createLetterAvatar('S', systemUserId, 'system', tenantId, db);
+    // System uses an in-app letter avatar (no /avatars file — avoids broken S3 before first upload).
     
     // Check if system user already exists
     const existingSystemUser = await wrapQuery(db.prepare('SELECT id FROM users WHERE id = ?'), 'SELECT').get(systemUserId);
@@ -1303,7 +1301,7 @@ const initializeDefaultData = async (db, tenantId = null) => {
       await wrapQuery(db.prepare(`
         INSERT INTO users (id, email, password_hash, first_name, last_name, avatar_path, auth_provider, is_active) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `), 'INSERT').run(systemUserId, 'system@local', systemPasswordHash, 'System', 'User', systemAvatarPath, 'local', false);
+      `), 'INSERT').run(systemUserId, 'system@local', systemPasswordHash, 'System', 'User', null, 'local', false);
 
       // Assign user role to system account
       const userRoleResult = await wrapQuery(db.prepare('SELECT id FROM roles WHERE name = ?'), 'SELECT').get('user');
@@ -1316,6 +1314,19 @@ const initializeDefaultData = async (db, tenantId = null) => {
       await dbRun(systemMemberStmt, systemMemberId, 'System', '#1E40AF', systemUserId);
       
       console.log('🤖 System account created for orphaned task management');
+    }
+
+    // Drop any stored System avatar path — UI renders an in-app letter mark (no S3/disk object).
+    try {
+      await wrapQuery(
+        db.prepare(`
+          UPDATE users SET avatar_path = NULL
+          WHERE email = 'system@local' AND avatar_path IS NOT NULL AND avatar_path <> ''
+        `),
+        'UPDATE'
+      ).run();
+    } catch (clearErr) {
+      console.warn('⚠️ Could not clear system avatar_path:', clearErr?.message || clearErr);
     }
 
     // Create AI Agent pseudo-user (assignable when AI_ENABLED; cannot log in)

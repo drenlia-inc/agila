@@ -82,6 +82,11 @@ export async function seedDefaultAvatarsToLiveStorage(db, tenantId) {
 
   for (const filename of names) {
     try {
+      // System account uses an in-app letter mark — do not write a phantom S3 object.
+      if (/^default-system-/i.test(filename)) {
+        skipped.push(filename);
+        continue;
+      }
       const letterMatch = filename.match(DEFAULT_AVATAR_RE);
       if (letterMatch) {
         const role = letterMatch[1].toLowerCase();

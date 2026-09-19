@@ -3,7 +3,6 @@ import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { authenticateToken } from '../middleware/auth.js';
 import { avatarUpload, createAttachmentUploadMiddleware } from '../config/multer.js';
-import { createDefaultAvatar } from '../utils/avatarGenerator.js';
 import { dbTransaction, dbExec } from '../utils/dbAsync.js';
 import notificationService from '../services/notificationService.js';
 import { getTranslator } from '../utils/i18n.js';
@@ -305,10 +304,7 @@ router.delete("/account", authenticateToken, async (req, res) => {
         const existingSystemUser = await userQueries.getUserByIdForAdmin(db, SYSTEM_USER_ID);
         if (!existingSystemUser) {
           const systemPasswordHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
-          const systemAvatarPath = await createDefaultAvatar('System', SYSTEM_USER_ID, '#1E40AF', tenantId, {
-            db,
-            storagePaths: req.locals?.tenantStoragePaths || req.app.locals?.tenantStoragePaths,
-          });
+          // No avatar file — UI uses an in-app letter mark (avoids broken S3 before first upload).
           await userQueries.createUser(
             db,
             SYSTEM_USER_ID,
@@ -319,9 +315,6 @@ router.delete("/account", authenticateToken, async (req, res) => {
             false,
             'local'
           );
-          if (systemAvatarPath) {
-            await userQueries.updateUserAvatar(db, SYSTEM_USER_ID, systemAvatarPath);
-          }
           const userRole = await userQueries.getRoleByName(db, 'user');
           if (userRole) {
             await userQueries.addUserRole(db, SYSTEM_USER_ID, userRole.id);
