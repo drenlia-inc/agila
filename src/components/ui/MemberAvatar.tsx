@@ -2,7 +2,7 @@ import React from 'react';
 import { Eye, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TeamMember } from '../../types';
-import { SYSTEM_MEMBER_ID } from '../../constants/appConstants';
+import { SYSTEM_MEMBER_ID, SYSTEM_DEFAULT_COLOR } from '../../constants/appConstants';
 import { getAuthenticatedAvatarUrl } from '../../utils/authImageUrl';
 import {
   getAgentAvatarSrc,
@@ -41,6 +41,30 @@ const USER_PX: Record<AvatarSize, number> = {
   lg: 16,
 };
 
+/** In-memory System letter mark — never loads /avatars (S3/disk). */
+export function SystemLetterAvatar({
+  sizeClass,
+  className = '',
+  title,
+  letter = 'S',
+}: {
+  sizeClass: string;
+  className?: string;
+  title?: string;
+  letter?: string;
+}) {
+  return (
+    <div
+      className={`${sizeClass} rounded-full flex items-center justify-center font-semibold text-white shrink-0 ring-1 ring-black/5 ${className}`}
+      style={{ backgroundColor: SYSTEM_DEFAULT_COLOR }}
+      title={title}
+      aria-hidden={title ? undefined : true}
+    >
+      {letter}
+    </div>
+  );
+}
+
 interface MemberAvatarProps {
   member?: TeamMember | null;
   memberId?: string | null;
@@ -55,7 +79,7 @@ interface MemberAvatarProps {
 }
 
 /**
- * Compact circular member avatar (photo, agent bot, system emoji, or initial).
+ * Compact circular member avatar (photo, agent bot, system letter, or initial).
  */
 export default function MemberAvatar({
   member: memberProp,
@@ -99,13 +123,7 @@ export default function MemberAvatar({
 
   if (member.id === SYSTEM_MEMBER_ID) {
     inner = (
-      <div
-        className={`${sizeClass} rounded-full flex items-center justify-center shrink-0 ${className}`}
-        style={{ backgroundColor: member.color || '#1E40AF' }}
-        title={nativeLabel}
-      >
-        🤖
-      </div>
+      <SystemLetterAvatar sizeClass={sizeClass} className={className} title={nativeLabel} />
     );
   } else if (isAgentMemberId(member.id)) {
     inner = (

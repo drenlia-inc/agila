@@ -417,6 +417,9 @@
     "resizeColumn": "Drag to resize column",
     "hideColumn": "Hide {{column}} column"
   },
+  "kanban": {
+    "resizeColumn": "Drag to resize column"
+  },
   "columnLabels": {
     "sprint": "Sprint",
     "ticket": "ID",

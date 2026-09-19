@@ -417,6 +417,9 @@
     "resizeColumn": "Glisser pour redimensionner la colonne",
     "hideColumn": "Masquer la colonne {{column}}"
   },
+  "kanban": {
+    "resizeColumn": "Glisser pour redimensionner la colonne"
+  },
   "columnLabels": {
     "sprint": "Sprint",
     "ticket": "ID",
