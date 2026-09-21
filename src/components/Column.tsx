@@ -168,6 +168,47 @@ interface KanbanColumnProps {
   columnHeaderStickyTopPx?: number;
 }
 
+/** Keeps a windowed card's slot in sync when its content grows (inline description). */
+function MeasuredTaskRow({
+  taskId,
+  windowed,
+  measure,
+  reportRowHeight,
+  className,
+  style,
+  children,
+  ...rest
+}: {
+  taskId: string;
+  windowed: boolean;
+  measure: boolean;
+  reportRowHeight: (taskId: string, height: number) => void;
+  className?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+} & React.HTMLAttributes<HTMLDivElement>) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || !measure) return;
+    const measureNow = () => {
+      const h = node.offsetHeight - (windowed ? TASK_ROW_GAP_PX : 0);
+      if (h > 0) reportRowHeight(taskId, h);
+    };
+    measureNow();
+    const ro = new ResizeObserver(() => measureNow());
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [taskId, windowed, measure, reportRowHeight]);
+
+  return (
+    <div ref={ref} className={className} style={style} {...rest}>
+      {children}
+    </div>
+  );
+}
+
 function KanbanColumn({
   column,
   filteredTasks,
@@ -1005,8 +1046,12 @@ function KanbanColumn({
       const collapseThis = collapseOrigin && skipYRow;
 
       taskElements.push(
-        <div
+        <MeasuredTaskRow
           key={task.id}
+          taskId={task.id}
+          windowed={windowed}
+          measure={!collapseThis}
+          reportRowHeight={reportRowHeight}
           {...(!skipYRow
             ? {
                 'data-kanban-task-row': true,
@@ -1014,7 +1059,7 @@ function KanbanColumn({
                 'data-layout-index': layoutIndex,
               }
             : {})}
-          className={`${windowed || collapseThis ? '' : 'mb-3'} ${isBeingDragged ? 'opacity-0' : 'opacity-100'}`}
+          className={`${windowed || collapseThis ? '' : 'mb-3'} ${isBeingDragged ? 'opacity-0' : 'opacity-100'} ${windowed && !collapseThis ? 'has-[[data-inline-editing]]:z-20' : ''}`}
           style={
             collapseThis
               ? {
@@ -1040,12 +1085,6 @@ function KanbanColumn({
                   }
                 : rowStyle
           }
-          ref={(node) => {
-            if (!node) return;
-            // Measure content only (exclude our paddingBottom gap)
-            const h = node.offsetHeight - (windowed ? TASK_ROW_GAP_PX : 0);
-            if (h > 0) reportRowHeight(task.id, h);
-          }}
         >
           <TaskCard
             task={task}
@@ -1097,7 +1136,7 @@ function KanbanColumn({
             onUnlinkRelatedTask={onUnlinkRelatedTask}
             relationSummary={getTaskRelationshipSummary(relationSummaryByTaskId, task.id)}
           />
-        </div>
+        </MeasuredTaskRow>
       );
     };
 

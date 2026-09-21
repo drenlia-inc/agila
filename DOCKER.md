@@ -89,6 +89,8 @@ sudo ufw enable
 
 ## Install Agila
 
+Video walkthrough (~5 min): https://www.youtube.com/watch?v=MfRvOfrM7lk
+
 Part 1 uses **`docker-compose-prod.yml`**: it builds with **`Dockerfile.prod`**, runs `NODE_ENV=production`, does not bind-mount source code, does not publish Redis, and sets `TRUST_PROXY=1`. This is the production path.
 
 (`docker-compose-example.yml` is for local development only — see Part 2. `docker-compose-demo.yml` is for the public demo site.)

@@ -156,7 +156,8 @@ import { customCollisionDetection, calculateGridStyle } from './utils/dragDropUt
 import { clearCustomCursor } from './utils/cursorUtils';
 import { generateUniqueBoardName } from './utils/boardUtils';
 import { renumberColumns, isArchivedColumnFlag, reconcileVisibleColumnIds, sameColumnIdSet, applyFinishedColumnVisibility } from './utils/columnUtils';
-import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveKanbanDropIndex, snapshotColumnTaskOrder, restoreColumnTaskOrders, TaskDropPlacement } from './utils/taskReorderingUtils';
+import { handleSameColumnReorder, handleCrossColumnMove, handleBulkMoveTasks, moveTaskToPosition, calculatePositionForIndex, renumberColumnAfterCopy, resolveKanbanDropIndex, columnPositionUpdates, restoreTaskPositionUpdates, applyBulkMove, TaskDropPlacement, TaskPositionUpdate } from './utils/taskReorderingUtils';
+import { columnWriteGeneration, columnWriteInFlight } from './utils/columnWriteGuard';
 import { getTaskColumnId, orderedCheckedTasksInColumn, snapshotTaskBoardLocation } from './utils/kanbanMultiSelect';
 import { useKanbanMultiSelect } from './hooks/useKanbanMultiSelect';
 import { blurEditableEscapeTarget, hasEscapeConsumingOverlay } from './utils/escapeKeyUtils';
@@ -3250,8 +3251,12 @@ function AppContent() {
       const fullPromise = boardIdToHydrate
         ? getBoardFull(boardIdToHydrate)
         : Promise.resolve(null);
+      const writeGenAtFetch = columnWriteGeneration();
       const [summaryResult, fullResult] = await Promise.allSettled([summaryPromise, fullPromise]);
       if (gen !== refreshBoardDataGenRef.current) return;
+      // A column move/undo committed (or started) while this GET was in flight.
+      // Applying it would paint the pre-move board over the optimistic layout.
+      if (columnWriteGeneration() !== writeGenAtFetch || columnWriteInFlight()) return;
 
       if (summaryResult.status === 'rejected') {
         throw summaryResult.reason;
@@ -5023,11 +5028,11 @@ function AppContent() {
       ? handleTaskPermanentDelete
       : undefined,
     onMoveToBoard: performCrossBoardMove,
-    onUndoColumnMove: async (previousColumnOrders) => {
+    onUndoColumnMove: async (positionUpdates) => {
       const liveColumns = columnsRef.current;
       const refresh = refreshBoardDataRef.current || refreshBoardData;
-      await restoreColumnTaskOrders(
-        previousColumnOrders,
+      await restoreTaskPositionUpdates(
+        positionUpdates,
         liveColumns,
         setColumns,
         setDragCooldown,
@@ -5144,17 +5149,10 @@ function AppContent() {
           : taskIds;
 
       const previousByTaskId: Record<string, Partial<Task>> = {};
-      const previousColumnOrders: Record<string, ReturnType<typeof snapshotColumnTaskOrder>> = {};
-      if (sourceColumnId && liveColumns[sourceColumnId]) {
-        previousColumnOrders[sourceColumnId] = snapshotColumnTaskOrder(
-          liveColumns[sourceColumnId].tasks
-        );
-      }
-      if (targetColumnId && liveColumns[targetColumnId] && targetColumnId !== sourceColumnId) {
-        previousColumnOrders[targetColumnId] = snapshotColumnTaskOrder(
-          liveColumns[targetColumnId].tasks
-        );
-      }
+      const movePreview = applyBulkMove(liveColumns, orderedIds, targetColumnId, targetIndex);
+      const undoPositionUpdates: TaskPositionUpdate[] = movePreview
+        ? columnPositionUpdates(liveColumns, movePreview.touchedColumnIds)
+        : [];
       for (const id of orderedIds) {
         const task = findTaskInColumns(id);
         if (!task) continue;
@@ -5183,7 +5181,7 @@ function AppContent() {
       const fromIndex = sourceSorted.findIndex((t) => t.id === orderedIds[0]);
       const isNoOp = sourceColumnId === targetColumnId && fromIndex === targetIndex;
       if (!isNoOp && Object.keys(previousByTaskId).length > 0) {
-        recordColumnMoveUndo(orderedIds, previousByTaskId, previousColumnOrders);
+        recordColumnMoveUndo(orderedIds, previousByTaskId, undoPositionUpdates);
       }
       clearAllChecked();
       setDraggedTaskIds([]);
@@ -5238,19 +5236,18 @@ function AppContent() {
         return;
       }
 
-      const previousColumnOrders: Record<string, ReturnType<typeof snapshotColumnTaskOrder>> = {
-        [sourceColumnId]: snapshotColumnTaskOrder(liveColumns[sourceColumnId].tasks),
-      };
-      if (targetColumnId !== sourceColumnId) {
-        previousColumnOrders[targetColumnId] = snapshotColumnTaskOrder(targetColumn.tasks);
-      }
+      const undoColumnIds =
+        targetColumnId === sourceColumnId
+          ? [sourceColumnId]
+          : [sourceColumnId, targetColumnId];
+      const undoPositionUpdates = columnPositionUpdates(liveColumns, undoColumnIds);
       const previousByTaskId: Record<string, Partial<Task>> = {
         [taskId]: { columnId: sourceTask.columnId, position: sourceTask.position },
       };
 
       const moved = await handleMoveTaskToColumn(taskId, targetColumnId, placement);
       if (moved) {
-        recordColumnMoveUndo([taskId], previousByTaskId, previousColumnOrders);
+        recordColumnMoveUndo([taskId], previousByTaskId, undoPositionUpdates);
         clearAllChecked();
       }
     },

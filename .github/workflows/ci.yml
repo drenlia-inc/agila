@@ -3,7 +3,14 @@ name: CI
 on:
   push:
     branches: [main, master, dev, staging]
+    # Docs-only pushes skip CI. A mixed commit (code + markdown) still runs.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
 
 jobs:
   build:

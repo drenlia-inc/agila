@@ -3,6 +3,10 @@ name: Deploy demo
 on:
   push:
     branches: [main]
+    # Docs-only pushes skip the demo rollout. Manual runs stay on workflow_dispatch.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   workflow_dispatch:
 
 concurrency:

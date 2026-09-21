@@ -5,6 +5,7 @@ import { feDebug } from '../utils/clientDebug';
 import { dedupeTasksInColumns, stripTaskFromAllColumns, applyRestoredTaskToColumns } from '../utils/taskReorderingUtils';
 import { isTaskSoftDeleted } from '../utils/taskUtils';
 import { scheduleSettledBoardRefresh } from '../utils/boardRestoredRefresh';
+import { columnWriteInFlight, shouldIgnoreSelfLayoutEcho } from '../utils/columnWriteGuard';
 import { sprintIdFromTaskPayload, getTaskSprintId } from '../utils/columnFilters';
 
 function wsHookLog(...args: unknown[]) {
@@ -63,10 +64,15 @@ export const useTaskWebSocket = ({
 }: UseTaskWebSocketProps) => {
   // Keep a ref to selectedTask to avoid stale closures in batch processing
   const selectedTaskRef = useRef<Task | null>(selectedTask);
+  const currentUserIdRef = useRef<string | null>(currentUser?.id ?? null);
   
   useEffect(() => {
     selectedTaskRef.current = selectedTask;
   }, [selectedTask]);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id ?? null;
+  }, [currentUser?.id]);
   
   // Batch processing for rapid task updates (e.g., 259 updates from batch-update-positions)
   // This prevents React batching from causing state overwrites
@@ -88,13 +94,17 @@ export const useTaskWebSocket = ({
       return;
     }
     
-    const updates = Array.from(pendingUpdatesRef.current.values());
+    const queued = Array.from(pendingUpdatesRef.current.values());
     pendingUpdatesRef.current.clear();
-    
+    const updates = queued.filter(
+      (data) => !shouldIgnoreSelfLayoutEcho(data, currentUserIdRef.current)
+    );
+
     if (batchTimeoutRef.current) {
       clearTimeout(batchTimeoutRef.current);
       batchTimeoutRef.current = null;
     }
+    if (updates.length === 0) return;
 
     // `columns` state only holds the SELECTED board. Applying task-updated batches for other
     // boards corrupts the UI (e.g. new empty board briefly shows the previous board's tasks).
@@ -1428,6 +1438,7 @@ export const useTaskWebSocket = ({
    */
   const handleTasksPositionsUpdated = useCallback((data: any) => {
     if (!data) return;
+    if (columnWriteInFlight()) return;
 
     // Oversized NOTIFY was compacted to a refresh hint (large columns)
     if (data.refresh === true && data.boardId) {
