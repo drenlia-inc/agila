@@ -1665,6 +1665,7 @@ const TaskCard = React.memo(function TaskCard({
           // Prevent clicks on tag areas from reaching card
           position: 'relative'
         }}
+        data-inline-editing={isEditingDescription || isEditingTitle ? 'true' : undefined}
         className={`group task-card sortable-item cursor-pointer outline-none focus:outline-none focus-visible:outline-none ${
           isSelected
             ? 'border-2 border-blue-500 bg-gray-100 dark:border-blue-400 dark:bg-gray-700'

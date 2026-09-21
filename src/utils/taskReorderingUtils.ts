@@ -12,11 +12,18 @@
 
 import { Task, Columns } from '../types';
 import { batchUpdateTaskPositions } from '../api';
+import { enqueueColumnWrite } from './columnWriteGuard';
 import { DRAG_COOLDOWN_DURATION } from '../constants';
 import { dndLog } from './dndDebug';
 import type { Dispatch, SetStateAction } from 'react';
 
 export type OnColumnsApplied = (next: Columns) => void;
+
+async function commitTaskPositions(
+  updates: Array<{ taskId: string; position: number; columnId?: string }>
+): Promise<void> {
+  await enqueueColumnWrite(() => batchUpdateTaskPositions(updates));
+}
 
 // Helper to parse position as number
 const parsePos = (pos: any): number => typeof pos === 'number' ? pos : parseFloat(String(pos)) || 0;
@@ -626,7 +633,104 @@ export function applyBulkMove(
   return { next, touchedColumnIds: Array.from(touched) };
 }
 
+export type TaskPositionUpdate = {
+  taskId: string;
+  position: number;
+  columnId: string;
+};
+
 export type ColumnTaskOrderSnapshot = Array<{ id: string; position: number }>;
+
+/** Flat column+position rows for the given columns. This is both the save batch and its undo. */
+export function columnPositionUpdates(
+  columns: Columns,
+  columnIds: string[]
+): TaskPositionUpdate[] {
+  const updates: TaskPositionUpdate[] = [];
+  const seen = new Set<string>();
+  for (const columnId of columnIds) {
+    if (!columnId || seen.has(columnId)) continue;
+    seen.add(columnId);
+    for (const task of sortTasksByPosition(columns[columnId]?.tasks || [])) {
+      if (!task?.id) continue;
+      updates.push({
+        taskId: task.id,
+        position: parsePos(task.position),
+        columnId,
+      });
+    }
+  }
+  return updates;
+}
+
+/**
+ * Place each task on the column and position in `updates`.
+ * Columns named in the payload are replaced by those rows.
+ */
+export function applyPositionUpdates(
+  prev: Columns,
+  updates: TaskPositionUpdate[]
+): { next: Columns; positionUpdates: TaskPositionUpdate[] } | null {
+  if (!updates.length) return null;
+
+  const taskById = new Map<string, Task>();
+  Object.values(prev).forEach((col) => {
+    (col?.tasks || []).forEach((task) => {
+      if (task?.id) taskById.set(task.id, task);
+    });
+  });
+
+  const byColumn = new Map<string, TaskPositionUpdate[]>();
+  const positionUpdates: TaskPositionUpdate[] = [];
+  for (const update of updates) {
+    if (!update?.taskId || !update.columnId || !taskById.has(update.taskId)) continue;
+    const row: TaskPositionUpdate = {
+      taskId: update.taskId,
+      position: parsePos(update.position),
+      columnId: update.columnId,
+    };
+    const list = byColumn.get(row.columnId) || [];
+    list.push(row);
+    byColumn.set(row.columnId, list);
+    positionUpdates.push(row);
+  }
+  if (positionUpdates.length === 0) return null;
+
+  const mentioned = new Set(positionUpdates.map((row) => row.taskId));
+  let next: Columns = { ...prev };
+
+  for (const columnId of Object.keys(next)) {
+    if (byColumn.has(columnId)) continue;
+    const col = next[columnId];
+    if (!col?.tasks?.some((task) => mentioned.has(task.id))) continue;
+    next = {
+      ...next,
+      [columnId]: {
+        ...col,
+        tasks: col.tasks.filter((task) => !mentioned.has(task.id)),
+      },
+    };
+  }
+
+  for (const [columnId, rows] of byColumn) {
+    const col = next[columnId];
+    if (!col) continue;
+    const tasks = [...rows]
+      .sort((a, b) => a.position - b.position)
+      .map((row) => {
+        const live = taskById.get(row.taskId);
+        if (!live) return null;
+        return { ...live, columnId, position: row.position };
+      })
+      .filter((task): task is Task => Boolean(task));
+    next = {
+      ...next,
+      [columnId]: { ...col, tasks },
+    };
+  }
+
+  return { next, positionUpdates };
+}
 
 /** Capture position-sorted id+position for a column (bulk-move undo). */
 export function snapshotColumnTaskOrder(tasks: Task[] | undefined): ColumnTaskOrderSnapshot {
@@ -703,8 +807,12 @@ export function applyColumnOrderSnapshots(
   return { next, positionUpdates };
 }
 
-export const restoreColumnTaskOrders = async (
-  orders: Record<string, ColumnTaskOrderSnapshot>,
+/**
+ * Undo a column move by writing the position batch captured before that move.
+ * The POST is that saved list. It does not depend on re-reading the board.
+ */
+export const restoreTaskPositionUpdates = async (
+  updates: TaskPositionUpdate[],
   columns: Columns,
   setColumns: Dispatch<SetStateAction<Columns>>,
   setDragCooldown: (value: boolean) => void,
@@ -712,38 +820,27 @@ export const restoreColumnTaskOrders = async (
   setFilteredColumns?: Dispatch<SetStateAction<Columns>>,
   onColumnsApplied?: OnColumnsApplied
 ): Promise<void> => {
-  const preview = applyColumnOrderSnapshots(columns, orders);
-  if (!preview) return;
+  if (!updates.length) {
+    throw new Error('Column undo had no position batch to write');
+  }
 
-  let applied: ReturnType<typeof applyColumnOrderSnapshots> = null;
+  const preview = applyPositionUpdates(columns, updates);
   const rollbackSnapshot = columns;
 
   window.justUpdatedFromWebSocket = true;
   (window as any).lastOptimisticUpdateTime = Date.now();
   (window as any).reorderingInProgress = true;
 
-  setColumns((prev) => {
-    applied = applyColumnOrderSnapshots(prev, orders);
-    return applied ? applied.next : prev;
-  });
-
-  if (!applied) {
-    window.justUpdatedFromWebSocket = false;
-    (window as any).reorderingInProgress = false;
-    return;
-  }
-
-  onColumnsApplied?.(applied.next);
-
-  if (setFilteredColumns) {
-    setFilteredColumns((prev) => {
-      const next = applyColumnOrderSnapshots(prev, orders);
-      return next ? next.next : prev;
-    });
+  if (preview) {
+    setColumns(preview.next);
+    onColumnsApplied?.(preview.next);
+    if (setFilteredColumns) {
+      setFilteredColumns((prev) => applyPositionUpdates(prev, updates)?.next ?? prev);
+    }
   }
 
   try {
-    await batchUpdateTaskPositions(applied.positionUpdates);
+    await commitTaskPositions(updates);
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
       (window as any).reorderingInProgress = false;
@@ -751,8 +848,9 @@ export const restoreColumnTaskOrders = async (
     setDragCooldown(true);
     setTimeout(() => setDragCooldown(false), DRAG_COOLDOWN_DURATION);
   } catch (error) {
-    console.error('❌ [restoreColumnTaskOrders] Failed:', error);
+    console.error('❌ [restoreTaskPositionUpdates] Failed:', error);
     setColumns(rollbackSnapshot);
+    onColumnsApplied?.(rollbackSnapshot);
     window.justUpdatedFromWebSocket = false;
     (window as any).reorderingInProgress = false;
     refreshBoardData().catch(() => {});
@@ -866,7 +964,7 @@ export const moveTaskToIndex = async (
       columnId,
     }));
 
-    await batchUpdateTaskPositions(updates);
+    await commitTaskPositions(updates);
 
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
@@ -951,7 +1049,7 @@ export const handleCrossColumnMove = async (
     // If source was unknown (task only in fallback), still send target renumbers
     const dedupedUpdates = updates.filter((u) => u.columnId);
 
-    await batchUpdateTaskPositions(dedupedUpdates);
+    await commitTaskPositions(dedupedUpdates);
 
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
@@ -990,25 +1088,15 @@ export const handleBulkMoveTasks = async (
   const preview = applyBulkMove(columns, taskIds, targetColumnId, targetIndex);
   if (!preview) return;
 
-  let applied: BulkMoveResult | null = null;
   const rollbackSnapshot = columns;
+  const updates = columnPositionUpdates(preview.next, preview.touchedColumnIds);
 
   window.justUpdatedFromWebSocket = true;
   (window as any).lastOptimisticUpdateTime = Date.now();
   (window as any).reorderingInProgress = true;
 
-  setColumns((prev) => {
-    applied = applyBulkMove(prev, taskIds, targetColumnId, targetIndex);
-    return applied ? applied.next : prev;
-  });
-
-  if (!applied) {
-    window.justUpdatedFromWebSocket = false;
-    (window as any).reorderingInProgress = false;
-    return;
-  }
-
-  onColumnsApplied?.(applied.next);
+  setColumns((prev) => applyBulkMove(prev, taskIds, targetColumnId, targetIndex)?.next ?? prev);
+  onColumnsApplied?.(preview.next);
 
   if (setFilteredColumns) {
     setFilteredColumns((prev) => {
@@ -1018,18 +1106,7 @@ export const handleBulkMoveTasks = async (
   }
 
   try {
-    const updates: Array<{ taskId: string; position: number; columnId: string }> = [];
-    for (const columnId of applied.touchedColumnIds) {
-      const tasks = applied.next[columnId]?.tasks || [];
-      tasks.forEach((t) => {
-        updates.push({
-          taskId: t.id,
-          position: Number(t.position) || 0,
-          columnId,
-        });
-      });
-    }
-    await batchUpdateTaskPositions(updates);
+    await commitTaskPositions(updates);
     setTimeout(() => {
       window.justUpdatedFromWebSocket = false;
       (window as any).reorderingInProgress = false;
@@ -1039,6 +1116,7 @@ export const handleBulkMoveTasks = async (
   } catch (error) {
     console.error('❌ [handleBulkMoveTasks] Failed:', error);
     setColumns(rollbackSnapshot);
+    onColumnsApplied?.(rollbackSnapshot);
     window.justUpdatedFromWebSocket = false;
     (window as any).reorderingInProgress = false;
     refreshBoardData().catch(() => {});
@@ -1089,7 +1167,7 @@ export const renumberColumnAfterCopy = async (
       position: t.position as number,
       columnId,
     }));
-    await batchUpdateTaskPositions(updates);
+    await commitTaskPositions(updates);
   } catch (error) {
     console.error('❌ [renumberColumnAfterCopy] Failed:', error);
   }

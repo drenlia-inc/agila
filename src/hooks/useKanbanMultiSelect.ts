@@ -59,8 +59,8 @@ export type BulkUndoSnapshot = {
   anchorColumnIds?: string[];
   /** Optional feed / email digest for the reverse operation */
   activity?: BulkUndoActivity;
-  /** Full column id/position snapshots for bulk-move undo (source + dest). */
-  previousColumnOrders?: Record<string, Array<{ id: string; position: number }>>;
+  /** Exact position batch from before the move. Undo posts this list. */
+  positionUpdates?: Array<{ taskId: string; position: number; columnId: string }>;
 };
 
 type UseKanbanMultiSelectArgs = {
@@ -91,9 +91,9 @@ type UseKanbanMultiSelectArgs = {
       position?: number;
     }
   ) => Promise<void>;
-  /** Restore source+dest column orders after a multi-select drag. */
+  /** Write the captured pre-move position batch. */
   onUndoColumnMove?: (
-    previousColumnOrders: Record<string, Array<{ id: string; position: number }>>
+    positionUpdates: Array<{ taskId: string; position: number; columnId: string }>
   ) => Promise<void>;
   getArchiveColumnId: () => string | null;
   availablePriorities: Array<{ id: number; priority: string; color: string }>;
@@ -879,13 +879,13 @@ export function useKanbanMultiSelect({
     (
       taskIds: string[],
       previousByTaskId: Record<string, Partial<Task>>,
-      previousColumnOrders?: Record<string, Array<{ id: string; position: number }>>
+      positionUpdates?: Array<{ taskId: string; position: number; columnId: string }>
     ) => {
-      if (taskIds.length < 1) return;
+      if (taskIds.length < 1 || !positionUpdates || positionUpdates.length === 0) return;
       offerBulkUndo({
         taskIds,
         previousByTaskId,
-        previousColumnOrders,
+        positionUpdates,
         labelKey:
           taskIds.length === 1 ? 'kanbanSelect.undoMoveSingle' : 'kanbanSelect.undoMove',
         kind: 'fields',
@@ -1025,11 +1025,12 @@ export function useKanbanMultiSelect({
       } else if (
         snapshot.activity?.type === 'column' &&
         snapshot.activity.reason === 'move' &&
-        snapshot.previousColumnOrders &&
+        snapshot.positionUpdates &&
+        snapshot.positionUpdates.length > 0 &&
         onUndoColumnMove
       ) {
         try {
-          await onUndoColumnMove(snapshot.previousColumnOrders);
+          await onUndoColumnMove(snapshot.positionUpdates);
           ok = snapshot.taskIds.length;
           succeededIds.push(...snapshot.taskIds);
         } catch {
