@@ -403,7 +403,7 @@ router.get('/demo-credentials', async (req, res) => {
       .toLowerCase();
     const hostname = host.split(':')[0];
     const demoHostAllowlist = new Set(
-      String(process.env.DEMO_CREDENTIALS_HOSTS || 'kanban.demo.drenlia.com,localhost,127.0.0.1')
+      String(process.env.DEMO_CREDENTIALS_HOSTS || 'demo.agila.dev,kanban.demo.drenlia.com,localhost,127.0.0.1')
         .split(',')
         .map((h) => h.trim().toLowerCase())
         .filter(Boolean)
