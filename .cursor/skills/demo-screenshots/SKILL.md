@@ -9,7 +9,7 @@ Capture product screenshots from the live demo for `screenshots/` (README + `SCR
 
 ## Source
 
-- **URL**: `https://kanban.demo.drenlia.com`
+- **URL**: `https://demo.agila.dev`
 - **Auth**: one-click — click **Sign In** (no credentials). Button may animate; use `{ force: true }` if the click times out as “not stable”.
 - Demo often runs Vite with HMR websockets — **do not** use `waitUntil: 'networkidle'` (hangs). Use `waitUntil: 'commit'` or `domcontentloaded`, then wait for UI selectors.
 

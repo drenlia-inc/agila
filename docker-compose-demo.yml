@@ -2,7 +2,7 @@
 # folder does not orphan volumes.
 #
 # Set host-specific values in project-root .env (Compose substitutes ${VAR}):
-#   ALLOWED_ORIGINS=kanban.demo.example.com
+#   ALLOWED_ORIGINS=demo.agila.dev,kanban.demo.drenlia.com
 #   TENANT_DOMAIN=example.com   # unused when MULTI_TENANT=false; kept for consistency
 #   POSTGRES_PASSWORD=…
 #   JWT_SECRET=…
@@ -44,7 +44,9 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-}
       # CORS / Vite allowedHosts — set demo hostname in .env
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-kanban.demo.drenlia.com}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-demo.agila.dev,kanban.demo.drenlia.com}
+      # Hosts allowed to fetch GET /api/auth/demo-credentials (comma-separated)
+      - DEMO_CREDENTIALS_HOSTS=${DEMO_CREDENTIALS_HOSTS:-demo.agila.dev,kanban.demo.drenlia.com,localhost,127.0.0.1}
       # Demo countdown / hourly reset UI
       - DEMO_ENABLED=true
       - LICENSE_ENABLED=false
