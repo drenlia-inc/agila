@@ -7,6 +7,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# CI security audit output (generated; do not commit)
+security-audit-report.md
+
 # Build outputs
 dist/
 build/

@@ -1,0 +1,74 @@
+name: Security audit
+
+on:
+  schedule:
+    # 07:00 America/Toronto (11:00 UTC)
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - package-lock.json
+      - package.json
+      - scripts/security-audit.sh
+      - .github/workflows/security-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit (critical/high)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Schedule / manual: always audit dev. Push: the commit that triggered the run.
+          ref: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'dev' || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Run security audit
+        id: audit
+        run: |
+          chmod +x scripts/security-audit.sh
+          set +e
+          ./scripts/security-audit.sh
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 1 ]; then
+            echo "Security audit tooling failed"
+            exit 1
+          fi
+          exit 0
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-report
+          path: security-audit-report.md
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -f security-audit-report.md ]; then
+            cat security-audit-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No security-audit-report.md produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Fail on critical/high findings
+        if: always() && steps.audit.outputs.exit_code == '2'
+        run: |
+          echo "ACTION REQUIRED: critical/high vulnerabilities found (see report)."
+          exit 1
