@@ -343,16 +343,14 @@ router.get('/me', authenticateToken, async (req, res) => {
     }
     
     // Generate a fresh JWT token with current roles (important for role changes)
-    const token = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email,
-        role: primaryRole(userRoles),
-        roles: userRoles
-      }, 
-      JWT_SECRET, 
-      { expiresIn: JWT_EXPIRES_IN }
-    );
+    const tokenPayload = {
+      id: user.id,
+      email: user.email,
+      role: primaryRole(userRoles),
+      roles: userRoles
+    };
+    if (req.user?.impersonatorId) tokenPayload.impersonatorId = req.user.impersonatorId;
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
     
     res.json({
       user: {

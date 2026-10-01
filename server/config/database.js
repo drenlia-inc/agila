@@ -252,7 +252,8 @@ const CREATE_SCHEMA_SQL = `
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       deleted_at TIMESTAMPTZ,
-      deleted_by TEXT
+      deleted_by TEXT,
+      external_key TEXT
     );
 
     CREATE TABLE IF NOT EXISTS columns (
@@ -294,6 +295,8 @@ const CREATE_SCHEMA_SQL = `
       deleted_by TEXT,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      external_key TEXT,
+      claim_token_hash TEXT,
       FOREIGN KEY (memberid) REFERENCES members(id),
       FOREIGN KEY (requesterid) REFERENCES members(id),
       FOREIGN KEY (columnid) REFERENCES columns(id) ON DELETE CASCADE,
@@ -369,7 +372,9 @@ const CREATE_SCHEMA_SQL = `
       token_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       last_used_at TIMESTAMPTZ,
-      revoked_at TIMESTAMPTZ
+      revoked_at TIMESTAMPTZ,
+      description TEXT NOT NULL DEFAULT '',
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '1 day')
     );
     CREATE INDEX IF NOT EXISTS idx_user_api_tokens_user_id ON user_api_tokens(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_api_tokens_prefix ON user_api_tokens(token_prefix);
@@ -716,7 +721,8 @@ const CREATE_SCHEMA_SQL = `
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
-      FOREIGN KEY (created_by) REFERENCES users(id)
+      FOREIGN KEY (created_by) REFERENCES users(id),
+      external_key TEXT
     );
 
     -- Migration 4: Badges table

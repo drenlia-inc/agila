@@ -5,6 +5,7 @@ import { TeamMember, Task, Column, Columns, Board, PriorityOption, Tag, QueryLog
 import { SavedFilterView, getSavedFilterView } from './api';
 import DebugPanel from './components/DebugPanel';
 import { ThemeProvider } from './contexts/ThemeContext';
+import ImpersonationBanner from './components/ImpersonationBanner';
 import { TourProvider } from './contexts/TourContext';
 import TourNudge from './components/tour/TourNudge';
 import MobileUnoptimizedBanner from './components/MobileUnoptimizedBanner';
@@ -6298,6 +6299,7 @@ function AppContent() {
     >
     <TourProvider currentUser={currentUser} onViewModeChange={handleViewModeChange} onPageChange={handlePageChange}>
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--main-bg)' }}>
+      <ImpersonationBanner name={currentUser?.displayName || currentUser?.email || ''} />
       {/* Demo Reset Counter is now rendered in Header component */}
       
       {/* New Enhanced Drag & Drop System */}

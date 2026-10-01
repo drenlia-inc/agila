@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { authenticateToken } from '../middleware/auth.js';
 import { getRequestDatabase } from '../middleware/tenantRouting.js';
+import { t } from '../utils/i18n.js';
 import { requireAiEnabledMiddleware } from '../utils/aiEnabled.js';
 import {
   userApiTokens as tokenQueries,
@@ -26,6 +27,7 @@ import { probeGithubRepoWithPat } from '../utils/githubRepoProbe.js';
 import {
   parseBody,
   createDevTokenBodySchema,
+  updateDevTokenBodySchema,
   githubTokenBodySchema,
   githubRepoProbeBodySchema
 } from '../utils/requestValidation.js';
@@ -56,12 +58,14 @@ function serializeToken(row) {
     tokenPrefix: row.token_prefix,
     createdAt: row.created_at,
     lastUsedAt: row.last_used_at,
-    revokedAt: row.revoked_at
+    revokedAt: row.revoked_at,
+    description: row.description || '',
+    expiresAt: row.expires_at
   };
 }
 
-// List tokens
-router.get('/tokens', authenticateToken, requireAi, async (req, res) => {
+// List tokens — available whether or not the in-app Agent is enabled.
+router.get('/tokens', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const rows = await tokenQueries.listTokensForUser(db, req.user.id);
@@ -73,26 +77,54 @@ router.get('/tokens', authenticateToken, requireAi, async (req, res) => {
 });
 
 // Create token (raw value returned once)
-router.post('/tokens', authenticateToken, requireAi, tokenMintLimiter, async (req, res) => {
+router.post('/tokens', authenticateToken, tokenMintLimiter, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const parsed = parseBody(createDevTokenBodySchema, req.body || {});
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error });
     }
-    const name = (parsed.data.name || 'Agent API token').toString().slice(0, 100);
+    const roles = Array.isArray(req.user.roles) ? req.user.roles : [];
+    const isAdmin = roles.includes('admin') || req.user.role === 'admin';
+    if (isAdmin && parsed.data.adminRiskAcknowledged !== true) {
+      return res.status(400).json({
+        error: 'Administrator tokens require adminRiskAcknowledged: true',
+        code: 'ADMIN_RISK_ACK_REQUIRED'
+      });
+    }
+    const lifetimeDays = parsed.data.lifetimeDays ?? 1;
+    const name = (parsed.data.name || 'API token').toString().slice(0, 100);
+    const description = (parsed.data.description || '').toString().slice(0, 500);
     const rawToken = `ek_${crypto.randomBytes(32).toString('hex')}`;
     const tokenPrefix = rawToken.slice(0, 11);
     const tokenHash = await bcrypt.hash(rawToken, 10);
     const id = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString();
 
     const row = await tokenQueries.createToken(db, {
       id,
       userId: req.user.id,
       name,
       tokenPrefix,
-      tokenHash
+      tokenHash,
+      description,
+      expiresAt
     });
+
+    if (req.user.impersonatorId) {
+      const { activity: activityQueries } = await import('../utils/sqlManager/index.js');
+      const email = req.user.email || '';
+      await activityQueries.insertSecurityActivity(
+        db,
+        req.user.impersonatorId,
+        'impersonate_mint_token',
+        JSON.stringify({
+          targetUserId: req.user.id,
+          en: t('activity.impersonatedMintToken', { name: email }, 'en'),
+          fr: t('activity.impersonatedMintToken', { name: email }, 'fr')
+        })
+      );
+    }
 
     res.status(201).json({
       token: serializeToken(row),
@@ -104,8 +136,30 @@ router.post('/tokens', authenticateToken, requireAi, tokenMintLimiter, async (re
   }
 });
 
+// Rename a token or change where it is used. The secret is not returned or replaced.
+router.patch('/tokens/:id', authenticateToken, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const parsed = parseBody(updateDevTokenBodySchema, req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error });
+    }
+    const row = await tokenQueries.updateTokenMeta(db, req.params.id, req.user.id, {
+      name: parsed.data.name,
+      description: parsed.data.description || ''
+    });
+    if (!row) {
+      return res.status(404).json({ error: 'Token not found or already revoked' });
+    }
+    res.json(serializeToken(row));
+  } catch (error) {
+    console.error('Update API token error:', error);
+    res.status(500).json({ error: 'Failed to update API token' });
+  }
+});
+
 // Revoke token
-router.delete('/tokens/:id', authenticateToken, requireAi, async (req, res) => {
+router.delete('/tokens/:id', authenticateToken, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const revoked = await tokenQueries.revokeToken(db, req.params.id, req.user.id);

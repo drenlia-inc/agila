@@ -13,6 +13,8 @@ import api from '../api';
 import { getAuthenticatedAvatarUrl } from '../utils/authImageUrl';
 import { useSettings } from '../contexts/SettingsContext';
 import ProfileDevTab from './profile/ProfileDevTab';
+import ProfileApiTokensTab from './profile/ProfileApiTokensTab';
+import { BetaSup } from './HelpAssistantTitle';
 import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { setExplicitGuestLanguage } from '../utils/guestLanguage';
 import { userIsViewer, userIsAdmin } from '../utils/permissions';
@@ -67,7 +69,7 @@ interface ProfileProps {
   onActivityFeedToggle?: (enabled: boolean) => void;
   onAccountDeleted?: () => void;
   /** Field to focus when the modal opens (default: display name). */
-  initialFocus?: 'displayName' | 'bio' | 'activityFeed';
+  initialFocus?: 'displayName' | 'bio' | 'activityFeed' | 'apiTokens';
 }
 
 export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated, isProfileBeingEdited, onProfileEditingChange, onActivityFeedToggle, onAccountDeleted, initialFocus = 'displayName' }: ProfileProps) {
@@ -77,7 +79,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   const isViewOnlyUser = userIsViewer(currentUser);
   const isAdminUser = userIsAdmin(currentUser);
   const githubFeedback = agilaGithubFeedbackUrls(i18n.language);
-  const [activeTab, setActiveTab] = useState<'profile' | 'app-settings' | 'notifications' | 'dev'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'app-settings' | 'notifications' | 'api-tokens' | 'dev'>('profile');
   const [displayName, setDisplayName] = useState(currentUser?.firstName + ' ' + currentUser?.lastName || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [systemSettings, setSystemSettings] = useState<{
@@ -208,7 +210,9 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
       setPreviewUrl(null);
       setError(null);
       setIsSubmitting(false);
-      setActiveTab(initialFocus === 'activityFeed' ? 'app-settings' : 'profile');
+      setActiveTab(
+        initialFocus === 'activityFeed' ? 'app-settings' : initialFocus === 'apiTokens' ? 'api-tokens' : 'profile'
+      );
       onProfileEditingChange(false); // Reset editing state when modal opens
     }
   }, [isOpen, onProfileEditingChange, initialFocus]); // Removed currentUser dependency to prevent resets during editing
@@ -217,10 +221,12 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
     if (!isOpen) return;
     if (initialFocus === 'activityFeed') {
       setActiveTab('app-settings');
+    } else if (initialFocus === 'apiTokens') {
+      setActiveTab('api-tokens');
     }
   }, [isOpen, initialFocus]);
 
-  // Leave Dev tab if AI is off or user is view-only (no PATs / agent credentials)
+  // Leave Dev tab if AI is off or user is view-only (SSH / GitHub credentials)
   useEffect(() => {
     if (activeTab === 'dev' && (!aiEnabled || isViewOnlyUser)) {
       setActiveTab('profile');
@@ -245,6 +251,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
         activityFeedPrefRef.current?.scrollIntoView({ block: 'center' });
         return;
       }
+      if (initialFocus === 'apiTokens') return;
       if (initialFocus === 'bio' && bioRef.current) {
         bioRef.current.focus();
         const len = bioRef.current.value.length;
@@ -659,6 +666,17 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                 }`}
               >
                 {t('profile.notifications')}
+              </button>
+              <button
+                onClick={() => setActiveTab('api-tokens')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'api-tokens'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
+                }`}
+              >
+                {t('profile.devApiTokens')}
+                <BetaSup />
               </button>
               {aiEnabled && !isViewOnlyUser && (
                 <button
@@ -1164,6 +1182,10 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
                 {t('profile.changesSavedAutomatically')}
               </div>
             </div>
+          )}
+
+          {activeTab === 'api-tokens' && (
+            <ProfileApiTokensTab isAdmin={isAdminUser} />
           )}
 
           {activeTab === 'dev' && aiEnabled && !isViewOnlyUser && (

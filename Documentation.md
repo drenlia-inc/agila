@@ -438,9 +438,9 @@ Side-panel edits (description, watchers, collaborators, attachments, effort, etc
 
 [Screenshot: Profile → Dev tab]
 
-When an administrator has enabled AI for the instance, Profile includes a **Dev** tab:
+When an administrator has enabled AI for the instance, Profile includes a **Dev** tab for SSH keys and a GitHub personal access token. **API tokens** are on their own Profile tab and work whether or not AI is enabled. See [docs/AGILA_API.md](docs/AGILA_API.md).
 
-- **API tokens**: Personal access tokens (`ek_…`) for agent/API automation (shown once at creation)
+- **API tokens**: Personal access tokens (`ek_…`) for the Agila API (shown once; default lifetime 1 day, maximum 30 days)
 - **SSH key**: Generate a dedicated keypair for agent git access (public key to add on GitHub/GitLab)
 - **GitHub PAT**: Store your own GitHub personal access token for clone, push, and pull requests (not shared with other users)
 - **Repo check**: Probe whether your PAT can access a given repository URL

@@ -172,6 +172,13 @@ export const activationLimiter = createLimiter({
   prefix: 'activate'
 });
 
+export const impersonateLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many impersonation attempts, please try again later' },
+  prefix: 'impersonate'
+});
+
 // Dev credential minting (API tokens / SSH keys): 20 per hour
 export const tokenMintLimiter = createLimiter({
   windowMs: 60 * 60 * 1000,

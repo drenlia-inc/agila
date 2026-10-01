@@ -14,6 +14,7 @@ import { setExplicitGuestLanguage } from '../../utils/guestLanguage';
 import { feDebug } from '../../utils/clientDebug';
 import ResetCountdown from '../ResetCountdown';
 import { KanbanChromeTooltip } from '../KanbanChromeTooltip';
+import BotWorkIndicator from './BotWorkIndicator';
 import { TOOLS_HEADER_SLOT_ID } from '../Tools';
 import InviteBoardPicker from '../InviteBoardPicker';
 import { defaultInviteBoardIds, liveInviteBoards } from '../../utils/inviteBoardIds';
@@ -1104,6 +1105,14 @@ const Header: React.FC<HeaderProps> = ({
               )}
             </div>
           </div>
+
+          {/* Bot work on the board currently on screen */}
+          {currentUser && (
+            <BotWorkIndicator
+              selectedBoard={selectedBoard}
+              onOpenTask={(taskId) => jumpToSearchTask({ id: taskId } as HeaderSearchTask)}
+            />
+          )}
 
           {/* 6. Account — click to open (iPad / keyboard friendly) */}
           {currentUser && (

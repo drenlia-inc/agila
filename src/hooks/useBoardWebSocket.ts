@@ -44,10 +44,12 @@ export const useBoardWebSocket = ({
   const handleBoardCreated = useCallback((data: any) => {
     if (!data.board || !data.boardId) return;
     if (!isAdminUser) {
-      const count = Number(data.board.participantCount ?? data.participantCount ?? 0);
-      const userIds = Array.isArray(data.userIds) ? data.userIds.map(String) : [];
-      if (count === 0 && !userIds.includes(String(currentUser?.id || ''))) {
-        return;
+      const userIds = Array.isArray(data.userIds) ? data.userIds.map(String) : null;
+      if (userIds) {
+        if (!userIds.includes(String(currentUser?.id || ''))) return;
+      } else {
+        const count = Number(data.board.participantCount ?? data.participantCount ?? 0);
+        if (count === 0) return;
       }
     }
 

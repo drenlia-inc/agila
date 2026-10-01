@@ -19,6 +19,23 @@
       "file": "src/components/ActivityFeed.tsx"
     },
     {
+      "id": "help:admin-impersonate",
+      "attr": "help",
+      "value": "admin-impersonate",
+      "en": "Impersonate",
+      "fr": "Incarner",
+      "searchEn": "Impersonate Impersonate admin-impersonate",
+      "searchFr": "Incarner Incarner admin-impersonate",
+      "kind": "admin",
+      "hash": "#admin#users",
+      "highlights": [
+        "[data-help-target=\"admin-impersonate\"]"
+      ],
+      "adminOnly": true,
+      "audience": "admin",
+      "file": "src/components/admin/AdminUsersTab.tsx"
+    },
+    {
       "id": "help:agent-code-iteration",
       "attr": "help",
       "value": "agent-code-iteration",
@@ -155,13 +172,30 @@
       "file": "src/components/Profile.tsx"
     },
     {
+      "id": "help:profile-api-tokens",
+      "attr": "help",
+      "value": "profile-api-tokens",
+      "en": "API tokens",
+      "fr": "Jetons API",
+      "searchEn": "API tokens Failed to update token Copied. Failed to copy Loading tokens… API tokens For external tools calling this Agila instance (Authorization: Bearer). Name api token ek profile profile-api-tokens",
+      "searchFr": "Jetons API Échec de la mise à jour du jeton Copié. Échec de la copie Chargement des jetons… Jetons API Pour les outils externes appelant cette instance Agila (Authorization: Bearer). Nom jeton api ek profil profile-api-tokens",
+      "kind": "profile",
+      "profileFocus": "apiTokens",
+      "highlights": [
+        "[data-help-target=\"profile-api-tokens\"]"
+      ],
+      "adminOnly": false,
+      "audience": "user",
+      "file": "src/components/profile/ProfileApiTokensTab.tsx"
+    },
+    {
       "id": "help:sprint-goal",
       "attr": "help",
       "value": "sprint-goal",
-      "en": "sprint goal",
-      "fr": "sprint goal",
-      "searchEn": "sprint goal  sprint-goal",
-      "searchFr": "sprint goal  sprint-goal",
+      "en": "End Date *",
+      "fr": "Date de fin *",
+      "searchEn": "End Date * End Date * Goal What this sprint should achieve… Description Optional description... sprint-goal",
+      "searchFr": "Date de fin * Date de fin * Objectif Ce que ce sprint doit accomplir… Description Description optionnelle... sprint-goal",
       "kind": "view",
       "mode": "kanban",
       "highlights": [
@@ -169,7 +203,7 @@
       ],
       "adminOnly": false,
       "audience": "user",
-      "file": "src/components/HelpModal.tsx"
+      "file": "src/components/sprints/SprintEditorFormFields.tsx"
     },
     {
       "id": "help:sso-add-provider",
@@ -1648,7 +1682,7 @@
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/HelpModal.tsx"
+      "file": "src/components/admin/AdminFeaturesSettingsTab.tsx"
     },
     {
       "id": "tour:admin-file-uploads",
@@ -1716,7 +1750,7 @@
       ],
       "adminOnly": true,
       "audience": "admin",
-      "file": "src/components/HelpModal.tsx"
+      "file": "src/components/admin/AdminLifecycleTab.tsx"
     },
     {
       "id": "tour:admin-mail-server",
