@@ -159,7 +159,11 @@ function inferNav(kind, value, fileRel, adminByKey) {
     if (value.startsWith('profile')) {
       return {
         navKind: 'profile',
-        profileFocus: value.includes('activity') ? 'activityFeed' : 'displayName',
+        profileFocus: value.includes('api-token')
+          ? 'apiTokens'
+          : value.includes('activity')
+            ? 'activityFeed'
+            : 'displayName',
         adminOnly: false,
         highlights
       };
@@ -236,9 +240,7 @@ function buildEntries() {
     if (SKIP_HARVEST_FILES.test(fileRel.replace(/\\/g, '/'))) continue;
     for (const { attr, kind } of ATTRS) {
       for (const hit of extractAttrValues(source, attr)) {
-        if (kind === 'setting' || kind === 'ownerSetup') {
-          if (/HelpModal\.tsx$/.test(fileRel)) continue;
-        }
+        if (/HelpModal\.tsx$/.test(fileRel)) continue;
         const value = hit.value;
         if (!isHarvestableValue(kind, value)) continue;
         const id = `${kind}:${value}`;
@@ -273,6 +275,11 @@ function buildEntries() {
           en = lab.en || en;
           fr = lab.fr || fr;
         }
+        if (value === 'profile-api-tokens') {
+          const lab = lookupLocale(locales, 'common.profile.devApiTokens');
+          en = lab.en || en;
+          fr = lab.fr || fr;
+        }
         if (value === 'task-page-link') {
           const lab = lookupLocale(locales, 'tasks.taskCard.directLinkTo');
           en = lab.en ? lab.en.replace('{{ticket}}', '').trim() : 'Full task page (ticket ID)';
@@ -287,6 +294,10 @@ function buildEntries() {
         if (value.includes('trash') || /trash/i.test(fileRel)) {
           extraEn += ' trash deleted';
           extraFr += ' corbeille supprimees supprimes';
+        }
+        if (value === 'profile-api-tokens') {
+          extraEn += ' api token ek profile';
+          extraFr += ' jeton api ek profil';
         }
         if (/activity.?feed/i.test(value) || /ActivityFeed|profile-activity/.test(value + fileRel)) {
           extraEn += ' activity feed profile';

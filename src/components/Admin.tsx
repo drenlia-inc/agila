@@ -1270,11 +1270,10 @@ const Admin: React.FC<AdminProps> = ({
       // Check if email was actually sent (only relevant if isActive is false)
       if (!userData.isActive && result.emailSent === false) {
         toast.warning(t('userCreatedButEmailFailed', { error: result.emailError || t('emailServiceUnavailable') }), '');
-      } else {
       }
-      
-      await loadData(); // Reload users
-      // Notify parent component that users have changed
+
+      const usersResponse = await api.get('/admin/users');
+      setUsers(usersResponse.data || []);
       if (onUsersChanged) {
         onUsersChanged();
       }

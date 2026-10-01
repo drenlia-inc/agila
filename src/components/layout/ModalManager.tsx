@@ -36,8 +36,8 @@ interface ModalManagerProps {
   onActivityFeedToggle?: (enabled: boolean) => void;
   onAccountDeleted?: () => void;
   /** Focus target when Profile opens (e.g. bio from Meet the team). */
-  profileInitialFocus?: 'displayName' | 'bio' | 'activityFeed';
-  onOpenProfile?: (focus?: 'displayName' | 'bio' | 'activityFeed') => void;
+  profileInitialFocus?: 'displayName' | 'bio' | 'activityFeed' | 'apiTokens';
+  onOpenProfile?: (focus?: 'displayName' | 'bio' | 'activityFeed' | 'apiTokens') => void;
   siteSettings?: { [key: string]: string };
   boards?: any[];
   sprints?: Array<{

@@ -519,8 +519,16 @@ export const workMapsBodySchema = z.object({
 // —— User /dev (PAT, GitHub) ——
 
 export const createDevTokenBodySchema = z.object({
-  name: z.string().max(100).optional()
+  name: z.string().max(100).optional(),
+  description: z.string().max(500).optional(),
+  lifetimeDays: z.number().int().min(1).max(30).optional(),
+  adminRiskAcknowledged: z.boolean().optional()
 }).passthrough();
+
+export const updateDevTokenBodySchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  description: z.string().max(500).optional()
+});
 
 export const githubTokenBodySchema = z.object({
   token: z.string().trim().min(20).max(255)
@@ -528,6 +536,61 @@ export const githubTokenBodySchema = z.object({
 
 export const githubRepoProbeBodySchema = z.object({
   repoUrl: z.string().trim().min(1).max(2048)
+});
+
+const relayColumnSchema = z.object({
+  title: z.string().trim().min(1).max(100),
+  finished: z.boolean().optional()
+});
+
+export const relayBoardBodySchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  externalKey: z.string().trim().min(1).max(200).optional(),
+  columns: z.array(relayColumnSchema).min(1).max(20).optional(),
+  participantUserIds: z.array(z.string().trim().min(1)).max(100).optional()
+});
+
+export const relaySprintBodySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  goal: z.string().max(2000).optional().nullable(),
+  description: z.string().max(4000).optional().nullable(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  active: z.boolean().optional(),
+  externalKey: z.string().trim().min(1).max(200).optional()
+});
+
+export const relayTaskBodySchema = z.object({
+  boardId: z.string().trim().min(1).optional(),
+  boardExternalKey: z.string().trim().min(1).max(200).optional(),
+  column: z.string().trim().min(1).max(100),
+  sprintId: z.string().trim().min(1).optional().nullable(),
+  title: z.string().trim().min(1).max(500),
+  description: z.string().max(20000).optional(),
+  acceptanceCriteria: z.array(z.string().trim().min(1).max(2000)).max(50).optional(),
+  externalKey: z.string().trim().min(1).max(200).optional()
+});
+
+export const relayMoveBodySchema = z.object({
+  column: z.string().trim().min(1).max(100),
+  claimToken: z.string().trim().min(16).max(200)
+});
+
+export const relayClaimBodySchema = z.object({
+  fromColumn: z.string().trim().min(1).max(100),
+  toColumn: z.string().trim().min(1).max(100),
+  sprintId: z.string().trim().min(1).optional()
+});
+
+export const relayCriterionBodySchema = z.object({
+  done: z.boolean(),
+  claimToken: z.string().trim().min(16).max(200)
+});
+
+export const relayPlanBodySchema = z.object({
+  sprint: relaySprintBodySchema.optional(),
+  board: relayBoardBodySchema,
+  tasks: z.array(relayTaskBodySchema).max(500)
 });
 
 // —— Admin AI / storage / notifications ——

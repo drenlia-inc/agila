@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { Edit, Trash2, User as UserIcon, Mail, Loader2, Search, X, ArrowUp, ArrowDown, ChevronsUpDown, ChevronDown, Check, Eye, Shield } from 'lucide-react';
+import { Edit, Trash2, User as UserIcon, Mail, Loader2, Search, X, ArrowUp, ArrowDown, ChevronsUpDown, ChevronDown, Check, Eye, Shield, VenetianMask } from 'lucide-react';
 import { getAuthenticatedAvatarUrl } from '../../utils/authImageUrl';
 import { AGENT_BOT_AVATAR_SRC } from '../../utils/agentMemberUi';
+import api from '../../api';
 import { toast } from '../../utils/toast';
 import { licenseLimitToastCopy } from '../../utils/licenseLimitToast';
 import { CHROME_TOOLTIP_SURFACE_CLASS } from '../KanbanChromeTooltip';
@@ -793,8 +794,10 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isResendingInvitation, setIsResendingInvitation] = useState<boolean>(false);
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
+  const [impersonateUser, setImpersonateUser] = useState<User | null>(null);
+  useEscapeDismiss(() => setImpersonateUser(null), { enabled: Boolean(impersonateUser) });
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
-  const [hoveredButton, setHoveredButton] = useState<{userId: string, type: 'promote' | 'demote' | 'edit' | 'delete' | 'resend', position: {top: number, left: number}} | null>(null);
+  const [hoveredButton, setHoveredButton] = useState<{userId: string, type: 'promote' | 'demote' | 'edit' | 'delete' | 'resend' | 'impersonate', position: {top: number, left: number}} | null>(null);
   
   const [deleteReassignToUserId, setDeleteReassignToUserId] = useState<string>(''); // '' = System
   // Refs for button positioning and focus
@@ -824,7 +827,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
     String(userEmail || '').trim().toLowerCase() === BOOTSTRAP_ADMIN_EMAIL;
 
   // Handle button hover for tooltips
-  const handleButtonMouseEnter = (userId: string, type: 'promote' | 'demote' | 'edit' | 'delete' | 'resend', e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleButtonMouseEnter = (userId: string, type: 'promote' | 'demote' | 'edit' | 'delete' | 'resend' | 'impersonate', e: React.MouseEvent<HTMLButtonElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setHoveredButton({
       userId,
@@ -988,9 +991,11 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   );
   
   const [newUser, setNewUser] = useState(getEmptyNewUser);
-  const newUserEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-    String(newUser.email || '').trim()
-  );
+  const [newUserEmailBlurred, setNewUserEmailBlurred] = useState(false);
+  const newUserEmailTrimmed = String(newUser.email || '').trim();
+  const newUserEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUserEmailTrimmed);
+  const newUserEmailError =
+    newUserEmailBlurred && newUserEmailTrimmed.length > 0 && !newUserEmailValid;
   const newUserReadyToSubmit =
     newUserEmailValid &&
     String(newUser.firstName || '').trim().length > 0 &&
@@ -1250,6 +1255,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
   const handleCancelAddUser = () => {
     setShowAddUserForm(false);
     setNewUser(getEmptyNewUser());
+    setNewUserEmailBlurred(false);
   };
 
   useEscapeDismiss(
@@ -1347,6 +1353,7 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
         ...getEmptyNewUser(),
         boardIds: defaultInviteBoardIds(boards),
       });
+      setNewUserEmailBlurred(false);
       setShowAddUserForm(true);
     } catch (error) {
       console.error('Error checking user limit:', error);
@@ -1656,6 +1663,19 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                       >
                         <Edit size={15} />
                       </button>
+                      {user.id !== currentUser?.id && user.isActive && user.email !== 'agent@local' && user.email !== 'system@local' && (
+                        <button
+                          type="button"
+                          data-help-target="admin-impersonate"
+                          aria-label={t('users.impersonate')}
+                          onMouseEnter={(e) => handleButtonMouseEnter(user.id, 'impersonate', e)}
+                          onMouseLeave={handleButtonMouseLeave}
+                          onClick={() => setImpersonateUser(user)}
+                          className="p-1.5 rounded-lg transition-colors text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800"
+                        >
+                          <VenetianMask size={15} />
+                        </button>
+                      )}
                       <div className="relative">
                         <button
                           ref={(el) => {
@@ -1951,10 +1971,20 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   type="email"
                   value={newUser.email}
                   onChange={(e) => handleNewUserChange('email', e.target.value)}
-                  className={adminModalInputEditableClass}
+                  onBlur={() => setNewUserEmailBlurred(true)}
+                  className={`${adminModalInputEditableClass}${
+                    newUserEmailError ? ' border-red-500 ring-2 ring-red-500/40' : ''
+                  }`}
                   placeholder="user@example.com"
                   autoFocus
+                  aria-invalid={newUserEmailError}
+                  aria-describedby={newUserEmailError ? 'admin-add-user-email-error' : undefined}
                 />
+                {newUserEmailError && (
+                  <p id="admin-add-user-email-error" className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {t('users.emailInvalid')}
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -2483,6 +2513,8 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                   : isOwner(user.email) 
                     ? t('users.cannotDemoteInstanceOwner') 
                     : t('users.demoteToUser');
+              case 'impersonate':
+                return t('users.impersonate');
               case 'edit':
                 return !canEditUserProfile(user.email)
                   ? t('users.onlyOwnerCanEditProfile')
@@ -2503,6 +2535,48 @@ const AdminUsersTab: React.FC<AdminUsersTabProps> = ({
                 return '';
             }
           })()}
+        </div>,
+        document.body
+      )}
+      {impersonateUser && createPortal(
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+          onMouseDown={() => setImpersonateUser(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="max-w-md w-full rounded-lg bg-white dark:bg-gray-800 p-4 shadow-lg"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <p className="text-sm text-gray-800 dark:text-gray-100">
+              {t('users.impersonateConfirm', { name: impersonateUser.displayName || impersonateUser.email })}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className="px-3 py-1 text-sm" onClick={() => setImpersonateUser(null)}>
+                {t('users.impersonateCancel')}
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 text-sm font-medium text-white bg-blue-600 rounded-md"
+                onClick={() => {
+                  const current = localStorage.getItem('authToken');
+                  const target = impersonateUser;
+                  if (!current || !target) return;
+                  void api.post(`/admin/users/${target.id}/impersonate`).then((response) => {
+                    sessionStorage.setItem('agila.impersonatorToken', current);
+                    localStorage.setItem('authToken', response.data.token);
+                    window.location.reload();
+                  }).catch(() => {
+                    toast.error(t('users.impersonateError'), '');
+                    setImpersonateUser(null);
+                  });
+                }}
+              >
+                {t('users.impersonate')}
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

@@ -16,6 +16,9 @@
 8. [User Profile & Settings](#user-profile--settings)
 9. [Admin Section](#admin-section-admin-only)
    - [Lifecycle](#lifecycle-admin-only)
+   - [SSO Configuration](#sso-configuration-admin-only)
+   - [Notifications & Webhooks](#notifications--webhooks-admin-only)
+   - [File Storage](#file-storage-admin-only)
 10. [Advanced Features](#advanced-features)
    - [Soft delete & trash](#soft-delete--trash)
 11. [AI Agent](#ai-agent)
@@ -35,17 +38,18 @@ Agila is a comprehensive agile project management platform that combines Kanban 
 - **Soft WIP limits** (column and board), card aging, blocked flags, and column policy notes
 - **Multiple views**: Kanban, List, Gantt, and Calendar
 - **Real-time collaboration** - see changes instantly as team members work
-- **User authentication** with local accounts and Google OAuth support
+- **User authentication** with local accounts plus optional **Google**, **GitHub**, and **Microsoft 365** OAuth (managed platform credentials and/or bring-your-own app credentials where offered)
 - **Role-based access control** (Admin/User/Viewer) and **board membership** — users and viewers only see boards they have been added to; admins see all boards and assign members (double-click a board tab)
 - **Team management** with color-coded member assignments
 - **Task management** with priorities, comments, attachments, relationships, and an **acceptance criteria** checklist
-- **Multi-select & bulk actions** - tag, copy, sprint, priority, archive, delete, move board; multi-drag between columns
+- **Multi-select & bulk actions** - tag, copy, sprint, priority, archive, delete, move board; multi-drag between columns; one-shot Undo for supported bulk actions
 - **Soft delete & trash** - restore or permanently purge tasks and boards (board trash + Settings → Lifecycle); admins can Shift+click delete to purge without trash
 - **AI Agent** (optional) — assign tasks to an Agent that can comment (**Assist**), work a linked Git repo (**Code**), or (admins) run board **Automation** with dry-run Apply/Undo (see [AI Agent](#ai-agent))
-- **Settings** (Profile → Settings, admins only) for users, branding, mail, SSO, sprints, reporting, licensing, and lifecycle
+- **Settings** (Profile → Settings, admins only) for users, branding, mail, SSO, notifications/webhooks, storage, sprints, reporting, licensing, and lifecycle
 - **File uploads** for task attachments and user avatars
 - **Site branding** - custom logo (light/dark), optional hide logo / GitHub link
 - **EN / FR localization**
+- **In-app Help** (F1 / ?) with guides, shortcuts, Delivery playbook, and optional Help Assistant when AI is enabled
 
 ### User Roles
 - **Admin**: Full access to all features including user management and system configuration
@@ -86,9 +90,10 @@ In production mode, you'll need to create your own user accounts through Setting
 4. Set up your boards and columns, then add **board members** (double-click the tab) so users and viewers can see each board
 5. Start creating and managing tasks; add **acceptance criteria** on the task details panel when a card needs a checklist definition of done
 6. Optional: create sprints with a **sprint goal** (header dropdown or Settings → Project Settings → Sprints)
-7. Configure Google OAuth (optional) in Settings → System Settings → SSO
+7. Configure SSO (optional) in Settings → System Settings → SSO — Google, GitHub, and/or Microsoft 365
 8. Configure branding (optional) in Settings → Site Settings (logo, site name)
-9. Configure AI Agent (optional) in Settings → System Settings → AI — then users add Profile → Dev credentials for coding jobs
+9. Configure notifications (optional): SMTP under Mail, and/or outbound webhooks under Notifications
+10. Configure AI Agent (optional) in Settings → System Settings → AI — then users add Profile → Dev credentials for coding jobs
 
 ---
 
@@ -433,9 +438,9 @@ Side-panel edits (description, watchers, collaborators, attachments, effort, etc
 
 [Screenshot: Profile → Dev tab]
 
-When an administrator has enabled AI for the instance, Profile includes a **Dev** tab:
+When an administrator has enabled AI for the instance, Profile includes a **Dev** tab for SSH keys and a GitHub personal access token. **API tokens** are on their own Profile tab and work whether or not AI is enabled. See [docs/AGILA_API.md](docs/AGILA_API.md).
 
-- **API tokens**: Personal access tokens (`ek_…`) for agent/API automation (shown once at creation)
+- **API tokens**: Personal access tokens (`ek_…`) for the Agila API (shown once; default lifetime 1 day, maximum 30 days)
 - **SSH key**: Generate a dedicated keypair for agent git access (public key to add on GitHub/GitLab)
 - **GitHub PAT**: Store your own GitHub personal access token for clone, push, and pull requests (not shared with other users)
 - **Repo check**: Probe whether your PAT can access a given repository URL
@@ -448,7 +453,7 @@ These credentials are used when **you** assign a coding job to the Agent. Assist
 
 [Screenshot: Settings interface]
 
-Open **Settings** from the profile menu (admins only). Settings provides instance management: users, branding, mail, SSO, project options, reporting, licensing, and lifecycle.
+Open **Settings** from the profile menu (admins only). Settings provides instance management: users, branding, mail, SSO, notifications/webhooks, storage, project options, reporting, licensing, and lifecycle.
 
 ### User Management
 
@@ -492,18 +497,25 @@ Open **Settings** from the profile menu (admins only). Settings provides instanc
 
 ### SSO Configuration (Admin Only)
 
-[Screenshot: Google OAuth setup]
+[Screenshot: SSO providers]
 
-#### Google OAuth Setup
-- **Client ID**: Google OAuth client ID
-- **Client Secret**: Google OAuth client secret
-- **Callback URL**: OAuth redirect URL
+Configure one or more identity providers under **Settings → System Settings → SSO**. Each provider can be enabled independently.
+
+#### Providers
+- **Google** — OAuth client ID/secret and callback URL
+- **GitHub** — OAuth App client ID/secret and callback URL
+- **Microsoft 365** — Entra ID (Azure AD) app client ID/secret, tenant, and callback URL
+
+#### Credential modes (where offered)
+- **Managed** — Use platform-provided OAuth credentials (hosted / connected installs when eligible)
+- **Bring your own (BYO)** — Enter your organization’s OAuth app credentials
+- Switch between managed and BYO from the provider card when both are available; disable a provider when not in use
 
 #### OAuth Features
-- **Single Sign-On**: Login with Google account
-- **Account Linking**: Link Google to existing accounts
-- **Profile Sync**: Sync Google profile information
-- **Avatar Import**: Use Google profile picture
+- **Single Sign-On**: Login with the configured provider account
+- **Account Linking**: Link a provider identity to an existing local account
+- **Profile Sync**: Sync profile information from the provider when available
+- **Avatar Import**: Use the provider profile picture when available
 
 ### Mail Server Settings (Admin Only)
 
@@ -519,8 +531,33 @@ Open **Settings** from the profile menu (admins only). Settings provides instanc
 #### Email Features
 - **User Invitations**: Send account invitations
 - **Password Resets**: Email password reset links
-- **Notifications**: Task and system notifications
+- **Notifications**: Task and system notifications (when the notification channel includes email)
 - **Test Email**: Send test email to verify setup
+
+### Notifications & Webhooks (Admin Only)
+
+Under **Settings → Notifications**, choose how task and board events leave the instance.
+
+#### Delivery channel
+- **Email** — Queue and send via SMTP (Mail settings)
+- **Webhooks** — Outbound HTTPS posts only
+- **Both** — Email and webhooks
+
+#### Webhooks
+- **Platforms**: Slack, Mattermost, Microsoft Teams (incoming webhook URL), Telegram, and WhatsApp
+- **Events**: Task created / changed / deleted; board created / renamed / deleted (per-webhook toggles)
+- **Test**: Send a sample payload from the webhook editor
+- **Queue**: Failed or pending webhook deliveries appear alongside email rows in the notification queue (filter by channel)
+
+Plan limits may cap how many webhooks you can create (for example one on Free; more on higher plans).
+
+### File Storage (Admin Only)
+
+Under **Settings → System Settings → Storage**, choose where uploads (attachments, avatars, logos) are kept.
+
+- **Local disk** — Default for many self-hosted Docker installs
+- **S3-compatible** — Custom (BYO) bucket credentials, or **managed** platform storage when the instance is connected and eligible
+- Use **Test** before switching live destinations; managed mode hides disk↔S3 cutover that would conflict with platform storage
 
 ### Lifecycle (Admin Only)
 
@@ -855,9 +892,10 @@ In the app, open **Help → Shortcuts** (F1 or **?**) for the same reference.
 - **Developer reference**: [`docs/AI_INTEGRATION.md`](docs/AI_INTEGRATION.md)
 
 ### Getting Help
-- **Help Modal**: Press F1 or ? (or click help button)
+- **Help Modal**: Press F1 or ? (or click the help button) for guides, shortcuts, Delivery playbook, and settings reference
+- **Help Assistant**: When AI is enabled for the instance, open the assistant from Help to ask questions; answers can include a **Go there** link to the matching setting or UI
 - **Documentation**: This comprehensive guide
-- **Support**: Contact system administrator
+- **Support**: Customer Portal / licensing contact when connected; otherwise your system administrator
 - **GitHub**: Project repository link in the header (unless hidden by admin)
 
 ---

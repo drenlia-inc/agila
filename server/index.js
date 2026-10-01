@@ -77,6 +77,7 @@ import taskRelationsRouter from './routes/taskRelations.js';
 import acceptanceCriteriaRouter from './routes/acceptanceCriteria.js';
 import taskWorkRouter from './routes/taskWork.js';
 import agentRouter from './routes/agent.js';
+import apiV1RelayRouter from './routes/apiV1Relay.js';
 import userDevRouter from './routes/userDev.js';
 import activityRouter from './routes/activity.js';
 import testNotificationsRouter from './routes/testNotifications.js';
@@ -508,6 +509,45 @@ app.use('/api/activity', activityRouter);
 app.use('/api/user', activityRouter);
 app.use('/api/user', usersRouter); // User settings routes
 app.use('/api/test', testNotificationsRouter); // Test endpoints for notifications
+
+// Agila API v1: same product routers as /api, plus Relay routes mounted first
+// so claim/move/plans match before parameterized task routes. Login and OAuth
+// stay on /api/auth only.
+app.use('/api/v1', apiV1RelayRouter);
+app.use('/api/v1/members', membersRouter);
+app.use('/api/v1/boards', boardsRouter);
+app.use('/api/v1/columns', columnsRouter);
+app.use('/api/v1/tasks', authenticateToken, tasksRouter);
+app.use('/api/v1/views', viewsRouter);
+app.use('/api/v1/reports', lazyRouteLoader('./routes/reports.js'));
+app.use('/api/v1/admin/sprints', lazyRouteLoader('./routes/sprints.js'));
+app.use('/api/v1/comments', commentsRouter);
+app.use('/api/v1/users', usersRouter);
+app.use('/api/v1/upload', uploadRouter);
+app.use('/api/v1/files', filesRouter);
+app.use('/api/v1/attachments', filesRouter);
+app.use('/api/v1/admin/users', lazyRouteLoader('./routes/adminUsers.js'));
+app.use('/api/v1/tags', lazyRouteLoader('./routes/tags.js'));
+app.use('/api/v1/admin/tags', lazyRouteLoader('./routes/tags.js'));
+app.use('/api/v1/admin/priorities', lazyRouteLoader('./routes/priorities.js'));
+app.use('/api/v1/priorities', lazyRouteLoader('./routes/priorities.js'));
+app.use('/api/v1/settings', settingsRouter);
+app.use('/api/v1/admin/settings', settingsRouter);
+app.use('/api/v1/storage', settingsRouter);
+app.use('/api/v1/admin', lazyRouteLoader('./routes/adminSystem.js'));
+app.use('/api/v1/admin/notification-queue', lazyRouteLoader('./routes/adminNotificationQueue.js'));
+app.use('/api/v1/admin/webhooks', lazyRouteLoader('./routes/adminWebhooks.js'));
+app.use('/api/v1/admin/lifecycle', lazyRouteLoader('./routes/adminLifecycle.js'));
+app.use('/api/v1/admin/csp-reports', cspAdminRouter);
+app.use('/api/v1/tasks', taskWorkRouter);
+app.use('/api/v1/tasks', taskRelationsRouter);
+app.use('/api/v1/tasks', acceptanceCriteriaRouter);
+app.use('/api/v1/agent', agentRouter);
+app.use('/api/v1/help-assistant', lazyRouteLoader('./routes/helpAssistant.js'));
+app.use('/api/v1/user/dev', userDevRouter);
+app.use('/api/v1/activity', activityRouter);
+app.use('/api/v1/user', activityRouter);
+app.use('/api/v1/user', usersRouter);
 
 // Admin Portal API routes (external access using INSTANCE_TOKEN) - Lazy loaded
 app.use('/api/admin-portal', lazyRouteLoader('./routes/adminPortal.js'));

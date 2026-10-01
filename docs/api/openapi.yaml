@@ -1,0 +1,4494 @@
+openapi: 3.0.3
+info:
+  title: Agila API
+  version: "1.0.0"
+  description: >
+    Agila API v1. Send Authorization Bearer with a session JWT or an ek_ token.
+    The same handlers and permission checks as the web app apply.
+    Relay routes add external keys, column titles, claim, and plans.
+    OAuth callbacks are not part of this API.
+servers:
+  - url: /
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+paths:
+  "/api/agent/automation/apply":
+    post:
+      summary: "POST /api/agent/automation/apply"
+      description: "Implemented in server/routes/agentAutomation.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/agent/automation/dry-run-artifact/{taskId}":
+    post:
+      summary: "POST /api/agent/automation/dry-run-artifact/{taskId}"
+      description: "Implemented in server/routes/agentAutomation.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/agent/automation/status":
+    get:
+      summary: "GET /api/agent/automation/status"
+      description: "Implemented in server/routes/agentAutomation.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/agent/automation/tools":
+    post:
+      summary: "POST /api/agent/automation/tools"
+      description: "Implemented in server/routes/agentAutomation.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/agent/automation/undo/{taskId}":
+    post:
+      summary: "POST /api/agent/automation/undo/{taskId}"
+      description: "Implemented in server/routes/agentAutomation.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/activate-account":
+    post:
+      summary: "POST /api/auth/activate-account"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/check-default-admin":
+    get:
+      summary: "GET /api/auth/check-default-admin"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/debug/oauth":
+    get:
+      summary: "GET /api/auth/debug/oauth"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/demo-credentials":
+    get:
+      summary: "GET /api/auth/demo-credentials"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/instance-status":
+    get:
+      summary: "GET /api/auth/instance-status"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/is-owner":
+    get:
+      summary: "GET /api/auth/is-owner"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/license-info":
+    get:
+      summary: "GET /api/auth/license-info"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/login":
+    post:
+      summary: "POST /api/auth/login"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/me":
+    get:
+      summary: "GET /api/auth/me"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/register":
+    post:
+      summary: "POST /api/auth/register"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/reload-oauth":
+    post:
+      summary: "POST /api/auth/reload-oauth"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/test/callback":
+    get:
+      summary: "GET /api/auth/test/callback"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/auth/verify-invitation":
+    get:
+      summary: "GET /api/auth/verify-invitation"
+      description: "Implemented in server/routes/auth.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/password-reset/request":
+    post:
+      summary: "POST /api/password-reset/request"
+      description: "Implemented in server/routes/password-reset.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/password-reset/reset":
+    post:
+      summary: "POST /api/password-reset/reset"
+      description: "Implemented in server/routes/password-reset.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/password-reset/verify/{token}":
+    get:
+      summary: "GET /api/password-reset/verify/{token}"
+      description: "Implemented in server/routes/password-reset.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/activity/bot-work":
+    get:
+      summary: "GET /api/v1/activity/bot-work"
+      description: "Implemented in server/routes/activity.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/activity/feed":
+    get:
+      summary: "GET /api/v1/activity/feed"
+      description: "Implemented in server/routes/activity.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/activity/status":
+    get:
+      summary: "GET /api/v1/activity/status"
+      description: "Implemented in server/routes/activity.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/compare-storage":
+    post:
+      summary: "POST /api/v1/admin/compare-storage"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/connect-portal":
+    post:
+      summary: "POST /api/v1/admin/connect-portal"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/email-status":
+    get:
+      summary: "GET /api/v1/admin/email-status"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/instance-portal/billing-history":
+    get:
+      summary: "GET /api/v1/admin/instance-portal/billing-history"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/instance-portal/cancel-subscription":
+    post:
+      summary: "POST /api/v1/admin/instance-portal/cancel-subscription"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/instance-portal/change-plan":
+    post:
+      summary: "POST /api/v1/admin/instance-portal/change-plan"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/jobs/achievements":
+    post:
+      summary: "POST /api/v1/admin/jobs/achievements"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/jobs/cleanup":
+    post:
+      summary: "POST /api/v1/admin/jobs/cleanup"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/jobs/snapshot":
+    post:
+      summary: "POST /api/v1/admin/jobs/snapshot"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/lifecycle/boards":
+    get:
+      summary: "GET /api/v1/admin/lifecycle/boards"
+      description: "Implemented in server/routes/adminLifecycle.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/lifecycle/boards/purge-batch":
+    post:
+      summary: "POST /api/v1/admin/lifecycle/boards/purge-batch"
+      description: "Implemented in server/routes/adminLifecycle.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/lifecycle/summary":
+    get:
+      summary: "GET /api/v1/admin/lifecycle/summary"
+      description: "Implemented in server/routes/adminLifecycle.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/lifecycle/tasks":
+    get:
+      summary: "GET /api/v1/admin/lifecycle/tasks"
+      description: "Implemented in server/routes/adminLifecycle.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/lifecycle/tasks/purge-batch":
+    post:
+      summary: "POST /api/v1/admin/lifecycle/tasks/purge-batch"
+      description: "Implemented in server/routes/adminLifecycle.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/lifecycle/tasks/restore-batch":
+    post:
+      summary: "POST /api/v1/admin/lifecycle/tasks/restore-batch"
+      description: "Implemented in server/routes/adminLifecycle.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/migrate-storage":
+    post:
+      summary: "POST /api/v1/admin/migrate-storage"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/migrate-storage/status":
+    get:
+      summary: "GET /api/v1/admin/migrate-storage/status"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/migrations":
+    get:
+      summary: "GET /api/v1/admin/migrations"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/notification-queue":
+    delete:
+      summary: "DELETE /api/v1/admin/notification-queue"
+      description: "Implemented in server/routes/adminNotificationQueue.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    get:
+      summary: "GET /api/v1/admin/notification-queue"
+      description: "Implemented in server/routes/adminNotificationQueue.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/notification-queue/send":
+    post:
+      summary: "POST /api/v1/admin/notification-queue/send"
+      description: "Implemented in server/routes/adminNotificationQueue.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/owner":
+    get:
+      summary: "GET /api/v1/admin/owner"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/portal-config":
+    get:
+      summary: "GET /api/v1/admin/portal-config"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/priorities":
+    get:
+      summary: "GET /api/v1/admin/priorities"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/admin/priorities"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/priorities/reorder":
+    put:
+      summary: "PUT /api/v1/admin/priorities/reorder"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/priorities/usage/batch":
+    get:
+      summary: "GET /api/v1/admin/priorities/usage/batch"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/priorities/{priorityId}":
+    delete:
+      summary: "DELETE /api/v1/admin/priorities/{priorityId}"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/admin/priorities/{priorityId}"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/priorities/{priorityId}/set-default":
+    put:
+      summary: "PUT /api/v1/admin/priorities/{priorityId}/set-default"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/priorities/{priorityId}/usage":
+    get:
+      summary: "GET /api/v1/admin/priorities/{priorityId}/usage"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings":
+    get:
+      summary: "GET /api/v1/admin/settings"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/admin/settings"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/ai/models":
+    post:
+      summary: "POST /api/v1/admin/settings/ai/models"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/ai/providers":
+    get:
+      summary: "GET /api/v1/admin/settings/ai/providers"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/ai/runner/probe":
+    post:
+      summary: "POST /api/v1/admin/settings/ai/runner/probe"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/ai/validate":
+    post:
+      summary: "POST /api/v1/admin/settings/ai/validate"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/app-url":
+    put:
+      summary: "PUT /api/v1/admin/settings/app-url"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/bulk":
+    put:
+      summary: "PUT /api/v1/admin/settings/bulk"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/clear-mail":
+    post:
+      summary: "POST /api/v1/admin/settings/clear-mail"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/clear-storage":
+    post:
+      summary: "POST /api/v1/admin/settings/clear-storage"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/github-sso/remove":
+    post:
+      summary: "POST /api/v1/admin/settings/github-sso/remove"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/google-sso/disable":
+    post:
+      summary: "POST /api/v1/admin/settings/google-sso/disable"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/google-sso/enable":
+    post:
+      summary: "POST /api/v1/admin/settings/google-sso/enable"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/google-sso/remove":
+    post:
+      summary: "POST /api/v1/admin/settings/google-sso/remove"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/google-sso/restore-managed":
+    post:
+      summary: "POST /api/v1/admin/settings/google-sso/restore-managed"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/info":
+    get:
+      summary: "GET /api/v1/admin/settings/info"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/logo":
+    post:
+      summary: "POST /api/v1/admin/settings/logo"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/m365-sso/remove":
+    post:
+      summary: "POST /api/v1/admin/settings/m365-sso/remove"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/mail/restore-managed":
+    post:
+      summary: "POST /api/v1/admin/settings/mail/restore-managed"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/settings/site-logo":
+    get:
+      summary: "GET /api/v1/admin/settings/site-logo"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/sprints":
+    get:
+      summary: "GET /api/v1/admin/sprints"
+      description: "Implemented in server/routes/sprints.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/admin/sprints"
+      description: "Implemented in server/routes/sprints.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/sprints/active":
+    get:
+      summary: "GET /api/v1/admin/sprints/active"
+      description: "Implemented in server/routes/sprints.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/sprints/{id}":
+    delete:
+      summary: "DELETE /api/v1/admin/sprints/{id}"
+      description: "Implemented in server/routes/sprints.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/admin/sprints/{id}"
+      description: "Implemented in server/routes/sprints.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/sprints/{id}/active-work-count":
+    get:
+      summary: "GET /api/v1/admin/sprints/{id}/active-work-count"
+      description: "Implemented in server/routes/sprints.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/sprints/{id}/usage":
+    get:
+      summary: "GET /api/v1/admin/sprints/{id}/usage"
+      description: "Implemented in server/routes/sprints.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/system-info":
+    get:
+      summary: "GET /api/v1/admin/system-info"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/tags":
+    get:
+      summary: "GET /api/v1/admin/tags"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/admin/tags"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/tags/usage/batch":
+    get:
+      summary: "GET /api/v1/admin/tags/usage/batch"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/tags/{tagId}":
+    delete:
+      summary: "DELETE /api/v1/admin/tags/{tagId}"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/admin/tags/{tagId}"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/tags/{tagId}/usage":
+    get:
+      summary: "GET /api/v1/admin/tags/{tagId}/usage"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/test-email":
+    post:
+      summary: "POST /api/v1/admin/test-email"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/test-storage":
+    post:
+      summary: "POST /api/v1/admin/test-storage"
+      description: "Implemented in server/routes/adminSystem.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users":
+    get:
+      summary: "GET /api/v1/admin/users"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/admin/users"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users/can-create":
+    get:
+      summary: "GET /api/v1/admin/users/can-create"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users/{userId}":
+    delete:
+      summary: "DELETE /api/v1/admin/users/{userId}"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/admin/users/{userId}"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users/{userId}/avatar":
+    delete:
+      summary: "DELETE /api/v1/admin/users/{userId}/avatar"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/admin/users/{userId}/avatar"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users/{userId}/color":
+    put:
+      summary: "PUT /api/v1/admin/users/{userId}/color"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users/{userId}/impersonate":
+    post:
+      summary: "POST /api/v1/admin/users/{userId}/impersonate"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users/{userId}/member-name":
+    put:
+      summary: "PUT /api/v1/admin/users/{userId}/member-name"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users/{userId}/resend-invitation":
+    post:
+      summary: "POST /api/v1/admin/users/{userId}/resend-invitation"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users/{userId}/role":
+    put:
+      summary: "PUT /api/v1/admin/users/{userId}/role"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/users/{userId}/task-count":
+    get:
+      summary: "GET /api/v1/admin/users/{userId}/task-count"
+      description: "Implemented in server/routes/adminUsers.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/webhooks":
+    get:
+      summary: "GET /api/v1/admin/webhooks"
+      description: "Implemented in server/routes/adminWebhooks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/admin/webhooks"
+      description: "Implemented in server/routes/adminWebhooks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/webhooks/test":
+    post:
+      summary: "POST /api/v1/admin/webhooks/test"
+      description: "Implemented in server/routes/adminWebhooks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/webhooks/{id}":
+    delete:
+      summary: "DELETE /api/v1/admin/webhooks/{id}"
+      description: "Implemented in server/routes/adminWebhooks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    patch:
+      summary: "PATCH /api/v1/admin/webhooks/{id}"
+      description: "Implemented in server/routes/adminWebhooks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/admin/webhooks/{id}"
+      description: "Implemented in server/routes/adminWebhooks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/admin/webhooks/{id}/test":
+    post:
+      summary: "POST /api/v1/admin/webhooks/{id}/test"
+      description: "Implemented in server/routes/adminWebhooks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/agent/control/{id}":
+    get:
+      summary: "GET /api/v1/agent/control/{id}"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/agent/tasks/pending":
+    get:
+      summary: "GET /api/v1/agent/tasks/pending"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/agent/tasks/{id}":
+    get:
+      summary: "GET /api/v1/agent/tasks/{id}"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    patch:
+      summary: "PATCH /api/v1/agent/tasks/{id}"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/agent/tasks/{id}/attachments":
+    post:
+      summary: "POST /api/v1/agent/tasks/{id}/attachments"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/agent/tasks/{id}/claim":
+    post:
+      summary: "POST /api/v1/agent/tasks/{id}/claim"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/agent/tasks/{id}/comments":
+    post:
+      summary: "POST /api/v1/agent/tasks/{id}/comments"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/agent/tasks/{id}/move":
+    post:
+      summary: "POST /api/v1/agent/tasks/{id}/move"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/agent/tasks/{id}/work":
+    get:
+      summary: "GET /api/v1/agent/tasks/{id}/work"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/agent/tasks/{id}/work"
+      description: "Implemented in server/routes/agent.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/attachments/attachments/{filename}":
+    get:
+      summary: "GET /api/v1/attachments/attachments/{filename}"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/attachments/avatars/{filename}":
+    get:
+      summary: "GET /api/v1/attachments/avatars/{filename}"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/attachments/media-session":
+    delete:
+      summary: "DELETE /api/v1/attachments/media-session"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/attachments/media-session"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/attachments/{id}":
+    delete:
+      summary: "DELETE /api/v1/attachments/{id}"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards":
+    get:
+      summary: "GET /api/v1/boards"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/boards"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/default-columns":
+    get:
+      summary: "GET /api/v1/boards/default-columns"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/reorder":
+    post:
+      summary: "POST /api/v1/boards/reorder"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{boardId}/columns":
+    get:
+      summary: "GET /api/v1/boards/{boardId}/columns"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{boardId}/full":
+    get:
+      summary: "GET /api/v1/boards/{boardId}/full"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{boardId}/participants":
+    get:
+      summary: "GET /api/v1/boards/{boardId}/participants"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/boards/{boardId}/participants"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{boardId}/relationships":
+    get:
+      summary: "GET /api/v1/boards/{boardId}/relationships"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{id}":
+    delete:
+      summary: "DELETE /api/v1/boards/{id}"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/boards/{id}"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{id}/claim":
+    post:
+      summary: "POST /api/v1/boards/{id}/claim"
+      description: "Implemented in server/routes/apiV1Relay.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{id}/permanent":
+    delete:
+      summary: "DELETE /api/v1/boards/{id}/permanent"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{id}/restore":
+    post:
+      summary: "POST /api/v1/boards/{id}/restore"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{id}/trash":
+    get:
+      summary: "GET /api/v1/boards/{id}/trash"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/boards/{id}/trash/count":
+    get:
+      summary: "GET /api/v1/boards/{id}/trash/count"
+      description: "Implemented in server/routes/boards.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/columns":
+    post:
+      summary: "POST /api/v1/columns"
+      description: "Implemented in server/routes/columns.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/columns/renumber":
+    post:
+      summary: "POST /api/v1/columns/renumber"
+      description: "Implemented in server/routes/columns.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/columns/reorder":
+    post:
+      summary: "POST /api/v1/columns/reorder"
+      description: "Implemented in server/routes/columns.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/columns/{id}":
+    delete:
+      summary: "DELETE /api/v1/columns/{id}"
+      description: "Implemented in server/routes/columns.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/columns/{id}"
+      description: "Implemented in server/routes/columns.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/comments":
+    post:
+      summary: "POST /api/v1/comments"
+      description: "Implemented in server/routes/comments.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/comments/{commentId}/attachments":
+    get:
+      summary: "GET /api/v1/comments/{commentId}/attachments"
+      description: "Implemented in server/routes/comments.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/comments/{id}":
+    delete:
+      summary: "DELETE /api/v1/comments/{id}"
+      description: "Implemented in server/routes/comments.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/comments/{id}"
+      description: "Implemented in server/routes/comments.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/files/attachments/{filename}":
+    get:
+      summary: "GET /api/v1/files/attachments/{filename}"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/files/avatars/{filename}":
+    get:
+      summary: "GET /api/v1/files/avatars/{filename}"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/files/media-session":
+    delete:
+      summary: "DELETE /api/v1/files/media-session"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/files/media-session"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/files/{id}":
+    delete:
+      summary: "DELETE /api/v1/files/{id}"
+      description: "Implemented in server/routes/files.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/help-assistant/chat":
+    post:
+      summary: "POST /api/v1/help-assistant/chat"
+      description: "Implemented in server/routes/helpAssistant.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/members":
+    get:
+      summary: "GET /api/v1/members"
+      description: "Implemented in server/routes/members.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/members"
+      description: "Implemented in server/routes/members.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/members/{id}":
+    delete:
+      summary: "DELETE /api/v1/members/{id}"
+      description: "Implemented in server/routes/members.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/plans":
+    post:
+      summary: "POST /api/v1/plans"
+      description: "Implemented in server/routes/apiV1Relay.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/priorities":
+    get:
+      summary: "GET /api/v1/priorities"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/priorities"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/priorities/reorder":
+    put:
+      summary: "PUT /api/v1/priorities/reorder"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/priorities/usage/batch":
+    get:
+      summary: "GET /api/v1/priorities/usage/batch"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/priorities/{priorityId}":
+    delete:
+      summary: "DELETE /api/v1/priorities/{priorityId}"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/priorities/{priorityId}"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/priorities/{priorityId}/set-default":
+    put:
+      summary: "PUT /api/v1/priorities/{priorityId}/set-default"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/priorities/{priorityId}/usage":
+    get:
+      summary: "GET /api/v1/priorities/{priorityId}/usage"
+      description: "Implemented in server/routes/priorities.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/reports/burndown":
+    get:
+      summary: "GET /api/v1/reports/burndown"
+      description: "Implemented in server/routes/reports.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/reports/leaderboard":
+    get:
+      summary: "GET /api/v1/reports/leaderboard"
+      description: "Implemented in server/routes/reports.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/reports/settings":
+    get:
+      summary: "GET /api/v1/reports/settings"
+      description: "Implemented in server/routes/reports.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/reports/task-list":
+    get:
+      summary: "GET /api/v1/reports/task-list"
+      description: "Implemented in server/routes/reports.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/reports/team-performance":
+    get:
+      summary: "GET /api/v1/reports/team-performance"
+      description: "Implemented in server/routes/reports.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/reports/user-points":
+    get:
+      summary: "GET /api/v1/reports/user-points"
+      description: "Implemented in server/routes/reports.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings":
+    get:
+      summary: "GET /api/v1/settings"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/settings"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/ai/models":
+    post:
+      summary: "POST /api/v1/settings/ai/models"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/ai/providers":
+    get:
+      summary: "GET /api/v1/settings/ai/providers"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/ai/runner/probe":
+    post:
+      summary: "POST /api/v1/settings/ai/runner/probe"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/ai/validate":
+    post:
+      summary: "POST /api/v1/settings/ai/validate"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/app-url":
+    put:
+      summary: "PUT /api/v1/settings/app-url"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/bulk":
+    put:
+      summary: "PUT /api/v1/settings/bulk"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/clear-mail":
+    post:
+      summary: "POST /api/v1/settings/clear-mail"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/clear-storage":
+    post:
+      summary: "POST /api/v1/settings/clear-storage"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/github-sso/remove":
+    post:
+      summary: "POST /api/v1/settings/github-sso/remove"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/google-sso/disable":
+    post:
+      summary: "POST /api/v1/settings/google-sso/disable"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/google-sso/enable":
+    post:
+      summary: "POST /api/v1/settings/google-sso/enable"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/google-sso/remove":
+    post:
+      summary: "POST /api/v1/settings/google-sso/remove"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/google-sso/restore-managed":
+    post:
+      summary: "POST /api/v1/settings/google-sso/restore-managed"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/info":
+    get:
+      summary: "GET /api/v1/settings/info"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/logo":
+    post:
+      summary: "POST /api/v1/settings/logo"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/m365-sso/remove":
+    post:
+      summary: "POST /api/v1/settings/m365-sso/remove"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/mail/restore-managed":
+    post:
+      summary: "POST /api/v1/settings/mail/restore-managed"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/settings/site-logo":
+    get:
+      summary: "GET /api/v1/settings/site-logo"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/sprints":
+    post:
+      summary: "POST /api/v1/sprints"
+      description: "Implemented in server/routes/apiV1Relay.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage":
+    get:
+      summary: "GET /api/v1/storage"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/storage"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/ai/models":
+    post:
+      summary: "POST /api/v1/storage/ai/models"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/ai/providers":
+    get:
+      summary: "GET /api/v1/storage/ai/providers"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/ai/runner/probe":
+    post:
+      summary: "POST /api/v1/storage/ai/runner/probe"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/ai/validate":
+    post:
+      summary: "POST /api/v1/storage/ai/validate"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/app-url":
+    put:
+      summary: "PUT /api/v1/storage/app-url"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/bulk":
+    put:
+      summary: "PUT /api/v1/storage/bulk"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/clear-mail":
+    post:
+      summary: "POST /api/v1/storage/clear-mail"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/clear-storage":
+    post:
+      summary: "POST /api/v1/storage/clear-storage"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/github-sso/remove":
+    post:
+      summary: "POST /api/v1/storage/github-sso/remove"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/google-sso/disable":
+    post:
+      summary: "POST /api/v1/storage/google-sso/disable"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/google-sso/enable":
+    post:
+      summary: "POST /api/v1/storage/google-sso/enable"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/google-sso/remove":
+    post:
+      summary: "POST /api/v1/storage/google-sso/remove"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/google-sso/restore-managed":
+    post:
+      summary: "POST /api/v1/storage/google-sso/restore-managed"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/info":
+    get:
+      summary: "GET /api/v1/storage/info"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/logo":
+    post:
+      summary: "POST /api/v1/storage/logo"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/m365-sso/remove":
+    post:
+      summary: "POST /api/v1/storage/m365-sso/remove"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/mail/restore-managed":
+    post:
+      summary: "POST /api/v1/storage/mail/restore-managed"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/storage/site-logo":
+    get:
+      summary: "GET /api/v1/storage/site-logo"
+      description: "Implemented in server/routes/settings.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tags":
+    get:
+      summary: "GET /api/v1/tags"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/tags"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tags/usage/batch":
+    get:
+      summary: "GET /api/v1/tags/usage/batch"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tags/{tagId}":
+    delete:
+      summary: "DELETE /api/v1/tags/{tagId}"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/tags/{tagId}"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tags/{tagId}/usage":
+    get:
+      summary: "GET /api/v1/tags/{tagId}/usage"
+      description: "Implemented in server/routes/tags.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks":
+    get:
+      summary: "GET /api/v1/tasks"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/tasks"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/add-at-top":
+    post:
+      summary: "POST /api/v1/tasks/add-at-top"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/batch-update":
+    post:
+      summary: "POST /api/v1/tasks/batch-update"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/batch-update-positions":
+    post:
+      summary: "POST /api/v1/tasks/batch-update-positions"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/bulk-field-activity":
+    post:
+      summary: "POST /api/v1/tasks/bulk-field-activity"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/by-board/{boardId}":
+    get:
+      summary: "GET /api/v1/tasks/by-board/{boardId}"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/copy":
+    post:
+      summary: "POST /api/v1/tasks/copy"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/move-to-board":
+    post:
+      summary: "POST /api/v1/tasks/move-to-board"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/permanent-batch":
+    post:
+      summary: "POST /api/v1/tasks/permanent-batch"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/reorder":
+    post:
+      summary: "POST /api/v1/tasks/reorder"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/trash/search":
+    get:
+      summary: "GET /api/v1/tasks/trash/search"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/work-maps":
+    post:
+      summary: "POST /api/v1/tasks/work-maps"
+      description: "Implemented in server/routes/taskWork.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{id}":
+    delete:
+      summary: "DELETE /api/v1/tasks/{id}"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    get:
+      summary: "GET /api/v1/tasks/{id}"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/tasks/{id}"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{id}/move":
+    post:
+      summary: "POST /api/v1/tasks/{id}/move"
+      description: "Implemented in server/routes/apiV1Relay.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{id}/permanent":
+    delete:
+      summary: "DELETE /api/v1/tasks/{id}/permanent"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{id}/restore":
+    post:
+      summary: "POST /api/v1/tasks/{id}/restore"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/acceptance-criteria":
+    get:
+      summary: "GET /api/v1/tasks/{taskId}/acceptance-criteria"
+      description: "Implemented in server/routes/acceptanceCriteria.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/tasks/{taskId}/acceptance-criteria"
+      description: "Implemented in server/routes/acceptanceCriteria.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/acceptance-criteria/reorder":
+    put:
+      summary: "PUT /api/v1/tasks/{taskId}/acceptance-criteria/reorder"
+      description: "Implemented in server/routes/acceptanceCriteria.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/acceptance-criteria/{criterionId}":
+    patch:
+      summary: "PATCH /api/v1/tasks/{taskId}/acceptance-criteria/{criterionId}"
+      description: "Implemented in server/routes/apiV1Relay.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/acceptance-criteria/{id}":
+    delete:
+      summary: "DELETE /api/v1/tasks/{taskId}/acceptance-criteria/{id}"
+      description: "Implemented in server/routes/acceptanceCriteria.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/tasks/{taskId}/acceptance-criteria/{id}"
+      description: "Implemented in server/routes/acceptanceCriteria.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/attachments":
+    get:
+      summary: "GET /api/v1/tasks/{taskId}/attachments"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/tasks/{taskId}/attachments"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/available-for-relationship":
+    get:
+      summary: "GET /api/v1/tasks/{taskId}/available-for-relationship"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/collaborators":
+    get:
+      summary: "GET /api/v1/tasks/{taskId}/collaborators"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/collaborators/{memberId}":
+    delete:
+      summary: "DELETE /api/v1/tasks/{taskId}/collaborators/{memberId}"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/tasks/{taskId}/collaborators/{memberId}"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/flow-chart":
+    get:
+      summary: "GET /api/v1/tasks/{taskId}/flow-chart"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/relationships":
+    get:
+      summary: "GET /api/v1/tasks/{taskId}/relationships"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/tasks/{taskId}/relationships"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/relationships/{relationshipId}":
+    delete:
+      summary: "DELETE /api/v1/tasks/{taskId}/relationships/{relationshipId}"
+      description: "Implemented in server/routes/tasks.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/tags":
+    get:
+      summary: "GET /api/v1/tasks/{taskId}/tags"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/tags/{tagId}":
+    delete:
+      summary: "DELETE /api/v1/tasks/{taskId}/tags/{tagId}"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/tasks/{taskId}/tags/{tagId}"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/watchers":
+    get:
+      summary: "GET /api/v1/tasks/{taskId}/watchers"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/watchers/{memberId}":
+    delete:
+      summary: "DELETE /api/v1/tasks/{taskId}/watchers/{memberId}"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/tasks/{taskId}/watchers/{memberId}"
+      description: "Implemented in server/routes/taskRelations.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/work":
+    get:
+      summary: "GET /api/v1/tasks/{taskId}/work"
+      description: "Implemented in server/routes/taskWork.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/tasks/{taskId}/work"
+      description: "Implemented in server/routes/taskWork.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/tasks/{taskId}/work/control":
+    put:
+      summary: "PUT /api/v1/tasks/{taskId}/work/control"
+      description: "Implemented in server/routes/taskWork.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/upload":
+    post:
+      summary: "POST /api/v1/upload"
+      description: "Implemented in server/routes/upload.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/account":
+    delete:
+      summary: "DELETE /api/v1/user/account"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/avatar":
+    delete:
+      summary: "DELETE /api/v1/user/avatar"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/user/avatar"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/bot-work":
+    get:
+      summary: "GET /api/v1/user/bot-work"
+      description: "Implemented in server/routes/activity.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/dev/agent-llm":
+    get:
+      summary: "GET /api/v1/user/dev/agent-llm"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/dev/github-repo-probe":
+    post:
+      summary: "POST /api/v1/user/dev/github-repo-probe"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/dev/github-token":
+    delete:
+      summary: "DELETE /api/v1/user/dev/github-token"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    get:
+      summary: "GET /api/v1/user/dev/github-token"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/user/dev/github-token"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/dev/ssh-key":
+    get:
+      summary: "GET /api/v1/user/dev/ssh-key"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/user/dev/ssh-key"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/dev/ssh-key/private":
+    get:
+      summary: "GET /api/v1/user/dev/ssh-key/private"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/dev/tokens":
+    get:
+      summary: "GET /api/v1/user/dev/tokens"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/user/dev/tokens"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/dev/tokens/{id}":
+    delete:
+      summary: "DELETE /api/v1/user/dev/tokens/{id}"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    patch:
+      summary: "PATCH /api/v1/user/dev/tokens/{id}"
+      description: "Implemented in server/routes/userDev.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/feed":
+    get:
+      summary: "GET /api/v1/user/feed"
+      description: "Implemented in server/routes/activity.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/profile":
+    put:
+      summary: "PUT /api/v1/user/profile"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/settings":
+    get:
+      summary: "GET /api/v1/user/settings"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/user/settings"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/status":
+    get:
+      summary: "GET /api/v1/user/status"
+      description: "Implemented in server/routes/activity.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/user/upload":
+    post:
+      summary: "POST /api/v1/user/upload"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/users/account":
+    delete:
+      summary: "DELETE /api/v1/users/account"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/users/avatar":
+    delete:
+      summary: "DELETE /api/v1/users/avatar"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/users/avatar"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/users/profile":
+    put:
+      summary: "PUT /api/v1/users/profile"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/users/settings":
+    get:
+      summary: "GET /api/v1/users/settings"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/users/settings"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/users/upload":
+    post:
+      summary: "POST /api/v1/users/upload"
+      description: "Implemented in server/routes/users.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/views":
+    get:
+      summary: "GET /api/v1/views"
+      description: "Implemented in server/routes/views.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    post:
+      summary: "POST /api/v1/views"
+      description: "Implemented in server/routes/views.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/views/shared":
+    get:
+      summary: "GET /api/v1/views/shared"
+      description: "Implemented in server/routes/views.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+  "/api/v1/views/{id}":
+    delete:
+      summary: "DELETE /api/v1/views/{id}"
+      description: "Implemented in server/routes/views.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    get:
+      summary: "GET /api/v1/views/{id}"
+      description: "Implemented in server/routes/views.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim
+    put:
+      summary: "PUT /api/v1/views/{id}"
+      description: "Implemented in server/routes/views.js. Same rules as the web app."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Denied by the same rule as the web app, including admin and owner self-delete
+        '409':
+          description: Conflict, including a stale Relay claim

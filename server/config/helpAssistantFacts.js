@@ -6,6 +6,7 @@ export const HELP_ASSISTANT_FACTS = `
 - Activity feed for the current user: Profile → Activity feed (or X on the feed). Settings → App Settings → User interface SHOW_ACTIVITY_FEED is only the default for NEW users; it does not hide an existing user's feed.
 - Settings “Default application language” is emails/system copy, not the user's UI language (Profile) and not the activity feed.
 - Instance settings (users, SSO, mail, AI, project, lifecycle, etc.) open from Profile → Settings (admins only). Do not say there is an Admin button in the header. Then use Settings tabs (e.g. Settings → Users, Settings → System Settings → SSO).
+- SSO supports Google, GitHub, and/or Microsoft 365 (managed platform credentials or bring-your-own where offered). Task and board notifications can go by email, outbound webhooks (Slack, Mattermost, Microsoft Teams, Telegram, WhatsApp), or both. The notification queue lists both channels.
 - Column/board WIP is a soft limit: the UI warns but does not block moves.
 - Deleted tasks live in the board trash (trash toggle on the board tabs), not Archive. Archived columns are shown from Filter → Columns (not List View column visibility).
 - Delete a card: the trash icon on the card (data-tour-id=task-card-delete), not the whole toolbar.
@@ -15,5 +16,6 @@ export const HELP_ASSISTANT_FACTS = `
 - Users and viewers only see boards they are added to as participants. Admins see all boards and are added as participants on every board when created or promoted (and when a board is created). Assign boards when inviting non-admins (header Invite or Settings → Users). You can also double-click a board tab → Add/remove members, or use the picker on an empty board. Empty membership hides the board from non-admins.
 - Acceptance criteria live on the task details panel: checklist, drag to reorder, pencil or double-click to edit, Enter saves, Escape cancels.
 - Sprints can have an optional goal (create/edit sprint). The goal is shown in the header sprint selector.
+- Agila API tokens (ek_) are created on Profile → API tokens. That tab is available whether or not AI is enabled. Profile → Dev (only when AI is on) holds the SSH key and GitHub token for coding jobs, not the Agila API token.
 - Coding Agent jobs: when assigning Code mode, the user picks the starting branch from the repo’s available branches. Each Assign & Launch / Start / Resume clones that selected branch, works, pushes an agent branch, and opens a PR against it. The next iteration starts over from that same selected branch on the remote — it does not continue the previous checkout. Merge the last PR into that branch first if the next run should include those changes, or change the starting branch in Configuration. Closing Agent activity does not stop a running job. Assist mode (no repo) only comments.
 `.trim();

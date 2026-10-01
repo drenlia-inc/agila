@@ -2,7 +2,8 @@ import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { getRequestDatabase } from '../middleware/tenantRouting.js';
-import { activity as activityQueries } from '../utils/sqlManager/index.js';
+import { activity as activityQueries, relay as relayQueries } from '../utils/sqlManager/index.js';
+import { userHasAdminRole } from '../middleware/boardAccess.js';
 
 const router = express.Router();
 
@@ -48,6 +49,7 @@ router.get('/feed', authenticateToken, async (req, res) => {
       userLanguage,
       beforeId: parsedSinceId != null ? undefined : parsedBeforeId,
       sinceId: parsedSinceId,
+      includeImpersonation: userHasAdminRole(req.user),
     });
     
     res.json(activities);
@@ -83,6 +85,21 @@ router.get('/status', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching user status:', error);
     res.status(500).json({ error: 'Failed to fetch user status' });
+  }
+});
+
+// Cards a bot currently holds, for the header indicator.
+router.get('/bot-work', authenticateToken, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const items = await relayQueries.listActiveBotWork(db, {
+      userId: req.user.id,
+      isAdmin: userHasAdminRole(req.user)
+    });
+    res.json({ items: items || [] });
+  } catch (error) {
+    console.error('Error fetching bot work:', error);
+    res.status(500).json({ error: 'Failed to fetch bot work' });
   }
 });
 

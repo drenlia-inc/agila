@@ -933,6 +933,20 @@ export const getActivityFeed = async (options: GetActivityFeedOptions = {}) => {
   return data;
 };
 
+export type BotWorkItem = {
+  taskId: string;
+  ticket: string;
+  taskTitle: string;
+  boardId: string;
+  boardTitle: string;
+  workerName: string;
+};
+
+export const getBotWork = async (): Promise<BotWorkItem[]> => {
+  const { data } = await api.get('/activity/bot-work');
+  return Array.isArray(data?.items) ? data.items : [];
+};
+
 // User Settings with rate limiting to prevent infinite loops
 let lastUserSettingsCall = 0;
 let cachedUserSettings: any = null;
@@ -1593,9 +1607,11 @@ export interface UserApiTokenMeta {
   id: string;
   name: string;
   tokenPrefix: string;
+  description?: string;
   createdAt: string;
   lastUsedAt?: string | null;
   revokedAt?: string | null;
+  expiresAt?: string | null;
 }
 
 export const listUserApiTokens = async (): Promise<UserApiTokenMeta[]> => {
@@ -1603,15 +1619,26 @@ export const listUserApiTokens = async (): Promise<UserApiTokenMeta[]> => {
   return data;
 };
 
-export const createUserApiToken = async (
-  name?: string
-): Promise<{ token: UserApiTokenMeta; rawToken: string }> => {
-  const { data } = await api.post('/user/dev/tokens', { name });
+export const createUserApiToken = async (body: {
+  name?: string;
+  description?: string;
+  lifetimeDays?: number;
+  adminRiskAcknowledged?: boolean;
+}): Promise<{ token: UserApiTokenMeta; rawToken: string }> => {
+  const { data } = await api.post('/user/dev/tokens', body);
   return data;
 };
 
 export const revokeUserApiToken = async (id: string): Promise<void> => {
   await api.delete(`/user/dev/tokens/${id}`);
+};
+
+export const updateUserApiToken = async (
+  id: string,
+  body: { name: string; description?: string }
+): Promise<UserApiTokenMeta> => {
+  const { data } = await api.patch(`/user/dev/tokens/${id}`, body);
+  return data;
 };
 
 export interface UserSshKeyMeta {

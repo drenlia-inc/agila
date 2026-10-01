@@ -34,7 +34,7 @@ type HelpGoTarget = {
   hash?: string;
   mode?: ViewMode;
   page?: 'kanban' | 'reports';
-  profileFocus?: 'displayName' | 'bio' | 'activityFeed';
+  profileFocus?: 'displayName' | 'bio' | 'activityFeed' | 'apiTokens';
   /** CSS selectors highlighted like Configuration guide Guide me */
   highlights?: string[];
   /** Open closed chrome (search, column filter, trash) before highlight */
@@ -119,7 +119,7 @@ interface HelpModalProps {
   expandToken?: number;
   onPageChange?: (page: 'kanban' | 'admin' | 'reports' | 'test', options?: { hash?: string }) => void;
   onViewModeChange?: (mode: ViewMode) => void;
-  onOpenProfile?: (focus?: 'displayName' | 'bio' | 'activityFeed') => void;
+  onOpenProfile?: (focus?: 'displayName' | 'bio' | 'activityFeed' | 'apiTokens') => void;
 }
 
 type TabType = 'overview' | 'delivery' | 'shortcuts' | 'kanban' | 'list' | 'gantt' | 'calendar' | 'reports' | 'ai' | 'admin';
@@ -215,7 +215,7 @@ const HELP_AI_KEYS = [
   'help.ai.controlling', 'help.ai.controllingDesc',
   'help.ai.controlStep1', 'help.ai.controlStep2', 'help.ai.controlStep3',
   'help.ai.devCredentials', 'help.ai.devCredentialsDesc',
-  'help.ai.devCredentialsApiTokens', 'help.ai.devCredentialsSsh', 'help.ai.devCredentialsGithub', 'help.ai.devCredentialsProbe',
+  'help.ai.devCredentialsSsh', 'help.ai.devCredentialsGithub', 'help.ai.devCredentialsProbe',
   'help.ai.adminSettings', 'help.ai.adminSettingsDesc',
   'help.ai.adminStep1', 'help.ai.adminStep2', 'help.ai.adminStep3', 'help.ai.adminStep4', 'help.ai.adminStep5',
   'help.ai.automation', 'help.ai.automationDesc',
@@ -1404,6 +1404,18 @@ export default function HelpModal({
           asideSearchKeys: HELP_OVERVIEW_SHORTCUT_HINT_KEYS,
         }
       ),
+      renderSection(
+        'help.overview.apiTokens',
+        ['help.overview.apiTokensDesc1', 'help.overview.apiTokensDesc2', 'help.overview.apiTokensDesc3'],
+        KeyRound,
+        'text-purple-600 dark:text-purple-400',
+        'bg-purple-50 dark:bg-purple-900/40',
+        {
+          kind: 'profile',
+          profileFocus: 'apiTokens',
+          highlights: ['[data-help-target="profile-api-tokens"]'],
+        }
+      ),
       renderSectionWithList(
         'help.overview.sprints',
         ['help.overview.sprintsDesc1', 'help.overview.sprintsDesc2'],
@@ -1892,7 +1904,6 @@ export default function HelpModal({
         'help.ai.devCredentials',
         ['help.ai.devCredentialsDesc'],
         [
-          'help.ai.devCredentialsApiTokens',
           'help.ai.devCredentialsSsh',
           'help.ai.devCredentialsGithub',
           'help.ai.devCredentialsProbe',
@@ -2203,7 +2214,8 @@ export default function HelpModal({
       case 'overview':
         tabKeys.push('help.overview.whatIsEasyKanban', 'help.overview.whatIsEasyKanbanDesc1', 'help.overview.whatIsEasyKanbanDesc2',
           'help.overview.navigation', 'help.overview.viewModes', 'help.overview.searchFilter',
-          'help.overview.userProfile', 'help.overview.activityFeed', 'help.overview.sprints',
+          'help.overview.userProfile', 'help.overview.activityFeed', 'help.overview.apiTokens',
+          'help.overview.apiTokensDesc1', 'help.overview.apiTokensDesc2', 'help.overview.apiTokensDesc3', 'help.overview.sprints',
           'help.overview.sprintsDesc1', 'help.overview.sprintsDesc2', 'help.overview.sprintFilter', 'help.overview.teamManagement',
           'help.overview.teamMembers', 'help.overview.memberSelection', 'help.overview.clearButton', 'help.overview.roleBasedFiltering',
           'help.overview.assignees', 'help.overview.watchers', 'help.overview.collaborators', 'help.overview.requesters',

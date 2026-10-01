@@ -553,6 +553,9 @@
     "unknownPriority": "Unknown",
     "unassigned": "Unassigned",
     "unknownUser": "Unknown User",
+    "impersonatedUser": "started a session as {name}",
+    "impersonatedMintToken": "created an API token while signed in as {name}",
+    "anotherUser": "another user",
     "joinedTeam": "joined the team",
     "blocked": "Blocked",
     "unblocked": "Not blocked"

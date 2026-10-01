@@ -163,7 +163,7 @@ router.get('/default-columns', authenticateToken, async (req, res) => {
 });
 
 // Create board
-router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
+router.post('/', authenticateToken, requireRole(['admin']), checkBoardLimit, async (req, res) => {
   const parsed = parseBody(createBoardBodySchema, req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error });
@@ -275,15 +275,16 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
       participantCount: 0,
     };
 
+    let participantUserIds = [];
     // Seed participants: creator + all admins (avoids empty-membership admin UX).
     try {
       await participantQueries.ensureAdminsOnBoard(db, id, [req.user?.id].filter(Boolean));
       const participantCount = await participantQueries.countParticipants(db, id);
-      const userIds = await participantQueries.listParticipantUserIds(db, id);
+      participantUserIds = await participantQueries.listParticipantUserIds(db, id);
       newBoard.participantCount = participantCount;
       await notificationService.publish(
         'board-participants-updated',
-        { boardId: id, participantCount, userIds },
+        { boardId: id, participantCount, userIds: participantUserIds },
         tenantId
       );
     } catch (participantErr) {
@@ -294,6 +295,7 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
     notificationService.publish('board-created', {
       boardId: id,
       board: { id, title, project: projectIdentifier, position, participantCount: newBoard.participantCount },
+      userIds: participantUserIds,
       timestamp: new Date().toISOString()
     }, tenantId);
 
@@ -319,7 +321,7 @@ router.post('/', authenticateToken, checkBoardLimit, async (req, res) => {
 // MIGRATED: generateProjectIdentifier is now in sqlManager/boards.js
 
 // Update board
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   const { id } = req.params;
   const parsed = parseBody(updateBoardBodySchema, req.body);
   if (!parsed.success) {
@@ -584,7 +586,7 @@ router.delete('/:id/permanent', authenticateToken, requireRole(['admin']), async
 });
 
 // Reorder boards
-router.post('/reorder', authenticateToken, async (req, res) => {
+router.post('/reorder', authenticateToken, requireRole(['admin']), async (req, res) => {
   const parsed = parseBody(reorderBoardBodySchema, req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error });

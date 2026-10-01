@@ -9,7 +9,7 @@ import {
   saveHelpSession,
 } from '../utils/helpSessionPersistence';
 
-export type ProfileInitialFocus = 'displayName' | 'bio' | 'activityFeed';
+export type ProfileInitialFocus = 'displayName' | 'bio' | 'activityFeed' | 'apiTokens';
 
 export interface UseModalStateReturn {
   showHelpModal: boolean;

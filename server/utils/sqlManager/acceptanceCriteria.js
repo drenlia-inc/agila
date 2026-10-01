@@ -68,6 +68,13 @@ export async function updateItem(db, id, updates) {
   return getById(db, id);
 }
 
+export async function deleteForTask(db, taskId) {
+  return wrapQuery(
+    db.prepare('DELETE FROM acceptance_criteria WHERE task_id = $1'),
+    'DELETE'
+  ).run(taskId);
+}
+
 export async function deleteItem(db, id) {
   return wrapQuery(db.prepare('DELETE FROM acceptance_criteria WHERE id = $1'), 'DELETE').run(id);
 }

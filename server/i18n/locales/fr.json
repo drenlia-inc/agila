@@ -553,6 +553,9 @@
     "unknownPriority": "Inconnue",
     "unassigned": "Non assigné",
     "unknownUser": "Utilisateur inconnu",
+    "impersonatedUser": "a ouvert une session en tant que {name}",
+    "impersonatedMintToken": "a créé un jeton API en étant connecté en tant que {name}",
+    "anotherUser": "un autre utilisateur",
     "joinedTeam": "a rejoint l'équipe",
     "blocked": "Bloquée",
     "unblocked": "Non bloquée"

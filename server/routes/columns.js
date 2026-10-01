@@ -1,7 +1,7 @@
 import express from 'express';
 import { wrapQuery } from '../utils/queryLogger.js';
 import notificationService from '../services/notificationService.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { assertBoardAccess } from '../middleware/boardAccess.js';
 import { getTranslator } from '../utils/i18n.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
@@ -19,7 +19,7 @@ import {
 const router = express.Router();
 
 // Create column
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => {
   const parsed = parseBody(createColumnBodySchema, req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error });
@@ -123,7 +123,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Update column
-router.put("/:id", authenticateToken, async (req, res) => {
+router.put("/:id", authenticateToken, requireRole(['admin']), async (req, res) => {
   const { id } = req.params;
   const parsed = parseBody(updateColumnBodySchema, req.body);
   if (!parsed.success) {
@@ -254,7 +254,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
 });
 
 // Delete column (only when empty of live tasks — prevents CASCADE permanent deletes)
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   const { id } = req.params;
   try {
     const db = getRequestDatabase(req);
@@ -315,7 +315,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // Reorder columns
-router.post('/reorder', authenticateToken, async (req, res) => {
+router.post('/reorder', authenticateToken, requireRole(['admin']), async (req, res) => {
   const parsed = parseBody(reorderColumnBodySchema, req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error });
@@ -401,7 +401,7 @@ router.post('/reorder', authenticateToken, async (req, res) => {
 });
 
 // Renumber all columns in a board to ensure clean integer positions
-router.post('/renumber', authenticateToken, async (req, res) => {
+router.post('/renumber', authenticateToken, requireRole(['admin']), async (req, res) => {
   const parsed = parseBody(renumberColumnsBodySchema, req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error });

@@ -1,9 +1,9 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { getRequestDatabase } from './tenantRouting.js';
+import { runWithImpersonator } from '../utils/requestContext.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { userApiTokens as tokenQueries } from '../utils/sqlManager/index.js';
-import { isAiEnabled } from '../utils/aiEnabled.js';
 
 // JWT configuration
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -106,10 +106,6 @@ async function authenticatePersonalAccessToken(req, rawToken) {
     return null;
   }
 
-  if (!(await isAiEnabled(db))) {
-    return null;
-  }
-
   // Prefix is ek_ + 8 hex chars for indexed lookup
   const prefix = rawToken.slice(0, 11);
   const candidates = await tokenQueries.getActiveTokensByPrefix(db, prefix);
@@ -153,6 +149,12 @@ async function authenticatePersonalAccessToken(req, rawToken) {
 }
 
 // Authentication middleware
+function proceedAuthenticated(req, res, next) {
+  const denied = enforceViewerWritePolicy(req, res);
+  if (denied) return denied;
+  return runWithImpersonator(req.user?.impersonatorId, () => next());
+}
+
 export const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -170,9 +172,7 @@ export const authenticateToken = async (req, res, next) => {
         return res.status(401).json({ error: 'Invalid or expired token' });
       }
       req.user = patUser;
-      const denied = enforceViewerWritePolicy(req, res);
-      if (denied) return denied;
-      return next();
+      return proceedAuthenticated(req, res, next);
     }
 
     // Verify JWT token
@@ -193,6 +193,9 @@ export const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
     
+    const impersonatorId =
+      typeof user?.impersonatorId === 'string' && user.impersonatorId ? user.impersonatorId : null;
+
     // Verify user still exists in the tenant DB (demo resets, deleted accounts, tenant switches).
     // Previously this ran only when MULTI_TENANT=true; single-tenant demo wipe left valid JWTs
     // for deleted user IDs and the UI got stuck off the login page.
@@ -230,11 +233,10 @@ export const authenticateToken = async (req, res, next) => {
           email: userInDb.email,
           role: primaryRole(roleNames),
           roles: roleNames,
-          authType: 'jwt'
+          authType: 'jwt',
+          impersonatorId
         };
-        const denied = enforceViewerWritePolicy(req, res);
-        if (denied) return denied;
-        return next();
+        return proceedAuthenticated(req, res, next);
       } catch (dbError) {
         // Transient DB errors (pool exhaustion, lock timeouts during bulk admin
         // deletes, etc.) must not look like an invalid session — the axios
@@ -245,10 +247,8 @@ export const authenticateToken = async (req, res, next) => {
     }
     
     // No DB available (should be rare) — fall back to JWT claims only
-    req.user = { ...user, authType: 'jwt' };
-    const denied = enforceViewerWritePolicy(req, res);
-    if (denied) return denied;
-    next();
+    req.user = { ...user, authType: 'jwt', impersonatorId };
+    return proceedAuthenticated(req, res, next);
   } catch (err) {
     // Return 401 for authentication errors (invalid/expired token)
     // This distinguishes from 403 which should be used for authorization errors (insufficient permissions)

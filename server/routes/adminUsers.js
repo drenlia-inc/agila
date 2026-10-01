@@ -2,23 +2,24 @@ import express from 'express';
 import { dbTransaction } from '../utils/dbAsync.js';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, requireRole, generateToken, primaryRole } from '../middleware/auth.js';
 import { avatarUpload } from '../config/multer.js';
 import { getLicenseManager } from '../config/license.js';
 import { licenseLimitBody } from '../middleware/licenseCheck.js';
+import { impersonateLimiter } from '../middleware/rateLimiters.js';
 import { createDefaultAvatar, getRandomColor } from '../utils/avatarGenerator.js';
 // Note: Email notification service (getNotificationService) is not yet implemented
 // import { getNotificationService } from '../services/notificationService.js';
 import notificationService from '../services/notificationService.js';
-import { getTranslator } from '../utils/i18n.js';
+import { getTranslator, t } from '../utils/i18n.js';
 import { getTenantId, getRequestDatabase } from '../middleware/tenantRouting.js';
 import { getTenantDomain } from '../utils/tenantDomain.js';
 // MIGRATED: Import sqlManager modules
-import { users as userQueries, tasks as taskQueries, adminUsers as adminUserQueries, auth as authQueries, helpers, settings as settingsQueries, members as memberQueries, boards as boardQueries, boardParticipants as participantQueries } from '../utils/sqlManager/index.js';
+import { users as userQueries, tasks as taskQueries, adminUsers as adminUserQueries, auth as authQueries, helpers, settings as settingsQueries, members as memberQueries, boards as boardQueries, boardParticipants as participantQueries, activity as activityQueries } from '../utils/sqlManager/index.js';
 import { commitUploadedFile, getRequestStoragePaths } from '../services/storage/index.js';
 import { validateUploadedFileMagic } from '../utils/fileMagicBytes.js';
 import { deleteAvatarFileIfUnused } from '../utils/avatarCleanup.js';
-import { AGENT_USER_ID } from '../constants/agentIdentity.js';
+import { AGENT_USER_ID, SYSTEM_USER_ID } from '../constants/agentIdentity.js';
 import { AI_SETTING_KEYS } from '../constants/aiSettings.js';
 import {
   parseBody,
@@ -1164,6 +1165,59 @@ router.delete("/:userId/avatar", authenticateToken, requireRole(["admin"]), asyn
   } catch (error) {
     console.error('Error removing admin avatar:', error);
     res.status(500).json({ error: 'Failed to remove avatar' });
+  }
+});
+
+router.post('/:userId/impersonate', authenticateToken, requireRole(['admin']), impersonateLimiter, async (req, res) => {
+  try {
+    const db = getRequestDatabase(req);
+    const targetId = req.params.userId;
+    if (targetId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot impersonate yourself' });
+    }
+    if (targetId === AGENT_USER_ID || targetId === SYSTEM_USER_ID) {
+      return res.status(400).json({ error: 'This account cannot be impersonated' });
+    }
+    const user = await userQueries.getUserByIdForAdmin(db, targetId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const email = String(user.email || '').toLowerCase();
+    if (email === 'agent@local' || email === 'system@local') {
+      return res.status(400).json({ error: 'This account cannot be impersonated' });
+    }
+    const active = user.is_active === true || user.is_active === 1 || user.isActive === true || user.isActive === 1;
+    if (!active) return res.status(400).json({ error: 'Inactive users cannot be impersonated' });
+
+    const roles = await authQueries.getUserRoles(db, targetId);
+    const roleNames = roles.map((r) => r.name);
+    const token = generateToken({
+      id: targetId,
+      email: user.email,
+      role: primaryRole(roleNames),
+      roles: roleNames,
+      impersonatorId: req.user.id
+    });
+    await activityQueries.insertSecurityActivity(
+      db,
+      req.user.id,
+      'impersonate',
+      JSON.stringify({
+        targetUserId: targetId,
+        en: t('activity.impersonatedUser', { name: user.email }, 'en'),
+        fr: t('activity.impersonatedUser', { name: user.email }, 'fr')
+      })
+    );
+    res.json({
+      token,
+      user: {
+        id: targetId,
+        email: user.email,
+        role: primaryRole(roleNames),
+        roles: roleNames
+      }
+    });
+  } catch (error) {
+    console.error('Impersonate error:', error);
+    res.status(500).json({ error: 'Failed to impersonate user' });
   }
 });
 

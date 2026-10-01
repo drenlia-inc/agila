@@ -17,7 +17,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **Column policy notes** for short entry/exit guidance
 - **Multiple view modes**: Kanban (visual board), List (table format), Gantt (timeline), and Calendar (month/week/day) views
 - **Real-time collaboration** - see changes instantly as team members work
-- **User authentication** with local accounts and Google OAuth support
+- **User authentication** with local accounts plus optional **Google**, **GitHub**, and **Microsoft 365** OAuth (managed platform credentials and/or bring-your-own app credentials where offered)
 - **Role-based access control** (Admin/User/Viewer) and **board membership** (users/viewers only see boards they belong to)
 - **Theme support** - Light and dark mode
 
@@ -36,7 +36,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **Task view modes** - Full, Preview, and Minimal card density for optimal screen space
 - **Task toolbar** - Quick actions on hover (assign members, change priority, add tags, copy tasks)
 - **Quick edit** - Inline editing without opening full task details
-- **Multi-select & bulk actions** - Select tasks (per card or Select all per column); bulk tag, copy, sprint, priority, archive, delete, and move to another board; drag multi-selected tasks between columns
+- **Multi-select & bulk actions** - Select tasks (per card or Select all per column); bulk tag, copy, sprint, priority, archive, delete, and move to another board; drag multi-selected tasks between columns; **one-shot Undo** (about 60 seconds) for supported bulk actions
 - **Task watchers & collaborators** - Add team members to watch or collaborate on tasks
 - **Requesters** - Track who requested each task
 - **Sprint association** - Organize tasks by time-based planning periods, with an optional **sprint goal**
@@ -69,8 +69,11 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **User management** - Create, edit, invite, activate/deactivate users, assign roles
 - **Board & column management** - Create, rename, reorder, and soft-delete boards and columns; set soft WIP and policy text per column
 - **Lifecycle (trash)** - Restore or permanently purge soft-deleted tasks and boards; configure retention/auto-purge
-- **Site settings** - Configure site name, URL, branding (logo light/dark), and global preferences- **SSO configuration** - Google OAuth Single Sign-On setup
-- **Mail server** - SMTP configuration for email notifications and invitations
+- **Site settings** - Configure site name, URL, branding (logo light/dark), and global preferences
+- **SSO configuration** - Google, GitHub, and Microsoft 365 OAuth (managed and/or bring-your-own credentials)
+- **Mail server** - SMTP for invitations, password reset, and task email (custom SMTP or managed mail where available)
+- **Notifications & webhooks** - Choose email, webhooks, or both; deliver task/board events to Slack, Mattermost, Microsoft Teams, Telegram, or WhatsApp
+- **File storage** - Local disk or S3-compatible object storage (managed platform bucket or bring-your-own)
 - **AI Settings** - Enable the AI Agent, choose LLM provider/model, and configure the agent runner
 - **Tags management** - Create and manage custom tags with colors
 - **Priorities management** - Customize priority levels with names and colors
@@ -78,7 +81,7 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **Project settings** - Manage project identifiers and board configurations
 - **Sprint settings** - Create and manage sprints for time-based task organization
 - **Reporting configuration** - Enable/disable reports, gamification, leaderboard, and achievements
-- **Licensing** - View and manage license information, usage limits, and subscriptions
+- **Licensing** - License status, usage limits, and (when connected) Customer Portal / support plan status for hosted or self-hosted installs
 - **System monitoring** - Real-time resource monitoring (RAM, CPU, disk usage)
 
 ### Data & Export
@@ -89,7 +92,8 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 - **Database backup** - PostgreSQL dump/restore scripts (see [Database Backup & Restore](#database-backup--restore))
 
 ### Additional Features
-- **Email notifications** - Configurable email notifications for task activities
+- **Email & webhook notifications** - Task activity by email and/or outbound webhooks (admin channel mode + per-user preferences)
+- **In-app Help** - F1 / ? opens guides, shortcuts, and the Delivery playbook; optional **Help Assistant** chat (when AI is enabled) can answer and navigate to the right setting
 - **Gamification** - Points, achievements, and leaderboard (when enabled)
 - **Keyboard shortcuts** - F1 for help, efficient keyboard navigation
 - **Column persistence** - Column preferences saved between sessions
@@ -109,8 +113,9 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 4. Go to Kanban View and set up your boards and columns. After creating a board, double-click the tab and add **board members** so users and viewers can see it
 5. Start creating and managing tasks (add **acceptance criteria** on the task details panel when a card needs a definition of done)
 6. Optional: create a sprint with a **sprint goal** from the header dropdown or Settings → Project Settings → Sprints
-7. Configure Google OAuth (optional) in Settings → System Settings → SSO
-8. Configure AI Agent (optional) in Settings → System Settings → AI — for coding jobs, users then add Profile → Dev credentials
+7. Configure SSO (optional) in Settings → System Settings → SSO — Google, GitHub, and/or Microsoft 365
+8. Configure notifications (optional): SMTP under Mail, and/or webhooks under Notifications
+9. Configure AI Agent (optional) in Settings → System Settings → AI — for coding jobs, users then add Profile → Dev credentials
 
 ## Permissions
 
@@ -132,8 +137,9 @@ A collaborative **Kanban workspace** for teams: multi-board drag-and-drop, List,
 | Access Settings (profile menu) | ✓ | ✗ | ✗ |
 | Manage users | ✓ | ✗ | ✗ |
 | Configure site settings | ✓ | ✗ | ✗ |
-| Configure Google OAuth | ✓ | ✗ | ✗ |
+| Configure SSO (Google / GitHub / Microsoft 365) | ✓ | ✗ | ✗ |
 | Configure mail server | ✓ | ✗ | ✗ |
+| Configure notifications & webhooks | ✓ | ✗ | ✗ |
 | Manage tags and priorities | ✓ | ✗ | ✗ |
 | Lifecycle retention & permanent purge | ✓ | ✗ | ✗ |
 | Export data (CSV/Excel) | ✓ | ✗ | ✗ |
