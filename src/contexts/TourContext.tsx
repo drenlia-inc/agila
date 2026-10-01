@@ -104,23 +104,23 @@ function prepareAdminTourTarget(
 const JOYRIDE_TOOLTIP_SELECTOR = '.react-joyride__tooltip';
 const JOYRIDE_VIEWPORT_MARGIN = 12;
 
-function resetJoyrideTooltipPin(tooltip: HTMLElement) {
-  tooltip.style.position = '';
-  tooltip.style.top = '';
-  tooltip.style.left = '';
-  tooltip.style.transform = '';
-}
-
-/** Keep the Joyride description inside the viewport (scroll if we can, then pin). */
+/**
+ * Keep the Joyride card inside the viewport.
+ * Pin the floater (card + arrow) together. Pinning `.react-joyride__tooltip`
+ * alone leaves the arrow on the target and the text off-screen.
+ * Do not clear the floater's inline transform first — Popper owns it.
+ */
 function keepJoyrideTooltipInViewport() {
   const tooltip = document.querySelector(JOYRIDE_TOOLTIP_SELECTOR) as HTMLElement | null;
   if (!tooltip) return;
 
-  resetJoyrideTooltipPin(tooltip);
+  const floater = tooltip.closest('.__floater') as HTMLElement | null;
+  const box = floater ?? tooltip;
+  if (box.dataset.joyridePinned === '1') return;
 
   const vh = window.innerHeight;
   const vw = window.innerWidth;
-  const rect = tooltip.getBoundingClientRect();
+  const rect = box.getBoundingClientRect();
 
   let dy = 0;
   if (rect.bottom > vh - JOYRIDE_VIEWPORT_MARGIN) {
@@ -142,7 +142,7 @@ function keepJoyrideTooltipInViewport() {
     window.scrollBy({ top: dy, left: dx, behavior: 'auto' });
   }
 
-  const next = tooltip.getBoundingClientRect();
+  const next = box.getBoundingClientRect();
   let top = next.top;
   let left = next.left;
   if (next.bottom > vh - JOYRIDE_VIEWPORT_MARGIN) {
@@ -155,10 +155,12 @@ function keepJoyrideTooltipInViewport() {
   if (left < JOYRIDE_VIEWPORT_MARGIN) left = JOYRIDE_VIEWPORT_MARGIN;
 
   if (top !== next.top || left !== next.left) {
-    tooltip.style.position = 'fixed';
-    tooltip.style.top = `${Math.round(top)}px`;
-    tooltip.style.left = `${Math.round(left)}px`;
-    tooltip.style.transform = 'none';
+    box.dataset.joyridePinned = '1';
+    box.style.position = 'fixed';
+    box.style.top = `${Math.round(top)}px`;
+    box.style.left = `${Math.round(left)}px`;
+    box.style.transform = 'none';
+    box.style.zIndex = '10001';
   }
 }
 

@@ -6,6 +6,7 @@ export const HELP_ASSISTANT_FACTS = `
 - Activity feed for the current user: Profile → Activity feed (or X on the feed). Settings → App Settings → User interface SHOW_ACTIVITY_FEED is only the default for NEW users; it does not hide an existing user's feed.
 - Settings “Default application language” is emails/system copy, not the user's UI language (Profile) and not the activity feed.
 - Instance settings (users, SSO, mail, AI, project, lifecycle, etc.) open from Profile → Settings (admins only). Do not say there is an Admin button in the header. Then use Settings tabs (e.g. Settings → Users, Settings → System Settings → SSO).
+- SSO supports Google, GitHub, and/or Microsoft 365 (managed platform credentials or bring-your-own where offered). Task and board notifications can go by email, outbound webhooks (Slack, Mattermost, Microsoft Teams, Telegram, WhatsApp), or both. The notification queue lists both channels.
 - Column/board WIP is a soft limit: the UI warns but does not block moves.
 - Deleted tasks live in the board trash (trash toggle on the board tabs), not Archive. Archived columns are shown from Filter → Columns (not List View column visibility).
 - Delete a card: the trash icon on the card (data-tour-id=task-card-delete), not the whole toolbar.
