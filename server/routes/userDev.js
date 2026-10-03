@@ -9,6 +9,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { getRequestDatabase } from '../middleware/tenantRouting.js';
 import { t } from '../utils/i18n.js';
 import { requireAiEnabledMiddleware } from '../utils/aiEnabled.js';
+import { requireApiPlanMiddleware } from '../utils/apiPlan.js';
 import {
   userApiTokens as tokenQueries,
   userSshKeys as sshQueries,
@@ -34,6 +35,7 @@ import {
 
 const router = express.Router();
 const requireAi = requireAiEnabledMiddleware(getRequestDatabase);
+const requireApiPlan = requireApiPlanMiddleware;
 
 /**
  * Tenant LLM model name for display (no secrets).
@@ -65,7 +67,7 @@ function serializeToken(row) {
 }
 
 // List tokens — available whether or not the in-app Agent is enabled.
-router.get('/tokens', authenticateToken, async (req, res) => {
+router.get('/tokens', authenticateToken, requireApiPlan, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const rows = await tokenQueries.listTokensForUser(db, req.user.id);
@@ -77,7 +79,7 @@ router.get('/tokens', authenticateToken, async (req, res) => {
 });
 
 // Create token (raw value returned once)
-router.post('/tokens', authenticateToken, tokenMintLimiter, async (req, res) => {
+router.post('/tokens', authenticateToken, requireApiPlan, tokenMintLimiter, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const parsed = parseBody(createDevTokenBodySchema, req.body || {});
@@ -137,7 +139,7 @@ router.post('/tokens', authenticateToken, tokenMintLimiter, async (req, res) => 
 });
 
 // Rename a token or change where it is used. The secret is not returned or replaced.
-router.patch('/tokens/:id', authenticateToken, async (req, res) => {
+router.patch('/tokens/:id', authenticateToken, requireApiPlan, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const parsed = parseBody(updateDevTokenBodySchema, req.body || {});
@@ -159,7 +161,7 @@ router.patch('/tokens/:id', authenticateToken, async (req, res) => {
 });
 
 // Revoke token
-router.delete('/tokens/:id', authenticateToken, async (req, res) => {
+router.delete('/tokens/:id', authenticateToken, requireApiPlan, async (req, res) => {
   try {
     const db = getRequestDatabase(req);
     const revoked = await tokenQueries.revokeToken(db, req.params.id, req.user.id);

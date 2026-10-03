@@ -4,6 +4,7 @@ import { getRequestDatabase } from './tenantRouting.js';
 import { runWithImpersonator } from '../utils/requestContext.js';
 import { wrapQuery } from '../utils/queryLogger.js';
 import { userApiTokens as tokenQueries } from '../utils/sqlManager/index.js';
+import { isApiAllowedByPlan } from '../utils/apiPlan.js';
 
 // JWT configuration
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -122,6 +123,10 @@ async function authenticatePersonalAccessToken(req, rawToken) {
       return null;
     }
 
+    if (!(await isApiAllowedByPlan(db))) {
+      return { planDenied: true };
+    }
+
     const roles = await wrapQuery(
       db.prepare(`
         SELECT r.name FROM roles r
@@ -168,6 +173,12 @@ export const authenticateToken = async (req, res, next) => {
     // Personal access tokens for agent automation
     if (token.startsWith('ek_')) {
       const patUser = await authenticatePersonalAccessToken(req, token);
+      if (patUser?.planDenied) {
+        return res.status(403).json({
+          error: 'Agila API is not available on this plan',
+          code: 'API_NOT_IN_PLAN'
+        });
+      }
       if (!patUser) {
         return res.status(401).json({ error: 'Invalid or expired token' });
       }

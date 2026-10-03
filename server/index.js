@@ -78,6 +78,7 @@ import acceptanceCriteriaRouter from './routes/acceptanceCriteria.js';
 import taskWorkRouter from './routes/taskWork.js';
 import agentRouter from './routes/agent.js';
 import apiV1RelayRouter from './routes/apiV1Relay.js';
+import { requireApiPlanMiddleware } from './utils/apiPlan.js';
 import userDevRouter from './routes/userDev.js';
 import activityRouter from './routes/activity.js';
 import testNotificationsRouter from './routes/testNotifications.js';
@@ -512,7 +513,8 @@ app.use('/api/test', testNotificationsRouter); // Test endpoints for notificatio
 
 // Agila API v1: same product routers as /api, plus Relay routes mounted first
 // so claim/move/plans match before parameterized task routes. Login and OAuth
-// stay on /api/auth only.
+// stay on /api/auth only. The whole prefix is plan-gated; the web app stays on /api.
+app.use('/api/v1', requireApiPlanMiddleware);
 app.use('/api/v1', apiV1RelayRouter);
 app.use('/api/v1/members', membersRouter);
 app.use('/api/v1/boards', boardsRouter);

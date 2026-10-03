@@ -76,6 +76,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
   const { t, i18n } = useTranslation('common');
   const { systemSettings: contextSystemSettings, siteSettings } = useSettings(); // Use SettingsContext instead of fetching
   const aiEnabled = siteSettings?.AI_ENABLED === 'true' || contextSystemSettings?.AI_ENABLED === 'true';
+  const apiAccess = siteSettings?.API_ACCESS === 'true' || contextSystemSettings?.API_ACCESS === 'true';
   const isViewOnlyUser = userIsViewer(currentUser);
   const isAdminUser = userIsAdmin(currentUser);
   const githubFeedback = agilaGithubFeedbackUrls(i18n.language);
@@ -211,7 +212,11 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
       setError(null);
       setIsSubmitting(false);
       setActiveTab(
-        initialFocus === 'activityFeed' ? 'app-settings' : initialFocus === 'apiTokens' ? 'api-tokens' : 'profile'
+        initialFocus === 'activityFeed'
+          ? 'app-settings'
+          : initialFocus === 'apiTokens' && apiAccess
+            ? 'api-tokens'
+            : 'profile'
       );
       onProfileEditingChange(false); // Reset editing state when modal opens
     }
@@ -221,10 +226,10 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
     if (!isOpen) return;
     if (initialFocus === 'activityFeed') {
       setActiveTab('app-settings');
-    } else if (initialFocus === 'apiTokens') {
+    } else if (initialFocus === 'apiTokens' && apiAccess) {
       setActiveTab('api-tokens');
     }
-  }, [isOpen, initialFocus]);
+  }, [isOpen, initialFocus, apiAccess]);
 
   // Leave Dev tab if AI is off or user is view-only (SSH / GitHub credentials)
   useEffect(() => {
@@ -232,6 +237,12 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
       setActiveTab('profile');
     }
   }, [aiEnabled, isViewOnlyUser, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'api-tokens' && !apiAccess) {
+      setActiveTab('profile');
+    }
+  }, [apiAccess, activeTab]);
 
   const isDirty =
     savedSnapshot !== '' &&
@@ -667,17 +678,19 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
               >
                 {t('profile.notifications')}
               </button>
-              <button
-                onClick={() => setActiveTab('api-tokens')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'api-tokens'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
-                }`}
-              >
-                {t('profile.devApiTokens')}
-                <BetaSup />
-              </button>
+              {apiAccess && (
+                <button
+                  onClick={() => setActiveTab('api-tokens')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'api-tokens'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
+                  }`}
+                >
+                  {t('profile.devApiTokens')}
+                  <BetaSup />
+                </button>
+              )}
               {aiEnabled && !isViewOnlyUser && (
                 <button
                   onClick={() => setActiveTab('dev')}
@@ -1184,7 +1197,7 @@ export default function Profile({ isOpen, onClose, currentUser, onProfileUpdated
             </div>
           )}
 
-          {activeTab === 'api-tokens' && (
+          {activeTab === 'api-tokens' && apiAccess && (
             <ProfileApiTokensTab isAdmin={isAdminUser} />
           )}
 

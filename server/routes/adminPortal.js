@@ -85,8 +85,8 @@ async function buildAdminPlanView(db) {
     licenseSettings.forEach((setting) => {
       let key = setting.settingKey;
       if (key === 'SUPPORT_TYPE') key = 'SUPPORT_LEVEL';
-      if (['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER'].includes(key)) {
-        if (key === 'SUPPORT_LEVEL' || key === 'AI_TIER') {
+      if (['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER', 'API_TIER'].includes(key)) {
+        if (key === 'SUPPORT_LEVEL' || key === 'AI_TIER' || key === 'API_TIER') {
           dbSettings[key] = setting.settingValue;
         } else {
           dbSettings[key] = parseInt(setting.settingValue, 10);
@@ -127,7 +127,8 @@ async function buildAdminPlanView(db) {
         STORAGE_LIMIT: getDisplayValue('STORAGE_LIMIT'),
         WEBHOOK_LIMIT: getDisplayValue('WEBHOOK_LIMIT'),
         SUPPORT_LEVEL: getDisplayValue('SUPPORT_LEVEL'),
-        AI_TIER: getDisplayValue('AI_TIER')
+        AI_TIER: getDisplayValue('AI_TIER'),
+        API_TIER: getDisplayValue('API_TIER')
       },
       features: [
         feature('USER_LIMIT', licenseInfo.usage.users, licenseInfo.limitsReached.users),
@@ -138,7 +139,8 @@ async function buildAdminPlanView(db) {
         }),
         feature('WEBHOOK_LIMIT', licenseInfo.usage.webhooks, licenseInfo.limitsReached.webhooks),
         feature('SUPPORT_LEVEL', undefined, undefined),
-        feature('AI_TIER', undefined, undefined)
+        feature('AI_TIER', undefined, undefined),
+        feature('API_TIER', undefined, undefined)
       ],
       boardTaskCounts: licenseInfo.boardTaskCounts
     }
@@ -1435,7 +1437,7 @@ router.put('/plan/:key', authenticateAdminPortal, async (req, res) => {
     const t = await getTranslator(db);
     
     // Validate key
-    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER', 'SUPPORT_HOURS_MONTHLY', 'SUPPORT_HOURS_USED', 'SUPPORT_OVERAGE_RATE', 'PLAN_NAME'];
+    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER', 'API_TIER', 'SUPPORT_HOURS_MONTHLY', 'SUPPORT_HOURS_USED', 'SUPPORT_OVERAGE_RATE', 'PLAN_NAME'];
     if (!allowedKeys.includes(key)) {
       return res.status(400).json({ 
         success: false,
@@ -1447,6 +1449,7 @@ router.put('/plan/:key', authenticateAdminPortal, async (req, res) => {
     if (
       key !== 'SUPPORT_LEVEL' &&
       key !== 'AI_TIER' &&
+      key !== 'API_TIER' &&
       key !== 'SUPPORT_OVERAGE_RATE' &&
       key !== 'PLAN_NAME' &&
       value !== null
@@ -1497,7 +1500,7 @@ router.delete('/plan/:key', authenticateAdminPortal, async (req, res) => {
     const t = await getTranslator(db);
     
     // Validate key
-    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER', 'SUPPORT_HOURS_MONTHLY', 'SUPPORT_HOURS_USED', 'SUPPORT_OVERAGE_RATE', 'PLAN_NAME'];
+    const allowedKeys = ['USER_LIMIT', 'TASK_LIMIT', 'BOARD_LIMIT', 'STORAGE_LIMIT', 'WEBHOOK_LIMIT', 'SUPPORT_LEVEL', 'AI_TIER', 'API_TIER', 'SUPPORT_HOURS_MONTHLY', 'SUPPORT_HOURS_USED', 'SUPPORT_OVERAGE_RATE', 'PLAN_NAME'];
     if (!allowedKeys.includes(key)) {
       return res.status(400).json({ 
         success: false,
