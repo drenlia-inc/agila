@@ -37,6 +37,13 @@ import {
 
 const router = express.Router();
 
+/** Perf-test seed accounts only. Other *@local addresses stay reserved. */
+const PERF_SEED_USER_EMAIL = /^perf\.user\.\d+\.\d+@local$/;
+
+function isPerfSeedUserEmail(email) {
+  return PERF_SEED_USER_EMAIL.test(String(email || '').trim().toLowerCase());
+}
+
 // Helper to get the actual notification system being used (for accurate logging)
 const getNotificationSystem = () => {
   return 'PostgreSQL';
@@ -434,11 +441,12 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
   if (validBoardIds.length !== requestedBoardIds.length) {
     return res.status(400).json({ error: t('errors.inviteBoardsInvalid') });
   }
-  if (role !== 'admin' && validBoardIds.length === 0) {
+  const perfSeed = isPerfSeedUserEmail(email);
+  if (role !== 'admin' && validBoardIds.length === 0 && !perfSeed) {
     return res.status(400).json({ error: t('errors.inviteBoardsRequired') });
   }
 
-  if (String(email || '').toLowerCase().endsWith('@local')) {
+  if (String(email || '').toLowerCase().endsWith('@local') && !perfSeed) {
     return res.status(400).json({ error: 'Cannot create users with @local email addresses' });
   }
 
@@ -541,7 +549,7 @@ router.post('/', authenticateToken, requireRole(['admin']), async (req, res) => 
       await userQueries.updateUserAvatar(db, userId, avatarPath);
     }
 
-    if (role === 'admin') {
+    if (role === 'admin' || (perfSeed && validBoardIds.length === 0)) {
       const allBoardIds = await participantQueries.addUserToAllLiveBoards(db, userId);
       for (const boardId of allBoardIds) {
         const participantCount = await participantQueries.countParticipants(db, boardId);
