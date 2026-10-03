@@ -201,7 +201,7 @@ Certbot configures HTTPS and typically enables HTTP-to-HTTPS redirection. Renewa
 2. Sign in with `admin@kanban.local` and the password from the container logs.
 3. Change the admin password immediately.
 4. Under **Settings → Site Settings**, set the site name and URL to your HTTPS origin.
-5. Optionally configure SMTP, SSO, and AI under System Settings.
+5. Optionally configure SMTP, SSO (Google / GitHub / Microsoft 365), notifications/webhooks, and AI under System Settings.
 
 Local health check: `http://127.0.0.1:3010/health`.
 

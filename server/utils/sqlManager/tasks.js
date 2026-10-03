@@ -560,6 +560,14 @@ export async function updateTask(db, taskId, updates) {
     values.push(new Date().toISOString());
   }
 
+  const changingOwner =
+    movingColumn ||
+    Object.prototype.hasOwnProperty.call(updates, 'memberId') ||
+    Object.prototype.hasOwnProperty.call(updates, 'memberid');
+  if (changingOwner) {
+    setClauses.push('claim_token_hash = NULL');
+  }
+
   if (setClauses.length === 0) {
     throw new Error('No valid fields to update');
   }
@@ -1090,7 +1098,8 @@ export async function updateTaskPositionAndColumn(
         pre_boardid = $4, 
         pre_columnid = $5,
         column_entered_at = $6,
-        updated_at = $7
+        updated_at = $7,
+        claim_token_hash = NULL
       WHERE id = $8
     `;
     const stmt = wrapQuery(db.prepare(query), 'UPDATE');
@@ -1112,7 +1121,8 @@ export async function updateTaskPositionAndColumn(
       pre_boardid = $3, 
       pre_columnid = $4,
       column_entered_at = $5,
-      updated_at = $6
+      updated_at = $6,
+      claim_token_hash = NULL
     WHERE id = $7
   `;
 

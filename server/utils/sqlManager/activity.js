@@ -8,6 +8,62 @@
  */
 
 import { wrapQuery } from '../queryLogger.js';
+import { t } from '../i18n.js';
+
+const SECURITY_FEED_ACTIONS = new Set(['impersonate', 'impersonate_mint_token']);
+
+function parseDetailsJson(details) {
+  if (!details) return null;
+  if (typeof details === 'object') return details;
+  try {
+    return JSON.parse(details);
+  } catch {
+    return null;
+  }
+}
+
+async function displayNamesForTargets(db, targets) {
+  const ids = [...new Set(targets.map((target) => target.id).filter(Boolean).map(String))];
+  const emails = [...new Set(targets.map((target) => String(target.email || '').trim().toLowerCase()).filter(Boolean))];
+  const byId = new Map();
+  const byEmail = new Map();
+  if (!ids.length && !emails.length) return { byId, byEmail };
+  const rows = await wrapQuery(
+    db.prepare(`
+      SELECT u.id::text AS id,
+             lower(u.email) AS email,
+             COALESCE(
+               NULLIF(m.name, ''),
+               NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
+               u.email
+             ) AS "displayName"
+      FROM users u
+      LEFT JOIN members m ON m.user_id = u.id
+      WHERE u.id::text = ANY($1::text[])
+         OR lower(u.email) = ANY($2::text[])
+    `),
+    'SELECT'
+  ).all(ids, emails);
+  for (const row of rows || []) {
+    if (row.id) byId.set(row.id, row.displayName);
+    if (row.email) byEmail.set(row.email, row.displayName);
+  }
+  return { byId, byEmail };
+}
+
+function emailInText(value) {
+  if (typeof value !== 'string') return '';
+  const match = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0] : '';
+}
+
+function securityFeedText(action, name, lang) {
+  const who = name || t('activity.anotherUser', {}, lang);
+  const key = action === 'impersonate_mint_token'
+    ? 'activity.impersonatedMintToken'
+    : 'activity.impersonatedUser';
+  return t(key, { name: who }, lang);
+}
 
 /**
  * Get activity feed
@@ -26,17 +82,23 @@ export async function getActivityFeed(db, options = {}) {
     userLanguage = 'en',
     beforeId,
     sinceId,
+    includeImpersonation = false,
   } = options;
 
   const params = [limit];
-  let whereClause = '';
+  const clauses = [];
   if (sinceId != null) {
-    whereClause = 'WHERE a.id > $2';
     params.push(sinceId);
+    clauses.push(`a.id > $${params.length}`);
   } else if (beforeId != null) {
-    whereClause = 'WHERE a.id < $2';
     params.push(beforeId);
+    clauses.push(`a.id < $${params.length}`);
   }
+  if (!includeImpersonation) {
+    clauses.push(`a.action NOT IN ('impersonate', 'impersonate_mint_token')`);
+    clauses.push(`COALESCE(a.details, '') NOT LIKE '%"impersonated":true%'`);
+  }
+  const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
   const query = `
     SELECT 
@@ -74,26 +136,39 @@ export async function getActivityFeed(db, options = {}) {
   
   // Parse bilingual JSON details and return user's language
   const normalizedLang = userLanguage?.toLowerCase() === 'fr' ? 'fr' : 'en';
-  
-  return activities.map(activity => {
+  const securityLookups = [];
+
+  const activitiesForFeed = activities.map(activity => {
     if (activity.details) {
-      try {
-        const parsed =
-          typeof activity.details === 'string'
-            ? JSON.parse(activity.details)
-            : activity.details;
-        if (parsed && (typeof parsed.en === 'string' || typeof parsed.fr === 'string')) {
-          // Bilingual JSON - return user's language (allow empty string for one locale)
-          activity.details = parsed[normalizedLang] || parsed.en || parsed.fr || '';
-          activity.viaApi = Boolean(parsed.viaApi);
-        }
-        // If not valid bilingual JSON, keep as-is (backward compatibility)
-      } catch {
-        // Not JSON, keep as-is (backward compatibility with old format)
+      const parsed = parseDetailsJson(activity.details);
+      if (SECURITY_FEED_ACTIONS.has(activity.action)) {
+        securityLookups.push({ activity, parsed: parsed || {} });
+      } else if (parsed && (typeof parsed.en === 'string' || typeof parsed.fr === 'string')) {
+        activity.details = parsed[normalizedLang] || parsed.en || parsed.fr || '';
+        activity.viaApi = Boolean(parsed.viaApi);
       }
     }
     return activity;
   });
+
+  if (securityLookups.length) {
+    const targets = securityLookups.map(({ parsed }) => ({
+      id: parsed.targetUserId || null,
+      email: parsed.targetEmail || emailInText(parsed.en) || emailInText(parsed.fr)
+    }));
+    const names = await displayNamesForTargets(db, targets);
+    securityLookups.forEach(({ activity, parsed }, index) => {
+      const target = targets[index];
+      const name = (target.id && names.byId.get(String(target.id)))
+        || (target.email && names.byEmail.get(target.email.toLowerCase()))
+        || target.email
+        || '';
+      activity.details = securityFeedText(activity.action, name, normalizedLang);
+      activity.viaApi = Boolean(parsed.viaApi);
+    });
+  }
+
+  return activitiesForFeed;
 }
 
 /**
@@ -365,5 +440,17 @@ export async function hasUserJoinActivity(db, userId) {
   `;
   const row = await wrapQuery(db.prepare(query), 'SELECT').get(userId);
   return Boolean(row);
+}
+
+/** Audit row for impersonation and token mint. taskid is unused. */
+export async function insertSecurityActivity(db, userId, action, details) {
+  const stmt = wrapQuery(
+    db.prepare(`
+      INSERT INTO activity (userid, action, details)
+      VALUES ($1, $2, $3)
+    `),
+    'INSERT'
+  );
+  await stmt.run(userId, action, details);
 }
 

@@ -274,7 +274,7 @@ export const getTourSteps = (): TourStepsConfig => {
     {
       target: '[data-tour-id="system-usage-panel"]',
       content: i18n.t('tour.steps.systemUsagePanel', { ns: 'common' }),
-      placement: 'left',
+      placement: 'bottom-end',
       data: { switchToPage: 'kanban', ensureSystemPanel: true },
     },
   ];

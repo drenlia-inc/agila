@@ -30,7 +30,7 @@ Shape the board to how work actually moves; use soft WIP and optional sprints wh
 
 ## First hour checklist
 
-**Google SSO (initial setup):** If your organization uses Google OAuth, configure SSO during setup—before invites go wide. Users can sign in with Google instead of creating another password, which speeds onboarding. See Settings → **System Settings → SSO** (or Help → Settings → SSO).
+**SSO (initial setup):** If your organization uses Google, GitHub, or Microsoft 365 OAuth, configure SSO during setup—before invites go wide. Users can sign in with their work identity instead of creating another password, which speeds onboarding. See Settings → **System Settings → SSO** (or Help → Settings → SSO).
 
 Do these in order. Skip branding and AI until the team can move cards.
 

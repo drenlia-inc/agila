@@ -14,6 +14,7 @@ import { setExplicitGuestLanguage } from '../../utils/guestLanguage';
 import { feDebug } from '../../utils/clientDebug';
 import ResetCountdown from '../ResetCountdown';
 import { KanbanChromeTooltip } from '../KanbanChromeTooltip';
+import BotWorkIndicator from './BotWorkIndicator';
 import { TOOLS_HEADER_SLOT_ID } from '../Tools';
 import InviteBoardPicker from '../InviteBoardPicker';
 import { defaultInviteBoardIds, liveInviteBoards } from '../../utils/inviteBoardIds';
@@ -1105,6 +1106,14 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
+          {/* Bot work on the board currently on screen */}
+          {currentUser && (
+            <BotWorkIndicator
+              selectedBoard={selectedBoard}
+              onOpenTask={(taskId) => jumpToSearchTask({ id: taskId } as HeaderSearchTask)}
+            />
+          )}
+
           {/* 6. Account — click to open (iPad / keyboard friendly) */}
           {currentUser && (
             <div className="relative ml-1" ref={profileMenuRef}>
@@ -1276,7 +1285,8 @@ const Header: React.FC<HeaderProps> = ({
       
       {/* System Usage Panel - Vertical Compact for Admins (Toggleable) */}
       {isSystemPanelAvailable && systemInfo?.memory && systemInfo?.cpu && systemInfo?.disk && currentUser?.roles?.includes('admin') && showSystemPanel && (
-        <div className="absolute top-full right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg p-1.5 shadow-lg z-10" data-tour-id="system-usage-panel">
+        <div className="absolute top-full right-0 z-10">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg p-1.5 shadow-lg" data-tour-id="system-usage-panel">
           <div className="flex flex-col space-y-0.5 text-[10px]">
             {/* RAM */}
             <div className="flex items-center space-x-1.5">
@@ -1340,6 +1350,7 @@ const Header: React.FC<HeaderProps> = ({
               {systemInfo.timestamp ? new Date(systemInfo.timestamp).toLocaleTimeString() : ''}
             </div>
           </div>
+        </div>
         </div>
       )}
     </header>

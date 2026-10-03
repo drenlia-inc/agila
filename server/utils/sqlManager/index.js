@@ -39,6 +39,7 @@ import * as cspReports from './cspReports.js';
 import * as webhooks from './webhooks.js';
 import * as boardParticipants from './boardParticipants.js';
 import * as acceptanceCriteria from './acceptanceCriteria.js';
+import * as relay from './relay.js';
 
 // Export all domain managers
 export const sqlManager = {
@@ -71,11 +72,12 @@ export const sqlManager = {
   cspReports,
   webhooks,
   boardParticipants,
-  acceptanceCriteria
+  acceptanceCriteria,
+  relay
 };
 
 // Also export individual domains for convenience
-export { tasks, helpers, boards, comments, priorities, sprints, users, reports, settings, files, activity, health, members, auth, tags, views, passwordReset, adminUsers, licenseSettings, notificationQueue, taskWork, userApiTokens, userSshKeys, userGithubTokens, automationTokens, automationJournal, cspReports, webhooks, boardParticipants, acceptanceCriteria };
+export { tasks, helpers, boards, comments, priorities, sprints, users, reports, settings, files, activity, health, members, auth, tags, views, passwordReset, adminUsers, licenseSettings, notificationQueue, taskWork, userApiTokens, userSshKeys, userGithubTokens, automationTokens, automationJournal, cspReports, webhooks, boardParticipants, acceptanceCriteria, relay };
 // export { users };
 // etc.
 

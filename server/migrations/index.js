@@ -1428,6 +1428,37 @@ const migrations = [
       );
       console.log('✅ Migration 56: portal URL seeds normalized (linked → agila.dev, unlinked localhost → empty)');
     }
+  },
+  {
+    version: 57,
+    name: 'agila_api_v1',
+    description: 'External keys, task claim hashes, and expiring Agila API tokens with a description',
+    up: async (db) => {
+      await dbExec(db, 'ALTER TABLE tasks ADD COLUMN IF NOT EXISTS external_key TEXT');
+      await dbExec(db, 'ALTER TABLE tasks ADD COLUMN IF NOT EXISTS claim_token_hash TEXT');
+      await dbExec(db, 'ALTER TABLE boards ADD COLUMN IF NOT EXISTS external_key TEXT');
+      await dbExec(db, 'ALTER TABLE planning_periods ADD COLUMN IF NOT EXISTS external_key TEXT');
+      await dbExec(db, 'ALTER TABLE user_api_tokens ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT \'\'');
+      await dbExec(db, 'ALTER TABLE user_api_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ');
+      await dbExec(db, `
+        UPDATE user_api_tokens
+        SET expires_at = CURRENT_TIMESTAMP + INTERVAL '30 days'
+        WHERE expires_at IS NULL
+      `);
+      await dbExec(db, `
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_external_key
+        ON tasks (external_key) WHERE external_key IS NOT NULL
+      `);
+      await dbExec(db, `
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_boards_external_key
+        ON boards (external_key) WHERE external_key IS NOT NULL
+      `);
+      await dbExec(db, `
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_planning_periods_external_key
+        ON planning_periods (external_key) WHERE external_key IS NOT NULL
+      `);
+      console.log('✅ Migration 57: Agila API external keys, claim hashes, token expiry');
+    }
   }
 ];
 

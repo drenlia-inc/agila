@@ -1,17 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BETA_SUP_CLASS } from '../HelpAssistantTitle';
 import {
-  listUserApiTokens,
-  createUserApiToken,
-  revokeUserApiToken,
   getUserSshKey,
   generateUserSshKey,
   downloadUserSshPrivateKey,
   getUserGithubToken,
   saveUserGithubToken,
   deleteUserGithubToken,
-  type UserApiTokenMeta,
   type UserSshKeyMeta,
   type UserGithubTokenMeta
 } from '../../api';
@@ -43,7 +38,6 @@ function StatusBadge({
 
 const ProfileDevTab: React.FC = () => {
   const { t } = useTranslation('common');
-  const [tokens, setTokens] = useState<UserApiTokenMeta[]>([]);
   const [sshKey, setSshKey] = useState<UserSshKeyMeta | null>(null);
   const [sshNeedsReenter, setSshNeedsReenter] = useState(false);
   const [githubConfigured, setGithubConfigured] = useState(false);
@@ -51,7 +45,6 @@ const ProfileDevTab: React.FC = () => {
   const [githubMeta, setGithubMeta] = useState<UserGithubTokenMeta | null>(null);
   const [githubDraft, setGithubDraft] = useState('');
   const [replacingPat, setReplacingPat] = useState(false);
-  const [rawToken, setRawToken] = useState<string | null>(null);
   const [privateKeyOnce, setPrivateKeyOnce] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -59,12 +52,10 @@ const ProfileDevTab: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [tokenList, ssh, gh] = await Promise.all([
-        listUserApiTokens(),
+      const [ssh, gh] = await Promise.all([
         getUserSshKey(),
         getUserGithubToken()
       ]);
-      setTokens(tokenList.filter((tok) => !tok.revokedAt));
       setSshKey(ssh.key);
       setSshNeedsReenter(Boolean(ssh.needsReenter));
       setGithubConfigured(Boolean(gh.configured));
@@ -83,36 +74,6 @@ const ProfileDevTab: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const handleCreateToken = async () => {
-    setBusy(true);
-    try {
-      const result = await createUserApiToken(t('profile.devDefaultTokenName'));
-      setRawToken(result.rawToken);
-      await load();
-      toast.success(t('profile.devTokenCreated'), '');
-    } catch (error) {
-      console.error(error);
-      toast.error(t('profile.devTokenCreateError'), '');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleRevoke = async (id: string) => {
-    if (!window.confirm(t('profile.devTokenRevokeConfirm'))) return;
-    setBusy(true);
-    try {
-      await revokeUserApiToken(id);
-      await load();
-      toast.success(t('profile.devTokenRevoked'), '');
-    } catch (error) {
-      console.error(error);
-      toast.error(t('profile.devTokenRevokeError'), '');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const handleGenerateSsh = async () => {
     if (sshKey && !window.confirm(t('profile.devSshRegenerateConfirm'))) return;
@@ -392,16 +353,14 @@ const ProfileDevTab: React.FC = () => {
                   {sshKey.fingerprint}
                 </code>
               </div>
-              <textarea
-                readOnly
-                value={sshKey.publicKey}
-                rows={2}
+              <pre
                 className={formFieldClass(true, {
-                  widthClass: 'w-full',
-                  py: '1.5',
-                  extra: 'px-2 text-xs font-mono resize-none',
+                  widthClass: 'block w-full',
+                  extra: 'font-mono whitespace-pre-wrap break-all overflow-visible cursor-text select-all',
                 })}
-              />
+              >
+                {sshKey.publicKey}
+              </pre>
               <p className="text-xs text-gray-500 dark:text-gray-400 leading-snug">
                 {t('profile.devSshAddHint')}
               </p>
@@ -444,75 +403,6 @@ const ProfileDevTab: React.FC = () => {
         </div>
       </section>
 
-      {/* —— Agila API tokens (external → Kanban) —— */}
-      <section>
-        <div className="mb-2">
-          <h3 className="text-base font-medium text-gray-900 dark:text-gray-100">
-            <span>{t('profile.devApiTokens')}</span>
-            <sup className={BETA_SUP_CLASS}>
-              {t('help.assistant.beta')}
-            </sup>
-          </h3>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-            {t('profile.devApiTokensHint')}
-          </p>
-        </div>
-
-        {rawToken && (
-          <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-3 py-2">
-            <p className="text-xs font-medium text-amber-800 dark:text-amber-200 mb-1">
-              {t('profile.devTokenShowOnce')}
-            </p>
-            <code className="block text-xs break-all text-gray-800 dark:text-gray-100 mb-1">
-              {rawToken}
-            </code>
-            <button
-              type="button"
-              onClick={() => void copyText(rawToken)}
-              className="text-xs text-blue-600 hover:underline"
-            >
-              {t('profile.devCopy')}
-            </button>
-          </div>
-        )}
-
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void handleCreateToken()}
-          className="px-2.5 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-        >
-          {t('profile.devGenerateToken')}
-        </button>
-
-        <ul className="mt-2 divide-y divide-gray-200 dark:divide-gray-700">
-          {tokens.length === 0 && (
-            <li className="py-1.5 text-xs text-gray-500 dark:text-gray-400">{t('profile.devNoTokens')}</li>
-          )}
-          {tokens.map((tok) => (
-            <li key={tok.id} className="py-2 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{tok.name}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">{tok.tokenPrefix}…</div>
-                <div className="text-xs text-gray-400 dark:text-gray-500">
-                  {t('profile.devCreated')}: {new Date(tok.createdAt).toLocaleString()}
-                  {tok.lastUsedAt
-                    ? ` · ${t('profile.devLastUsed')}: ${new Date(tok.lastUsedAt).toLocaleString()}`
-                    : ''}
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void handleRevoke(tok.id)}
-                className="text-xs text-red-600 hover:underline disabled:opacity-50 shrink-0"
-              >
-                {t('profile.devRevoke')}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 };

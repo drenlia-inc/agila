@@ -1,4 +1,4 @@
-import { isValidAction, MEMBER_ACTIONS } from '../constants/activityActions.js';
+import { currentImpersonatorId } from '../utils/requestContext.js';
 import notificationService from './notificationService.js';
 import { notifyTaskActivity, notifyCommentActivity, notifyBulkTaskFieldActivity } from './taskEmailNotificationService.js';
 import { getBilingualTranslation, t } from '../utils/i18n.js';
@@ -58,7 +58,22 @@ function stringifyActivityDetails(bilingual, additionalData = {}) {
   if (resolveViaApi(additionalData)) {
     payload.viaApi = true;
   }
-  return JSON.stringify(payload);
+  return stampImpersonation(JSON.stringify(payload));
+}
+
+/** Hide work done while an admin is signed in as someone else from non-admin feeds. */
+function stampImpersonation(details) {
+  if (!currentImpersonatorId() || typeof details !== 'string') return details;
+  try {
+    const parsed = JSON.parse(details);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      parsed.impersonated = true;
+      return JSON.stringify(parsed);
+    }
+  } catch {
+    // Plain text from older callers.
+  }
+  return JSON.stringify({ en: details, fr: details, impersonated: true });
 }
 
 /**
@@ -550,7 +565,7 @@ export const logActivity = async (userId, action, details, additionalData = {}) 
       columnId: additionalData.columnId || null,
       boardId: additionalData.boardId || null,
       tagId: additionalData.tagId || null,
-      details: translatedDetails
+      details: stampImpersonation(translatedDetails)
     });
 
     // Publish activity update for real-time updates
