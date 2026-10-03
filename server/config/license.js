@@ -176,6 +176,7 @@ class LicenseManager {
           if (
             key === 'SUPPORT_LEVEL' ||
             key === 'AI_TIER' ||
+            key === 'API_TIER' ||
             key === 'SUPPORT_OVERAGE_RATE' ||
             key === 'PLAN_NAME'
           ) {

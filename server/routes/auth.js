@@ -1341,7 +1341,11 @@ router.get('/license-info', authenticateToken, requireRole(['admin']), async (re
   try {
     const licenseManager = getLicenseManager(getRequestDatabase(req));
     const licenseInfo = await licenseManager.getLicenseInfo();
-    
+    if (licenseInfo?.enabled) {
+      const { isApiAllowedByPlan } = await import('../utils/apiPlan.js');
+      licenseInfo.apiAccess = await isApiAllowedByPlan(getRequestDatabase(req));
+    }
+
     res.json(licenseInfo);
   } catch (error) {
     console.error('Error fetching license info:', error);

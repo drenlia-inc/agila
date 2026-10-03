@@ -48,6 +48,8 @@ interface LicenseInfo {
   boardTaskCounts?: BoardTaskCount[];
   message?: string;
   error?: string;
+  /** Hosted only: Pro includes the Agila API; Basic does not. */
+  apiAccess?: boolean;
 }
 
 function resolveSupportLevel(limits: LicenseInfo['limits'] | undefined): string {
@@ -405,6 +407,11 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
                       {t('licensing.includesSupport', {
                         level: supportPlanTitle(supportLevel),
                       })}
+                    </p>
+                  ) : null}
+                  {licenseInfo.enabled ? (
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {licenseInfo.apiAccess ? t('licensing.apiIncluded') : t('licensing.apiNotIncluded')}
                     </p>
                   ) : null}
                 </div>

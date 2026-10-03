@@ -18,6 +18,7 @@ import { clearSqlDebugSettingsCache } from '../utils/sqlDebugSettingsCache.js';
 import { serverDebug } from '../utils/serverDebug.js';
 import { validateAiConnectivity, listAiModels } from '../utils/aiConnectivity.js';
 import { applyEffectiveAiEnabledToSettings, isAiAllowedByPlan } from '../utils/aiEnabled.js';
+import { isApiAllowedByPlan } from '../utils/apiPlan.js';
 import { AI_PROVIDER_PRESETS } from '../constants/aiProviders.js';
 import { isMaskedOrEmptyApiKey } from '../utils/maskSecret.js';
 import {
@@ -219,6 +220,7 @@ router.get('/', async (req, res, next) => {
       settingsObj[setting.key] = setting.value;
     });
     await applyEffectiveAiEnabledToSettings(db, settingsObj);
+    settingsObj.API_ACCESS = (await isApiAllowedByPlan(db)) ? 'true' : 'false';
     settingsObj.DEPLOY_MULTI_TENANT = process.env.MULTI_TENANT === 'true' ? 'true' : 'false';
     settingsObj.DEPLOY_DEMO_ENABLED = process.env.DEMO_ENABLED === 'true' ? 'true' : 'false';
     applyPublicSsoSettings(settingsObj);
@@ -428,6 +430,7 @@ router.get('/', authenticateToken, requireRole(['admin']), async (req, res, next
     }
 
     await applyEffectiveAiEnabledToSettings(db, settingsObj);
+    settingsObj.API_ACCESS = (await isApiAllowedByPlan(db)) ? 'true' : 'false';
     settingsObj.DEPLOY_MULTI_TENANT = process.env.MULTI_TENANT === 'true' ? 'true' : 'false';
     settingsObj.DEPLOY_DEMO_ENABLED = process.env.DEMO_ENABLED === 'true' ? 'true' : 'false';
     
@@ -645,6 +648,10 @@ router.put('/', authenticateToken, requireRole(['admin']), async (req, res, next
     // Prevent updates to WEBSITE_URL - it's read-only and set during instance purchase
     if (key === 'WEBSITE_URL') {
       return res.status(403).json({ error: 'WEBSITE_URL is read-only and cannot be updated' });
+    }
+
+    if (key === 'API_ACCESS' || key === 'API_TIER') {
+      return res.status(403).json({ error: 'Agila API access is set by the plan and cannot be updated' });
     }
 
     if (key === 'INSTANCE_ID' || key === 'INSTANCE_TOKEN' || key === 'ADMIN_PORTAL_URL') {

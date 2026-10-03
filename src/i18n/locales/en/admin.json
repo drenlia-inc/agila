@@ -1175,6 +1175,8 @@
     "hostedPlanPro": "Pro",
     "supportLabel": "Support",
     "includesSupport": "Includes {{level}} support",
+    "apiIncluded": "Agila API included",
+    "apiNotIncluded": "Agila API is not included on this plan",
     "priorityPlanDescription": "Priority email support and faster response targets",
     "essentialPlanDescription": "Business-hours email support for install and ops",
     "communityPlanDescription": "Community support via docs, GitHub, and contact form",
