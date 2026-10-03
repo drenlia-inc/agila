@@ -19,7 +19,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Pull + compose up on web01
         run: bash scripts/deploy-demo.sh

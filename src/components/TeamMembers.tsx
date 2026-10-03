@@ -66,6 +66,12 @@ const NARROW_MAX_WIDTH_PX = 576;
 /** Horizontal padding of the card (p-3 → 12px each side). */
 const CARD_PAD_X_PX = 24;
 
+/** Shared text slot once first names no longer fit: first few letters, same width. */
+const SHORT_NAME_CHARS = 4;
+const SHORT_NAME_CLASS = 'inline-block w-[4ch] overflow-hidden whitespace-nowrap text-left';
+
+type MemberNameDensity = 'full' | 'first' | 'short' | 'avatar';
+
 interface TeamMembersProps {
   members: TeamMember[];
   selectedMembers: string[];
@@ -99,6 +105,34 @@ function truncateDisplayName(name: string, maxLength: number = 12): string {
     return name;
   }
   return name.substring(0, maxLength) + '...';
+}
+
+/** Text before the first space, or the whole name when there is no space. */
+function firstNameToken(name: string): string {
+  const trimmed = name.trim();
+  const space = trimmed.search(/\s/);
+  return space === -1 ? trimmed : trimmed.slice(0, space);
+}
+
+function memberChipLabel(name: string, density: Exclude<MemberNameDensity, 'avatar'>): string {
+  if (density === 'full') return truncateDisplayName(name);
+  const first = firstNameToken(name);
+  if (density === 'first') return first;
+  return first.slice(0, SHORT_NAME_CHARS);
+}
+
+function MemberNameLabel({
+  name,
+  density,
+}: {
+  name: string;
+  density: Exclude<MemberNameDensity, 'avatar'>;
+}) {
+  return (
+    <span className={density === 'short' ? SHORT_NAME_CLASS : undefined}>
+      {memberChipLabel(name, density)}
+    </span>
+  );
 }
 
 /** Active accounts with an email, or inactive accounts (rich tooltip without email). */
@@ -238,13 +272,14 @@ function memberAvatarNode(
     memberIsInactive(member) && !isAgentMemberId(member.id) && !isSystemMemberId(member.id);
   const dimInactive = options?.dimInactive !== false;
 
+  const mediaClass = 'h-full w-full rounded-full';
   let inner: ReactElement;
   if (isAgentMemberId(member.id)) {
     inner = (
       <img
         src={getAgentAvatarSrc(member)}
         alt=""
-        className={`${sizeClass} rounded-full object-cover`}
+        className={`${mediaClass} object-cover`}
       />
     );
   } else if (member.googleAvatarUrl) {
@@ -252,7 +287,7 @@ function memberAvatarNode(
       <img
         src={getAuthenticatedAvatarUrl(member.googleAvatarUrl)}
         alt=""
-        className={`${sizeClass} rounded-full object-cover`}
+        className={`${mediaClass} object-cover`}
       />
     );
   } else if (member.avatarUrl) {
@@ -260,42 +295,38 @@ function memberAvatarNode(
       <img
         src={getAuthenticatedAvatarUrl(member.avatarUrl)}
         alt=""
-        className={`${sizeClass} rounded-full object-cover`}
+        className={`${mediaClass} object-cover`}
       />
     );
   } else {
     const initials = member.name.split(' ').map(n => n[0]).join('').toUpperCase();
     inner = (
       <div
-        className={`${sizeClass} rounded-full flex items-center justify-center ${textClass} font-bold text-white`}
+        className={`${mediaClass} flex items-center justify-center ${textClass} font-bold text-white`}
         style={{ backgroundColor: member.color }}
       >
         {initials}
       </div>
     );
   }
-  if (!memberIsViewer(member)) {
-    if (isInactive && dimInactive) {
-      return (
-        <span className={`relative inline-flex ${sizeClass} shrink-0 opacity-45 saturate-50`}>
-          {inner}
-        </span>
-      );
-    }
-    return inner;
-  }
   const compact = sizeClass.includes('w-7');
+  const frameClass = `relative inline-flex items-center justify-center ${sizeClass} shrink-0 leading-none`;
   return (
-    <span className={`relative inline-flex ${sizeClass} shrink-0`} title={viewerLabel}>
+    <span
+      className={`${frameClass} ${isInactive && dimInactive ? 'opacity-45 saturate-50' : ''}`}
+      title={memberIsViewer(member) ? viewerLabel : undefined}
+    >
       {inner}
-      <span
-        className={`absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-sky-100 text-sky-700 ring-2 ring-white dark:bg-sky-950 dark:text-sky-300 dark:ring-gray-800 ${
-          compact ? 'h-3.5 w-3.5' : 'h-5 w-5'
-        }`}
-        aria-label={viewerLabel}
-      >
-        <Eye size={compact ? 8 : 12} strokeWidth={2.5} aria-hidden />
-      </span>
+      {memberIsViewer(member) ? (
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full bg-sky-100 text-sky-700 ring-2 ring-white dark:bg-sky-950 dark:text-sky-300 dark:ring-gray-800 ${
+            compact ? 'h-3.5 w-3.5' : 'h-5 w-5'
+          }`}
+          aria-label={viewerLabel}
+        >
+          <Eye size={compact ? 8 : 12} strokeWidth={2.5} aria-hidden />
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -721,11 +752,16 @@ export default function TeamMembers({
 }: TeamMembersProps) {
   const { t } = useTranslation('common');
   const rootRef = useRef<HTMLDivElement>(null);
-  const nameProbeRef = useRef<HTMLDivElement>(null);
+  const fullProbeRef = useRef<HTMLDivElement>(null);
+  const firstProbeRef = useRef<HTMLDivElement>(null);
+  const shortProbeRef = useRef<HTMLDivElement>(null);
   /** Narrow card: hide Assignees/Watchers/… chips */
   const [hideRoleChips, setHideRoleChips] = useState(false);
-  /** Avatar-only member row (narrow card OR too many named chips to fit) */
-  const [avatarOnly, setAvatarOnly] = useState(false);
+  /**
+   * Named chips stay on one row. Tighten full name → first name → short
+   * common width, and only then avatars, when the row would overflow.
+   */
+  const [nameDensity, setNameDensity] = useState<MemberNameDensity>('full');
   const [meetTheTeamOpen, setMeetTheTeamOpen] = useState(false);
   const [memberDisplayOrder, setMemberDisplayOrder] = useState<string[]>(
     () => loadUserPreferences(currentUserId ?? null).memberDisplayOrder || []
@@ -767,26 +803,34 @@ export default function TeamMembers({
 
   const recomputeLayout = useCallback(() => {
     const root = rootRef.current;
-    const probe = nameProbeRef.current;
     if (!root) return;
 
     const width = root.clientWidth;
-    const narrow = width < NARROW_MAX_WIDTH_PX;
-    setHideRoleChips(narrow);
+    setHideRoleChips(width < NARROW_MAX_WIDTH_PX);
 
-    if (narrow || displayMembers.length === 0) {
-      setAvatarOnly(true);
+    if (displayMembers.length === 0) {
+      setNameDensity('avatar');
       return;
     }
 
-    if (!probe) {
-      setAvatarOnly(false);
+    const fullProbe = fullProbeRef.current;
+    const firstProbe = firstProbeRef.current;
+    const shortProbe = shortProbeRef.current;
+    if (!fullProbe || !firstProbe || !shortProbe) {
+      setNameDensity('full');
       return;
     }
 
     const available = Math.max(0, width - CARD_PAD_X_PX);
-    // Named chips that would overflow a single row → avatar-only (even on wide screens)
-    setAvatarOnly(probe.scrollWidth > available + 1);
+    const fits = (probe: HTMLDivElement) => probe.scrollWidth <= available + 1;
+    const next: MemberNameDensity = fits(fullProbe)
+      ? 'full'
+      : fits(firstProbe)
+        ? 'first'
+        : fits(shortProbe)
+          ? 'short'
+          : 'avatar';
+    setNameDensity(next);
   }, [displayMembers.length]);
 
   useLayoutEffect(() => {
@@ -813,23 +857,26 @@ export default function TeamMembers({
       className="relative p-3 bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-100 dark:border-gray-700 w-full flex-1 flex flex-col min-w-0 overflow-visible"
       data-tour-id="team-members"
     >
-      {/* Off-screen probe: width of named chips in one row */}
-      <div
-        ref={nameProbeRef}
-        aria-hidden
-        className="pointer-events-none absolute left-0 top-0 -z-10 flex flex-nowrap gap-2 opacity-0"
-        style={{ width: 'max-content', visibility: 'hidden' }}
-      >
-        {displayMembers.map((member) => (
-          <div
-            key={`probe-${member.id}`}
-            className="flex items-center gap-1 px-2 py-1 shrink-0 text-xs font-medium"
-          >
-            <span className="w-7 h-7 shrink-0" />
-            <span>{truncateDisplayName(member.name)}</span>
-          </div>
-        ))}
-      </div>
+      {/* Off-screen probes: full name, first name, then a shared short width */}
+      {(['full', 'first', 'short'] as const).map((density) => (
+        <div
+          key={density}
+          ref={density === 'full' ? fullProbeRef : density === 'first' ? firstProbeRef : shortProbeRef}
+          aria-hidden
+          className="pointer-events-none absolute left-0 top-0 -z-10 flex flex-nowrap gap-2 opacity-0"
+          style={{ width: 'max-content', visibility: 'hidden' }}
+        >
+          {displayMembers.map((member) => (
+            <div
+              key={`probe-${density}-${member.id}`}
+              className="flex items-center gap-1 px-2 py-1 shrink-0 text-xs font-medium"
+            >
+              <span className="w-7 h-7 shrink-0" />
+              <MemberNameLabel name={member.name} density={density} />
+            </div>
+          ))}
+        </div>
+      ))}
 
       {/* Header: title → Clear → All Roles → role chips | meet-the-team (i) */}
       <div className="flex items-start justify-between mb-3 gap-2 min-h-5 shrink-0 overflow-visible">
@@ -1010,8 +1057,8 @@ export default function TeamMembers({
       )}
 
       <div
-        className={`flex content-start flex-1 ${
-          avatarOnly
+        className={`flex items-center content-start flex-1 ${
+          nameDensity === 'avatar'
             ? 'flex-nowrap overflow-x-auto py-1 px-0.5 -mx-0.5 gap-1.5'
             : 'flex-wrap overflow-visible gap-2'
         }`}
@@ -1046,7 +1093,7 @@ export default function TeamMembers({
                 label: `${member.name} ${statusLabel}`,
               };
 
-          if (avatarOnly) {
+          if (nameDensity === 'avatar') {
             return (
               <KanbanChromeTooltip
                 key={member.id}
@@ -1055,7 +1102,7 @@ export default function TeamMembers({
               >
                 <button
                   type="button"
-                  className={`shrink-0 rounded-full transition-shadow duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  className={`inline-flex items-center justify-center leading-none shrink-0 rounded-full p-0 transition-shadow duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     isSelected
                       ? 'ring-2 ring-blue-500 dark:ring-blue-400 shadow-sm'
                       : isInactiveMember
@@ -1106,7 +1153,7 @@ export default function TeamMembers({
                       : 'text-gray-800 dark:text-gray-100'
                   } ${isSelected ? 'font-semibold' : 'font-medium'}`}
                 >
-                  {truncateDisplayName(member.name)}
+                  <MemberNameLabel name={member.name} density={nameDensity} />
                 </span>
               </div>
             </KanbanChromeTooltip>

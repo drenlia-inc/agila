@@ -219,7 +219,7 @@ export const permanentBatchBodySchema = z.object({
 });
 
 export const adminCreateUserBodySchema = z.object({
-  email: z.string().trim().toLowerCase().email('Valid email is required').max(320),
+  email: emailOrLocalSchema,
   // Invite (inactive) may omit password; active local create still needs one (enforced in route).
   password: z.string().max(1024).optional().default(''),
   firstName: z.string().min(1, 'First name is required').max(100),
