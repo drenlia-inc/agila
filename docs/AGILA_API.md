@@ -4,6 +4,8 @@ Agila API v1 is the same set of actions as the web app. Call `/api/v1` with `Aut
 
 The web app keeps calling `/api/*`. Login and OAuth stay on `/api/auth`.
 
+On an Agila-hosted site, the API is part of the Pro plan. A self-hosted install includes it. The demo and the Basic plan do not: token minting and `/api/v1` return **403** `API_NOT_IN_PLAN`. The signed-in app on `/api` is unchanged.
+
 People who are logged in see the same live updates as if the work was done in the app: a new board appears for its members and for admins, a new or moved card appears on that board, and acceptance criteria refresh on the open card.
 
 ## Create a token
