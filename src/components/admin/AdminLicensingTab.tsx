@@ -60,6 +60,17 @@ function resolveSupportLevel(limits: LicenseInfo['limits'] | undefined): string 
   return n;
 }
 
+function PlanFact({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm font-medium text-gray-900 dark:text-white">{value}</dd>
+    </div>
+  );
+}
+
 function resolveHostedPlanName(info: LicenseInfo | null): 'basic' | 'pro' | null {
   if (!info?.enabled) return null;
   const named = String(info.planName || info.limits?.PLAN_NAME || '').toLowerCase();
@@ -189,43 +200,6 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getSupportTypeColor = (supportType: string): string => {
-    switch (String(supportType || '').toLowerCase()) {
-      case 'priority':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-      case 'essential':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'community':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
-    }
-  };
-
-  const getHostedPlanColor = (planName: string): string => {
-    switch (String(planName || '').toLowerCase()) {
-      case 'pro':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-      case 'basic':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
-    }
-  };
-
-  const getSupportTypeIcon = (supportType: string) => {
-    switch (String(supportType || '').toLowerCase()) {
-      case 'priority':
-        return <Shield className="h-4 w-4" />;
-      case 'essential':
-        return <CheckCircle className="h-4 w-4" />;
-      case 'community':
-        return <AlertCircle className="h-4 w-4" />;
-      default:
-        return <AlertCircle className="h-4 w-4" />;
-    }
-  };
-
   const supportPlanDescription = (level: string): string => {
     const n = resolveSupportLevel({ SUPPORT_LEVEL: level } as LicenseInfo['limits']);
     if (n === 'priority') return t('licensing.priorityPlanDescription');
@@ -327,26 +301,18 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
 
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="p-6">
-              <h3 className="text-lg font-semibold flex items-center mb-4 text-gray-900 dark:text-white">
-                <Shield className="h-5 w-5 mr-2" />
+              <h3 className="text-sm font-medium flex items-center text-gray-500 dark:text-gray-400">
+                <Shield className="h-4 w-4 mr-2" />
                 {t('licensing.currentSupportPlan')}
               </h3>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  {getSupportTypeIcon(supportLevel)}
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                      {supportPlanTitle(supportLevel)}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-400">{supportPlanDescription(supportLevel)}</p>
-                  </div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getSupportTypeColor(supportLevel)}`}>
-                  {supportPlanTitle(supportLevel)}
-                </span>
-              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+                {supportPlanTitle(supportLevel)}
+              </p>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {supportPlanDescription(supportLevel)}
+              </p>
               {!isDemoMode && (
-                <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                <p className="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-400">
                   {hoursIncluded > 0
                     ? t('licensing.supportHoursSummary', {
                         used: hoursUsed,
@@ -384,48 +350,34 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
         {/* Plan Information */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="p-6">
-            <h3 className="text-lg font-semibold flex items-center mb-4 text-gray-900 dark:text-white">
-              <Shield className="h-5 w-5 mr-2" />
+            <h3 className="text-sm font-medium flex items-center text-gray-500 dark:text-gray-400">
+              <Shield className="h-4 w-4 mr-2" />
               {t('licensing.currentPlan')}
             </h3>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center space-x-3 min-w-0">
-                <Shield className="h-4 w-4 shrink-0 text-gray-500" />
-                <div className="min-w-0">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                    {hostedPlan
-                      ? `${hostedPlanTitle(hostedPlan)} ${t('licensing.plan')}`
-                      : `${supportPlanTitle(supportLevel)} ${t('licensing.plan')}`}
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    {hostedPlan
-                      ? hostedPlanDescription(hostedPlan)
-                      : supportPlanDescription(supportLevel)}
-                  </p>
-                  {hostedPlan ? (
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                      {t('licensing.includesSupport', {
-                        level: supportPlanTitle(supportLevel),
-                      })}
-                    </p>
-                  ) : null}
-                  {licenseInfo.enabled ? (
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      {licenseInfo.apiAccess ? t('licensing.apiIncluded') : t('licensing.apiNotIncluded')}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-              <span
-                className={`shrink-0 px-3 py-1 rounded-full text-xs font-semibold ${
-                  hostedPlan
-                    ? getHostedPlanColor(hostedPlan)
-                    : getSupportTypeColor(supportLevel)
-                }`}
-              >
-                {hostedPlan ? hostedPlanTitle(hostedPlan) : supportPlanTitle(supportLevel)}
-              </span>
-            </div>
+            <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+              {hostedPlan ? hostedPlanTitle(hostedPlan) : supportPlanTitle(supportLevel)}
+            </p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {hostedPlan
+                ? hostedPlanDescription(hostedPlan)
+                : supportPlanDescription(supportLevel)}
+            </p>
+            <dl className="mt-5 grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 sm:grid-cols-3 dark:border-gray-700">
+              <PlanFact
+                label={t('licensing.supportLabel')}
+                value={supportPlanTitle(supportLevel)}
+              />
+              <PlanFact
+                label={t('licensing.apiLabel')}
+                value={licenseInfo.apiAccess ? t('licensing.apiIncluded') : t('licensing.apiNotIncluded')}
+              />
+              {licenseInfo.limits.TASK_LIMIT === -1 ? (
+                <PlanFact
+                  label={t('licensing.tasks')}
+                  value={t('licensing.tasksUnlimited')}
+                />
+              ) : null}
+            </dl>
           </div>
         </div>
 
@@ -586,35 +538,17 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
           </div>
         </div>
 
-        {/* Task Limits */}
+        {licenseInfo.limits.TASK_LIMIT !== -1 && licenseInfo.boardTaskCounts && licenseInfo.boardTaskCounts.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="p-6">
-            <h3 className="text-lg font-semibold flex items-center mb-4 text-gray-900 dark:text-white">
-              <ClipboardList className="h-5 w-5 mr-2" />
+            <h3 className="text-sm font-medium flex items-center mb-4 text-gray-900 dark:text-white">
+              <ClipboardList className="h-4 w-4 mr-2" />
               {t('licensing.taskLimitsPerBoard')}
             </h3>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {licenseInfo.limits.TASK_LIMIT === -1
-                    ? t('licensing.unlimitedTasksPerBoard')
-                    : t('licensing.tasksPerBoardLimit', { count: licenseInfo.limits.TASK_LIMIT })}
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  {t('licensing.maxTasksPerBoardDescription')}
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {licenseInfo.limits.TASK_LIMIT === -1 ? '∞' : licenseInfo.limits.TASK_LIMIT}
-                </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">{t('licensing.perBoard')}</div>
-              </div>
-            </div>
-
-            {/* Board Task Count Breakdown - Only show if not unlimited and we have data */}
-            {licenseInfo.limits.TASK_LIMIT !== -1 && licenseInfo.boardTaskCounts && licenseInfo.boardTaskCounts.length > 0 && (
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+              {t('licensing.tasksPerBoardLimit', { count: licenseInfo.limits.TASK_LIMIT })}
+            </p>
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                   {t('licensing.boardUsageBreakdown')}
                 </h4>
@@ -665,20 +599,10 @@ const AdminLicensingTab: React.FC<AdminLicensingTabProps> = ({ currentUser, sett
                     );
                   })}
                 </div>
-              </div>
-            )}
-
-            {/* Show message for unlimited plans */}
-            {licenseInfo.limits.TASK_LIMIT === -1 && (
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                <div className="flex items-center text-gray-500 dark:text-gray-400">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  <span className="text-sm">{t('licensing.unlimitedTasksPerBoard')}</span>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
+        )}
 
         {/* License Status */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
