@@ -87,7 +87,7 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
         end = new Date(today.getFullYear() - 1, 11, 31);
         break;
 
-      case 'this-sprint':
+      case 'this-sprint': {
         // Find the active sprint
         const activeSprint = sprints.find(s => s.is_active);
         if (activeSprint) {
@@ -95,8 +95,9 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
           onEndDateChange(activeSprint.end_date);
         }
         return;
+      }
 
-      case 'last-sprint':
+      case 'last-sprint': {
         // Find the most recent sprint that ended before today
         const today_str = today.toISOString().split('T')[0];
         const pastSprints = sprints
@@ -108,6 +109,7 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
           onEndDateChange(pastSprints[0].end_date);
         }
         return;
+      }
 
       default:
         return;

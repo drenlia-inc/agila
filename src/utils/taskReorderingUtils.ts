@@ -257,7 +257,7 @@ export function applyRestoredTaskToColumns(
   const insertPos = Number(task.position);
   const updates = options?.positionUpdates;
 
-  let next = stripTaskFromAllColumns(columns, task.id, {
+  const next = stripTaskFromAllColumns(columns, task.id, {
     renumber: false,
   });
 

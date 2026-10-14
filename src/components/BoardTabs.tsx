@@ -817,27 +817,6 @@ export default function BoardTabs({
   // Board selection is now handled by the main App.tsx logic
   // This effect has been removed to prevent automatic board selection
 
-  if (boards.length === 0) {
-    return (
-      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50/80 px-4 py-3 dark:border-gray-600 dark:bg-gray-800/40">
-        <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('boardTabs.noBoards')}</h2>
-        {isAdmin && (
-          <KanbanChromeTooltip label={t('boardTabs.addBoard')}>
-            <button
-              type="button"
-              onClick={onAddBoard}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:border-blue-500 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:border-blue-400 dark:hover:text-blue-300"
-              data-tour-id="add-board-button"
-            >
-              <Plus size={16} strokeWidth={2} />
-              <span className="hidden sm:inline">{t('boardTabs.newBoard')}</span>
-            </button>
-          </KanbanChromeTooltip>
-        )}
-      </div>
-    );
-  }
-
   const handleEditClick = (boardId: string) => {
     // Only admins can edit board title / WIP
     if (!isAdmin) return;
@@ -894,9 +873,10 @@ export default function BoardTabs({
     void saveBoardEdit();
   };
 
-  // Keep edit dropdown under the tab without growing the tab bar
+  // Keep edit dropdown under the tab without growing the tab bar.
+  // Always call this hook: the empty-board return below must not skip it.
   useLayoutEffect(() => {
-    if (!editingBoardId) {
+    if (!editingBoardId || boards.length === 0) {
       setEditMenuPosition(null);
       return;
     }
@@ -924,7 +904,7 @@ export default function BoardTabs({
 
   // Enter accepts; click outside saves (same as column edit).
   useEffect(() => {
-    if (!editingBoardId) return;
+    if (!editingBoardId || boards.length === 0) return;
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node | null;
@@ -946,7 +926,7 @@ export default function BoardTabs({
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [editingBoardId, onEditBoard]);
+  }, [editingBoardId, onEditBoard, boards.length]);
 
   const handleRemoveClick = (boardId: string) => {
     if (boards.length <= 1) return;
@@ -994,8 +974,7 @@ export default function BoardTabs({
 
   // Close confirmation menu when clicking outside
   useEffect(() => {
-    if (!showDeleteConfirm) {
-      // If no confirmation is showing, don't add listeners but still call useEffect properly
+    if (!showDeleteConfirm || boards.length === 0) {
       return;
     }
     
@@ -1017,13 +996,42 @@ export default function BoardTabs({
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showDeleteConfirm]);
+  }, [showDeleteConfirm, boards.length]);
 
-  useEscapeDismiss(cancelDeleteBoard, { enabled: showDeleteConfirm != null });
+  useEscapeDismiss(cancelDeleteBoard, {
+    enabled: showDeleteConfirm != null && boards.length > 0,
+  });
 
-  useEscapeDismiss(cancelBoardEdit, { enabled: editingBoardId != null });
+  useEscapeDismiss(cancelBoardEdit, {
+    enabled: editingBoardId != null && boards.length > 0,
+  });
 
-  useFloatingOverlayDismiss(Boolean(editingBoardId), `board-tab:${editingBoardId || 'none'}:edit`, cancelBoardEdit);
+  useFloatingOverlayDismiss(
+    Boolean(editingBoardId) && boards.length > 0,
+    `board-tab:${editingBoardId || 'none'}:edit`,
+    cancelBoardEdit
+  );
+
+  if (boards.length === 0) {
+    return (
+      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50/80 px-4 py-3 dark:border-gray-600 dark:bg-gray-800/40">
+        <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('boardTabs.noBoards')}</h2>
+        {isAdmin && (
+          <KanbanChromeTooltip label={t('boardTabs.addBoard')}>
+            <button
+              type="button"
+              onClick={onAddBoard}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:border-blue-500 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:border-blue-400 dark:hover:text-blue-300"
+              data-tour-id="add-board-button"
+            >
+              <Plus size={16} strokeWidth={2} />
+              <span className="hidden sm:inline">{t('boardTabs.newBoard')}</span>
+            </button>
+          </KanbanChromeTooltip>
+        )}
+      </div>
+    );
+  }
 
   const boardEffortTooltip = (effort: number) =>
     t('boardTabs.totalEffortTooltip', {

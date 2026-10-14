@@ -11,7 +11,7 @@
     "start:prod": "concurrently \"./node_modules/.bin/vite preview --host 0.0.0.0 --port 3010\" \"node server/index.js\"",
     "version:generate": "node scripts/generate-version.js",
     "serve": "vite preview --port 3010 --host 0.0.0.0",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 1118",
     "audit:sql": "node scripts/audit-sql-columns.js",
     "audit:js": "node scripts/audit-js-identifiers.js",
     "audit:schema": "npm run audit:sql && npm run audit:js",

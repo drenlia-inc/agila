@@ -288,7 +288,6 @@ export const useDataPolling = ({
                 return;
               }
               onColumnsUpdate(currentBoard.columns || {});
-            } else {
             }
           }
         }
