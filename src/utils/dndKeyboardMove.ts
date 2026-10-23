@@ -35,7 +35,7 @@ export function stepKeyboardMoveSlot(
 ): KeyboardMoveSlot {
   const ids = orderedKeyboardColumnIds(columns);
   const count = keyboardLayoutCount(columns, slot.columnId, excludeIds);
-  let { columnId, insertIndex } = slot;
+  const { columnId, insertIndex } = slot;
 
   if (code === 'ArrowDown' || code === 'ArrowUp') {
     const next =

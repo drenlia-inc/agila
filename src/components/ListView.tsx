@@ -845,57 +845,64 @@ export default function ListView({
         let aValue: any, bValue: any;
 
         switch (sortField) {
-          case 'ticket':
+          case 'ticket': {
             // Extract last 5 digits for numeric sorting (e.g., TASK-00023 → 23, PROJ-00001 → 1)
             const aTicketMatch = a.ticket?.match(/(\d{1,5})$/);
             const bTicketMatch = b.ticket?.match(/(\d{1,5})$/);
             aValue = aTicketMatch ? parseInt(aTicketMatch[1], 10) : 0;
             bValue = bTicketMatch ? parseInt(bTicketMatch[1], 10) : 0;
             break;
+          }
           case 'title':
             aValue = a.title.toLowerCase();
             bValue = b.title.toLowerCase();
             break;
-          case 'priority':
+          case 'priority': {
             const aPriority = availablePriorities?.find(p => p.id === a.priorityId);
             const bPriority = availablePriorities?.find(p => p.id === b.priorityId);
             aValue = aPriority?.order || 999;
             bValue = bPriority?.order || 999;
             break;
-          case 'assignee':
+          }
+          case 'assignee': {
             const aMember = members?.find(m => m.id === a.memberId);
             const bMember = members?.find(m => m.id === b.memberId);
             aValue = aMember ? `${aMember.firstName} ${aMember.lastName}`.toLowerCase() : '';
             bValue = bMember ? `${bMember.firstName} ${bMember.lastName}`.toLowerCase() : '';
             break;
-          case 'dueDate':
+          }
+          case 'dueDate': {
             const aDate = a.dueDate ? parseLocalDate(a.dueDate) : null;
             const bDate = b.dueDate ? parseLocalDate(b.dueDate) : null;
             aValue = aDate && !isNaN(aDate.getTime()) ? aDate.getTime() : 0;
             bValue = bDate && !isNaN(bDate.getTime()) ? bDate.getTime() : 0;
             break;
-          case 'startDate':
+          }
+          case 'startDate': {
             const aStart = parseLocalDate(a.startDate);
             const bStart = parseLocalDate(b.startDate);
             aValue = !isNaN(aStart.getTime()) ? aStart.getTime() : 0;
             bValue = !isNaN(bStart.getTime()) ? bStart.getTime() : 0;
             break;
-          case 'createdAt':
+          }
+          case 'createdAt': {
             const aCreated = new Date(a.createdAt);
             const bCreated = new Date(b.createdAt);
             aValue = !isNaN(aCreated.getTime()) ? aCreated.getTime() : 0;
             bValue = !isNaN(bCreated.getTime()) ? bCreated.getTime() : 0;
             break;
+          }
           case 'column':
             aValue = a.columnTitle.toLowerCase();
             bValue = b.columnTitle.toLowerCase();
             break;
-          case 'sprint':
+          case 'sprint': {
             const aSprint = sprints.find(s => s.id === a.sprintId);
             const bSprint = sprints.find(s => s.id === b.sprintId);
             aValue = aSprint?.name?.toLowerCase() || '';
             bValue = bSprint?.name?.toLowerCase() || '';
             break;
+          }
           case 'tags':
             aValue = a.tags?.length || 0;
             bValue = b.tags?.length || 0;

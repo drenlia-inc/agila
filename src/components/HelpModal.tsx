@@ -883,8 +883,6 @@ export default function HelpModal({
 
   useEscapeDismiss(handleHelpEscape, { enabled: isOpen && !minimized });
 
-  if (!isOpen) return null;
-
   const sectionShellClass = (hasMatch: boolean) =>
     hasMatch && debouncedSearchTerm.trim()
       ? 'rounded-xl border-2 border-yellow-400 dark:border-yellow-600 bg-yellow-50/90 dark:bg-yellow-900/30 p-5 shadow-md'
@@ -2345,6 +2343,9 @@ export default function HelpModal({
     }
     return anyTextMatches(tabTexts, debouncedSearchTerm);
   }, [t, debouncedSearchTerm, anyTextMatches, isAdmin, aiEnabled, troubleshootingVisible]);
+
+  // After every hook. Returning earlier skipped the section useCallbacks above.
+  if (!isOpen) return null;
 
   if (minimized) {
     const activeTabMeta = tabs.find((tab) => tab.id === activeTab);

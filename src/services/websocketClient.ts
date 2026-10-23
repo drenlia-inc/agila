@@ -289,9 +289,11 @@ class WebSocketClient {
       this.socket.emit('join-board', boardId);
       
       // Add debugging to see if we're actually in the room
-      this.socket.on('joined-room', (data) => {
+      this.socket.on('joined-room', (_data) => {
+        // Join ack is unused; the listener stays so the event is consumed.
       });
     } else {
+      // Not connected yet; joinBoardWhenReady records the pending board.
     }
   }
 

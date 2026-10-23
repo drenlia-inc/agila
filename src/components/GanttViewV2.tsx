@@ -1017,7 +1017,6 @@ const GanttViewV2 = ({
         if (!isBoardLoading && !isInitializing && !isSwitchingBoards) {
           saveCurrentScrollPosition(timeline, dateRange, { targetBoardId: boardId || undefined });
           // Update debug overlay after saving with a longer delay to ensure cookie is written
-        } else {
         }
       }, 100); // 100ms throttle
     };

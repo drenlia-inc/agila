@@ -315,51 +315,51 @@ export const useTaskWebSocket = ({
             ticket: data.task.ticket !== undefined ? data.task.ticket : fullTaskData.ticket, // Server always includes ticket (may be null)
             updatedBy: data.task.updatedBy ?? fullTaskData.updatedBy,
             // Handle fields that are only included if they changed
-            description: data.task.hasOwnProperty('description') ? data.task.description : fullTaskData.description,
+            description: Object.prototype.hasOwnProperty.call(data.task, 'description') ? data.task.description : fullTaskData.description,
             // CRITICAL: Always use position from update if provided (even if 0)
             // Use nullish coalescing to handle 0 as a valid position value
-            position: data.task.hasOwnProperty('position') 
+            position: Object.prototype.hasOwnProperty.call(data.task, 'position') 
               ? (data.task.position !== null && data.task.position !== undefined ? data.task.position : fullTaskData.position)
               : fullTaskData.position,
-            requesterId: data.task.hasOwnProperty('requesterId') ? data.task.requesterId : fullTaskData.requesterId,
-            startDate: data.task.hasOwnProperty('startDate') ? data.task.startDate : fullTaskData.startDate,
-            dueDate: data.task.hasOwnProperty('dueDate') ? data.task.dueDate : fullTaskData.dueDate,
-            effort: data.task.hasOwnProperty('effort') ? (data.task.effort ?? fullTaskData.effort ?? 0) : fullTaskData.effort,
+            requesterId: Object.prototype.hasOwnProperty.call(data.task, 'requesterId') ? data.task.requesterId : fullTaskData.requesterId,
+            startDate: Object.prototype.hasOwnProperty.call(data.task, 'startDate') ? data.task.startDate : fullTaskData.startDate,
+            dueDate: Object.prototype.hasOwnProperty.call(data.task, 'dueDate') ? data.task.dueDate : fullTaskData.dueDate,
+            effort: Object.prototype.hasOwnProperty.call(data.task, 'effort') ? (data.task.effort ?? fullTaskData.effort ?? 0) : fullTaskData.effort,
             // CRITICAL: Always update priority fields if they exist in the update (even if null/undefined)
             // This ensures priority reassignment after deletion is always applied
             // Use priorityName from JOIN as the source of truth, not the stale priority field
-            priority: data.task.hasOwnProperty('priorityName') ? (data.task.priorityName ?? null) 
-                     : (data.task.hasOwnProperty('priority') ? (data.task.priority ?? null) : fullTaskData.priority),
-            priorityId: data.task.hasOwnProperty('priorityId') ? (data.task.priorityId ?? null) : fullTaskData.priorityId,
-            priorityName: data.task.hasOwnProperty('priorityName') ? (data.task.priorityName ?? null) : fullTaskData.priorityName,
-            priorityColor: data.task.hasOwnProperty('priorityColor') ? (data.task.priorityColor ?? null) : fullTaskData.priorityColor,
+            priority: Object.prototype.hasOwnProperty.call(data.task, 'priorityName') ? (data.task.priorityName ?? null) 
+                     : (Object.prototype.hasOwnProperty.call(data.task, 'priority') ? (data.task.priority ?? null) : fullTaskData.priority),
+            priorityId: Object.prototype.hasOwnProperty.call(data.task, 'priorityId') ? (data.task.priorityId ?? null) : fullTaskData.priorityId,
+            priorityName: Object.prototype.hasOwnProperty.call(data.task, 'priorityName') ? (data.task.priorityName ?? null) : fullTaskData.priorityName,
+            priorityColor: Object.prototype.hasOwnProperty.call(data.task, 'priorityColor') ? (data.task.priorityColor ?? null) : fullTaskData.priorityColor,
             sprintId: sprintIdFromTaskPayload(data.task, getTaskSprintId(fullTaskData)),
-            columnEnteredAt: data.task.hasOwnProperty('columnEnteredAt')
+            columnEnteredAt: Object.prototype.hasOwnProperty.call(data.task, 'columnEnteredAt')
               ? data.task.columnEnteredAt
               : fullTaskData.columnEnteredAt,
-            isBlocked: data.task.hasOwnProperty('isBlocked')
+            isBlocked: Object.prototype.hasOwnProperty.call(data.task, 'isBlocked')
               ? Boolean(data.task.isBlocked)
               : fullTaskData.isBlocked,
-            blockedReason: data.task.hasOwnProperty('blockedReason')
+            blockedReason: Object.prototype.hasOwnProperty.call(data.task, 'blockedReason')
               ? data.task.blockedReason
               : fullTaskData.blockedReason,
             // Handle previous location fields (for cross-column/board moves)
-            previousColumnId: data.task.hasOwnProperty('previousColumnId') ? data.task.previousColumnId : fullTaskData.previousColumnId,
-            previousBoardId: data.task.hasOwnProperty('previousBoardId') ? data.task.previousBoardId : fullTaskData.previousBoardId,
+            previousColumnId: Object.prototype.hasOwnProperty.call(data.task, 'previousColumnId') ? data.task.previousColumnId : fullTaskData.previousColumnId,
+            previousBoardId: Object.prototype.hasOwnProperty.call(data.task, 'previousBoardId') ? data.task.previousBoardId : fullTaskData.previousBoardId,
             // Preserve arrays when omitted; apply when present (including empty = cleared)
-            comments: data.task.hasOwnProperty('comments') && Array.isArray(data.task.comments)
+            comments: Object.prototype.hasOwnProperty.call(data.task, 'comments') && Array.isArray(data.task.comments)
               ? data.task.comments
               : (fullTaskData.comments || []),
-            watchers: data.task.hasOwnProperty('watchers') && Array.isArray(data.task.watchers)
+            watchers: Object.prototype.hasOwnProperty.call(data.task, 'watchers') && Array.isArray(data.task.watchers)
               ? data.task.watchers
               : (fullTaskData.watchers || []),
-            collaborators: data.task.hasOwnProperty('collaborators') && Array.isArray(data.task.collaborators)
+            collaborators: Object.prototype.hasOwnProperty.call(data.task, 'collaborators') && Array.isArray(data.task.collaborators)
               ? data.task.collaborators
               : (fullTaskData.collaborators || []),
-            tags: data.task.hasOwnProperty('tags') && Array.isArray(data.task.tags)
+            tags: Object.prototype.hasOwnProperty.call(data.task, 'tags') && Array.isArray(data.task.tags)
               ? data.task.tags
               : (fullTaskData.tags || []),
-            attachmentCount: data.task.hasOwnProperty('attachmentCount')
+            attachmentCount: Object.prototype.hasOwnProperty.call(data.task, 'attachmentCount')
               ? (data.task.attachmentCount ?? 0)
               : fullTaskData.attachmentCount
           } : {

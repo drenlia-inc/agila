@@ -549,8 +549,6 @@ function AppContent() {
     }
   }, [selectedTask?.id, t]);
 
-  // This will be defined later after the hooks are initialized
-  let handleRemoveTask: (taskId: string, clickEvent?: React.MouseEvent) => Promise<void>;
   const [queryLogs, setQueryLogs] = useState<QueryLog[]>([]);
   const [dragCooldown, setDragCooldown] = useState(false);
   const [taskCreationPause, setTaskCreationPause] = useState(false);
@@ -1208,8 +1206,7 @@ function AppContent() {
     onPurge: currentUser?.roles?.includes('admin') ? handleTaskPermanentDelete : undefined
   });
 
-  // Now define the handleRemoveTask function
-  handleRemoveTask = async (taskId: string, clickEvent?: React.MouseEvent) => {
+  const handleRemoveTask = async (taskId: string, clickEvent?: React.MouseEvent) => {
     if (!canMutate) {
       toast.error(t('messages.readOnlyMode', { ns: 'common' }), '');
       return;
@@ -5996,7 +5993,7 @@ function AppContent() {
     const base = explicitVisibility
       ? explicitVisibility
       : Object.values(boardColumns)
-          .filter((col) => col && !Boolean(col.is_archived))
+          .filter((col) => col && !col.is_archived)
           .map((col) => col.id);
     return applyFinishedColumnVisibility(base, boardColumns, taskFilters.showFinishedColumns);
   };
@@ -6675,7 +6672,7 @@ function AppContent() {
               availablePriorities={availablePriorities}
               visibleColumnIds={
                 boardColumnVisibility[selectedBoard] ||
-                Object.keys(columns).filter((id) => !Boolean(columns[id]?.is_archived))
+                Object.keys(columns).filter((id) => !columns[id]?.is_archived)
               }
               onMoveTask={handleMoveTaskToColumn}
               onRefreshBoard={() => refreshBoardData({ force: true })}

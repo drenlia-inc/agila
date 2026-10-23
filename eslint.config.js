@@ -23,8 +23,13 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
-      // Pre-existing debt (CI would otherwise fail ~1k findings). New error-level
-      // recommended rules still fail the job. Tighten these incrementally.
+      // Pre-existing debt. These stay warn because the volume is still high
+      // (no-explicit-any, no-unused-vars, exhaustive-deps) or the fix is a
+      // type-signature change (no-unsafe-function-type). The lint script caps
+      // the warning count so this debt cannot grow. Restored to error (recommended
+      // default): react-hooks/rules-of-hooks, prefer-const, no-extra-boolean-cast,
+      // no-useless-catch, no-empty, no-case-declarations, no-prototype-builtins,
+      // @typescript-eslint/no-empty-object-type.
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': [
         'warn',
@@ -34,16 +39,8 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      '@typescript-eslint/no-empty-object-type': 'warn',
       '@typescript-eslint/no-unsafe-function-type': 'warn',
       'react-hooks/exhaustive-deps': 'warn',
-      'react-hooks/rules-of-hooks': 'warn',
-      'no-prototype-builtins': 'warn',
-      'no-case-declarations': 'warn',
-      'prefer-const': 'warn',
-      'no-empty': 'warn',
-      'no-extra-boolean-cast': 'warn',
-      'no-useless-catch': 'warn',
     },
   }
 );
