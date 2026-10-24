@@ -3,6 +3,7 @@ import notificationService from './notificationService.js';
 import { notifyTaskActivity, notifyCommentActivity, notifyBulkTaskFieldActivity } from './taskEmailNotificationService.js';
 import { getBilingualTranslation, t } from '../utils/i18n.js';
 import { activity as activityQueries, helpers } from '../utils/sqlManager/index.js';
+import { isValidAction } from '../constants/activityActions.js';
 
 /**
  * Activity Logger Service
