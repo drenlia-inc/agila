@@ -716,7 +716,7 @@ const Admin: React.FC<AdminProps> = ({
             : prev
         );
       }
-      let errorMessage =
+      const errorMessage =
         err.response?.data?.error ||
         err.response?.data?.message ||
         err.message ||

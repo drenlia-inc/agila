@@ -43,7 +43,7 @@ export function isBoardWipActiveColumn(column: {
   is_archived?: boolean | null;
 } | null | undefined): boolean {
   if (!column) return false;
-  return !Boolean(column.is_finished) && !Boolean(column.is_archived);
+  return !column.is_finished && !column.is_archived;
 }
 
 export function getBoardWipTaskCount(

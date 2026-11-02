@@ -124,6 +124,7 @@ export const usePerformanceMonitor = (options: UsePerformanceMonitorOptions = {}
     }
 
     if (enableConsoleLog) {
+      // Metric values stay in metricsRef; console output was removed.
     }
   }, [sampleRate, maxMetrics, enableConsoleLog]);
 

@@ -1397,7 +1397,7 @@ const TaskCard = React.memo(function TaskCard({
       const spaceBelow = window.innerHeight - rect.bottom;
       const dropdownHeight = 150; // Approximate height for priority dropdown
       
-      let top, left;
+      let top;
       if (spaceBelow < dropdownHeight) {
         // Show above
         top = rect.top - dropdownHeight - 8;
@@ -1405,8 +1405,8 @@ const TaskCard = React.memo(function TaskCard({
         // Show below
         top = rect.bottom + 8;
       }
-      
-      left = rect.left;
+
+      const left = rect.left;
       
       return { top, left, direction: spaceBelow < dropdownHeight ? 'above' : 'below' };
     }

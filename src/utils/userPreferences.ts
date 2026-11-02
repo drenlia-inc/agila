@@ -2,7 +2,7 @@ import { Priority } from '../types';
 import { updateUserSetting, getUserSettings } from '../api';
 
 // Global state to track preference saving operations
-let globalSavingCallbacks: Set<() => void> = new Set();
+const globalSavingCallbacks: Set<() => void> = new Set();
 let isSavingGlobally = false;
 
 // Register a callback to be notified when saving state changes
@@ -1422,7 +1422,6 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
     try {
       // Map preference keys to database setting keys
       // For nested keys like appSettings, we need to handle them specially
-      let dbKey: string | undefined;
       let dbValue: any = value;
       
       // Handle top-level keys
@@ -1462,7 +1461,7 @@ export const updateUserPreference = async <K extends keyof UserPreferences>(
         'notifications': 'notifications',
       };
       
-      dbKey = topLevelKeyMap[key as string];
+      const dbKey = topLevelKeyMap[key as string];
       
       // Note: appSettings keys are handled separately via updateActivityFeedPreference pattern
       // If we need to support appSettings here, we'd need to check the key structure differently

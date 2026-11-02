@@ -613,7 +613,7 @@ export const useVirtualViewport = (options: UseVirtualViewportOptions = {}) => {
     },
     
     scrollToToday: async () => {
-      let todayIndex = dateRange.findIndex(d => d.isToday);
+      const todayIndex = dateRange.findIndex(d => d.isToday);
       
       if (todayIndex >= 0 && scrollContainerRef.current) {
         // Today is in current range, scroll to it

@@ -789,20 +789,15 @@ export const updateUser = async (userId: string, userData: {
   isActive: boolean;
   displayName?: string; // Optional since it's handled separately
 }) => {
-  try {
-    // Only send fields that the backend endpoint expects
-    const { firstName, lastName, email, isActive } = userData;
-    const { data } = await api.put(`/admin/users/${userId}`, { 
-      firstName, 
-      lastName, 
-      email, 
-      isActive 
-    });
-    return data;
-  } catch (error: any) {
-    // Re-throw the error so it can be caught by the calling function
-    throw error;
-  }
+  // Only send fields that the backend endpoint expects
+  const { firstName, lastName, email, isActive } = userData;
+  const { data } = await api.put(`/admin/users/${userId}`, {
+    firstName,
+    lastName,
+    email,
+    isActive,
+  });
+  return data;
 };
 
 export const updateUserRole = async (userId: string, action: 'promote' | 'demote') => {
